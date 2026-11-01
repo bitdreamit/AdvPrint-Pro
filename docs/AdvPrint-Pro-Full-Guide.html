@@ -5,7 +5,7 @@
 <title>AdvPrint Pro (Advanced Printer) — Full Setup Guide A to Z</title>
 <style>
   @page { size: A4; margin: 16mm 15mm 16mm 15mm;
-          @bottom-center { content: "AdvPrint Pro 2.6.8 — Full Setup Guide — page " counter(page) " / " counter(pages);
+          @bottom-center { content: "AdvPrint Pro 2.6.9 — Full Setup Guide — page " counter(page) " / " counter(pages);
                            font: 9.5px "Segoe UI", sans-serif; color: #64748b; } }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font: 10.5px/1.55 "Segoe UI", "Noto Sans", sans-serif; color: #0f172a; }
@@ -61,7 +61,7 @@
   <div class="sub">Advanced Printer — silent printing for every web page, PDF, application and receipt printer</div>
   <div class="org">by Bit Dream IT — Innovative Healthcare Solutions</div>
   <div class="meta">
-    Version 2.6.8 — Enterprise Edition<br>
+    Version 2.6.9 — Enterprise Edition<br>
     Full Setup Guide — A to Z<br><br>
     100% local · no cloud · no tracking · MIT licensed<br>
     Windows 7/8/10/11 · Windows Server · Debian/Ubuntu/Mint · macOS
@@ -124,8 +124,8 @@ Your printer — or ~/.advprint/files if the destination is "save as PDF"</pre>
 <h2>2. Install in 3 minutes</h2>
 <h3>2.1 Windows — the one-time installer (recommended)</h3>
 <ol>
-<li>Download <span class="mono">AdvPrint-Pro-v2.6.8-FULL.zip</span> and unzip it.</li>
-<li>Run <span class="mono">AdvPrint-Pro-Setup-2.6.8.exe</span>. No admin needed, no UAC popup, no Python needed —
+<li>Download <span class="mono">AdvPrint-Pro-v2.6.9-FULL.zip</span> and unzip it.</li>
+<li>Run <span class="mono">AdvPrint-Pro-Setup-2.6.9.exe</span>. No admin needed, no UAC popup, no Python needed —
     the setup carries a <b>complete Python 3.11.9 runtime</b> (this is exactly what the broken 2.5.3 download missed:
     if an installer is smaller than ~9&nbsp;MB it is incomplete — re-download).</li>
 <li>Setup registers the <b>Startup app "AdvPrint Pro"</b> (Task Manager → Startup apps), creates Start Menu
@@ -146,7 +146,7 @@ the hub is a plain stdlib Python script, signed-off and open source (MIT).</div>
 </ol>
 
 <h3>2.3 Linux / Debian / Ubuntu / Mint — the .deb</h3>
-<pre>sudo apt install ./advprint-pro_2.6.8_all.deb
+<pre>sudo apt install ./advprint-pro_2.6.9_all.deb
 advprint-start            # start now
 advprint token            # show the current token
 advprint livetest         # full A-to-Z self-test</pre>
@@ -382,7 +382,7 @@ environment variables (<span class="mono">ADVPRINT_*</span>; legacy <span class=
 <!-- ============ 11 ============ -->
 <h2>11. Enterprise edition — silent install, policy, service</h2>
 <h3>11.1 Silent / scripted Windows install</h3>
-<pre>AdvPrint-Pro-Setup-2.6.8.exe /S          # silent, per-user, no UAC
+<pre>AdvPrint-Pro-Setup-2.6.9.exe /S          # silent, per-user, no UAC
 # enterprise rollout via Intune/GPO/SCCM: run per user, no elevation needed</pre>
 <h3>11.2 Managed policy (force settings on all PCs)</h3>
 <p>Deploy <span class="mono">extension/managed.json</span> content as Chrome policy
@@ -434,7 +434,7 @@ curl -X POST -H "X-AdvPrint-Token: $TOKEN" http://127.0.0.1:9235/livetest</pre>
 <h2>13. Troubleshooting — every known problem and its fix</h2>
 <table>
 <tr><th>Symptom</th><th>Cause → Fix</th></tr>
-<tr><td>Setup says <i>cannot access / Access is denied</i></td><td>Incomplete/damaged download (pre-2.6 bug) or Mark-of-the-Web → re-download the 2.6.8 zip (setup ≈ 9.6 MB), right-click zip → Properties → Unblock, or run <span class="mono">install-windows.bat</span> which unblocks automatically.</td></tr>
+<tr><td>Setup says <i>cannot access / Access is denied</i></td><td>Incomplete/damaged download (pre-2.6 bug) or Mark-of-the-Web → re-download the 2.6.9 zip (setup ≈ 9.6 MB), right-click zip → Properties → Unblock, or run <span class="mono">install-windows.bat</span> which unblocks automatically.</td></tr>
 <tr><td>Dashboard shows “needs the current token”</td><td>Stale bookmark → press the green <b>Fix it now</b> button on that very page (hub PC), or tray → Open dashboard, or extension → Detect token.</td></tr>
 <tr><td>Extension shows 401 / token rejected</td><td>Options → Settings → <b>Detect token</b> (or paste the token from <span class="mono">advprint token</span>). After a rotation always re-detect.</td></tr>
 <tr><td>Nothing prints, no error</td><td>Debug tab → Run full self-test → fix the [!!] line (usually SumatraPDF missing or no default printer). Then send a test print &amp; watch live.</td></tr>
@@ -456,6 +456,7 @@ curl -X POST -H "X-AdvPrint-Token: $TOKEN" http://127.0.0.1:9235/livetest</pre>
 <tr><td><span class="mono">print backend exit 1:</span> with no message (File (PDF))</td><td><b>Fixed in 2.6.7</b> — “File (PDF)” is now a virtual printer: the PDF is <b>saved</b> to <span class="mono">Downloads\AdvPrint</span> with status “saved” (also with Queue Mode OFF). The backend's stdout is captured too, so real printer errors now show a readable reason.</td></tr>
 <tr><td>Windows service “AdvPrint” stuck in <i>start pending</i></td><td>A stale state left by an older service process — the hub actually runs from the Startup app / tray. Fix: <span class="mono">services.msc</span> → AdvPrint → Restart (or reboot), or run <span class="mono">service-remove</span> — keep only ONE of service / Startup app active. The Debug tab lists this automatically.</td></tr>
 <tr><td><span class="mono">printer 'X...X not found</span> — the name shows TWICE in a row (e.g. <span class="mono">CanonCanon</span>)</td><td>A stored printer name was typed/pasted twice. <b>Self-healed in 2.6.8</b> — the hub collapses the doubled name to the real printer, prints, and corrects the history (audit: <span class="mono">printer.corrected</span>). Old dead jobs: just press <b>Retry</b>. Still check Settings → Printer for the stale entry.</td></tr>
+<tr><td>Every page prints TWICE — two sheets, and the log shows two <span class="mono">[OK] job #N</span> lines</td><td>Queue Mode OFF race in v2.6.8 and earlier: the FIFO worker and the direct thread both grabbed the same job. <b>Fixed in 2.6.9</b> — the job row is created in its final state, one job = one sheet. Not a printer or driver problem (the printer was innocent). Upgrade the hub to 2.6.9; nothing to change on the printer.</td></tr>
 <tr><td>Right-click "Print this page" fails with <i>Cannot access contents of url chrome-extension://…</i></td><td>The menu was used on a browser-internal page (chrome://, settings, extension page). <b>Fixed in 2.6.8</b> — the menu now only appears on printable pages (http/https/file) and shows a friendly notice otherwise.</td></tr>
 <tr><td>HP Laser 103/107/108 shows <i>offline</i></td><td>That is the printer device itself (USB/network/sleep), not a hub error — check cable/power, set it online in Windows, then <b>Retry</b> the held jobs.</td></tr>
 </table>
@@ -484,7 +485,7 @@ Linux: <span class="mono">sudo apt remove advprint-pro</span> + <span class="mon
 the tray always opens the dashboard with the right token, and the error page itself offers the one-click fix.
 That is the v2.6 promise: <b>auto security, zero manual Security-tab surgery</b>.</div>
 
-<p style="margin-top:18px;color:#64748b;font-size:9.5px">AdvPrint Pro (Advanced Printer) v2.6.8 —
+<p style="margin-top:18px;color:#64748b;font-size:9.5px">AdvPrint Pro (Advanced Printer) v2.6.9 —
 by Bit Dream IT — Innovative Healthcare Solutions — MIT license — 100% local, no cloud, no tracking.
 Repository: github.com/bitdreamit/AdvPrint-Pro</p>
 

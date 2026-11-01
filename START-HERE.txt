@@ -1,6 +1,25 @@
-AdvPrint Pro (Advanced Printer) v2.6.8 - START HERE
+AdvPrint Pro (Advanced Printer) v2.6.9 - START HERE
 ====================================================
 by Bit Dream IT - Innovative Healthcare Solutions
+
+WHAT'S NEW IN 2.6.9 (DOUBLE-PRINT FIX - ONE JOB = ONE SHEET)
+  0. "THE PRINTER PRINTS EVERY PAGE TWICE" IS FIXED (found through the
+     Debug tab on a live install: every job produced TWO SumatraPDF
+     runs, two "[OK] job #N" lines and two sheets of paper). With
+     Queue Mode OFF the job used to sit in the database as 'queued'
+     for a moment while the hub checked the printer status - the FIFO
+     worker grabbed it there AND the direct thread printed it too.
+     The path is now decided BEFORE the job row is created: one job,
+     ONE sheet, one "[OK]" line. Not a printer or driver problem -
+     the printer was innocent.
+  1. DIRECT-MODE RETRY KEEPS ITS FILE: a failed instant job no longer
+     deletes its PDF before the automatic retry (the retry used to
+     die on "file no longer stored").
+  2. UPGRADE IS DROP-IN: run the new Setup exe over the old install
+     (settings + history migrate automatically), then reload the
+     extension. Nothing else changes - full v2.6.8 feature set 1:1.
+  FILES IN THIS RELEASE: AdvPrint-Pro-Setup-2.6.9.exe (Windows),
+  advprint-pro_2.6.9_all.deb (Linux), AdvPrint-Pro-v2.6.9-FULL.zip.
 
 WHAT'S NEW IN 2.6.8 (PRINTER-NAME SELF-HEAL + CLEAN EXTENSION ERRORS)
   0. JOB #2 "printer 'Canon LBP6230/6240Canon LBP6230/6240' not found"
@@ -20,8 +39,8 @@ WHAT'S NEW IN 2.6.8 (PRINTER-NAME SELF-HEAL + CLEAN EXTENSION ERRORS)
      shows a friendly notice instead.
   2. YOUR EXISTING JOB #2: press Retry in the history - it now prints
      (or saves) with the corrected printer name.
-  FILES IN THIS RELEASE: AdvPrint-Pro-Setup-2.6.8.exe (Windows),
-  advprint-pro_2.6.8_all.deb (Linux), AdvPrint-Pro-v2.6.8-FULL.zip.
+  FILES IN THIS RELEASE: AdvPrint-Pro-Setup-2.6.9.exe (Windows),
+  advprint-pro_2.6.9_all.deb (Linux), AdvPrint-Pro-v2.6.9-FULL.zip.
   NOTHING ELSE CHANGED: full v2.6.7 feature set kept 1:1.
 
 WHAT'S NEW IN 2.6.7 (PRINT RELIABILITY - THE TWO "NOTHING PRINTS" BUGS)
@@ -233,7 +252,7 @@ WHY DID MY OLD VERSION SAY "cannot access" ON THE SETUP EXE?
   No manual Security-tab work is needed anywhere.
 
 UPDATE IN 3 STEPS
-  1. Run AdvPrint-Pro-Setup-2.6.7.exe (installs over the old
+  1. Run AdvPrint-Pro-Setup-2.6.9.exe (installs over the old
      version; history + settings migrate to .advprint automatically).
      Portable users: extract the new zip over the old folder, then
      AdvPrint-Tool.bat > [13] once (unblocks), then [1] Start.
@@ -267,12 +286,12 @@ FILES IN THIS PACKAGE
                    AdvPrint-Pro-Full-Guide.html + .pdf, release notes
   tests\           pytest suite + pytest.ini
   installer\       setup.nsi - NSIS 3 source that builds
-                   AdvPrint-Pro-Setup-2.6.7.exe (per-machine, UAC)
+                   AdvPrint-Pro-Setup-2.6.9.exe (per-machine, UAC)
   prebuilt\        READY installers, no build needed:
-                   AdvPrint-Pro-Setup-2.6.7.exe (Windows setup,
+                   AdvPrint-Pro-Setup-2.6.9.exe (Windows setup,
                    ~9.5 MB - run it, UAC appears, done)
-                   advprint-pro_2.6.7_all.deb (Linux deb -
-                   sudo dpkg -i advprint-pro_2.6.7_all.deb)
+                   advprint-pro_2.6.9_all.deb (Linux deb -
+                   sudo dpkg -i advprint-pro_2.6.9_all.deb)
   README.md / CHANGELOG.md / LICENSE / pytest.ini / .gitignore
   SHA256SUMS.txt
 
@@ -284,6 +303,6 @@ SUPPORT
   Bug report? Debug tab -> Copy report - and attach hub.log from
   the data folder (%USERPROFILE%\.advprint\hub.log).
 
-AdvPrint Pro (Advanced Printer) v2.6.7
+AdvPrint Pro (Advanced Printer) v2.6.9
 by Bit Dream IT - Innovative Healthcare Solutions
 100% local - no cloud - no tracking - MIT license

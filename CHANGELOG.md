@@ -1,6 +1,29 @@
 # Changelog - AdvPrint Pro (Advanced Printer)
 by Bit Dream IT - Innovative Healthcare Solutions
 
+## v2.6.9 - DOUBLE-PRINT FIX (2026-11-01)
+
+### Fixed: every page printed TWICE with Queue Mode OFF ("after print it
+### extra again auto print")
+- Live case (Debug tab, v2.6.8): each print produced TWO SumatraPDF
+  runs, two "[OK] job #N printed" lines with different timings and two
+  sheets of paper. Root cause: with Queue Mode OFF the job row was
+  born 'queued' and only flipped to 'printing' AFTER the slow
+  printer-status probe (hundreds of ms on Windows). The FIFO worker
+  polls every 0.35 s and claimed the job inside that window - so BOTH
+  the direct thread and the worker sent the same job to the printer.
+- The execution path is now decided BEFORE the DB row exists and the
+  row is BORN in its final state ('printing' for direct jobs). The
+  worker, which only claims 'queued' rows, can never see a direct job:
+  one job = one sheet. Proven by a race regression test that fails on
+  v2.6.8 and passes on v2.6.9 (printer-status probe slowed to 0.6 s).
+- Also fixed: a direct-mode job that fails now KEEPS its PDF file for
+  the automatic retry (the direct thread used to delete the file even
+  when the job was requeued, so the retry died on a missing file).
+
+- Tests: +2 v2.6.9 regressions (race: exactly-one-execution; retry
+  keeps file). Full suite 111/111.
+
 ## v2.6.8 - PRINTER-NAME SELF-HEAL + EXTENSION MENU FIX (2026-11-01)
 
 ### Fixed: job died with "printer 'XxX' not found" when a stored printer

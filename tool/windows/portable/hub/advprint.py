@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # ============================================================
-#  AdvPrint Pro v2.6.8  -  Print from any web page to any printer
+#  AdvPrint Pro v2.6.9  -  Print from any web page to any printer
 #  by Bit Dream IT  -  MIT licensed, 100% local & open source
-#  AdvPrint Pro - Version 2.6.8 - by Bit Dream IT - MIT license
+#  AdvPrint Pro - Version 2.6.9 - by Bit Dream IT - MIT license
 #  100% local - no cloud, no tracking.
 # ------------------------------------------------------------
 #  Chrome extension <-> this hub (localhost) -> ANY printer
@@ -91,11 +91,11 @@ if _HUB_DIR not in sys.path:
     sys.path.insert(0, _HUB_DIR)
 
 
-VERSION = "2.6.8"
-VERSION_NAME = ("v2.6.8 (printer-name self-heal: doubled / mistyped"
-                " printer names are corrected to the real installed"
-                " printer instead of dying, extension menus only on"
-                " printable pages - full v2.6.7 set 1:1)")
+VERSION = "2.6.9"
+VERSION_NAME = ("v2.6.9 (double-print fix: Queue Mode OFF jobs can no"
+                " longer be claimed by BOTH the FIFO worker and the direct"
+                " thread - one job, one sheet; retried direct jobs keep"
+                " their PDF file)")
 FULL_BRAND = ("AdvPrint Pro (Advanced Printer) by "
               "Bit Dream IT - Innovative Healthcare Solutions")
 BRANDING = ("AdvPrint Pro (Advanced Printer) - Version %s - by "
@@ -2398,35 +2398,50 @@ def enqueue_print(kind, title, data, printer="", copies=1,
     if run_at:
         status = "scheduled"
         next_at = run_at
-    job_id = db_add(kind, title, printer, copies, path, source, origin_ip,
-                    status=status, priority=max(1, min(9, int(priority or 5))),
-                    run_at=run_at, next_attempt_at=next_at, site=site,
-                    dedupe_key=dedupe_key, content_hash=content_hash,
-                    **extra)
-    if queue_mode and status == "queued":
-        log("[QUEUE] job #%d queued (p%s, %s, %s) from %s"
-            % (job_id, priority, kind, title or "untitled", source))
-        return job_id, None
-    if status == "scheduled":
-        log("[SCHEDULE] job #%d scheduled for %s" % (job_id, run_at))
-        return job_id, None
+    # v2.6.9 FIX (double print): decide direct-vs-queued BEFORE the DB row
+    # exists. Queue Mode OFF used to insert the row as 'queued' and only
+    # flip it to 'printing' AFTER the slow printer-status probe (hundreds
+    # of ms on Windows) - the FIFO worker polls every 0.35 s and could
+    # claim the job inside that window, so BOTH paths sent the same job to
+    # the printer: two Sumatra runs, two '[OK] job #N' lines and the page
+    # physically printed twice. Now the row is BORN in its final state
+    # ('printing' for direct jobs) - the worker, which only claims
+    # 'queued' rows, can never see a direct job.
+    direct = (status == "queued" and not queue_mode)
+    auto_hold = None
     # v2.3 INSTANT PRINT fallback: queue mode OFF + the printer is NOT
     # active -> auto-queue the job instead of firing a doomed direct
     # print. The FIFO worker then handles it like any other job (with
     # hold_offline it even waits for the printer to come back and
     # prints automatically). Raw/ESC-POS jobs skip the check - receipt
     # printers rarely report a usable status.
-    if CFG.get("instant_auto_queue", True) and kind != "raw":
+    if direct and CFG.get("instant_auto_queue", True) and kind != "raw":
         pstat = printer_ready(printer)
         if pstat in ("offline", "paper-out", "error"):
-            db_audit("print.auto_queued", job_id=job_id, printer=printer,
-                     details="instant print: printer '%s' is %s - job"
-                             " auto-queued (prints when it is ready)"
-                             % (printer or "default", pstat))
-            log("[INSTANT] job #%d auto-queued - printer '%s' is %s"
-                % (job_id, printer or "default", pstat))
-            return job_id, None
-    db_update(job_id, status="printing", error=None)
+            auto_hold = pstat
+            direct = False
+    if direct:
+        status = "printing"        # row never visible as 'queued'
+    job_id = db_add(kind, title, printer, copies, path, source, origin_ip,
+                    status=status, priority=max(1, min(9, int(priority or 5))),
+                    run_at=run_at, next_attempt_at=next_at, site=site,
+                    dedupe_key=dedupe_key, content_hash=content_hash,
+                    **extra)
+    if status == "scheduled":
+        log("[SCHEDULE] job #%d scheduled for %s" % (job_id, run_at))
+        return job_id, None
+    if queue_mode:
+        log("[QUEUE] job #%d queued (p%s, %s, %s) from %s"
+            % (job_id, priority, kind, title or "untitled", source))
+        return job_id, None
+    if auto_hold:
+        db_audit("print.auto_queued", job_id=job_id, printer=printer,
+                 details="instant print: printer '%s' is %s - job"
+                         " auto-queued (prints when it is ready)"
+                         % (printer or "default", auto_hold))
+        log("[INSTANT] job #%d auto-queued - printer '%s' is %s"
+            % (job_id, printer or "default", auto_hold))
+        return job_id, None
     threading.Thread(target=_print_now,
                      args=(job_id, path, kind, printer, copies),
                      daemon=True, name="advprint-direct-%d" % job_id).start()
@@ -2482,7 +2497,13 @@ def _print_now(job_id, path, kind, printer, copies):
                      details=str(e)[:200])
             _retry_or_dead(db_get(job_id) or {}, e)
     finally:
-        if not CFG["keep_files"] and path and os.path.exists(path):
+        # v2.6.9: keep the file when the job was requeued for retry -
+        # deleting it here used to make the retry fail with "file no
+        # longer stored". Only clean up terminal states, like the FIFO
+        # worker's finally_guard does.
+        if not CFG["keep_files"] and path and os.path.exists(path) \
+                and (db_get(job_id) or {}).get("status") in (
+                    "printed", "failed", "dead", "canceled", "saved"):
             try:
                 os.unlink(path)
             except OSError:

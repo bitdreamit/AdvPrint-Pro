@@ -28,7 +28,7 @@ from conftest import wait_until  # noqa: E402
 def test_health_open_no_token(hub):
     code, d = hub.get("/health", token=None)
     assert code == 200 and d["ok"] is True
-    assert d["version"] == "2.6.8"
+    assert d["version"] == "2.6.9"
     assert d["v2"] is True
     assert "100% local" in d["branding"]
 
@@ -538,13 +538,13 @@ def test_v1_database_migration(tmp_path):
 
 
 def test_version_anchors():
-    assert advprint.VERSION == "2.6.8"
+    assert advprint.VERSION == "2.6.9"
     # repo/package layout: tool/windows/portable/hub -> root/extension
     root = os.path.dirname(os.path.dirname(os.path.dirname(
         os.path.dirname(os.path.dirname(advprint.__file__)))))
     ext = os.path.join(root, "extension", "manifest.json")
     with open(ext) as f:
-        assert json.load(f)["version"] == "2.6.8"
+        assert json.load(f)["version"] == "2.6.9"
 
 
 def test_log_rotation(tmp_path):
@@ -1051,7 +1051,7 @@ def test_v26_token_current_loopback_only(hub):
     code, d = hub.get("/token/current")
     assert code == 200 and d["ok"] is True
     assert d["token"] == hub.token
-    assert d["app"] == "AdvPrint Pro" and d["version"] == "2.6.8"
+    assert d["app"] == "AdvPrint Pro" and d["version"] == "2.6.9"
 
 
 def test_v26_token_current_rejects_remote(hub):
@@ -1125,8 +1125,8 @@ def test_v261_tray_module_ships_and_parses():
 
 
 def test_v261_version_single_source():
-    assert advprint.VERSION == "2.6.8"
-    assert advprint.VERSION_NAME.startswith("v2.6.8")
+    assert advprint.VERSION == "2.6.9"
+    assert advprint.VERSION_NAME.startswith("v2.6.9")
 
 
 def test_v261_cli_cmd_full_path():
@@ -1285,7 +1285,7 @@ def test_v264_setup_exe_kills_zombie_hubs():
                             "installer", "setup.nsi"), encoding="utf-8").read()
     assert "taskkill /F /IM AdvPrintPro.exe" in src
     assert "taskkill /F /IM PrintHubPro.exe" in src
-    assert 'VIProductVersion "2.6.8.0"' in src
+    assert 'VIProductVersion "2.6.9.0"' in src
 
 
 # ---------------- v2.6.8: printer-name self-heal + menu guard ----------
@@ -1385,3 +1385,57 @@ def test_v268_extension_self_heal_and_menu_patterns():
     assert '"http://*/*"' in src and '"https://*/*"' in src
     assert "function printableTab" in src
     assert "/^(https?|file):/i" in src
+
+
+# ---------------- v2.6.9: no double print (worker vs direct race) -------
+
+def test_v269_direct_job_printed_exactly_once(hub, clean_queue, monkeypatch):
+    """v2.6.9 regression for the real-machine report 'the page prints
+    twice' (two Sumatra runs, two '[OK] job #N' lines): with Queue Mode
+    OFF the job row used to be born 'queued' and was only flipped to
+    'printing' AFTER the slow printer-status probe (hundreds of ms on
+    Windows) - the FIFO worker polls every 0.35 s and could claim the job
+    inside that window, so BOTH paths sent the same job to the backend.
+    The row is now born 'printing', a state the worker (which only claims
+    'queued') can never see."""
+    def slow_ready(name=""):
+        time.sleep(0.6)              # probe wider than the worker cycle
+        return "ready"
+    monkeypatch.setattr(advprint, "printer_ready", slow_ready)
+    code, d = hub.post("/print", {"text": "double print race", "title":
+                                  "race269", "queue": False})
+    assert code == 200 and d.get("ok"), d
+    jid = d["job_id"]
+    assert wait_until(lambda: any(p.get("job_id") == jid
+                                  for p in hub.printed), timeout=10)
+    time.sleep(1.2)                  # a 2nd execution would land here
+    hits = [p for p in hub.printed if p.get("job_id") == jid]
+    assert len(hits) == 1, ("job #%d was printed %d times - double-print"
+                            " bug is back" % (jid, len(hits)))
+    assert advprint.db_get(jid)["status"] == "printed"
+
+
+def test_v269_direct_retry_keeps_file(hub, clean_queue, cfg_reset,
+                                      monkeypatch):
+    """v2.6.9: a Queue-Mode-OFF job that fails must stay printable - its
+    PDF file used to be deleted in the direct thread's finally block, so
+    the automatic retry always died on 'file no longer stored'."""
+    monkeypatch.setitem(advprint.CFG, "max_retries", 2)
+    monkeypatch.setitem(advprint.CFG, "retry_base_seconds", 30)
+    def boom(*a, **kw):
+        raise RuntimeError("backend exploded")
+    monkeypatch.setattr(advprint, "print_file", boom)
+    code, d = hub.post("/print", {"text": "retry keeps file", "title":
+                                  "retryfile269", "queue": False})
+    assert code == 200 and d.get("ok"), d
+    jid = d["job_id"]
+    ok = wait_until(lambda: (advprint.db_get(jid) or {}).get("status")
+                    == "queued"
+                    and (advprint.db_get(jid) or {}).get("next_attempt_at"),
+                    timeout=8)
+    assert ok, advprint.db_get(jid)
+    j = advprint.db_get(jid)
+    assert j["attempts"] == 1
+    assert j.get("file_path") and os.path.exists(j["file_path"]), \
+        "retry file was deleted - the retry can never succeed"
+    advprint.db_update(jid, status="canceled", error="test done")
