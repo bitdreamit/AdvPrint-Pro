@@ -13,6 +13,29 @@ Web page ──► Chrome extension ──► AdvPrint Pro hub (localhost:9235) 
 
 ---
 
+## What's new in v2.6.7 (print reliability — the two "nothing prints" bugs)
+
+Two real failures reported through the Debug tab are fixed:
+
+1. **`save-as-PDF failed: [Errno 13] Permission denied`** — a real-time
+   antivirus / search indexer / sync filter briefly holds the fresh PDF
+   exclusively right after the hub writes it; the single read attempt hit
+   that window and the job died. The hub now **retry-reads with backoff
+   (~4 s)**, writes atomically (`.part` + rename) and **probe-reads every
+   file before a backend (SumatraPDF / lp) starts**. If a lock truly never
+   clears, the error now says exactly that and names the fix.
+2. **`print backend exit 1:` on a queued *File (PDF)* job** — `File (PDF)`
+   was missing from the virtual-printer list, so the job went to
+   SumatraPDF as a Windows printer name that does not exist. It now routes
+   to the save path (status *saved*, PDF in `Downloads\AdvPrint`), also
+   with Queue Mode OFF.
+
+Plus: backend **stdout is captured** in errors (SumatraPDF reports on
+stdout), a **printer-not-found guard** ("printer 'X' not found on this PC
+(installed: …)"), and the Debug tab now lists a Windows service stuck in
+*start pending* with the fix. Nothing else changed — full v2.6.4 feature
+set kept 1:1.
+
 ## What's new in v2.6.6 (screen-glitch fix — no more console flashes)
 
 - **The periodic Windows "screen glitch" is fixed.** The windowless hub queried the optional Windows service with `sc query` without the `CREATE_NO_WINDOW` flag, so Windows allocated a fresh console window for `sc.exe` every ~10 seconds for as long as the hub ran — a black window flashing "after some time", stopping only when the tool or hub was closed. All background child processes now run windowless (`creationflags=HIDE`).

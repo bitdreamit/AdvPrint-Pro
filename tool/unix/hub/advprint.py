@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # ============================================================
-#  AdvPrint Pro v2.6.6  -  Print from any web page to any printer
+#  AdvPrint Pro v2.6.7  -  Print from any web page to any printer
 #  by Bit Dream IT  -  MIT licensed, 100% local & open source
-#  AdvPrint Pro - Version 2.6.6 - by Bit Dream IT - MIT license
+#  AdvPrint Pro - Version 2.6.7 - by Bit Dream IT - MIT license
 #  100% local - no cloud, no tracking.
 # ------------------------------------------------------------
 #  Chrome extension <-> this hub (localhost) -> ANY printer
@@ -91,10 +91,10 @@ if _HUB_DIR not in sys.path:
     sys.path.insert(0, _HUB_DIR)
 
 
-VERSION = "2.6.6"
-VERSION_NAME = ("v2.6.6 (screen-glitch fix - no more console flashes from"
-                " background threads - full v2.6.4 feature set kept 1:1"
-                " - SumatraPDF per-user scan - hardened service start)")
+VERSION = "2.6.7"
+VERSION_NAME = ("v2.6.7 (print reliability: antivirus-lock retry for"
+                " save-as-PDF, File (PDF) routing fix, printer-not-found"
+                " guard, backend output in errors - full v2.6.4 set 1:1)")
 FULL_BRAND = ("AdvPrint Pro (Advanced Printer) by "
               "Bit Dream IT - Innovative Healthcare Solutions")
 BRANDING = ("AdvPrint Pro (Advanced Printer) - Version %s - by "
@@ -861,7 +861,12 @@ def _find_sumatra_inner():
     SUMATRA_LAST["tried"] = tried
     return None
 
-VIRTUAL_PDF_PRINTERS = ("Microsoft Print to PDF",)
+# v2.6.7: "File (PDF)" is the hub's own virtual save-as-PDF
+# destination. It was MISSING here, so a QUEUED job with printer
+# "File (PDF)" went to the SumatraPDF backend as a Windows printer
+# name that does not exist - SumatraPDF exited 1 with no output
+# ("print backend exit 1: ", job dead-lettered).
+VIRTUAL_PDF_PRINTERS = ("Microsoft Print to PDF", "File (PDF)")
 
 def is_virtual_pdf_printer(name):
     """A virtual PDF printer needs no renderer and would pop a Save-As
@@ -1734,6 +1739,17 @@ def print_file(path, kind="a4", printer="", copies=1, job_id=None,
         return None
 
     try:
+        # v2.6.7: two guards that turn silent backend deaths into
+        # CLEAR error messages (the "print backend exit 1: " case):
+        if target and not is_virtual_pdf_printer(target):
+            st = printers_status()
+            if st and target not in st:
+                raise RuntimeError(
+                    "printer '%s' not found on this PC (installed: %s)"
+                    " - pick the exact name in Settings > Printer"
+                    % (target, ", ".join(sorted(st))[:150]))
+        if os.path.isfile(path):
+            _wait_readable(path)  # AV lock window - see _read_locked
         if IS_WIN:
             sumatra = find_sumatra()
             if not sumatra:
@@ -1839,9 +1855,17 @@ def print_file(path, kind="a4", printer="", copies=1, job_id=None,
             proc.kill()
             raise RuntimeError("printer did not respond within 180 s")
         if proc.returncode != 0:
+            # v2.6.7: SumatraPDF reports problems on STDOUT and often
+            # leaves stderr EMPTY - "print backend exit 1: " with no
+            # reason. Collect both streams so the history shows WHY.
+            detail = ((err or b"") + (out or b"")).decode(
+                "utf-8", "ignore").strip()[:300]
+            if not detail:
+                detail = ("backend gave no output - usually the printer"
+                          " name does not exist or the file was locked"
+                          " by another program")
             raise RuntimeError("print backend exit %d: %s"
-                               % (proc.returncode,
-                                  (err or b"").decode("utf-8", "ignore")[:300]))
+                               % (proc.returncode, detail))
     finally:
         with _CURRENT_LOCK:
             if _CURRENT["id"] == job_id:
@@ -1890,6 +1914,58 @@ def _hold_job(job, why):
              details=why[:200])
     log("[HOLD] job #%d: %s" % (job["id"], why))
 
+def _read_locked(path, attempts=5, first_delay=0.2):
+    """v2.6.7: read a freshly written file that a real-time antivirus,
+    search indexer or sync filter may hold EXCLUSIVELY for a few hundred
+    milliseconds right after it is closed. On Windows that answers the
+    read with [Errno 13] Permission denied - one unlucky read used to
+    kill the whole job ("save-as-PDF failed: [Errno 13] Permission
+    denied" in the history). Retries with backoff (~4 s in total); the
+    lock window always clears. Missing files raise immediately."""
+    last = None
+    for i in range(attempts):
+        try:
+            with open(path, "rb") as f:
+                return f.read()
+        except PermissionError as e:
+            last = e
+        except OSError:
+            raise                        # not found / bad path - no retry
+        if i < attempts - 1:
+            time.sleep(first_delay * (2 ** i))    # 0.2 0.4 0.8 1.6 s
+    raise last
+
+
+def _write_atomic(path, data, attempts=4):
+    """v2.6.7: write bytes via a .part file + os.replace so readers never
+    see a partial PDF, retrying while the destination folder is briefly
+    locked (antivirus / OneDrive / sync tools)."""
+    tmp = "%s.part%d" % (path, os.getpid())
+    last = None
+    for i in range(attempts):
+        try:
+            with open(tmp, "wb") as f:
+                f.write(data)
+            os.replace(tmp, path)        # atomic on the same volume
+            return
+        except PermissionError as e:
+            last = e
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+            if i < attempts - 1:
+                time.sleep(0.2 * (2 ** i))
+    raise last
+
+
+def _wait_readable(path, attempts=5, first_delay=0.2):
+    """v2.6.7: probe-read a job file before handing it to a print
+    backend (SumatraPDF / lp), so an antivirus lock window cannot make
+    the BACKEND fail either (SumatraPDF would just exit 1 silently)."""
+    _read_locked(path, attempts=attempts, first_delay=first_delay)
+
+
 def _save_virtual_pdf(job):
     """v2.5: write the job's PDF straight into the save-as-PDF folder
     (Downloads\\AdvPrint by default). Status 'saved' - no Save-As dialog,
@@ -1906,7 +1982,14 @@ def _save_virtual_pdf(job):
         n = 1
         while os.path.exists(fpath):
             fpath = os.path.join(fdir, "%s-%d.pdf" % (base, n)); n += 1
-        shutil.copyfile(job["file_path"], fpath)
+        # v2.6.7: the fresh PDF is sometimes held exclusively for a
+        # few 100 ms by the real-time antivirus / indexer right
+        # after the hub writes it. The plain copyfile read then
+        # failed instantly with "[Errno 13] Permission denied" and
+        # the job was lost. Retry-read + atomic write ride out the
+        # lock window instead.
+        data = _read_locked(job["file_path"])
+        _write_atomic(fpath, data)
         db_update(jid, status="saved", printer="File (PDF)",
                   held_reason=None, error=None, file_path=fpath)
         db_audit("print.saved", job_id=jid,
@@ -1914,8 +1997,15 @@ def _save_virtual_pdf(job):
                  details="virtual printer -> PDF saved to %s" % fpath)
         log("[FILE] job #%d: virtual printer -> saved %s" % (jid, fpath))
     except Exception as e:
-        db_update(jid, status="failed", error="save-as-PDF failed: %s" % e)
-        log("[FAIL] job #%d save-as-PDF: %s" % (jid, e))
+        msg = str(e)
+        if isinstance(e, PermissionError):
+            msg = ("PDF still locked by antivirus / another program"
+                   " after retries - Retry from the history; if it"
+                   " repeats add '%s' to your antivirus exclusions (%s)"
+                   % (CFG["data_dir"], e))
+        db_update(jid, status="failed",
+                  error=("save-as-PDF failed: %s" % msg)[:500])
+        log("[FAIL] job #%d save-as-PDF: %s" % (jid, msg))
 
 def _release_held_jobs():
     """Every ~15 s: printers that came back online release their held jobs."""
@@ -2309,6 +2399,17 @@ def _print_now(job_id, path, kind, printer, copies):
             with open(path, "rb") as f:
                 data = f.read()
             target = print_raw(data, printer, job_id=job_id)
+        elif is_virtual_pdf_printer(
+                printer or CFG.get("printer") or default_printer() or ""):
+            # v2.6.7: virtual PDF printers (Microsoft Print to PDF /
+            # File (PDF)) take the save path here TOO - Queue Mode OFF
+            # used to hand "File (PDF)" straight to the print backend,
+            # and SumatraPDF exited 1 (no such Windows printer).
+            jrow = dict(db_get(job_id) or {})
+            jrow.setdefault("id", job_id)
+            jrow.setdefault("file_path", path)
+            _save_virtual_pdf(jrow)
+            return
         else:
             jrow = db_get(job_id) or {}
             target = print_file(path, kind, printer, copies, job_id=job_id,
@@ -2359,8 +2460,7 @@ def save_file_job(kind, title, data, source="api", origin_ip="-"):
     while os.path.exists(path):            # never overwrite an earlier file
         path = os.path.join(fdir, "%s-%d.pdf" % (fname[:-4], n))
         n += 1
-    with open(path, "wb") as f:
-        f.write(data)
+    _write_atomic(path, data)   # v2.6.7: ride out AV/OneDrive lock windows
     job_id = db_add(kind, title, "File (PDF)", 1, path, source, origin_ip,
                     status="saved")
     log("[FILE] job #%d saved -> %s" % (job_id, path))
@@ -4391,6 +4491,20 @@ def _debug_problems():
             "message": "the queue is PAUSED - queued jobs wait and nothing"
                        " prints",
             "fix": "press Resume (popup / dashboard) or POST /queue/resume"})
+    if IS_WIN:
+        svc = service_state()
+        if (svc and svc.get("installed") and not svc.get("running")
+                and "pending" in (svc.get("state") or "")):
+            probs.append({
+                "level": "warn", "check": "Windows service",
+                "message": "the OPTIONAL service 'AdvPrint' is stuck in"
+                           " '%s' - a stale state left by an older service"
+                           " process that was never restarted after an"
+                           " upgrade (the hub actually runs from the"
+                           " Startup app / tray)" % (svc.get("state") or ""),
+                "fix": "services.msc > AdvPrint > Restart (or reboot),"
+                       " or run service-remove - keep only ONE of"
+                       " service / Startup app active"})
     st = printers_status_cached()
     if not st:
         probs.append({

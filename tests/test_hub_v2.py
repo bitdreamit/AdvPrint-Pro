@@ -28,7 +28,7 @@ from conftest import wait_until  # noqa: E402
 def test_health_open_no_token(hub):
     code, d = hub.get("/health", token=None)
     assert code == 200 and d["ok"] is True
-    assert d["version"] == "2.6.6"
+    assert d["version"] == "2.6.7"
     assert d["v2"] is True
     assert "100% local" in d["branding"]
 
@@ -538,13 +538,13 @@ def test_v1_database_migration(tmp_path):
 
 
 def test_version_anchors():
-    assert advprint.VERSION == "2.6.6"
+    assert advprint.VERSION == "2.6.7"
     # repo/package layout: tool/windows/portable/hub -> root/extension
     root = os.path.dirname(os.path.dirname(os.path.dirname(
         os.path.dirname(os.path.dirname(advprint.__file__)))))
     ext = os.path.join(root, "extension", "manifest.json")
     with open(ext) as f:
-        assert json.load(f)["version"] == "2.6.6"
+        assert json.load(f)["version"] == "2.6.7"
 
 
 def test_log_rotation(tmp_path):
@@ -1051,7 +1051,7 @@ def test_v26_token_current_loopback_only(hub):
     code, d = hub.get("/token/current")
     assert code == 200 and d["ok"] is True
     assert d["token"] == hub.token
-    assert d["app"] == "AdvPrint Pro" and d["version"] == "2.6.6"
+    assert d["app"] == "AdvPrint Pro" and d["version"] == "2.6.7"
 
 
 def test_v26_token_current_rejects_remote(hub):
@@ -1125,8 +1125,8 @@ def test_v261_tray_module_ships_and_parses():
 
 
 def test_v261_version_single_source():
-    assert advprint.VERSION == "2.6.6"
-    assert advprint.VERSION_NAME.startswith("v2.6.6")
+    assert advprint.VERSION == "2.6.7"
+    assert advprint.VERSION_NAME.startswith("v2.6.7")
 
 
 def test_v261_cli_cmd_full_path():
@@ -1285,4 +1285,4 @@ def test_v264_setup_exe_kills_zombie_hubs():
                             "installer", "setup.nsi"), encoding="utf-8").read()
     assert "taskkill /F /IM AdvPrintPro.exe" in src
     assert "taskkill /F /IM PrintHubPro.exe" in src
-    assert 'VIProductVersion "2.6.6.0"' in src
+    assert 'VIProductVersion "2.6.7.0"' in src

@@ -1,6 +1,47 @@
 # Changelog - AdvPrint Pro (Advanced Printer)
 by Bit Dream IT - Innovative Healthcare Solutions
 
+## v2.6.7 - PRINT RELIABILITY FIX (2026-11-01)
+
+### Fixed
+- **"save-as-PDF failed: [Errno 13] Permission denied" (job lost).**
+  Right after the hub writes the PDF into its jobs folder, a real-time
+  antivirus / search indexer / sync filter can hold the fresh file
+  EXCLUSIVELY for a few hundred ms; the save-as-PDF step read the file
+  exactly once, hit that window and the job failed with no retry.
+  Now: retry-read with backoff (~4 s, `_read_locked`), atomic part-file
+  write + `os.replace` (`_write_atomic`), and a readability probe
+  (`_wait_readable`) before ANY print backend is spawned so SumatraPDF /
+  lp cannot hit the same lock. The error text now names the cause and
+  the fix (Retry from history / antivirus exclusion) if a lock persists.
+- **"print backend exit 1: " (dead letter) for queued "File (PDF)"
+  jobs.** "File (PDF)" - the hub's own save-as-PDF destination - was
+  missing from `VIRTUAL_PDF_PRINTERS`, so the worker handed the job to
+  SumatraPDF as `-print-to "File (PDF)"` (a Windows printer that does
+  not exist) and Sumatra exited 1 silently. "File (PDF)" now routes to
+  the save path (status "saved", PDF in Downloads\AdvPrint) in the FIFO
+  worker AND in the Queue-Mode-OFF direct path (`_print_now`).
+- **Silent backend errors explained.** The backend's stdout is captured
+  together with stderr (SumatraPDF reports on stdout); when both are
+  empty the error says so ("usually the printer name does not exist or
+  the file was locked") instead of ending with a bare colon.
+- **Printer-not-found guard.** Before spawning the backend, non-virtual
+  targets are checked against the OS printer list; a wrong name now
+  fails fast with "printer 'X' not found on this PC (installed: ...)".
+- **Debug tab: stuck service surfaced.** The optional Windows service
+  sitting in "start pending" (stale SCM state from a pre-upgrade service
+  process - the real hub runs from the Startup app) is now listed under
+  Problems with the one-line fix (services.msc > AdvPrint > Restart, or
+  service-remove; keep only ONE of service / Startup app active).
+- Atomic writes for the destination:"file" path as well (antivirus /
+  OneDrive lock windows on Downloads\AdvPrint).
+
+### Unchanged
+- Full v2.6.4 feature set kept 1:1 (baseline restored in v2.6.5,
+  glitch fix from v2.6.6): TUI menu [0-13], tray icon + auto-start,
+  all endpoints, six extension tabs, service, installers, Bangla +
+  English UI.
+
 ## v2.6.6 - SCREEN GLITCH FIX (NO MORE CONSOLE FLASHES) (2026-10-31)
 
 ### Fixed
