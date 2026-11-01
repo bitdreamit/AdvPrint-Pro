@@ -1,6 +1,37 @@
 # Changelog - AdvPrint Pro (Advanced Printer)
 by Bit Dream IT - Innovative Healthcare Solutions
 
+## v2.6.8 - PRINTER-NAME SELF-HEAL + EXTENSION MENU FIX (2026-11-01)
+
+### Fixed: job died with "printer 'XxX' not found" when a stored printer
+### name was the same text twice in a row
+- Live case (Debug tab, job #2): the submitted printer was
+  "Canon LBP6230/6240Canon LBP6230/6240" - the real name concatenated
+  with itself (typed/pasted twice into a stored setting). The v2.6.7
+  guard correctly refused the bogus name, but the job stayed dead.
+- **fix_printer_name() self-heal** in the print path: a doubled name
+  (x + x) collapses to x; names differing only by case or whitespace
+  match the installed printer exactly. The job prints on the REAL
+  printer, the history row is corrected and a printer.corrected audit
+  entry records the original value.
+- The extension now collapses a doubled name in hubPrint BEFORE sending
+  (second safety net).
+- Retry of the old dead job now simply works.
+
+### Fixed: extension error spam "Cannot access contents of url
+### chrome-extension://... Extension manifest must request permission"
+- Right-click "Print this page" on the extension's own options page (or
+  any chrome://, edge://, about: or Web Store page) tried to inject into
+  a page Chrome forbids and reported an error to the hub Debug tab.
+- Context menus now carry documentUrlPatterns (http/https/file only) so
+  they never appear on browser-internal pages, and the click handlers +
+  Alt+P shortcut show a friendly notification instead of an error.
+
+- Tests: +6 v2.6.8 regressions (doubled-name heal, case/space match,
+  heal leaves exact names alone, heal missed -> clear error kept, NSIS
+  version bump, extension source carries healPrinterName +
+  documentUrlPatterns). Suite: 109 passed.
+
 ## v2.6.7 - PRINT RELIABILITY FIX (2026-11-01)
 
 ### Fixed

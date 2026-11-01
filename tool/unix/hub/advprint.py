@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # ============================================================
-#  AdvPrint Pro v2.6.7  -  Print from any web page to any printer
+#  AdvPrint Pro v2.6.8  -  Print from any web page to any printer
 #  by Bit Dream IT  -  MIT licensed, 100% local & open source
-#  AdvPrint Pro - Version 2.6.7 - by Bit Dream IT - MIT license
+#  AdvPrint Pro - Version 2.6.8 - by Bit Dream IT - MIT license
 #  100% local - no cloud, no tracking.
 # ------------------------------------------------------------
 #  Chrome extension <-> this hub (localhost) -> ANY printer
@@ -91,10 +91,11 @@ if _HUB_DIR not in sys.path:
     sys.path.insert(0, _HUB_DIR)
 
 
-VERSION = "2.6.7"
-VERSION_NAME = ("v2.6.7 (print reliability: antivirus-lock retry for"
-                " save-as-PDF, File (PDF) routing fix, printer-not-found"
-                " guard, backend output in errors - full v2.6.4 set 1:1)")
+VERSION = "2.6.8"
+VERSION_NAME = ("v2.6.8 (printer-name self-heal: doubled / mistyped"
+                " printer names are corrected to the real installed"
+                " printer instead of dying, extension menus only on"
+                " printable pages - full v2.6.7 set 1:1)")
 FULL_BRAND = ("AdvPrint Pro (Advanced Printer) by "
               "Bit Dream IT - Innovative Healthcare Solutions")
 BRANDING = ("AdvPrint Pro (Advanced Printer) - Version %s - by "
@@ -1703,6 +1704,33 @@ def html_to_pdf_bytes(source, is_url=True, title="page"):
 _CURRENT_LOCK = threading.Lock()
 _CURRENT = {"id": None, "proc": None}
 
+def fix_printer_name(name, st):
+    """v2.6.8: self-heal a printer name that cannot match any installed
+    printer but maps to one after a SAFE repair. Real-world case (live
+    install, job #2): the stored name was 'Canon LBP6230/6240Canon
+    LBP6230/6240' - the exact name twice in a row (typed/pasted twice
+    or saved from a stale field). Instead of killing the job with
+    "printer not found", the doubled name is collapsed to its half and
+    printed. Also matches when only case / double spaces differ.
+    Returns (fixed_name_or_None, note_or_None). Never raises."""
+    if not name or not st:
+        return None, None
+    if name in st:
+        return name, None
+    half = len(name) // 2
+    if (half > 0 and name[:half] == name[half:]
+            and name[:half].strip()):
+        cand = name[:half].strip()
+        if cand in st:
+            return cand, "name was doubled - corrected"
+    norm = re.sub(r"\s+", "", name).lower()
+    if norm:
+        for p in st:
+            if p and re.sub(r"\s+", "", str(p)).lower() == norm:
+                return p, "matched ignoring case/spaces"
+    return None, None
+
+
 def print_file(path, kind="a4", printer="", copies=1, job_id=None,
                pages=None, duplex=None, paper_size=None, tray=None,
                per_sheet=None, quality=None, dpi=None):
@@ -1741,13 +1769,32 @@ def print_file(path, kind="a4", printer="", copies=1, job_id=None,
     try:
         # v2.6.7: two guards that turn silent backend deaths into
         # CLEAR error messages (the "print backend exit 1: " case):
+        # v2.6.8: before refusing an unknown name, try to SELF-HEAL it
+        # (doubled name 'XxX' -> 'X', case/space differences) so the job
+        # prints instead of dying on a typo in a stored setting.
         if target and not is_virtual_pdf_printer(target):
             st = printers_status()
             if st and target not in st:
-                raise RuntimeError(
-                    "printer '%s' not found on this PC (installed: %s)"
-                    " - pick the exact name in Settings > Printer"
-                    % (target, ", ".join(sorted(st))[:150]))
+                fixed, note = fix_printer_name(target, st)
+                if fixed:
+                    log("[PRINT] printer '%s' corrected to '%s' (%s)"
+                        " - printing on the real printer"
+                        % (target, fixed, note))
+                    if job_id:
+                        try:
+                            db_update(job_id, printer=fixed)
+                            db_audit("printer.corrected", job_id=job_id,
+                                     printer=fixed,
+                                     details="was '%s' (%s)"
+                                             % (target, note))
+                        except Exception:
+                            pass
+                    target = fixed
+                else:
+                    raise RuntimeError(
+                        "printer '%s' not found on this PC (installed: %s)"
+                        " - pick the exact name in Settings > Printer"
+                        % (target, ", ".join(sorted(st))[:150]))
         if os.path.isfile(path):
             _wait_readable(path)  # AV lock window - see _read_locked
         if IS_WIN:

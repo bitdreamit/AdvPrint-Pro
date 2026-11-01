@@ -28,7 +28,7 @@ from conftest import wait_until  # noqa: E402
 def test_health_open_no_token(hub):
     code, d = hub.get("/health", token=None)
     assert code == 200 and d["ok"] is True
-    assert d["version"] == "2.6.7"
+    assert d["version"] == "2.6.8"
     assert d["v2"] is True
     assert "100% local" in d["branding"]
 
@@ -538,13 +538,13 @@ def test_v1_database_migration(tmp_path):
 
 
 def test_version_anchors():
-    assert advprint.VERSION == "2.6.7"
+    assert advprint.VERSION == "2.6.8"
     # repo/package layout: tool/windows/portable/hub -> root/extension
     root = os.path.dirname(os.path.dirname(os.path.dirname(
         os.path.dirname(os.path.dirname(advprint.__file__)))))
     ext = os.path.join(root, "extension", "manifest.json")
     with open(ext) as f:
-        assert json.load(f)["version"] == "2.6.7"
+        assert json.load(f)["version"] == "2.6.8"
 
 
 def test_log_rotation(tmp_path):
@@ -1051,7 +1051,7 @@ def test_v26_token_current_loopback_only(hub):
     code, d = hub.get("/token/current")
     assert code == 200 and d["ok"] is True
     assert d["token"] == hub.token
-    assert d["app"] == "AdvPrint Pro" and d["version"] == "2.6.7"
+    assert d["app"] == "AdvPrint Pro" and d["version"] == "2.6.8"
 
 
 def test_v26_token_current_rejects_remote(hub):
@@ -1125,8 +1125,8 @@ def test_v261_tray_module_ships_and_parses():
 
 
 def test_v261_version_single_source():
-    assert advprint.VERSION == "2.6.7"
-    assert advprint.VERSION_NAME.startswith("v2.6.7")
+    assert advprint.VERSION == "2.6.8"
+    assert advprint.VERSION_NAME.startswith("v2.6.8")
 
 
 def test_v261_cli_cmd_full_path():
@@ -1285,4 +1285,103 @@ def test_v264_setup_exe_kills_zombie_hubs():
                             "installer", "setup.nsi"), encoding="utf-8").read()
     assert "taskkill /F /IM AdvPrintPro.exe" in src
     assert "taskkill /F /IM PrintHubPro.exe" in src
-    assert 'VIProductVersion "2.6.7.0"' in src
+    assert 'VIProductVersion "2.6.8.0"' in src
+
+
+# ---------------- v2.6.8: printer-name self-heal + menu guard ----------
+
+def test_v268_fix_printer_name_doubled():
+    """'CanonCanon' style names collapse to their half when that half is
+    an installed printer (live case: job #2 'Canon LBP6230/6240Canon
+    LBP6230/6240')."""
+    st = {"Canon LBP6230/6240", "Fax"}
+    fixed, note = advprint.fix_printer_name(
+        "Canon LBP6230/6240Canon LBP6230/6240", st)
+    assert fixed == "Canon LBP6230/6240"
+    assert "doubled" in (note or "")
+
+
+def test_v268_fix_printer_name_case_space():
+    """A name that differs only by case / doubled spaces matches the
+    installed printer exactly."""
+    st = {"Canon LBP6230/6240"}
+    fixed, note = advprint.fix_printer_name("canon  LBP6230/6240", st)
+    assert fixed == "Canon LBP6230/6240"
+    assert "case" in (note or "")
+
+
+def test_v268_fix_printer_name_exact_passthrough():
+    """An exact name passes through untouched."""
+    st = {"Canon LBP6230/6240"}
+    fixed, note = advprint.fix_printer_name("Canon LBP6230/6240", st)
+    assert fixed == "Canon LBP6230/6240" and note is None
+
+
+def test_v268_fix_printer_name_miss_returns_none():
+    """A truly unknown name still returns None -> the clear
+    'printer not found' error stays (no false healing)."""
+    st = {"Canon LBP6230/6240"}
+    assert advprint.fix_printer_name("Ghost 9000", st) == (None, None)
+    assert advprint.fix_printer_name("", st) == (None, None)
+    assert advprint.fix_printer_name("Canon LBP6230/6240", {}) == (None, None)
+
+
+def test_v268_print_file_guard_heals_before_refusing(monkeypatch, tmp_path):
+    """print_file must self-heal a doubled printer name instead of
+    raising 'not found' (the exact job #2 failure). Uses an ISOLATED
+    module import because the shared hub fixture permanently stubs
+    advprint.print_file for the whole test session."""
+    import importlib.util
+    import types
+    spec = importlib.util.spec_from_file_location(
+        "advprint_iso_268",
+        os.path.join(os.path.dirname(advprint.__file__), "advprint.py"))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    import tempfile
+    os.environ.setdefault("ADVPRINT_DATA", tempfile.mkdtemp(prefix="t268-"))
+    os.environ.setdefault("ADVPRINT_FILE_DIR",
+                          tempfile.mkdtemp(prefix="t268fd-"))
+    mod.ensure_dirs()
+    pdf = tmp_path / "j.pdf"
+    pdf.write_bytes(b"%PDF-1.4\n")
+    monkeypatch.setattr(mod, "printers_status",
+                        lambda force=False: {"Canon LBP6230/6240": "ready"})
+    monkeypatch.setattr(mod, "default_printer",
+                        lambda: "Canon LBP6230/6240")
+    monkeypatch.setattr(mod, "find_sumatra", lambda: "C:/x/SumatraPDF.exe")
+    monkeypatch.setattr(mod, "IS_WIN", False)
+    monkeypatch.setattr(mod.shutil, "which",
+                        lambda n: "/usr/bin/lp" if n == "lp" else None)
+
+    class P:
+        returncode = 0
+        stdout = b""
+        stderr = b""
+
+        def communicate(self, timeout=None):
+            return (b"", b"")
+
+        def kill(self):
+            pass
+
+    monkeypatch.setattr(mod.subprocess, "Popen", lambda *a, **k: P())
+    monkeypatch.setattr(mod.subprocess, "run",
+                        lambda *a, **k: P())
+    target = mod.print_file(str(pdf), "a4",
+                            "Canon LBP6230/6240Canon LBP6230/6240")
+    assert target == "Canon LBP6230/6240"
+
+
+def test_v268_extension_self_heal_and_menu_patterns():
+    """The extension must collapse doubled names before sending and its
+    context menus must be limited to printable pages."""
+    p = os.path.join(os.path.dirname(advprint.__file__),
+                     "..", "..", "..", "..", "extension", "background.js")
+    src = open(p, encoding="utf-8").read()
+    assert "function healPrinterName" in src
+    assert "payload.printer = healPrinterName(payload.printer)" in src
+    assert "documentUrlPatterns" in src
+    assert '"http://*/*"' in src and '"https://*/*"' in src
+    assert "function printableTab" in src
+    assert "/^(https?|file):/i" in src

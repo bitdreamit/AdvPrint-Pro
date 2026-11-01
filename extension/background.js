@@ -528,6 +528,37 @@ function printerLabel(p) {
   return p === "__file__" ? "File (PDF)" : (p || "default");
 }
 
+/* v2.6.8: collapse a printer name that is the same text twice in a row
+ * ("Canon LBP6230/6240Canon LBP6230/6240" -> "Canon LBP6230/6240").
+ * Such a name can only come from a stale/typed-twice stored setting; it
+ * used to die with "printer not found". Never raises. */
+function healPrinterName(p) {
+  if (typeof p !== "string" || p.length < 2) return p;
+  const half = p.slice(0, Math.floor(p.length / 2));
+  if (half && half === p.slice(Math.floor(p.length / 2))) return half;
+  return p;
+}
+
+/* v2.6.8: only http/https/file tabs can be printed - chrome://, edge://,
+ * chrome-extension://, about: and the Web Store reject script injection
+ * ("Extension manifest must request permission to access this host") and
+ * used to spam the hub Debug tab with that error. */
+function printableTab(tab) {
+  return !!(tab && /^(https?|file):/i.test(tab.url || ""));
+}
+
+function notifyNotPrintable() {
+  try {
+    chrome.notifications.create({
+      type: "basic", iconUrl: "icons/icon128.png",
+      title: "AdvPrint Pro",
+      message: "This page cannot be printed (browser-internal page: " +
+               "chrome://, settings or extension page). Open the " +
+               "website you want to print."
+    });
+  } catch (_) {}
+}
+
 function applyPrintDefaults(payload, cfg) {
   // v2.2: merge the saved "Default print options" into every job - values
   // the caller already set (page script, rule, popup) always win.
@@ -562,6 +593,10 @@ function hubPrint(payload) {
     payload.destination = "file";
     payload.printer = "";
   }
+  // v2.6.8: a printer name typed/pasted twice ("CanonCanon") can never
+  // match an installed printer - collapse it to its half before sending
+  // (the hub self-heals the same way as a second safety net).
+  if (payload.printer) payload.printer = healPrinterName(payload.printer);
   // Queue Mode OFF -> tell the hub to print THIS job immediately
   // (bypasses the FIFO; pause/resume does not hold it back).
   return loadCfg().then((cfg) => {
@@ -664,6 +699,9 @@ async function printPageDom(tab, title, printer) {
 }
 
 async function printTab(tab, force, printerOverride) {
+  // v2.6.8: browser-internal pages cannot be printed - say so instead of
+  // letting the injection fail with a permission error
+  if (!printableTab(tab)) { notifyNotPrintable(); return null; }
   const url = tab.url || "";
   const printer = printerOverride || (await resolvePrinter(url, tab.title));
   const looksPdf = /\.pdf(\?|#|$)/i.test(url);
@@ -1281,30 +1319,44 @@ async function rebuildMenus() {
   const cfg = await loadCfg();
   await chrome.contextMenus.removeAll();
   if (!cfg.contextMenu || cfg.enabled === false) return;   // no menu while disabled
-  chrome.contextMenus.create({
+  // v2.6.8: documentUrlPatterns - the menu only exists on pages that CAN
+  // be printed (http/https/file). chrome://, edge://, chrome-extension://,
+  // about: and the Web Store never show it again, so "Print this page"
+  // can no longer fail with a permission error on the extension's own
+  // options page.
+  const DP = { documentUrlPatterns: ["http://*/*", "https://*/*",
+                                     "file://*/*"] };
+  chrome.contextMenus.create(Object.assign({
     id: "advprint-root", title: "AdvPrint Pro", contexts: ["all"]
-  });
-  chrome.contextMenus.create({
+  }, DP));
+  chrome.contextMenus.create(Object.assign({
     id: "ph-print-page", parentId: "advprint-root",
     title: "Print this page", contexts: ["page"]
-  });
-  chrome.contextMenus.create({
+  }, DP));
+  chrome.contextMenus.create(Object.assign({
     id: "ph-print-sel", parentId: "advprint-root",
     title: "Print selection", contexts: ["selection"]
-  });
-  chrome.contextMenus.create({
+  }, DP));
+  chrome.contextMenus.create(Object.assign({
     id: "ph-print-link", parentId: "advprint-root",
     title: "Print linked PDF", contexts: ["link"]
-  });
-  chrome.contextMenus.create({
+  }, DP));
+  chrome.contextMenus.create(Object.assign({
     id: "ph-shot", parentId: "advprint-root",
     title: "Print screenshot", contexts: ["page"]
-  });
+  }, DP));
 }
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   try {
     if ((await loadCfg()).enabled === false) return;   // master switch OFF
+    // v2.6.8: browser-internal pages (chrome://, edge://, extension
+    // pages, Web Store) cannot be printed - friendly notice instead of
+    // the old "must request permission to access this host" error
+    if (!printableTab(tab) && info.menuItemId !== "ph-print-link") {
+      notifyNotPrintable();
+      return;
+    }
     if (info.menuItemId === "ph-print-page" && tab) {
       await printTab(tab);
     } else if (info.menuItemId === "ph-print-sel" && info.selectionText) {
@@ -1335,6 +1387,7 @@ chrome.commands.onCommand.addListener(async (command) => {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab) return;
   try {
+    if (!printableTab(tab)) { notifyNotPrintable(); return; }   // v2.6.8
     await printTab(tab);
   } catch (e) {
     await flashBadge(false, "!");

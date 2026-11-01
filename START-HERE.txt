@@ -1,6 +1,28 @@
-AdvPrint Pro (Advanced Printer) v2.6.7 - START HERE
+AdvPrint Pro (Advanced Printer) v2.6.8 - START HERE
 ====================================================
 by Bit Dream IT - Innovative Healthcare Solutions
+
+WHAT'S NEW IN 2.6.8 (PRINTER-NAME SELF-HEAL + CLEAN EXTENSION ERRORS)
+  0. JOB #2 "printer 'Canon LBP6230/6240Canon LBP6230/6240' not found"
+     IS NOW SELF-HEALED (found through the Debug tab on a live install):
+     a printer name that is the SAME TEXT TWICE in a row (typed/pasted
+     twice into a stored setting, or saved from a stale field) can
+     never match an installed printer. Instead of killing the job, the
+     hub now collapses 'XxX' to 'X' - and also matches when only case
+     or double spaces differ - prints on the REAL printer, corrects the
+     job row in the history and writes a printer.corrected audit entry.
+     The extension collapses the name BEFORE sending (second net).
+  1. EXTENSION CONTEXT MENU: "Print this page" on browser-internal
+     pages (chrome://, edge://, chrome-extension://, about:, Web Store)
+     used to fail with "Extension manifest must request permission to
+     access this host" and spam the hub Debug tab. The menu now only
+     exists on printable pages (http/https/file), and any other path
+     shows a friendly notice instead.
+  2. YOUR EXISTING JOB #2: press Retry in the history - it now prints
+     (or saves) with the corrected printer name.
+  FILES IN THIS RELEASE: AdvPrint-Pro-Setup-2.6.8.exe (Windows),
+  advprint-pro_2.6.8_all.deb (Linux), AdvPrint-Pro-v2.6.8-FULL.zip.
+  NOTHING ELSE CHANGED: full v2.6.7 feature set kept 1:1.
 
 WHAT'S NEW IN 2.6.7 (PRINT RELIABILITY - THE TWO "NOTHING PRINTS" BUGS)
   0. TWO REAL PRINT FAILURES ARE FIXED (found through the Debug tab on
