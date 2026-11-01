@@ -1,6 +1,19 @@
-AdvPrint Pro (Advanced Printer) v2.6.5 - START HERE
+AdvPrint Pro (Advanced Printer) v2.6.6 - START HERE
 ====================================================
 by Bit Dream IT - Innovative Healthcare Solutions
+
+WHAT'S NEW IN 2.6.6 (SCREEN-GLITCH FIX - NO MORE CONSOLE FLASHES)
+  0. THE PERIODIC "GLITCH" IS FIXED. On Windows the windowless hub
+     (AdvPrintPro.exe) checked the optional service state with
+     "sc query" WITHOUT the CREATE_NO_WINDOW flag - so Windows
+     allocated a fresh BLACK CONSOLE WINDOW for sc.exe every ~10 s
+     for as long as the hub ran (the health refresher pulls the
+     service state every 3 s). That was the screen "glitch after
+     some time" that stopped only when the tool/hub was closed.
+     Every background child process now runs windowless - zero
+     flashes, verified. The Control Tool is hardened the same way
+     (tasklist / taskkill / PowerShell port-kill). NOTHING else
+     changed: full v2.6.4 feature set kept 1:1.
 
 WHAT'S NEW IN 2.6.5 (BASELINE RESTORE - NOTHING MISSING, ALL POLISHED)
   0. THE FEATURE BASELINE IS v2.6.4 - 1:1. An intermediate build
@@ -118,7 +131,7 @@ WHAT'S NEW IN 2.6.1 (HUB START + TRAY FIX RELEASE)
        a. open the tool (AdvPrint-Tool.bat, or Start Menu >
           AdvPrint Pro > AdvPrint Tool)
        b. pick [13] Diagnose & fix -> read the [4/5] result
-       c. pick [1] Start -> "Started: v2.6.5 on http://127.0.0.1:9235"
+       c. pick [1] Start -> "Started: v2.6.6 on http://127.0.0.1:9235"
        d. tray icon appears -> right-click -> Open dashboard
      If [13] says antivirus: add the AdvPrint folder to your AV's
      exclusions and start again (menu [1]).
@@ -153,12 +166,13 @@ WHAT'S NEW IN 2.6.0 (REBRAND + ONE-CLICK TOKEN FIX) - kept for reference
      reprint policy, thermal engine, save-as-PDF folder and more
      LIVE from the browser.
   5. COMPLETE INSTALLERS:
-     - AdvPrint-Pro-Setup-2.6.5.exe (~9.6 MB): hub + tool + tray +
+     - AdvPrint-Pro-Setup-2.6.6.exe (~9.6 MB): hub + tool + tray +
        service files + FULL Python 3.11.9 runtime (34 files) +
-       extension + docs. Per-user, no UAC, auto-run as a VISIBLE
+       extension + docs. Per-machine install (the UAC prompt appears
+       once - that is the admin approval), auto-run as a VISIBLE
        Startup app, silent install with /S, removes all old
        PrintHub Pro leftovers automatically.
-     - advprint-pro_2.6.5_all.deb: hub + tool + extension +
+     - advprint-pro_2.6.6_all.deb: hub + tool + extension +
        systemd user service + XDG autostart + CLI commands.
 
 WHY DID MY OLD VERSION SAY "cannot access" ON THE SETUP EXE?
@@ -170,7 +184,7 @@ WHY DID MY OLD VERSION SAY "cannot access" ON THE SETUP EXE?
   No manual Security-tab work is needed anywhere.
 
 UPDATE IN 3 STEPS
-  1. Run AdvPrint-Pro-Setup-2.6.5.exe (installs over the old
+  1. Run AdvPrint-Pro-Setup-2.6.6.exe (installs over the old
      version; history + settings migrate to .advprint automatically).
      Portable users: extract the new zip over the old folder, then
      AdvPrint-Tool.bat > [13] once (unblocks), then [1] Start.
@@ -204,7 +218,12 @@ FILES IN THIS PACKAGE
                    AdvPrint-Pro-Full-Guide.html + .pdf, release notes
   tests\           pytest suite + pytest.ini
   installer\       setup.nsi - NSIS 3 source that builds
-                   AdvPrint-Pro-Setup-2.6.5.exe (per-machine, UAC)
+                   AdvPrint-Pro-Setup-2.6.6.exe (per-machine, UAC)
+  prebuilt\        READY installers, no build needed:
+                   AdvPrint-Pro-Setup-2.6.6.exe (Windows setup,
+                   ~9.5 MB - run it, UAC appears, done)
+                   advprint-pro_2.6.6_all.deb (Linux deb -
+                   sudo dpkg -i advprint-pro_2.6.6_all.deb)
   README.md / CHANGELOG.md / LICENSE / pytest.ini / .gitignore
   SHA256SUMS.txt
 
@@ -216,6 +235,6 @@ SUPPORT
   Bug report? Debug tab -> Copy report - and attach hub.log from
   the data folder (%USERPROFILE%\.advprint\hub.log).
 
-AdvPrint Pro (Advanced Printer) v2.6.5
+AdvPrint Pro (Advanced Printer) v2.6.6
 by Bit Dream IT - Innovative Healthcare Solutions
 100% local - no cloud - no tracking - MIT license

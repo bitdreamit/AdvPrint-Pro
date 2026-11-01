@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # ============================================================
-#  AdvPrint Pro v2.6.5  -  Print from any web page to any printer
+#  AdvPrint Pro v2.6.6  -  Print from any web page to any printer
 #  by Bit Dream IT  -  MIT licensed, 100% local & open source
-#  AdvPrint Pro - Version 2.6.5 - by Bit Dream IT - MIT license
+#  AdvPrint Pro - Version 2.6.6 - by Bit Dream IT - MIT license
 #  100% local - no cloud, no tracking.
 # ------------------------------------------------------------
 #  Chrome extension <-> this hub (localhost) -> ANY printer
@@ -91,10 +91,10 @@ if _HUB_DIR not in sys.path:
     sys.path.insert(0, _HUB_DIR)
 
 
-VERSION = "2.6.5"
-VERSION_NAME = ("v2.6.5 (baseline restore - full v2.6.4 feature set kept 1:1"
-                " - SumatraPDF per-user scan fix - service start hardened"
-                " - token self-check - extension UI refresh)")
+VERSION = "2.6.6"
+VERSION_NAME = ("v2.6.6 (screen-glitch fix - no more console flashes from"
+                " background threads - full v2.6.4 feature set kept 1:1"
+                " - SumatraPDF per-user scan - hardened service start)")
 FULL_BRAND = ("AdvPrint Pro (Advanced Printer) by "
               "Bit Dream IT - Innovative Healthcare Solutions")
 BRANDING = ("AdvPrint Pro (Advanced Printer) - Version %s - by "
@@ -5360,8 +5360,16 @@ def service_state():
         return _SVC_CACHE["v"]
     state = {"installed": False, "running": False, "state": "not installed"}
     try:
+        # v2.6.6: creationflags=HIDE was MISSING here - the windowless hub
+        # (AdvPrintPro.exe) made Windows allocate a NEW console window for
+        # sc.exe every ~10 s (service_state cache TTL), because the health
+        # refresher thread pulls the service state through
+        # build_health_snapshot() every 3 s. Users saw a black window /
+        # screen "glitch" flashing periodically; it stopped only when the
+        # tool or hub was closed. HIDE (CREATE_NO_WINDOW) ends the flash.
         r = subprocess.run(["sc", "query", SERVICE_NAME],
-                           capture_output=True, text=True, timeout=6)
+                           capture_output=True, text=True, timeout=6,
+                           creationflags=HIDE)
         out = (r.stdout or "") + (r.stderr or "")
         if r.returncode == 1060 or "STATE" not in out.upper():
             state["state"] = "not installed"

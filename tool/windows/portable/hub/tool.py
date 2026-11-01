@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 # ============================================================
 #  AdvPrint Pro - Control Tool  (the friendly one-stop tool)
-#  v2.6.5 - same full menu as v2.6.4, nothing removed
+#  v2.6.6 - same full menu as v2.6.4, nothing removed
 # ------------------------------------------------------------
 #  One menu for everything a normal user needs:
 #    start / stop / status, auto-run on/off, Windows service
@@ -29,6 +29,12 @@ if HERE not in sys.path:
     sys.path.insert(0, HERE)
 
 IS_WIN = sys.platform == "win32"
+# v2.6.6: CREATE_NO_WINDOW for every console child (tasklist / taskkill /
+# powershell). The tool normally owns a console so children inherit it,
+# but when the tool itself runs hidden (VBS / service context) an
+# unflagged child would pop a black console window - the periodic
+# "screen glitch" reported on Windows. Zero flashes now, everywhere.
+HIDE = 0x08000000 if IS_WIN else 0
 
 
 def _load_advprint():
@@ -81,7 +87,8 @@ def _win_process_alive(image):
         return False
     try:
         r = subprocess.run(["tasklist", "/FI", "IMAGENAME eq %s" % image],
-                           capture_output=True, text=True, timeout=10)
+                           capture_output=True, text=True, timeout=10,
+                           creationflags=HIDE)
         return image.lower() in (r.stdout or "").lower()
     except Exception:
         return False
@@ -225,10 +232,10 @@ def stop_hub():
         # kill by image name (ours is renamed pythonw -> AdvPrintPro.exe;
         # pre-2.6 installs ran as PrintHubPro.exe - kill both)
         r = subprocess.run(["taskkill", "/F", "/IM", "AdvPrintPro.exe"],
-                           capture_output=True, text=True)
+                           capture_output=True, text=True, creationflags=HIDE)
         if r.returncode != 0:
             subprocess.run(["taskkill", "/F", "/IM", "PrintHubPro.exe"],
-                           capture_output=True, text=True)
+                           capture_output=True, text=True, creationflags=HIDE)
         if r.returncode != 0:
             # fall back: kill whoever listens on our port
             subprocess.run(
@@ -237,7 +244,7 @@ def stop_hub():
                  "-ErrorAction SilentlyContinue | Select-Object -ExpandProperty "
                  "OwningProcess | ForEach-Object { Stop-Process -Id $_ -Force "
                  "-ErrorAction SilentlyContinue }" % ph.CFG["port"]],
-                capture_output=True, text=True)
+                capture_output=True, text=True, creationflags=HIDE)
     else:
         subprocess.run(["pkill", "-f", "advprint.py serve"],
                        capture_output=True, text=True)
@@ -463,7 +470,8 @@ def diagnose_and_fix():
                      " -ExpandProperty OwningProcess | ForEach-Object {"
                      " Stop-Process -Id $_ -Force -ErrorAction"
                      " SilentlyContinue }" % ph.CFG["port"]],
-                    capture_output=True, text=True, timeout=30)
+                    capture_output=True, text=True, timeout=30,
+                    creationflags=HIDE)
             else:
                 subprocess.run(["fuser", "-k", "%d/tcp" % ph.CFG["port"]],
                                capture_output=True, text=True)
@@ -485,7 +493,9 @@ def diagnose_and_fix():
         with open(outp, "w", encoding="utf-8") as tf:
             proc = subprocess.Popen(
                 [sys.executable, script, "serve"], cwd=HERE,
-                stdout=tf, stderr=subprocess.STDOUT)
+                stdout=tf, stderr=subprocess.STDOUT,
+                creationflags=HIDE)  # v2.6.6: output goes to the file -
+                                     # never allocate an extra console
         came_up = False
         for _ in range(20):
             time.sleep(0.5)

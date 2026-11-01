@@ -1,6 +1,32 @@
 # Changelog - AdvPrint Pro (Advanced Printer)
 by Bit Dream IT - Innovative Healthcare Solutions
 
+## v2.6.6 - SCREEN GLITCH FIX (NO MORE CONSOLE FLASHES) (2026-10-31)
+
+### Fixed
+- **The periodic Windows "screen glitch" is gone.** The windowless hub
+  (`AdvPrintPro.exe`) queried the optional Windows service state with
+  `sc query` WITHOUT the `CREATE_NO_WINDOW` flag, so Windows allocated a
+  brand-new console window for `sc.exe` every ~10 seconds (the service
+  state cache TTL) for as long as the hub ran - the health refresher
+  thread pulls the service state every 3 s through
+  `build_health_snapshot()`. Users saw a black window / screen flash
+  appear "after some time" and stop only when the tool or hub was
+  closed. `creationflags=HIDE` is now set - zero flashes, verified.
+- **Tool hardened the same way**: every Windows console child of the
+  Control Tool (`tasklist`, `taskkill` x2, PowerShell port-kill x2) now
+  also runs with `CREATE_NO_WINDOW`, so no black window can appear even
+  when the tool itself runs hidden (VBS / service context).
+- Audited ALL remaining `subprocess` call sites in hub + tool: every
+  one is either flagged, POSIX-only (`lpstat` / `lp` / `lpoptions` /
+  `fuser` / `pkill`), a GUI-subsystem process, or the intentional UAC
+  elevation prompt. Nothing else can flash a console window.
+
+### Unchanged
+- Full v2.6.4 feature set kept 1:1 (baseline restore from v2.6.5):
+  TUI menu [0-13], tray icon + auto-start, all endpoints, six extension
+  tabs, service, installers, Bangla + English UI.
+
 ## v2.6.5 - BASELINE RESTORE (FULL v2.6.4 FEATURE SET) + SERVICE & SUMATRA FIXES + EXTENSION UI REFRESH (2026-10-31)
 
 ### Why this release exists

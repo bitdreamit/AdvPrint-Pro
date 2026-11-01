@@ -13,6 +13,12 @@ Web page ──► Chrome extension ──► AdvPrint Pro hub (localhost:9235) 
 
 ---
 
+## What's new in v2.6.6 (screen-glitch fix — no more console flashes)
+
+- **The periodic Windows "screen glitch" is fixed.** The windowless hub queried the optional Windows service with `sc query` without the `CREATE_NO_WINDOW` flag, so Windows allocated a fresh console window for `sc.exe` every ~10 seconds for as long as the hub ran — a black window flashing "after some time", stopping only when the tool or hub was closed. All background child processes now run windowless (`creationflags=HIDE`).
+- **The Control Tool is hardened the same way** (`tasklist` / `taskkill` / PowerShell port-kill), so nothing can flash a console even when the tool runs hidden.
+- **Everything else is unchanged** — full v2.6.4 feature set kept 1:1 (baseline restored in v2.6.5).
+
 ## What's new in v2.6.5 (baseline restore — full v2.6.4 feature set, all polished)
 
 - **The feature baseline is v2.6.4 — kept 1:1.** An intermediate build had accidentally started from the old 1.5.0 tree and shipped with fewer features (no tray icon, missing TUI menu items). v2.6.5 is built **from the published v2.6.4 source**: TUI menu [0–13], tray icon with auto-start, every endpoint, all six extension tabs, service, installers — **nothing reduced**.
