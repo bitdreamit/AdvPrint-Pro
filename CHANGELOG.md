@@ -1,6 +1,63 @@
 # Changelog - AdvPrint Pro (Advanced Printer)
 by Bit Dream IT - Innovative Healthcare Solutions
 
+## v2.7.0 - HISTORY MANAGER + SHARE MODES + LAYOUT FIX (2026-11-01)
+
+### New: the Job history is a real manager now (dashboard + extension)
+- **Filter** by any status (printed / queued / printing / held /
+  scheduled / failed / dead / canceled / saved / forwarded) plus a
+  one-click **"Not printed"** view; **search** by title, printer or
+  #id; load 50/100/300/1000 rows; 50-per-page paging with
+  newer/older; every row gets a **checkbox** with check/uncheck-ALL
+  (master checkbox with the indeterminate state) and a live
+  "N selected" counter.
+- **Reprint selected** - POST /jobs/bulk-reprint {"ids":[...]}.
+- **Reprint all non-printed** - POST /jobs/bulk-reprint
+  {"scope":"not_printed"} re-queues every failed/dead/canceled job
+  (jobs whose original file is gone are skipped and counted).
+- **Clear ALL history** - POST /history/clear deletes every FINISHED
+  job (printed / failed / dead / canceled / forwarded / saved).
+  Active jobs (queued / printing / held / scheduled) are never
+  touched, so clearing can not cancel a waiting print. Audited as
+  history.cleared.
+- The dashboard's old "Recent jobs" table became the **Job history**
+  manager; the extension Options > History tab got the same filter /
+  search / tick / bulk-reprint / clear-hub-history toolbar (the old
+  "Clear extension copy" button stays).
+
+### New: Share Receive Mode + Share Send Mode in the POPUP
+- **Share Receive Mode** = hub share_lan (this PC accepts jobs from
+  other PCs). One toggle in the popup; saved via POST /config; the
+  usual "restart the hub to apply" note appears.
+- **Share Send Mode** = extension-side switch (config key lanSend).
+  OFF = the background refuses every queue/shift send-to-peer request
+  ("nothing leaves this machine"); ON = shift buttons work again.
+  Both switches show live state (Receive from /health, Send from the
+  saved config) and turn gray/disabled while the hub is offline.
+- New en + Bangla strings for every new control; nothing removed.
+
+### Fixed: dashboard layout (the "broken design" below the page)
+- The "Live debug & test tool" section and the SumatraPDF
+  "Hub settings" box used to sit AFTER </main> - full-width,
+  unstyled, below the page. They are now proper panels INSIDE the
+  main column (Live test right under the Debug card).
+- Dashboard header shows a v2.7.0 version badge; inputs/selects/
+  checkboxes are styled; .forwarded status chips got their color.
+
+### Professional polish
+- Extension About panel shows the REAL manifest version (it used to
+  stay on the hardcoded 2.6.4); popup version badge follows the
+  manifest too.
+- LAN tab cross-references the new popup switches; About panel got a
+  v2.7.0 highlights line; setup.nsi / VERSION.txt / START-HERE /
+  README / API docs all speak 2.7.0.
+
+### Tests
+- +6 v2.7.0 tests: bulk-reprint by ids, bulk-reprint
+  scope=not_printed, history/clear (finished only - active rows
+  survive), reprint single still works via the shared core, bad
+  bulk payload -> 400, audit entries written. Full suite 117/117.
+
 ## v2.6.9 - DOUBLE-PRINT FIX (2026-11-01)
 
 ### Fixed: every page printed TWICE with Queue Mode OFF ("after print it

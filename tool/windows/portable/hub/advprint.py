@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # ============================================================
-#  AdvPrint Pro v2.6.9  -  Print from any web page to any printer
+#  AdvPrint Pro v2.7.0  -  Print from any web page to any printer
 #  by Bit Dream IT  -  MIT licensed, 100% local & open source
-#  AdvPrint Pro - Version 2.6.9 - by Bit Dream IT - MIT license
+#  AdvPrint Pro - Version 2.7.0 - by Bit Dream IT - MIT license
 #  100% local - no cloud, no tracking.
 # ------------------------------------------------------------
 #  Chrome extension <-> this hub (localhost) -> ANY printer
@@ -91,11 +91,10 @@ if _HUB_DIR not in sys.path:
     sys.path.insert(0, _HUB_DIR)
 
 
-VERSION = "2.6.9"
-VERSION_NAME = ("v2.6.9 (double-print fix: Queue Mode OFF jobs can no"
-                " longer be claimed by BOTH the FIFO worker and the direct"
-                " thread - one job, one sheet; retried direct jobs keep"
-                " their PDF file)")
+VERSION = "2.7.0"
+VERSION_NAME = ("v2.7.0 (history manager: filter / tick / bulk reprint /"
+                " clear; live test tool fixed inside the dashboard layout;"
+                " Share Receive + Send toggles in the popup)")
 FULL_BRAND = ("AdvPrint Pro (Advanced Printer) by "
               "Bit Dream IT - Innovative Healthcare Solutions")
 BRANDING = ("AdvPrint Pro (Advanced Printer) - Version %s - by "
@@ -619,6 +618,42 @@ def db_list(limit=HISTORY_DEFAULT, status=None):
                 "SELECT * FROM jobs ORDER BY id DESC LIMIT ?", (int(limit),)
             ).fetchall()
         return [dict(r) for r in rows]
+
+# v2.7.0: history management - job states grouped the way the new
+# dashboard History tab and the bulk endpoints think about them.
+JOB_ACTIVE_STATES = ("queued", "printing", "held", "scheduled")
+JOB_TERMINAL_STATES = ("printed", "failed", "dead", "canceled",
+                       "forwarded", "saved")
+JOB_NOT_PRINTED_STATES = ("failed", "dead", "canceled")
+
+def db_clear_history():
+    """v2.7.0: wipe FINISHED jobs (printed / failed / dead / canceled /
+    forwarded / saved) from the history. Jobs that still mean something
+    (queued / printing / held / scheduled) are NEVER touched, so a
+    "Clear ALL history" can never eat a waiting print job.
+    Returns the number of rows removed."""
+    with _DB_LOCK, db() as conn:
+        cur = conn.execute(
+            "DELETE FROM jobs WHERE status IN (%s)" %
+            ",".join("?" * len(JOB_TERMINAL_STATES)), JOB_TERMINAL_STATES)
+        return cur.rowcount or 0
+
+def db_list_not_printed(limit=500):
+    """v2.7.0: every finished job that did NOT reach the printer
+    (failed / dead / canceled) - the "Reprint all non-printed" source."""
+    with _DB_LOCK, db() as conn:
+        rows = conn.execute(
+            "SELECT * FROM jobs WHERE status IN (%s) "
+            "ORDER BY id DESC LIMIT ?" %
+            ",".join("?" * len(JOB_NOT_PRINTED_STATES)),
+            (*JOB_NOT_PRINTED_STATES, int(limit))).fetchall()
+        return [dict(r) for r in rows]
+
+def db_count_status():
+    """v2.7.0: {status: n} map for the History tab filter badges."""
+    with _DB_LOCK, db() as conn:
+        return {r["status"]: int(r["n"]) for r in conn.execute(
+            "SELECT status, COUNT(*) AS n FROM jobs GROUP BY status")}
 
 def db_next_queued():
     """Next printable job: priority first (1 = urgent), then FIFO, and
@@ -3052,6 +3087,72 @@ def raw_payload_bytes(body):
         drawer = drawer.strip().lower() in ("1", "true", "yes", "on")
     return escpos_bytes(text, cut=bool(cut), drawer=bool(drawer)), "escpos"
 
+
+# ------------------------------------------------------------
+# v2.7.0: shared reprint core - used by POST /jobs/{id}/reprint AND
+# POST /jobs/bulk-reprint (the dashboard History tab "Reprint selected"
+# / "Reprint all non-printed" buttons and the extension History panel).
+# Returns (http_status, payload_dict).
+# ------------------------------------------------------------
+def reprint_job_core(j, body, ip, site):
+    """Re-queue one stored job row `j` for printing again. `body` may
+    carry reason / watermark / watermark_text / printer exactly like the
+    single-job endpoint. Never raises - problems come back as (4xx/5xx)."""
+    try:
+        if not j:
+            return 404, {"ok": False, "error": "job not found"}
+        if not (j.get("file_path") and os.path.exists(j["file_path"])):
+            return 410, {"ok": False,
+                         "error": "original file no longer stored"}
+        # v2.0: the audit trail asks WHY something is printed again
+        reason = str((body or {}).get("reason") or "").strip()[:200] or None
+        if CFG.get("reprint_reason_required") and not reason:
+            return 400, {
+                "ok": False,
+                "error": "a reprint reason is required on this hub"
+                         " (reprint_reason_required) - add \"reason\""}
+        wm = (body or {}).get("watermark")
+        if wm is None:
+            wm = CFG.get("reprint_watermark", False)
+        elif isinstance(wm, str):
+            wm = wm.strip().lower() in ("1", "true", "yes", "on")
+        with open(j["file_path"], "rb") as f:
+            data = f.read()
+        if wm and j.get("kind") != "raw":
+            data = pdf_watermark(data, str((body or {}).get("watermark_text")
+                                           or "REPRINT"))
+        # a 'saved' (file-destination) job has no printer yet ->
+        # reprinting it sends it to the OS default printer
+        rpt_printer = str((body or {}).get("printer") or "")
+        if not rpt_printer:
+            rpt_printer = ("" if j["status"] == "saved"
+                           else (j["printer"] or ""))
+            if rpt_printer == "File (PDF)":
+                rpt_printer = ""
+        job, dup = enqueue_print(
+            j["kind"], (j["title"] or "reprint") + "-reprint", data,
+            rpt_printer, j["copies"] or 1, "api", ip,
+            site=site, reason=reason,
+            dedupe=False,          # a reprint is never a duplicate
+            priority=(j.get("priority") or 5),
+            pages=j.get("pages"), duplex=j.get("duplex"),
+            paper_size=j.get("paper_size"), tray=j.get("tray"),
+            profile=j.get("profile"),
+            content_hash=hashlib.sha256(data).hexdigest(),
+            **({"watermarked": 1} if wm else {}))
+        db_audit("reprint", job_id=job, actor="api", site=site, ip=ip,
+                 doc_hash=hashlib.sha256(data).hexdigest(),
+                 printer=rpt_printer, reason=reason,
+                 details="reprint of job #%d%s"
+                         % (j["id"], ", watermarked" if wm else ""))
+        return 200, {"ok": True, "job_id": job,
+                     "duplicate": dup is not None,
+                     "reprint_of": j["id"],
+                     "watermark": bool(wm and j.get("kind") != "raw")}
+    except Exception as e:                      # never kill the request
+        return 500, {"ok": False, "error": "reprint failed: %s" % e}
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "AdvPrintPro/" + VERSION
     protocol_version = "HTTP/1.1"
@@ -3720,56 +3821,82 @@ class Handler(BaseHTTPRequestHandler):
         if route.startswith("/jobs/") and route.endswith("/reprint"):
             jid = route.strip("/").split("/")[1]
             j = db_get(int(jid) if jid.isdigit() else 0)
-            if not j:
-                return self._send(404, {"ok": False, "error": "job not found"})
-            if not (j.get("file_path") and os.path.exists(j["file_path"])):
-                return self._send(410, {"ok": False,
-                                        "error": "original file no longer stored"})
-            # v2.0: the audit trail asks WHY something is printed again
-            reason = str(body.get("reason") or "").strip()[:200] or None
-            if CFG.get("reprint_reason_required") and not reason:
+            code, payload = reprint_job_core(j, body, ip, site)
+            return self._send(code, payload)
+
+        # POST /jobs/bulk-reprint - v2.7.0: reprint MANY stored jobs in
+        # one call. Either {"ids":[12,13,...]} (History tab "Reprint
+        # selected") or {"scope":"not_printed"} (every failed/dead/
+        # canceled job - "Reprint all non-printed"). Optional reason /
+        # watermark / watermark_text / printer ride along, exactly like
+        # the single-job reprint. Per-job failures never abort the batch.
+        if route == "/jobs/bulk-reprint":
+            ids = body.get("ids") or []
+            scope = str(body.get("scope") or "").strip().lower()
+            pairs = []                       # (requested_id, job_row|None)
+            if scope == "not_printed":
+                try:
+                    lim = max(1, min(1000, int(body.get("limit") or 500)))
+                except (TypeError, ValueError):
+                    lim = 500
+                pairs = [(j["id"], j)
+                         for j in db_list_not_printed(limit=lim)]
+            elif isinstance(ids, list) and ids:
+                seen = set()
+                pick = []
+                for x in ids:
+                    try:
+                        i = int(x)
+                    except (TypeError, ValueError):
+                        continue
+                    if i > 0 and i not in seen:
+                        seen.add(i)
+                        pick.append(i)
+                # v2.7.0: unknown ids stay in the list (as None rows) so
+                # the caller sees them as skipped, not silently dropped
+                pairs = [(i, db_get(i)) for i in pick]
+            else:
                 return self._send(400, {
                     "ok": False,
-                    "error": "a reprint reason is required on this hub"
-                             " (reprint_reason_required) - add \"reason\""})
-            wm = body.get("watermark")
-            if wm is None:
-                wm = CFG.get("reprint_watermark", False)
-            elif isinstance(wm, str):
-                wm = wm.strip().lower() in ("1", "true", "yes", "on")
-            with open(j["file_path"], "rb") as f:
-                data = f.read()
-            if wm and j.get("kind") != "raw":
-                data = pdf_watermark(data, str(body.get("watermark_text")
-                                               or "REPRINT"))
-            # a 'saved' (file-destination) job has no printer yet ->
-            # reprinting it sends it to the OS default printer
-            rpt_printer = str(body.get("printer") or "")
-            if not rpt_printer:
-                rpt_printer = "" if j["status"] == "saved" else (j["printer"] or "")
-                if rpt_printer == "File (PDF)":
-                    rpt_printer = ""
-            job, dup = enqueue_print(
-                j["kind"], (j["title"] or "reprint") + "-reprint", data,
-                rpt_printer, j["copies"] or 1, "api", ip,
-                site=site, reason=reason,
-                dedupe=False,          # a reprint is never a duplicate
-                priority=(j.get("priority") or 5),
-                pages=j.get("pages"), duplex=j.get("duplex"),
-                paper_size=j.get("paper_size"), tray=j.get("tray"),
-                profile=j.get("profile"),
-                content_hash=hashlib.sha256(data).hexdigest(),
-                **({"watermarked": 1} if wm else {}))
-            db_audit("reprint", job_id=job, actor="api", site=site, ip=ip,
-                     doc_hash=hashlib.sha256(data).hexdigest(),
-                     printer=rpt_printer, reason=reason,
-                     details="reprint of job #%d%s"
-                             % (j["id"], ", watermarked" if wm else ""))
-            return self._send(200, {"ok": True, "job_id": job,
-                                    "duplicate": dup is not None,
-                                    "reprint_of": j["id"],
-                                    "watermark": bool(wm and
-                                                      j.get("kind") != "raw")})
+                    "error": "give \"ids\":[...] or \"scope\":\"not_printed\""})
+            results, okn, skip = [], 0, 0
+            for req_id, j in pairs:
+                if j is None:
+                    skip += 1
+                    results.append({"id": req_id, "ok": False,
+                                    "job_id": None,
+                                    "error": "job not found"})
+                    continue
+                code, payload = reprint_job_core(j, body, ip, site)
+                if code == 200:
+                    okn += 1
+                else:
+                    skip += 1
+                results.append({"id": j["id"], "ok": code == 200,
+                                "job_id": payload.get("job_id"),
+                                "error": payload.get("error")})
+            db_audit("reprint.bulk", actor="api", site=site, ip=ip,
+                     details="bulk reprint: %d queued, %d skipped "
+                             "(scope=%s ids=%s)"
+                             % (okn, skip, scope or "ids",
+                                (",".join(str(i) for i in ids))[:80]))
+            log("[REPRINT] bulk: %d queued, %d skipped" % (okn, skip))
+            return self._send(200, {"ok": True, "queued": okn,
+                                    "skipped": skip, "results": results})
+
+        # POST /history/clear - v2.7.0: wipe the FINISHED job history
+        # (printed / failed / dead / canceled / forwarded / saved).
+        # Waiting jobs (queued / printing / held / scheduled) are never
+        # touched - clearing the history cannot cancel a real print job.
+        if route == "/history/clear":
+            n = db_clear_history()
+            db_audit("history.cleared", actor="api", site=site, ip=ip,
+                     details="history cleared: %d finished job(s) removed"
+                             % n)
+            log("[HISTORY] cleared - %d finished job(s) removed" % n)
+            return self._send(200, {"ok": True, "deleted": n,
+                                    "message": "%d finished job(s) removed "
+                                               "from the history" % n})
 
         # POST /jobs/{id}/retry - failed/dead/held jobs, optionally on
         # ANOTHER printer (dead-letter recovery)
@@ -4786,7 +4913,11 @@ DOCS_HTML = r"""<!DOCTYPE html>
  <ul>
   <li><b>Toolbar popup</b> - queue on/off (Pause), last jobs, token banner.
       <b>Queue mode OFF = instant print</b>: every job goes straight to the
-      printer; if no printer is active the job is auto-queued (v2.3).</li>
+      printer; if no printer is active the job is auto-queued (v2.3).
+      <b>v2.7.0:</b> the popup also carries the two LAN switches -
+      <b>Share Receive Mode</b> (this PC accepts jobs from other PCs =
+      hub share_lan) and <b>Share Send Mode</b> (this browser may shift
+      jobs to peer PCs; OFF locks every send-to-PC button here).</li>
   <li><b>Extension Options &rarr; Settings</b> - master switch, queue mode,
       <b>Debug mode</b> (v2.3 - collect errors so problems can be seen,
       not guessed),
@@ -4801,8 +4932,16 @@ DOCS_HTML = r"""<!DOCTYPE html>
   <li><b>Extension Options &rarr; Queue</b> - live queue, Pause/Resume,
       per-row Cancel + <b>Shift to PC</b>.</li>
   <li><b>Hub dashboard</b> (<code>/dashboard?token=...</code>) - printers,
-      queue, history, audit, <b>LAN sharing card</b> (on/off + copy URL),
-      pause, clear, shift-all to a peer PC, rotate token.</li>
+      queue, <b>Job history manager (v2.7.0)</b>, audit, <b>LAN sharing
+      card</b> (on/off + copy URL), pause, clear, shift-all to a peer PC,
+      rotate token, <b>live debug &amp; test tool + SumatraPDF path</b>
+      (proper panels inside the page since v2.7.0).</li>
+  <li><b>Job history (v2.7.0)</b> - dashboard AND extension Options &rarr;
+      History: <b>filter</b> by status (incl. one-click
+      "not printed"), <b>search</b> by title / printer / #id, <b>tick</b>
+      rows (check / uncheck all), <b>Reprint selected</b>,
+      <b>Reprint all non-printed</b> and <b>Clear ALL history</b>
+      (finished jobs only - waiting jobs are never touched).</li>
   <li><b>This page</b> - the built-in guide at <code>/docs?token=...</code>.</li>
  </ul>
 </div>
@@ -5189,7 +5328,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   td{padding:7px 8px;border-bottom:1px solid #f4f7fb;white-space:nowrap}
   .st{font-size:11px;font-weight:700;padding:2px 8px;border-radius:9px}
   .st.printed,.st.queued,.ready{background:#dcfce7;color:#166534}
-  .st.printing{background:#dbeafe;color:#1e40af}
+  .st.printing,.st.forwarded{background:#dbeafe;color:#1e40af}
   .st.saved,.st.scheduled{background:#fef9c3;color:#854d0e}
   .st.held{background:#ffedd5;color:#9a3412}
   .st.dead,.st.failed,.st.canceled,.offline,.paper-out,.error{background:#fee2e2;color:#991b1b}
@@ -5202,11 +5341,30 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   .bar{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px}
   #msg{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);
        background:#0f172a;color:#fff;padding:9px 16px;border-radius:9px;
-       font-size:13px;display:none;max-width:80vw}
+       font-size:13px;display:none;max-width:80vw;z-index:9}
+  /* v2.7.0: inputs, checkboxes + history toolbar - the live test tool
+     and the Job history manager now live INSIDE <main> (proper panel
+     styling, no more broken full-width section below the page). */
+  input[type=text],input[type=search],select{border:1px solid #dbe2ee;
+       border-radius:7px;padding:5px 9px;font:600 12px "Segoe UI",system-ui;
+       color:var(--ink);background:#fff;outline:none}
+  input[type=text]:focus,input[type=search]:focus,select:focus{border-color:var(--blue)}
+  input[type=checkbox]{width:15px;height:15px;accent-color:var(--blue);cursor:pointer}
+  .hbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 8px}
+  .hbar label{font-size:13px;color:#334155;display:flex;gap:6px;align-items:center}
+  .hbar .cnt{font:700 12px "Segoe UI",system-ui;color:var(--blue);
+       background:#dbeafe;border-radius:9px;padding:3px 10px}
+  .ltbox{padding:12px 12px 14px}
+  .ltbox p{font-size:13px;color:#334155;margin:2px 0 10px}
+  #ltOut{margin:4px 0 2px;max-height:260px;overflow:auto;white-space:pre-wrap}
+  .verbadge{font:700 11px "Segoe UI",system-ui;background:rgba(255,255,255,.14);
+       border:1px solid rgba(255,255,255,.35);border-radius:9px;padding:3px 10px}
+  .paging{display:flex;gap:8px;align-items:center;margin-top:8px;font-size:12px;color:var(--mut)}
 </style></head><body>
 <header>
   <div class="logo">A</div>
   <h1>AdvPrint Pro <small>@@BRANDING@@</small></h1>
+  <span class="verbadge">v@@VERSION@@</span>
   <button class="primary" onclick="rotateToken()">Rotate token</button>
 </header>
 <main>
@@ -5238,6 +5396,27 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   <h2>Debug <small style="text-transform:none;letter-spacing:0">&nbsp;- v2.3: WHY is nothing printing? one card, one answer</small></h2>
   <div class="panel" id="dbgCard"><table><tbody id="dbgBody">
     <tr><td>Loading debug status...</td></tr></tbody></table></div>
+  <h2>Live debug &amp; test tool <small style="text-transform:none;letter-spacing:0">&nbsp;- send a REAL print and watch every step live (v@@VERSION@@)</small></h2>
+  <div class="panel ltbox" id="livetest">
+    <p>Send a REAL test print and watch every step live until it hits the
+       printer - or see exactly why it did not (offline, held, SumatraPDF...).</p>
+    <div class="hbar">
+      <label>Printer: <input type="text" id="ltPrinter" size="24" placeholder="(default printer)"></label>
+      <button onclick="ltSend()">Send test print &amp; watch live</button>
+      <button onclick="ltRelease()">Release ALL held jobs</button>
+      <button class="primary" onclick="ltFull()">Full self-test (A-to-Z check)</button>
+    </div>
+    <pre id="ltOut">idle - click the button above</pre>
+  </div>
+  <h2>Hub settings <small style="text-transform:none;letter-spacing:0">&nbsp;- SumatraPDF.exe override (empty = auto-find on every print)</small></h2>
+  <div class="panel ltbox">
+    <div class="hbar">
+      <label style="flex:1;min-width:280px">SumatraPDF.exe full path:
+        <input type="text" id="ltSumatra" style="width:100%" placeholder="C:\Users\you\AppData\Local\SumatraPDF\SumatraPDF.exe"></label>
+      <button onclick="ltSaveSumatra()">Save</button>
+      <span id="ltCfgMsg" style="font-size:12px;color:var(--mut)"></span>
+    </div>
+  </div>
   <h2>Printers</h2>
   <div class="panel" id="printers"><table><tbody>
     <tr><td>Loading printers...</td></tr></tbody></table></div>
@@ -5245,39 +5424,72 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   <div class="panel"><table><thead><tr>
     <th>#</th><th>Title</th><th>Printer</th><th>Status</th><th></th>
   </tr></thead><tbody id="queue"><tr><td>-</td></tr></tbody></table></div>
-  <h2>Recent jobs</h2>
-  <div class="panel"><table><thead><tr>
-    <th>#</th><th>Time</th><th>Title</th><th>Printer</th><th>Status</th><th></th>
-  </tr></thead><tbody id="jobs"><tr><td>-</td></tr></tbody></table></div>
+  <h2>Job history <small style="text-transform:none;letter-spacing:0">&nbsp;- v2.7.0: filter, tick, REPRINT selected / non-printed, clear ALL</small></h2>
+  <div class="panel" style="padding:10px 12px">
+    <div class="hbar">
+      <select id="hFilter" onchange="HIST.page=1;renderHistory()">
+        <option value="">All statuses</option>
+        <option value="printed">Printed</option>
+        <option value="queued">Queued</option>
+        <option value="printing">Printing</option>
+        <option value="held">Held</option>
+        <option value="scheduled">Scheduled</option>
+        <option value="failed">Failed</option>
+        <option value="dead">Dead</option>
+        <option value="canceled">Canceled</option>
+        <option value="saved">Saved (file)</option>
+        <option value="forwarded">Forwarded</option>
+        <option value="not_printed">Not printed (failed + dead + canceled)</option>
+      </select>
+      <input type="search" id="hSearch" size="24" placeholder="Search title / printer / #id..." oninput="HIST.page=1;renderHistory()">
+      <select id="hLimit" onchange="loadHistory()">
+        <option value="50">load last 50</option>
+        <option value="100" selected>load last 100</option>
+        <option value="300">load last 300</option>
+        <option value="1000">load last 1000</option>
+      </select>
+      <span class="cnt" id="hSelCnt">0 selected</span>
+      <span style="flex:1"></span>
+      <button class="primary" onclick="reprintSelected()">Reprint selected</button>
+      <button onclick="reprintNotPrinted()">Reprint non-printed</button>
+      <button onclick="clearHistory()">Clear ALL history</button>
+      <button onclick="loadHistory()">Refresh</button>
+    </div>
+    <table><thead><tr>
+      <th style="width:26px;padding-right:0"><input type="checkbox" id="hAllTop" title="check / uncheck ALL rows on this page" onchange="toggleAllHistory(this.checked)"></th>
+      <th>#</th><th>Time</th><th>Title</th><th>Printer</th><th>Status</th><th></th>
+    </tr></thead><tbody id="jobs"><tr><td>-</td></tr></tbody></table>
+    <div class="paging">
+      <button id="hPrev" onclick="HIST.page--;renderHistory()">&larr; newer</button>
+      <span id="hPage">-</span>
+      <button id="hNext" onclick="HIST.page++;renderHistory()">older &rarr;</button>
+    </div>
+  </div>
   <h2>Audit trail (latest events)</h2>
   <div class="panel"><table><thead><tr>
     <th>Time</th><th>Event</th><th>Job</th><th>Site / IP</th><th>Printer</th><th>Reason / details</th>
   </tr></thead><tbody id="audit"><tr><td>-</td></tr></tbody></table></div>
 </main>
-<section id="livetest">
-  <h2>Live debug &amp; test tool <small>(v@@VERSION@@)</small></h2>
-  <p>Send a REAL test print and watch every step live until it hits the
-     printer - or see exactly why it did not (offline, held, SumatraPDF...).</p>
-  <p><label>Printer: <input id="ltPrinter" placeholder="(default printer)"></label>
-     <button onclick="ltSend()">Send test print &amp; watch live</button>
-     <button onclick="ltRelease()">Release ALL held jobs</button>
-     <button class="primary" onclick="ltFull()">
-       Full self-test (A-to-Z check)</button></p>
-  <pre id="ltOut">idle - click the button above</pre>
-  <h2>Settings</h2>
-  <p><label>SumatraPDF.exe full path (empty = auto-find):<br>
-     <input id="ltSumatra" size="46" placeholder="C:\\Users\\you\\AppData\\Local\\SumatraPDF\\SumatraPDF.exe"></label>
-     <button onclick="ltSaveSumatra()">Save</button> <span id="ltCfgMsg"></span></p>
-</section>
 <div id="msg"></div>
 <script>
+/* v2.7.0 NOTE: the "Live debug & test tool" + "Hub settings" panels now
+   live INSIDE <main> (see above) - the old <section id="livetest"> after
+   </main> broke the layout (full-width, unstyled, below the page). */
 const Q = location.search || "";
 const TOKEN = "@@TOKEN@@";
 const H = {"X-AdvPrint-Token": new URLSearchParams(Q).get("token") || ""};
 function msg(t){const m=document.getElementById("msg");m.textContent=t;
   m.style.display="block";setTimeout(()=>m.style.display="none",4000);}
-async function jget(p){const r=await fetch(p+Q);return r.json();}
-async function act(p,body){const r=await fetch(p+Q,{method:"POST",
+/* v2.7.0 FIX: query strings used to be GLUED as
+   "/jobs?limit=12" + "?token=..." -> "?limit=12?token=..." which the
+   hub cannot parse - the dashboard's Recent jobs / Audit tables were
+   ALWAYS empty on a real install (every dashboard link carries a
+   token). withQ() joins the token with "&" when the path already has
+   a "?", and jget() additionally sends the token header. */
+function withQ(p){return Q?p+((p.indexOf("?")>=0)?"&":"?")+Q.slice(1):p;}
+async function jget(p){const r=await fetch(withQ(p),{headers:H});
+  return r.json();}
+async function act(p,body){const r=await fetch(withQ(p),{method:"POST",
   headers:Object.assign({"Content-Type":"application/json"},H),
   body:JSON.stringify(body||{})});return r.json();}
 function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,
@@ -5311,28 +5523,15 @@ async function refresh(){
           esc(j.printer||"default")+"</td><td><span class='st "+esc(j.status)+
           "'>"+esc(j.status)+(j.held_reason?" - "+esc(j.held_reason):"")+
           "</span></td><td><button onclick=\"act('/jobs/"+j.id+
-          "/cancel').then(refresh)\">Cancel</button> "+
-          (j.status!=="printing"?"<button onclick=\"act('/jobs/"+j.id+"/print-now').then(refresh)\">Print now</button> "+
+          "/cancel').then(()=>{refresh();loadHistory();})\">Cancel</button> "+
+          (j.status!=="printing"?"<button onclick=\"act('/jobs/"+j.id+"/print-now').then(()=>{refresh();loadHistory();})\">Print now</button> "+
           "<button onclick=\"shiftJob("+j.id+")\">Shift</button>":"")+"</td></tr>";
     }
     document.getElementById("queue").innerHTML=
       qh||"<tr><td>Queue is empty.</td></tr>";
-    let jh="";
-    for(const j of (jobs.jobs||[])){
-      jh+="<tr><td>"+j.id+"</td><td>"+esc((j.created_at||"").replace("T"," "))+
-          "</td><td>"+esc(j.title)+"</td><td>"+esc(j.printer||"default")+
-          "</td><td><span class='st "+esc(j.status)+"'>"+esc(j.status)+
-          "</span></td><td>";
-      if(["failed","dead","canceled"].includes(j.status))
-        jh+="<button onclick=\"const p=prompt('Retry on which printer? (empty = same)');"+
-           "if(p!==null)act('/jobs/"+j.id+"/retry',{printer:p}).then(refresh)\">Retry</button> ";
-      else if(j.status!=="printing")
-        jh+="<button onclick=\"const r=prompt('Reprint - reason?');"+
-           "if(r!==null)act('/jobs/"+j.id+"/reprint',{reason:r}).then(refresh)\">Reprint</button>";
-      jh+="</td></tr>";
-    }
-    document.getElementById("jobs").innerHTML=
-      jh||"<tr><td>No jobs yet.</td></tr>";
+    /* v2.7.0: the old "Recent jobs" rendering moved out of refresh() -
+       the Job history manager below owns the #jobs table now (it loads
+       its own rows, keeps filter/checkboxes and pages 50 per view). */
     const a=await jget("/audit?limit=10");
     let ah="";
     for(const e of (a.entries||[])){
@@ -5349,6 +5548,102 @@ async function togglePause(){
   const st=await jget("/queue");
   await act("/queue/"+(st.paused?"resume":"pause"));
   refresh();
+}
+/* ---- v2.7.0: Job history - filter, search, tick, bulk reprint, clear ----
+   Owns the #jobs table (the old "Recent jobs"). State:
+   HIST.rows  = what the hub returned for the selected load-limit
+   HIST.page  = page within the FILTERED rows (50 rows per page)
+   SELECTED   = Set of ticked job ids - survives re-render/refresh */
+const HIST={rows:[],page:1,per:50};
+const SELECTED=new Set();
+async function loadHistory(){
+  try{
+    const lim=(document.getElementById("hLimit")||{}).value||100;
+    const f=(document.getElementById("hFilter")||{}).value||"";
+    const st=(f&&f!=="not_printed")?("&status="+encodeURIComponent(f)):"";
+    const d=await jget("/jobs?limit="+lim+st);
+    HIST.rows=d.jobs||[];
+    renderHistory();
+  }catch(e){/* hub briefly offline - the next tick retries */}
+}
+function histFiltered(){
+  const f=(document.getElementById("hFilter")||{}).value||"";
+  const s=((document.getElementById("hSearch")||{}).value||"").trim().toLowerCase();
+  let rows=HIST.rows;
+  if(f==="not_printed")
+    rows=rows.filter(j=>["failed","dead","canceled"].includes(j.status));
+  if(s)
+    rows=rows.filter(j=>(j.title||"").toLowerCase().includes(s)||
+                        (j.printer||"").toLowerCase().includes(s)||
+                        String(j.id)===s.replace("#",""));
+  return rows;
+}
+function renderHistory(){
+  const rows=histFiltered();
+  const per=HIST.per, pages=Math.max(1,Math.ceil(rows.length/per));
+  if(HIST.page>pages)HIST.page=pages;
+  if(HIST.page<1)HIST.page=1;
+  const start=(HIST.page-1)*per, pageRows=rows.slice(start,start+per);
+  let h="";
+  for(const j of pageRows){
+    h+="<tr><td><input type='checkbox' "+(SELECTED.has(j.id)?"checked":"")+
+       " title='tick to reprint' onchange='histCheck("+j.id+",this.checked)'></td>"+
+       "<td>"+j.id+"</td><td>"+esc((j.created_at||"").replace("T"," "))+"</td>"+
+       "<td>"+esc(j.title)+"</td><td>"+esc(j.printer||"default")+"</td>"+
+       "<td><span class='st "+esc(j.status)+"'>"+esc(j.status)+
+       (j.held_reason?" - "+esc(j.held_reason):"")+"</span></td><td>";
+    if(["failed","dead","canceled"].includes(j.status))
+      h+="<button onclick=\"const p=prompt('Retry on which printer? (empty = same)');"+
+         "if(p!==null)act('/jobs/"+j.id+"/retry',{printer:p}).then(()=>{loadHistory();refresh();})\">Retry</button> ";
+    else if(j.status!=="printing"&&j.status!=="forwarded")
+      h+="<button onclick=\"const r=prompt('Reprint - reason?');"+
+         "if(r!==null)act('/jobs/"+j.id+"/reprint',{reason:r}).then(()=>{loadHistory();refresh();})\">Reprint</button>";
+    h+="</td></tr>";
+  }
+  const f=(document.getElementById("hFilter")||{}).value||"";
+  const s=((document.getElementById("hSearch")||{}).value||"").trim();
+  document.getElementById("jobs").innerHTML=h||
+    "<tr><td colspan='7'>No jobs"+((f||s)?" match this filter.":" yet.")+"</td></tr>";
+  document.getElementById("hSelCnt").textContent=SELECTED.size+" selected";
+  document.getElementById("hPage").textContent=rows.length?
+    ("showing "+(start+1)+"-"+Math.min(start+per,rows.length)+" of "+rows.length+" (page "+HIST.page+"/"+pages+")"):
+    "0 jobs";
+  const all=document.getElementById("hAllTop");
+  const pageIds=pageRows.map(j=>j.id);
+  const selPage=pageIds.filter(i=>SELECTED.has(i)).length;
+  all.checked=pageIds.length>0&&selPage===pageIds.length;
+  all.indeterminate=selPage>0&&selPage<pageIds.length;
+}
+function histCheck(id,on){on?SELECTED.add(id):SELECTED.delete(id);renderHistory();}
+function toggleAllHistory(on){
+  const rows=histFiltered().slice((HIST.page-1)*HIST.per,HIST.page*HIST.per);
+  for(const j of rows)on?SELECTED.add(j.id):SELECTED.delete(j.id);
+  renderHistory();
+}
+async function reprintSelected(){
+  if(!SELECTED.size)return msg("Tick one or more jobs in the history first.");
+  if(!confirm("Reprint "+SELECTED.size+" selected job(s)?"))return;
+  const r=await act("/jobs/bulk-reprint",{ids:[...SELECTED]});
+  if(r.ok)msg("Reprint queued: "+r.queued+" job(s)"+
+              (r.skipped?(" - "+r.skipped+" skipped (original file gone)"):""));
+  else msg(r.error||"bulk reprint failed");
+  SELECTED.clear();loadHistory();refresh();
+}
+async function reprintNotPrinted(){
+  if(!confirm("Reprint EVERY failed / dead / canceled job in the history (up to 500)?"))return;
+  const r=await act("/jobs/bulk-reprint",{scope:"not_printed"});
+  if(r.ok)msg("Reprint queued: "+r.queued+" job(s)"+
+              (r.skipped?(" - "+r.skipped+" skipped (original file gone)"):""));
+  else msg(r.error||"bulk reprint failed");
+  SELECTED.clear();loadHistory();refresh();
+}
+async function clearHistory(){
+  if(!confirm("Delete ALL finished jobs (printed / failed / dead / canceled / forwarded / saved) from the history?\n"+
+              "Waiting jobs (queued / held) are NOT touched.\nThis cannot be undone - export the CSV first if unsure."))return;
+  const r=await act("/history/clear",{});
+  if(r.ok)msg(r.message||("History cleared - "+r.deleted+" job(s) removed"));
+  else msg(r.error||"clear failed");
+  SELECTED.clear();loadHistory();refresh();
 }
 /* ---- v2.2: LAN sharing card + queue shift ---- */
 let PEERS=[];
@@ -5457,13 +5752,15 @@ async function rotateToken(){
   if(r.ok){prompt("Your NEW token - copy it into the extension Options page:",r.token);}
   else msg(r.error||"failed");
 }
-refresh();loadLan();loadDebug();setInterval(refresh,5000);setInterval(loadLan,15000);setInterval(loadDebug,15000);
+refresh();loadHistory();loadLan();loadDebug();
+setInterval(refresh,5000);setInterval(loadHistory,10000);
+setInterval(loadLan,15000);setInterval(loadDebug,15000);
 async function ltSend(){
   const out=document.getElementById("ltOut");
   const pr=(document.getElementById("ltPrinter").value||"").trim();
   out.textContent="sending test print...";
   try{
-    const r=await fetch("/testprint?kind=a4"+(pr?"&printer="+encodeURIComponent(pr):"")+Q);
+    const r=await fetch(withQ("/testprint?kind=a4"+(pr?"&printer="+encodeURIComponent(pr):"")));
     const d=await r.json();
     if(!d.ok){out.textContent="test print failed: "+(d.error||("HTTP "+r.status));return;}
     const jid=d.job_id; let n=0;

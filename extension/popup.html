@@ -97,7 +97,7 @@
   <header>
     <div class="logo">A</div>
     <h1>AdvPrint Pro</h1>
-    <span class="ver" id="ver">v2.6.9</span>
+    <span class="ver" id="ver">v2.7.0</span>
   </header>
 
   <div class="status">
@@ -120,6 +120,7 @@
   </div>
 
   <div class="switches">
+    <h2 data-i18n="popPowerSection" style="padding:0 0 2px">Power</h2>
     <label class="sw" id="swEnabledRow" title="Master switch: turns ALL AdvPrint printing, auto-print, the print() hook and the page API on or off">
       <span class="swtext"><b>AdvPrint enabled</b><small id="swEnabledSub">printing is on</small></span>
       <input type="checkbox" id="swEnabled">
@@ -128,6 +129,17 @@
     <label class="sw" id="swQueueRow" title="ON: jobs wait in the hub queue in order (pause works). OFF: instant print - every job goes straight to the printer; if no printer is active the job is auto-queued and prints when it is back">
       <span class="swtext"><b>Queue mode</b><small id="swQueueSub">jobs wait in order + pause works</small></span>
       <input type="checkbox" id="swQueue">
+      <span class="slider"></span>
+    </label>
+    <h2 data-i18n="popLanSection" style="padding:6px 0 2px">LAN sharing</h2>
+    <label class="sw" id="swShareRxRow" title="Share RECEIVE Mode (v2.7.0): ON = this PC's hub accepts print jobs from other PCs on the LAN (hub share_lan). OFF = this hub prints only for this PC. Takes effect after a hub restart">
+      <span class="swtext"><b data-i18n="popShareRx">Share Receive Mode</b><small id="swShareRxSub">this PC accepts jobs from other PCs</small></span>
+      <input type="checkbox" id="swShareRx">
+      <span class="slider"></span>
+    </label>
+    <label class="sw" id="swShareTxRow" title="Share SEND Mode (v2.7.0): ON = this browser may shift/send print jobs to peer PCs (Queue tab + LAN tab). OFF = sending to other PCs is locked - nothing leaves this machine">
+      <span class="swtext"><b data-i18n="popShareTx">Share Send Mode</b><small id="swShareTxSub">this browser may send jobs to peer PCs</small></span>
+      <input type="checkbox" id="swShareTx">
       <span class="slider"></span>
     </label>
   </div>

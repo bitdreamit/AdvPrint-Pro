@@ -68,7 +68,7 @@ $("bFixToken").addEventListener("click", async () => {
   }
 });
 
-/* ---------- master switches (Enable / Queue Mode) ---------- */
+/* ---------- master switches (Enable / Queue Mode / LAN sharing) ---- */
 function renderEnabledState(off) {
   document.body.classList.toggle("off", off);
   $("swEnabledRow").classList.toggle("off", off);
@@ -84,7 +84,28 @@ async function loadSwitches() {
   const off = cfg.cfg.enabled === false;
   $("swEnabled").checked = !off;
   $("swQueue").checked = cfg.cfg.queueMode !== false;
+  // v2.7.0: Share SEND Mode - extension-side switch (this browser may
+  // shift/send jobs to peer PCs). Share RECEIVE state comes from the
+  // hub in refresh() (health share_lan).
+  $("swShareTx").checked = cfg.cfg.lanSend !== false;
+  renderShareTxState(cfg.cfg.lanSend !== false);
   renderEnabledState(off);
+}
+
+function renderShareTxState(on) {
+  $("swShareTxSub").textContent = on ? AdvPrintI18n.t("popShareTxOn")
+                                     : AdvPrintI18n.t("popShareTxOff");
+  $("swShareTxRow").classList.toggle("off", !on);
+}
+
+function renderShareRxState(on, reachable) {
+  const sw = $("swShareRx");
+  sw.checked = !!on;
+  sw.disabled = !reachable;
+  $("swShareRxSub").textContent = !reachable
+    ? AdvPrintI18n.t("popShareRxOffline")
+    : (on ? AdvPrintI18n.t("popShareRxOn") : AdvPrintI18n.t("popShareRxOff"));
+  $("swShareRxRow").classList.toggle("off", reachable ? !on : true);
 }
 
 $("swEnabled").addEventListener("change", async () => {
@@ -98,11 +119,35 @@ $("swQueue").addEventListener("change", async () => {
   const on = $("swQueue").checked;
   await send({ type: "saveCfg", patch: { queueMode: on } });
   $("swQueueSub").textContent = on
-    ? "jobs wait in order + pause works"
-    : "instant print - auto-queues if no printer is active";
-  msg(on ? "Queue mode ON - jobs are printed in FIFO order"
-         : "Instant print ON - jobs print immediately; if no printer is " +
-           "active they are auto-queued for later", "info");
+    ? AdvPrintI18n.t("popQueueOn")
+    : AdvPrintI18n.t("popQueueOff");
+  msg(on ? AdvPrintI18n.t("popQueueOnMsg")
+         : AdvPrintI18n.t("popQueueOffMsg"), "info");
+});
+
+/* v2.7.0: Share Receive Mode - hub-side share_lan (accept jobs from
+ * other PCs on the LAN). Saved straight into the hub config; a hub
+ * restart applies the new listener binding. */
+$("swShareRx").addEventListener("change", async () => {
+  const on = $("swShareRx").checked;
+  const r = await send({ type: "hubConfigSet", patch: { share_lan: on } });
+  if (r && r.ok) {
+    renderShareRxState(on, true);
+    msg(AdvPrintI18n.t(on ? "popShareRxMsgOn" : "popShareRxMsgOff"), "info");
+  } else {
+    $("swShareRx").checked = !on;
+    msg("Failed: " + ((r && r.error) || "hub offline") +
+        "  (start AdvPrint Pro first)", "err");
+  }
+});
+
+/* v2.7.0: Share Send Mode - extension-side switch. OFF = this browser
+ * refuses every shift/send-to-peer request (background queueShift). */
+$("swShareTx").addEventListener("change", async () => {
+  const on = $("swShareTx").checked;
+  await send({ type: "saveCfg", patch: { lanSend: on } });
+  renderShareTxState(on);
+  msg(AdvPrintI18n.t(on ? "popShareTxMsgOn" : "popShareTxMsgOff"), "info");
 });
 
 async function refresh() {
@@ -121,6 +166,8 @@ async function refresh() {
     $("bPause").textContent = paused ? AdvPrintI18n.t("popResume")
                                      : AdvPrintI18n.t("popPause");
     $("qpend").textContent = st.pending ? st.pending + " pending" : "";
+    // v2.7.0: Share RECEIVE state lives in the hub (/health share_lan)
+    renderShareRxState(!!st.share_lan, true);
     showOffline(false);
     // v2.1.0: token rejected earlier (KEY state) -> red banner; once an
     // authed call succeeds below, the flag is cleared again
@@ -147,6 +194,7 @@ async function refresh() {
     $("connect").textContent = "";
     $("qstate").textContent = "-";
     $("qpend").textContent = "";
+    renderShareRxState(false, false);
     showOffline(false);
     showTokenWarning(true, "token");
   } else if (st.reason === "slow") {
@@ -158,6 +206,7 @@ async function refresh() {
     $("connect").textContent = "";
     $("qstate").textContent = "-";
     $("qpend").textContent = "";
+    renderShareRxState(false, false);
     showOffline(false);
     msg(AdvPrintI18n.t("popStatSlowHint"), "info");
   } else {
@@ -166,6 +215,7 @@ async function refresh() {
     $("connect").textContent = "Connect";
     $("qstate").textContent = "-";
     $("qpend").textContent = "";
+    renderShareRxState(false, false);
     const ri = await send({ type: "retryInfo" });
     showOffline(true, ri.ok ? ri.count : 0);
     msg(AdvPrintI18n.t("popHubOfflineHint"), "err");
@@ -318,7 +368,14 @@ AdvPrintI18n.currentLang().then((lang) => {
   const off = document.body.classList.contains("off");
   $("swEnabledSub").textContent = off ? AdvPrintI18n.t("popEnabledOff")
                                       : AdvPrintI18n.t("popEnabledOn");
+  // v2.7.0: re-render the share switch sub-labels in the chosen language
+  renderShareTxState($("swShareTx").checked);
+  renderShareRxState($("swShareRx").checked, !$("swShareRx").disabled);
 });
+
+/* v2.7.0: the version badge always matches the real manifest version */
+try { $("ver").textContent = "v" + chrome.runtime.getManifest().version; }
+catch (_) { /* keep the hardcoded one */ }
 
 loadSwitches();
 refresh();

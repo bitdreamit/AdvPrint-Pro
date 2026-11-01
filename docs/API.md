@@ -128,6 +128,33 @@ The queue is **DB-driven** (SQLite): pending jobs survive hub restarts, and jobs
 | `GET /jobs/{id}/file` | Download the original PDF of a job |
 | `POST /jobs/{id}/reprint` | Queue an exact copy of the job |
 | `POST /jobs/{id}/cancel` | Cancel a queued job; if it is printing, the print process is killed |
+| `POST /jobs/bulk-reprint` | **v2.7.0** Reprint many jobs in one call |
+| `POST /history/clear` | **v2.7.0** Delete every FINISHED job from the history |
+
+### POST /jobs/bulk-reprint (v2.7.0)
+
+Body: either `{"ids":[12,13,14]}` (History tab "Reprint selected") or
+`{"scope":"not_printed","limit":500}` (every `failed` / `dead` /
+`canceled` job — "Reprint all non-printed"). Optional `reason`,
+`watermark`, `watermark_text`, `printer` ride along exactly like the
+single-job reprint. Per-job problems never abort the batch:
+
+```json
+{"ok":true,"queued":2,"skipped":1,
+ "results":[{"id":12,"ok":true,"job_id":41},
+            {"id":13,"ok":false,"error":"original file no longer stored"}]}
+```
+
+### POST /history/clear (v2.7.0)
+
+Deletes every FINISHED job (`printed / failed / dead / canceled /
+forwarded / saved`). Waiting jobs (`queued / printing / held /
+scheduled`) are NEVER touched — clearing the history can not cancel a
+real print. Audited as `history.cleared`.
+
+```json
+{"ok":true,"deleted":37,"message":"37 finished job(s) removed from the history"}
+```
 
 ---
 

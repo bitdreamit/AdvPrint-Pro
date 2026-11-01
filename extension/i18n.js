@@ -1,4 +1,4 @@
-/* AdvPrint Pro v2.6.9 - UI language: English + Bangla (বাংলা).
+/* AdvPrint Pro v2.7.0 - UI language: English + Bangla (বাংলা).
  * Shared by popup + options. The language comes from:
  *   1. chrome.storage.local.lang ("en" | "bn"), set in Options
  *   2. fallback: the browser UI language (auto-detect)
@@ -46,6 +46,19 @@
       popDisabledMsg: "AdvPrint disabled - nothing will print",
       popQueueOnMsg: "Queue mode ON - jobs are printed in FIFO order",
       popQueueOffMsg: "Instant print ON - jobs print immediately; if no printer is active they are auto-queued for later",
+      popLanSection: "LAN sharing",
+      popPowerSection: "Power",
+      popShareRx: "Share Receive Mode",
+      popShareRxOn: "this PC accepts jobs from other PCs",
+      popShareRxOff: "this PC prints only for itself",
+      popShareRxMsgOn: "Share Receive Mode ON - RESTART the hub (tray icon → Exit, start again) so other PCs can connect. Check the firewall!",
+      popShareRxMsgOff: "Share Receive Mode OFF - the hub only listens on this PC (restart it to unbind the LAN)",
+      popShareTx: "Share Send Mode",
+      popShareTxOn: "this browser may send jobs to peer PCs",
+      popShareTxOff: "sending to other PCs is locked",
+      popShareTxMsgOn: "Share Send Mode ON - Queue/LAN shift buttons work again",
+      popShareTxMsgOff: "Share Send Mode OFF - jobs can no longer be shifted to other PCs",
+      popShareRxOffline: "connect to the hub first",
       popTestQueued: "Test page queued as job #",
       popScreenshotQueued: "Screenshot queued as job #",
       popCapturing: "Capturing screenshot...",
@@ -65,7 +78,7 @@
       optTypeGlob: "Glob (* wildcard)",
       optTypeRegex: "Regex",
       // about / branding
-      brandLine: "Version 2.6.9 - AdvPrint Pro (Advanced Printer) by Bit Dream IT - Innovative Healthcare Solutions - MIT license - 100% local - no cloud, no tracking."
+      brandLine: "Version 2.7.0 - AdvPrint Pro (Advanced Printer) by Bit Dream IT - Innovative Healthcare Solutions - MIT license - 100% local - no cloud, no tracking."
     },
     bn: {
       appName: "AdvPrint Pro",
@@ -104,6 +117,19 @@
       popDisabledMsg: "অ্যাডভান্সড প্রিন্টার বন্ধ - কিছুই প্রিন্ট হবে না",
       popQueueOnMsg: "কিউ মোড চালু - কাজ ক্রমানুসারে প্রিন্ট হবে",
       popQueueOffMsg: "কিউ মোড বন্ধ - কাজ সাথে সাথে প্রিন্ট হবে",
+      popLanSection: "LAN শেয়ারিং",
+      popPowerSection: "পাওয়ার",
+      popShareRx: "শেয়ার রিসিভ মোড",
+      popShareRxOn: "এই পিসি অন্য পিসি থেকে কাজ নেয়",
+      popShareRxOff: "এই পিসি শুধু নিজের জন্য প্রিন্ট করে",
+      popShareRxMsgOn: "শেয়ার রিসিভ মোড চালু - অন্য পিসি সংযোগ পেতে হাব রিস্টার্ট করুন (ট্রে আইকন → Exit, আবার চালু)। ফায়ারওয়াল দেখুন!",
+      popShareRxMsgOff: "শেয়ার রিসিভ মোড বন্ধ - হাব শুধু এই পিসিতে শোনে (LAN আনবাইন্ড করতে রিস্টার্ট করুন)",
+      popShareTx: "শেয়ার সেন্ড মোড",
+      popShareTxOn: "এই ব্রাউজার অন্য পিসিতে কাজ পাঠাতে পারে",
+      popShareTxOff: "অন্য পিসিতে পাঠানো বন্ধ",
+      popShareTxMsgOn: "শেয়ার সেন্ড মোড চালু - Queue/LAN শিফট বাটন আবার কাজ করবে",
+      popShareTxMsgOff: "শেয়ার সেন্ড মোড বন্ধ - অন্য পিসিতে কাজ শিফ্ট করা যাবে না",
+      popShareRxOffline: "আগে হাবের সাথে সংযোগ করুন",
       popTestQueued: "টেস্ট পেজ কিউ হয়েছে, জব #",
       popScreenshotQueued: "স্ক্রিনশট কিউ হয়েছে, জব #",
       popCapturing: "স্ক্রিনশট নেওয়া হচ্ছে...",
@@ -121,7 +147,7 @@
       optRulesType: "ধরন",
       optTypeGlob: "Glob (* ওয়াইল্ডকার্ড)",
       optTypeRegex: "Regex",
-      brandLine: "সংস্করণ 2.6.9 - AdvPrint Pro (Advanced Printer) by Bit Dream IT - Innovative Healthcare Solutions - MIT লাইসেন্স - ১০০% লোকাল - কোনো ক্লাউড নেই, কোনো ট্র্যাকিং নেই।"
+      brandLine: "সংস্করণ 2.7.0 - AdvPrint Pro (Advanced Printer) by Bit Dream IT - Innovative Healthcare Solutions - MIT লাইসেন্স - ১০০% লোকাল - কোনো ক্লাউড নেই, কোনো ট্র্যাকিং নেই।"
     }
   };
 

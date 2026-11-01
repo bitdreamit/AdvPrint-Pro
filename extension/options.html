@@ -118,7 +118,7 @@
     <h1>AdvPrint Pro</h1>
     <p>Print from any web page to any printer &middot; silent &middot; 100% local &middot; MIT open source</p>
   </div>
-  <span class="verchip" id="verChip">v2.6.9</span>
+  <span class="verchip" id="verChip">v2.7.0</span>
   <span class="pill" id="hubPill" title="Live hub status (checked automatically)"><i class="pdot" id="pillDot"></i><span id="pillTxt">checking…</span></span>
 </header>
 
@@ -158,17 +158,46 @@
 
   <!-- ================= HISTORY ================= -->
   <section class="panel" id="panel-history">
-    <h2>Job history <span class="sub" style="display:inline">(last 100)</span></h2>
-    <p class="sub">Served by the hub from SQLite. Survives restarts. Reprint anything.</p>
-    <table>
-      <thead><tr><th>#</th><th>Time</th><th>Title</th><th>Printer</th>
-        <th>Kind</th><th>Status</th><th style="width:130px"></th></tr></thead>
-      <tbody id="jobsBody"></tbody>
-    </table>
-    <div class="row" style="margin-top:10px">
+    <h2>Job history <span class="sub" style="display:inline">(hub SQLite - v2.7.0 manager)</span></h2>
+    <p class="sub">Filter, search, <b>tick rows</b> and reprint in bulk - or clear the
+      whole finished history. Waiting jobs (queued / held) are never touched.
+      Reprint needs the original file on disk (Settings &rarr; Keep printed files).</p>
+    <div class="row" style="gap:8px;flex-wrap:wrap">
+      <select id="histFilter" title="Show only one status - or every job that never printed">
+        <option value="">All statuses</option>
+        <option value="printed">Printed</option>
+        <option value="queued">Queued</option>
+        <option value="printing">Printing</option>
+        <option value="held">Held</option>
+        <option value="scheduled">Scheduled</option>
+        <option value="failed">Failed</option>
+        <option value="dead">Dead</option>
+        <option value="canceled">Canceled</option>
+        <option value="saved">Saved (file)</option>
+        <option value="forwarded">Forwarded</option>
+        <option value="not_printed">Not printed (failed + dead + canceled)</option>
+      </select>
+      <input type="search" id="histSearch" placeholder="Search title / printer / #id" style="min-width:210px">
+      <select id="histLimit" title="How many jobs to load from the hub">
+        <option value="50">load last 50</option>
+        <option value="100" selected>load last 100</option>
+        <option value="300">load last 300</option>
+        <option value="1000">load last 1000</option>
+      </select>
+      <span id="histSelCnt" class="mono" style="font-weight:700;color:#1d4ed8">0 selected</span>
+    </div>
+    <div class="row" style="gap:8px;flex-wrap:wrap;margin-top:8px">
+      <button class="primary" id="bHistReprintSel">Reprint selected</button>
+      <button id="bHistReprintNot" title="Requeue every failed / dead / canceled job in the loaded history">Reprint non-printed</button>
+      <button id="bHistClearHub" title="Delete every FINISHED job from the hub history (waiting jobs are never touched)">Clear ALL hub history</button>
       <button class="mini" id="bReloadJobs">Refresh</button>
       <button class="mini danger" id="bClearHist">Clear extension copy</button>
     </div>
+    <table style="margin-top:8px">
+      <thead><tr><th style="width:26px;padding-right:0"><input type="checkbox" id="histAll" title="check / uncheck all"></th><th>#</th><th>Time</th><th>Title</th><th>Printer</th>
+        <th>Kind</th><th>Status</th><th style="width:130px"></th></tr></thead>
+      <tbody id="jobsBody"></tbody>
+    </table>
   </section>
 
   <!-- ================= SETTINGS ================= -->
@@ -540,6 +569,10 @@
       <button class="mini" id="bLanCopy">Copy URL</button>
       <button class="mini" id="bLanRefresh">Refresh</button>
     </div>
+    <div class="note">v2.7.0: the same two switches live in the <b>popup</b> -
+      <b>Share Receive Mode</b> (= this "Enable" button, hub-side
+      <span class="mono">share_lan</span>) and <b>Share Send Mode</b> (extension-side:
+      OFF locks every shift/send-to-peer button in this browser).</div>
     <div class="note" id="lanHint">After enabling: <b>restart the hub</b>
       (tray icon &rarr; Exit, start AdvPrint Pro again) and allow the port
       through the firewall once:<br>
@@ -572,7 +605,8 @@
   <section class="panel" id="panel-about">
     <div id="api" style="margin-top:-70px;padding-top:70px"></div>
     <h2>About AdvPrint Pro</h2>
-    <p class="sub">Version <b id="aboutVer">2.6.4</b> &middot; AdvPrint (Advanced Printer) by Bit Dream IT - Innovative Healthcare Solutions &middot; MIT license &middot; 100% local - no cloud, no tracking.</p>
+    <p class="sub">Version <b id="aboutVer">2.7.0</b> &middot; AdvPrint (Advanced Printer) by Bit Dream IT - Innovative Healthcare Solutions &middot; MIT license &middot; 100% local - no cloud, no tracking.</p>
+    <p class="sub">v2.7.0 highlights: <b>History manager</b> - filter, search, tick rows, <b>Reprint selected</b>, <b>Reprint all non-printed</b>, <b>Clear ALL history</b> (waiting jobs are never touched) &middot; <b>Share Receive / Send Mode</b> toggles right in the popup &middot; the dashboard's <b>Live debug &amp; test tool</b> now sits properly inside the page &middot; new API: <span class="mono">POST /jobs/bulk-reprint</span>, <span class="mono">POST /history/clear</span>.</p>
     <p class="sub">v2.3 highlights: <b>Debug tab</b> - see WHEN / WHY / WHERE printing fails (hub problems + browser error reports, one Copy button) &middot; <b>instant print</b> (Queue mode OFF) with auto-queue fallback when no printer is active &middot; v2.2: <b>Default print options</b> (copies, odd/even/custom pages, per-sheet n-up, <b>quality draft/normal/high AND DPI</b>, scale, margins, duplex, paper, layout) &middot; <b>LAN / PCs tab</b>: LAN sharing, peers, shift single jobs or the whole queue to another PC &middot; the hub serves the full user guide at <b>/docs</b>.</p>
     <div class="gh">
       <button class="primary" id="bOpenDocs">Open user guide (built-in docs)</button>

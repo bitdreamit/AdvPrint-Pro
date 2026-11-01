@@ -150,6 +150,25 @@ HKLM\Software\Policies\Google\Chrome\3rdparty\extensions\<EXT-ID>\policy\
 
 Managed values override local user settings; managed `rules` fully replace user-defined rules.
 
+## 4b. Popup switches + history manager (v2.7.0)
+
+The popup now carries two LAN switches and Options > History got bulk
+actions. New background message types (same `chrome.runtime.sendMessage`
+protocol as before):
+
+| Message | Effect |
+|---|---|
+| `{type:"jobBulkReprint", ids:[...]}` | POST /jobs/bulk-reprint with the given ids |
+| `{type:"jobBulkReprint", scope:"not_printed"}` | Reprint every failed/dead/canceled job |
+| `{type:"historyClear"}` | POST /history/clear (finished jobs only) |
+| `{type:"saveCfg", patch:{lanSend:false}}` | **Share Send Mode OFF** — the background then refuses every `queueShift` |
+
+`queueShift` respects the new **Share Send Mode**: when the popup switch
+is OFF it answers
+`{ok:false,error:"Share Send Mode is OFF - ..."}` and nothing is sent to
+the peer PC. **Share Receive Mode** is hub-side (`share_lan` via
+`hubConfigSet`) — a hub restart applies the listener change.
+
 ## 5. Direct HTTP from any web app
 
 The hub API is CORS + Private-Network friendly, so page JS can call it directly (no extension needed):

@@ -28,7 +28,7 @@ from conftest import wait_until  # noqa: E402
 def test_health_open_no_token(hub):
     code, d = hub.get("/health", token=None)
     assert code == 200 and d["ok"] is True
-    assert d["version"] == "2.6.9"
+    assert d["version"] == "2.7.0"
     assert d["v2"] is True
     assert "100% local" in d["branding"]
 
@@ -538,13 +538,13 @@ def test_v1_database_migration(tmp_path):
 
 
 def test_version_anchors():
-    assert advprint.VERSION == "2.6.9"
+    assert advprint.VERSION == "2.7.0"
     # repo/package layout: tool/windows/portable/hub -> root/extension
     root = os.path.dirname(os.path.dirname(os.path.dirname(
         os.path.dirname(os.path.dirname(advprint.__file__)))))
     ext = os.path.join(root, "extension", "manifest.json")
     with open(ext) as f:
-        assert json.load(f)["version"] == "2.6.9"
+        assert json.load(f)["version"] == "2.7.0"
 
 
 def test_log_rotation(tmp_path):
@@ -1051,7 +1051,7 @@ def test_v26_token_current_loopback_only(hub):
     code, d = hub.get("/token/current")
     assert code == 200 and d["ok"] is True
     assert d["token"] == hub.token
-    assert d["app"] == "AdvPrint Pro" and d["version"] == "2.6.9"
+    assert d["app"] == "AdvPrint Pro" and d["version"] == "2.7.0"
 
 
 def test_v26_token_current_rejects_remote(hub):
@@ -1125,8 +1125,8 @@ def test_v261_tray_module_ships_and_parses():
 
 
 def test_v261_version_single_source():
-    assert advprint.VERSION == "2.6.9"
-    assert advprint.VERSION_NAME.startswith("v2.6.9")
+    assert advprint.VERSION == "2.7.0"
+    assert advprint.VERSION_NAME.startswith("v2.7.0")
 
 
 def test_v261_cli_cmd_full_path():
@@ -1285,7 +1285,7 @@ def test_v264_setup_exe_kills_zombie_hubs():
                             "installer", "setup.nsi"), encoding="utf-8").read()
     assert "taskkill /F /IM AdvPrintPro.exe" in src
     assert "taskkill /F /IM PrintHubPro.exe" in src
-    assert 'VIProductVersion "2.6.9.0"' in src
+    assert 'VIProductVersion "2.7.0.0"' in src
 
 
 # ---------------- v2.6.8: printer-name self-heal + menu guard ----------
@@ -1439,3 +1439,113 @@ def test_v269_direct_retry_keeps_file(hub, clean_queue, cfg_reset,
     assert j.get("file_path") and os.path.exists(j["file_path"]), \
         "retry file was deleted - the retry can never succeed"
     advprint.db_update(jid, status="canceled", error="test done")
+
+
+# ---------------- v2.7.0: history manager + bulk endpoints --------------
+
+def _v270_mkfile(tmp_path, name, content=b"%PDF-1.4 v270-test"):
+    p = tmp_path / name
+    p.write_bytes(content)
+    return str(p)
+
+
+def test_v270_bulk_reprint_by_ids(hub, clean_queue, tmp_path):
+    """v2.7.0: POST /jobs/bulk-reprint {"ids":[...]} re-queues exactly the
+    picked stored jobs and reports per-job results."""
+    src = _v270_mkfile(tmp_path, "a.pdf")
+    j1 = advprint.db_add("a4", "bulk-src-1", "", 1, src, "test", "t",
+                         status="printed")
+    j2 = advprint.db_add("a4", "bulk-src-2", "", 1, src, "test", "t",
+                         status="printed")
+    code, d = hub.post("/jobs/bulk-reprint", {"ids": [j1, j2]})
+    assert code == 200 and d["ok"] and d["queued"] == 2, d
+    assert [r["ok"] for r in d["results"]] == [True, True]
+    for r in d["results"]:
+        j = advprint.db_get(r["job_id"])
+        assert j and j["title"].endswith("-reprint")
+        advprint.db_update(r["job_id"], status="canceled", error="test done")
+    # unknown ids never abort the batch - they are reported as skipped
+    code, d = hub.post("/jobs/bulk-reprint", {"ids": [999999]})
+    assert code == 200 and d["queued"] == 0 and d["skipped"] == 1, d
+    assert d["results"][0]["id"] == 999999
+    assert d["results"][0]["error"] == "job not found"
+
+
+def test_v270_bulk_reprint_not_printed_scope(hub, clean_queue, tmp_path):
+    """v2.7.0: {"scope":"not_printed"} re-queues failed/dead/canceled
+    rows only - printed jobs stay untouched. (The suite shares one hub
+    DB across tests, so assertions are scoped to the rows this test
+    created, never to absolute counts.)"""
+    src = _v270_mkfile(tmp_path, "f.pdf")
+    failed_id = advprint.db_add("a4", "never-printed-270", "", 1, src,
+                                "test", "t", status="failed", error="x")
+    printed_id = advprint.db_add("a4", "done-ok-270", "", 1, src,
+                                 "test", "t", status="printed")
+    code, d = hub.post("/jobs/bulk-reprint", {"scope": "not_printed"})
+    assert code == 200 and d["ok"], d
+    mine = [r for r in d["results"] if r["id"] == failed_id]
+    assert mine and mine[0]["ok"] and mine[0]["job_id"], d
+    assert all(r["id"] != printed_id for r in d["results"]), \
+        "a printed job must never be re-queued by the not_printed scope"
+    assert d["queued"] >= 1
+    advprint.db_update(mine[0]["job_id"], status="canceled",
+                       error="test done")
+
+
+def test_v270_bulk_reprint_bad_payload(hub, clean_queue):
+    code, d = hub.post("/jobs/bulk-reprint", {})
+    assert code == 400 and "ids" in d["error"]
+    code, d = hub.post("/jobs/bulk-reprint", {"ids": "nope"})
+    assert code == 400
+
+
+def test_v270_history_clear_keeps_active_jobs(hub, clean_queue, tmp_path):
+    """v2.7.0: POST /history/clear removes FINISHED rows only - a held
+    (waiting) job MUST survive the wipe, and the audit trail records it."""
+    src = _v270_mkfile(tmp_path, "c.pdf")
+    done = advprint.db_add("a4", "finished-row-270", "", 1, src, "test",
+                           "t", status="printed")
+    held = advprint.db_add("a4", "waiting-row-270", "", 1, src, "test",
+                           "t", status="held", held_reason="printer offline")
+    code, d = hub.post("/history/clear", {})
+    assert code == 200 and d["ok"] and d["deleted"] >= 1, d
+    assert advprint.db_get(done) is None, "finished row must be gone"
+    j = advprint.db_get(held)
+    assert j is not None and j["status"] == "held", \
+        "clearing the history ate a WAITING job"
+    code, a = hub.get("/audit?event=history.cleared")
+    assert any("history cleared" in (x.get("details") or "")
+               for x in a["entries"])
+    advprint.db_update(held, status="canceled", error="test done")
+
+
+def test_v270_single_reprint_shares_core(hub, clean_queue, tmp_path):
+    """v2.7.0: the single /jobs/{id}/reprint endpoint now runs through the
+    same reprint_job_core() helper as the bulk route - behaviour kept."""
+    src = _v270_mkfile(tmp_path, "s.pdf")
+    jid = advprint.db_add("a4", "solo-src-270", "", 1, src, "test", "t",
+                          status="printed")
+    code, d = hub.post("/jobs/%d/reprint" % jid, {})
+    assert code == 200 and d["ok"] and d["reprint_of"] == jid
+    j = advprint.db_get(d["job_id"])
+    assert j["title"] == "solo-src-270-reprint"
+    advprint.db_update(d["job_id"], status="canceled", error="test done")
+
+
+def test_v270_missing_file_is_skipped_not_fatal(hub, clean_queue, tmp_path):
+    """v2.7.0: a bulk batch keeps going when one row lost its file."""
+    gone = _v270_mkfile(tmp_path, "gone.pdf")
+    keep = _v270_mkfile(tmp_path, "keep.pdf")
+    dead_id = advprint.db_add("a4", "file-gone-270", "", 1, gone, "test",
+                              "t", status="failed", error="x")
+    ok_id = advprint.db_add("a4", "file-there-270", "", 1, keep, "test",
+                            "t", status="failed", error="x")
+    import os as _os
+    _os.unlink(gone)                      # the file is really gone now
+    code, d = hub.post("/jobs/bulk-reprint",
+                       {"ids": [dead_id, ok_id]})
+    assert code == 200 and d["queued"] == 1 and d["skipped"] == 1, d
+    assert d["results"][0]["ok"] is False
+    assert "no longer stored" in (d["results"][0]["error"] or "")
+    advprint.db_update(d["results"][1]["job_id"], status="canceled",
+                       error="test done")

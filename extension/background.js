@@ -18,6 +18,11 @@ const DEFAULTS = {
                             //      (pause/resume, ordered)
                             // OFF = hub prints each job immediately
                             //      (queue:false - no waiting in line)
+  lanSend: true,            // v2.7.0 SHARE SEND MODE: false = this browser
+                            // refuses every shift/send-to-peer request
+                            // (Queue tab + LAN tab) - nothing leaves this
+                            // machine toward another PC. The popup has
+                            // the toggle; hub-side receive is share_lan.
   retryOffline: true,       // v2.0: keep jobs in the browser while the hub
                             // is unreachable and send them when it returns
   lang: "auto",             // v2.0 UI language: auto | en | bn
@@ -1160,12 +1165,36 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
           }
           break;
         }
-        case "queueShift":
+        case "queueShift": {
+          // v2.7.0: Share SEND MODE gate - when the user turned it off in
+          // the popup, nothing may leave this browser toward another PC.
+          const cfgQ = await loadCfg();
+          if (cfgQ.lanSend === false) {
+            reply({ ok: false,
+                     error: "Share Send Mode is OFF - turn it on in the " +
+                            "popup (LAN sharing > Share Send Mode) to " +
+                            "shift jobs to another PC" });
+            break;
+          }
           reply(await hubFetch("/queue/shift", { method: "POST", body: {
             scope: msg.scope || "all",
             ids: msg.ids || [],
             target: msg.target || "",
             target_token: msg.targetToken || "" } }));
+          break;
+        }
+        case "jobBulkReprint":
+          // v2.7.0: History panel "Reprint selected" / "Reprint all
+          // non-printed" - one POST, per-job results.
+          reply(await hubFetch("/jobs/bulk-reprint", { method: "POST",
+            body: { ids: msg.ids || [], scope: msg.scope || "",
+                    reason: msg.reason || "" } }));
+          break;
+        case "historyClear":
+          // v2.7.0: wipe FINISHED jobs from the hub history (waiting
+          // jobs are never touched).
+          reply(await hubFetch("/history/clear", { method: "POST",
+                                                  body: {} }));
           break;
         case "hubJobs":
           reply(await hubFetch("/jobs?limit=" + (msg.limit || 100)));

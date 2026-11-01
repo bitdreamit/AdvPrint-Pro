@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 # ============================================================
 #  AdvPrint Pro - Control Tool  (the friendly one-stop tool)
-#  v2.6.8 - same full menu as v2.6.4, nothing removed
+#  v2.7.0 - same full menu as v2.6.4, nothing removed
 # ------------------------------------------------------------
 #  One menu for everything a normal user needs:
 #    start / stop / status, auto-run on/off, Windows service

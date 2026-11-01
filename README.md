@@ -13,6 +13,14 @@ Web page ──► Chrome extension ──► AdvPrint Pro hub (localhost:9235) 
 
 ---
 
+## What's new in v2.7.0 (history manager + share modes + layout fix)
+
+- **Job history manager** (dashboard + Options > History): filter by any status (incl. one-click "Not printed"), search by title / printer / #id, tick rows with check/uncheck-all, **Reprint selected**, **Reprint all non-printed**, **Clear ALL history** — finished jobs only, waiting jobs are never touched. New API: `POST /jobs/bulk-reprint`, `POST /history/clear`.
+- **Share Receive / Send Mode toggles in the popup**: Receive = hub `share_lan` (accept jobs from other PCs); Send = this browser may shift jobs to peer PCs (OFF locks every send-to-PC button here).
+- **Dashboard layout fixed**: the Live debug & test tool + SumatraPDF settings are now proper panels inside the page (they used to hang below it, unstyled).
+- **Dashboard data fix**: Recent jobs / Audit tables were silently empty on real installs (the token was glued into the query string as `?limit=12?token=...`) — fixed.
+- Version badge everywhere, About panel shows the real manifest version, 117/117 tests. Nothing removed.
+
 ## What's new in v2.6.7 (print reliability — the two "nothing prints" bugs)
 
 Two real failures reported through the Debug tab are fixed:

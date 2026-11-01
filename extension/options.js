@@ -521,22 +521,48 @@ async function testHub(verbose = true) {
   if (verbose) await loadAll();
 }
 
-/* ---------- jobs ---------- */
+/* ---------- jobs (v2.7.0 history manager) ----------
+ * HIST_JOBS = last hub payload; HIST_SEL = ticked ids (survives the
+ * 8 s auto-refresh). Filter + search happen client-side, so switching
+ * views never re-hits the hub. */
+let HIST_JOBS = [];
+const HIST_SEL = new Set();
+function histFilteredJobs() {
+  const f = ($("histFilter") || {}).value || "";
+  const s = (($("histSearch") || {}).value || "").trim().toLowerCase();
+  let rows = HIST_JOBS;
+  if (f === "not_printed")
+    rows = rows.filter((j) => ["failed", "dead", "canceled"].includes(j.status));
+  else if (f) rows = rows.filter((j) => j.status === f);
+  if (s)
+    rows = rows.filter((j) => (j.title || "").toLowerCase().includes(s) ||
+      (j.printer || "").toLowerCase().includes(s) ||
+      String(j.id) === s.replace("#", ""));
+  return rows;
+}
 async function loadJobs() {
-  const r = await send({ type: "hubJobs", limit: 100 });
+  const limitEl = $("histLimit");
+  const limit = limitEl ? Number(limitEl.value || 100) : 100;
+  const r = await send({ type: "hubJobs", limit });
+  HIST_JOBS = (r.ok && r.jobs) || [];
+  renderJobs();
+}
+function renderJobs() {
   const body = $("jobsBody");
   body.innerHTML = "";
-  if (!r.ok) {
-    body.innerHTML = '<tr><td colspan="7">Hub offline - start it with: python advprint.py serve</td></tr>';
+  const rows = histFilteredJobs();
+  if (!HIST_JOBS.length) {
+    body.innerHTML = '<tr><td colspan="8">Hub offline - start it with: python advprint.py serve</td></tr>';
     return;
   }
-  for (const j of r.jobs || []) {
+  for (const j of rows) {
     const tr = document.createElement("tr");
     const why = j.held_reason || j.error || "";
     tr.innerHTML =
+      `<td><input type="checkbox" ${HIST_SEL.has(j.id) ? "checked" : ""} title="tick to reprint" onchange="histSel(${j.id},this.checked)"></td>` +
       `<td>${j.id}</td><td class="mono">${(j.created_at || "").replace("T", " ")}</td>` +
       `<td>${(j.title || "-").slice(0, 42)}</td><td>${(j.printer || "default").slice(0, 28)}</td>` +
-      `<td>${j.kind}</td><td><span class="st ${j.status}" title="${String(why).replace(/"/g, "&quot;")}">${j.status}</span>` +
+      `<td>${j.kind || "-"}</td><td><span class="st ${j.status}" title="${String(why).replace(/"/g, "&quot;")}">${j.status}</span>` +
       (why ? `<div class="jerr">${String(why).replace(/</g, "&lt;").slice(0, 90)}</div>` : "") + `</td>`;
     const tdBtn = document.createElement("td");
     if (j.status === "queued" || j.status === "printing" || j.status === "scheduled"
@@ -589,10 +615,68 @@ async function loadJobs() {
     tr.appendChild(tdBtn);
     body.appendChild(tr);
   }
-  if (!(r.jobs || []).length) {
-    body.innerHTML = '<tr><td colspan="7">No jobs yet.</td></tr>';
+  if (!rows.length) {
+    const f = ($("histFilter") || {}).value || "";
+    const s = (($("histSearch") || {}).value || "").trim();
+    body.innerHTML = '<tr><td colspan="8">No jobs' +
+      ((f || s) ? " match this filter." : " yet.") + '</td></tr>';
   }
+  // master checkbox + selected counter
+  const all = $("histAll");
+  const sel = rows.filter((j) => HIST_SEL.has(j.id)).length;
+  all.checked = rows.length > 0 && sel === rows.length;
+  all.indeterminate = sel > 0 && sel < rows.length;
+  $("histSelCnt").textContent = HIST_SEL.size + " selected";
 }
+function histSel(id, on) {
+  on ? HIST_SEL.add(id) : HIST_SEL.delete(id);
+  const all = $("histAll");
+  const rows = histFilteredJobs();
+  const sel = rows.filter((j) => HIST_SEL.has(j.id)).length;
+  all.checked = rows.length > 0 && sel === rows.length;
+  all.indeterminate = sel > 0 && sel < rows.length;
+  $("histSelCnt").textContent = HIST_SEL.size + " selected";
+}
+$("histFilter").addEventListener("change", renderJobs);
+$("histSearch").addEventListener("input", renderJobs);
+$("histLimit").addEventListener("change", loadJobs);
+$("histAll").addEventListener("change", (e) => {
+  for (const j of histFilteredJobs())
+    e.target.checked ? HIST_SEL.add(j.id) : HIST_SEL.delete(j.id);
+  renderJobs();
+});
+$("bHistReprintSel").addEventListener("click", async () => {
+  if (!HIST_SEL.size) return saved("Tick one or more rows in the history first");
+  if (!confirm("Reprint " + HIST_SEL.size + " selected job(s)?")) return;
+  const r = await send({ type: "jobBulkReprint", ids: [...HIST_SEL] });
+  saved(r.ok
+    ? "Reprint queued: " + r.queued + " job(s)" +
+      (r.skipped ? " - " + r.skipped + " skipped (original file gone)" : "")
+    : "Failed: " + (r.error || "no response"));
+  HIST_SEL.clear();
+  loadJobs();
+});
+$("bHistReprintNot").addEventListener("click", async () => {
+  if (!confirm("Reprint EVERY failed / dead / canceled job in the loaded history?\n" +
+               "Jobs whose original file is gone are skipped.")) return;
+  const r = await send({ type: "jobBulkReprint", scope: "not_printed" });
+  saved(r.ok
+    ? "Reprint queued: " + r.queued + " job(s)" +
+      (r.skipped ? " - " + r.skipped + " skipped (original file gone)" : "")
+    : "Failed: " + (r.error || "no response"));
+  HIST_SEL.clear();
+  loadJobs();
+});
+$("bHistClearHub").addEventListener("click", async () => {
+  if (!confirm("Delete ALL finished jobs (printed / failed / dead / canceled / forwarded / saved) from the HUB history?\n\n" +
+               "Waiting jobs (queued / printing / held / scheduled) are NEVER touched.\n" +
+               "This cannot be undone - export the CSV first if unsure.")) return;
+  const r = await send({ type: "historyClear" });
+  saved(r.ok ? (r.message || ("History cleared - " + r.deleted + " job(s) removed"))
+             : "Failed: " + (r.error || "no response"));
+  HIST_SEL.clear();
+  loadJobs();
+});
 
 /* ---------- v2.6: one-click token detection (loopback fix) ---------- */
 $("bDetectToken").addEventListener("click", async () => {
@@ -741,7 +825,7 @@ $("bPrintPdf").addEventListener("click", async () => {
 $("bReloadJobs").addEventListener("click", loadJobs);
 $("bClearHist").addEventListener("click", async () => {
   await chrome.storage.local.set({ history: [] });
-  saved("Extension history copy cleared (hub history untouched)");
+  saved("Extension history copy cleared (hub history untouched - use 'Clear ALL hub history' for that)");
 });
 ["enabled", "queueMode", "debugMode", "retryOffline", "autoPrintAllPdfs", "hookPrint",
  "closeAfterPrint", "failFallback", "contextMenu", "badge", "defaultPrinter"].forEach((id) =>
@@ -912,3 +996,8 @@ $("bUpdateCheck").addEventListener("click", updateCheck);
 loadAll();
 pickDefaultTab();
 AdvPrintI18n.currentLang().then((lang) => AdvPrintI18n.apply(lang));
+/* v2.7.0: the About panel shows the REAL manifest version - it used to
+ * stay on whatever was hardcoded in the HTML (stuck at 2.6.4). */
+try {
+  $("aboutVer").textContent = chrome.runtime.getManifest().version;
+} catch (_) { /* keep the HTML default */ }
