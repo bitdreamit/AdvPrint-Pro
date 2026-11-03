@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 # ============================================================
 #  AdvPrint Pro - Control Tool  (the friendly one-stop tool)
-#  v2.7.0 - same full menu as v2.6.4, nothing removed
+#  v2.8.0 - menu [14] Restart AdvPrint added, nothing removed
 # ------------------------------------------------------------
 #  One menu for everything a normal user needs:
 #    start / stop / status, auto-run on/off, Windows service
@@ -253,7 +253,44 @@ def stop_hub():
     return not hub_running()
 
 
-def show_status():
+def restart_hub():
+    """v2.8 menu [14]: restart the RUNNING hub without killing it hard.
+    The hub relaunches ITSELF as a new process (POST /restart) - settings
+    are re-read, the port is re-bound, nothing is lost. When the hub is
+    not running this simply starts it."""
+    ph = _load_advprint()
+    if not hub_running():
+        print("AdvPrint Pro is not running - starting it instead...")
+        return start_hub()
+    old_ver = (_health()[1] or {}).get("version", "?")
+    print("Restarting AdvPrint Pro v%s ..." % old_ver)
+    url = "http://127.0.0.1:%d/restart" % ph.CFG["port"]
+    req = urllib.request.Request(
+        url, method="POST",
+        data=b"{}",
+        headers={"Content-Type": "application/json",
+                 "X-AdvPrint-Token": ph.CFG["token"]})
+    try:
+        with urllib.request.urlopen(req, timeout=6) as r:
+            d = json.loads(r.read().decode("utf-8", "replace"))
+        if not d.get("ok"):
+            print("  Hub answered: %s" % d.get("error", "?"))
+    except Exception as e:
+        print("  Restart request failed (%s) - hard stop + start instead." % e)
+        stop_hub()
+        return start_hub()
+    print("  Stop request accepted - waiting for the hub to come back...")
+    deadline = time.time() + 45
+    while time.time() < deadline:
+        time.sleep(1.0)
+        ok, info = _health()
+        if ok:
+            print("  [OK] AdvPrint Pro v%s is back on http://127.0.0.1:%d"
+                  % (info.get("version", "?"), ph.CFG["port"]))
+            return True
+    print("  The hub did not answer within 45 s - check the tray icon or"
+          " menu [13] Diagnose & fix.")
+    return False
     ph = _load_advprint()
     ok, info = _health()
     print("-" * 62)
@@ -266,6 +303,17 @@ def show_status():
                  info.get("pending", 0), info.get("jobs_today", 0)))
         print("  Auto-run     : %s"
               % ("ON" if info.get("autostart") else "off"))
+        try:
+            with urllib.request.urlopen(
+                    "http://127.0.0.1:%d/dropzone" % ph.CFG["port"],
+                    timeout=3) as r:
+                dzd = json.loads(r.read().decode("utf-8", "replace"))
+            if dzd.get("ok"):
+                print("  DropZone     : %s (%d waiting, %d done)"
+                      % ("ON" if dzd.get("enabled") else "off",
+                         dzd.get("waiting", 0), dzd.get("done", 0)))
+        except Exception:
+            pass
         svc = info.get("service")
         if svc is not None:
             print("  Windows svc  : %s" % svc.get("state", "?"))
@@ -589,6 +637,7 @@ MENU = """
   [9] Show recent jobs         [10] Uninstall / remove
   [11] LIVE TEST (A-to-Z)      [12] Open dashboard
   [13] Diagnose & fix (hub offline / tray missing / blocked exe)
+  [14] Restart AdvPrint (v2.8 - clean relaunch, no Task Manager)
   [0] Exit
 """
 
@@ -597,7 +646,7 @@ def menu():
     while True:
         print(MENU)
         try:
-            c = input("  Choose [0-13]: ").strip()
+            c = input("  Choose [0-14]: ").strip()
         except (EOFError, KeyboardInterrupt):
             print("")
             return
@@ -633,10 +682,12 @@ def menu():
                 ph.CFG["port"], urllib.parse.quote(ph.CFG["token"])))
         elif c == "13":
             diagnose_and_fix()
+        elif c == "14":
+            restart_hub()
         elif c == "0":
             return
         else:
-            print("Pick 0-13.")
+            print("Pick 0-14.")
         print("")
 
 
@@ -645,6 +696,7 @@ def usage():
   (no command)  interactive menu
   status        show status
   start|stop    start / stop the hub
+  restart       restart the running hub (clean relaunch, v2.8)
   testprint     print a test page
   history [n]   show recent jobs
   autorun on|off   start-at-logon on/off
@@ -672,6 +724,8 @@ def main():
         start_hub()
     elif cmd == "stop":
         stop_hub()
+    elif cmd == "restart":
+        restart_hub()
     elif cmd == "testprint":
         test_page()
     elif cmd == "history":

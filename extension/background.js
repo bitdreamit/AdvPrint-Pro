@@ -18,18 +18,25 @@ const DEFAULTS = {
                             //      (pause/resume, ordered)
                             // OFF = hub prints each job immediately
                             //      (queue:false - no waiting in line)
-  lanSend: true,            // v2.7.0 SHARE SEND MODE: false = this browser
-                            // refuses every shift/send-to-peer request
-                            // (Queue tab + LAN tab) - nothing leaves this
-                            // machine toward another PC. The popup has
-                            // the toggle; hub-side receive is share_lan.
+  lanSend: false,           // v2.8 SHARE SEND ROUTE: ON  = print jobs go
+                            //      to the LAN PC hub (hubUrlLan +
+                            //      hubTokenLan - Options > LAN PC);
+                            //      OFF = jobs print on THIS PC's own hub
+                            //      (hubUrl). The popup toggle switches it.
+  hubUrlLan: "",            // v2.8 LAN PC profile: the OTHER PC's hub URL
+                            // (e.g. http://192.168.0.60:9235). Two full
+                            // profiles exist: Self PC (hubUrl + token) and
+                            // LAN PC (hubUrlLan + hubTokenLan).
+  hubTokenLan: "",          // v2.8 the LAN PC's hub token (Options)
   retryOffline: true,       // v2.0: keep jobs in the browser while the hub
                             // is unreachable and send them when it returns
   lang: "auto",             // v2.0 UI language: auto | en | bn
   hookPrint: true,          // intercept window.print() on every page
   failFallback: "tab",      // page print call failed: "tab"=open URL in new tab, "none"=stay silent
   autoPrintAllPdfs: true,   // SIMPLE MODE: any PDF opened in the browser prints silently
-  closeAfterPrint: true,    // auto-printed URLs: close the tab after -> no browser view
+  closeAfterPrint: false,   // v2.8 DEFAULT OFF (was true): auto-printed URLs
+                            // keep their tab open - the user opts in to
+                            // closing in Options > Behavior
   contextMenu: true,        // right-click "AdvPrint Pro" menu
   badge: true,              // show ok/fail on the toolbar icon
   debugMode: false,         // v2.3 DEBUG: collect this extension's errors
@@ -71,6 +78,32 @@ async function loadCfg() {
 
 function invalidateCfg() { CFG = null; }
 
+/* ---------------- v2.8: two hub profiles (Self PC / LAN PC) --------
+ * The extension keeps TWO full hub profiles:
+ *   Self PC  - hubUrl + token          (this computer's hub + printers)
+ *   LAN PC   - hubUrlLan + hubTokenLan (another PC's hub, share-send)
+ * Share Send Mode (lanSend) routes PRINT jobs: ON -> LAN PC, OFF ->
+ * Self PC. Management calls (config, debug, token heal) always talk
+ * to the Self PC hub. */
+function hubBase(cfg, target) {
+  if (target === "lan" && cfg.hubUrlLan) {
+    return String(cfg.hubUrlLan).replace(/\/+$/, "");
+  }
+  return (cfg.hubUrl || DEFAULTS.hubUrl).replace(/\/+$/, "");
+}
+
+function hubToken(cfg, target) {
+  if (target === "lan" && cfg.hubUrlLan) {
+    return cfg.hubTokenLan || cfg.token || "";
+  }
+  return cfg.token;
+}
+
+async function resolveTarget() {
+  const cfg = await loadCfg();
+  return (cfg.lanSend === true && cfg.hubUrlLan) ? "lan" : "self";
+}
+
 async function saveCfg(patch) {
   await chrome.storage.local.set(patch);
   invalidateCfg();
@@ -111,8 +144,9 @@ async function flushRetries(reason) {
   for (let i = 0; i < q.length; i++) {
     const item = q[i];
     try {
-      const data = await hubFetch("/print", {
-        method: "POST", body: item.payload });
+      const data = await hubFetch("/print", { method: "POST",
+                                              body: item.payload },
+                                  await resolveTarget());
       await rememberJob({ id: data.job_id,
                           title: (item.payload && item.payload.title) || "retry",
                           status: data.status || "queued",
@@ -243,13 +277,13 @@ function autoHealToken() {
   return HEAL.inflight;
 }
 
-async function hubFetch(path, opts = {}) {
+async function hubFetch(path, opts = {}, target = "self") {
   const cfg = await loadCfg();
-  const base = (cfg.hubUrl || DEFAULTS.hubUrl).replace(/\/+$/, "");
+  const base = hubBase(cfg, target);
   const res = await fetch(base + path, {
     method: opts.method || "GET",
     headers: Object.assign(
-      { "X-AdvPrint-Token": cfg.token },
+      { "X-AdvPrint-Token": hubToken(cfg, target) },
       opts.body ? { "Content-Type": "application/json" } : {}
     ),
     body: opts.body ? JSON.stringify(opts.body) : undefined
@@ -268,7 +302,11 @@ async function hubFetch(path, opts = {}) {
     // /token/current (loopback only); the original call is then
     // retried transparently, so a stale token can never again show
     // the extension as "offline" while the desktop tool is running.
-    if (res.status === 401 && !path.startsWith("/token/current")) {
+    // v2.8: NEVER auto-heal against the LAN PC profile - /token/current
+    // is loopback-only and would install THIS PC's token over the LAN
+    // profile's own token field.
+    if (res.status === 401 && target !== "lan" &&
+        !path.startsWith("/token/current")) {
       reportDebug("warn",
                   "hub rejected the stored token (401) - auto token " +
                   "sync starts (" + base + ")",
@@ -604,10 +642,13 @@ function hubPrint(payload) {
   if (payload.printer) payload.printer = healPrinterName(payload.printer);
   // Queue Mode OFF -> tell the hub to print THIS job immediately
   // (bypasses the FIFO; pause/resume does not hold it back).
-  return loadCfg().then((cfg) => {
+  return loadCfg().then(async (cfg) => {
     if (cfg.queueMode === false) payload.queue = false;
     applyPrintDefaults(payload, cfg);
-    return hubFetch("/print", { method: "POST", body: payload })
+    // v2.8: the Share Send toggle decides WHERE this job prints -
+    // the LAN PC hub (ON) or this PC's own hub (OFF).
+    const target = await resolveTarget();
+    return hubFetch("/print", { method: "POST", body: payload }, target)
       .catch(async (e) => {
         // v2.2.0: 401 = the token is wrong. Flag it (KEY badge + popup
         // banner) and say so plainly; do NOT park the job - printing
@@ -616,8 +657,11 @@ function hubPrint(payload) {
           await setAuthProblem(true, "token");
           reportDebug("warn", "hub rejected the token (401) - printing " +
                       "cannot succeed until the token is fixed");
-          throw new HubError("hub rejected the token - fix it in " +
-                             "AdvPrint Pro options (Hub token field)");
+          throw new HubError(target === "lan"
+            ? "the LAN PC rejected the token - fix it in AdvPrint Pro " +
+              "options > LAN PC (hub token field)"
+            : "hub rejected the token - fix it in " +
+              "AdvPrint Pro options (Hub token field)");
         }
         if (e && e.locked) {
           // v2.2.0: 429 = this IP is temporarily locked (too many bad
@@ -639,9 +683,15 @@ function hubPrint(payload) {
         if (cfg.retryOffline !== false && networkish &&
             payload.destination !== "file") {
           await queueForRetry(payload);
-          reportDebug("warn", "hub offline - job parked for retry (" +
+          reportDebug("warn",
+                      (target === "lan" ? "LAN PC hub offline" :
+                       "hub offline") +
+                      " - job parked for retry (" +
                       (payload.title || "untitled") + ")");
-          throw new HubError("hub offline - job saved and will retry");
+          throw new HubError(target === "lan"
+            ? "LAN PC unreachable - job saved and will retry (turn " +
+              "Share Send OFF to print on this PC instead)"
+            : "hub offline - job saved and will retry");
         }
         reportDebug("error", "print failed: " + msg.slice(0, 300),
                     payload.title || "");
@@ -1018,7 +1068,9 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
             break;
           }
           if (!hcfg.hookPrint) {
-            reply({ ok: false, error: "print interception is disabled in Options" });
+            reply({ ok: false,
+                     error: "window.print() interception is OFF - turn the " +
+                            "window.print switch on in the popup" });
             break;
           }
           const tab = sender.tab ||
@@ -1069,46 +1121,77 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
           reply({ ok: true, ...(await printScreenshot(win.id)) });
           break;
         }
-        case "hubStatus":
+        case "hubStatus": {
           // v2.6.2: structured failure - the popup must be able to tell
           // "hub not reachable" (real offline) from "hub answered 401"
           // (token mismatch - hub is RUNNING). Before this, any 401
           // landed here as a generic error and the popup showed a
           // misleading "OFFLINE - start the hub first".
           // v2.6.4: third state "slow" - the hub is LISTENING but
-          // /health did not answer within 8 s (still starting). The
-          // v2.6.4 hub serves /health from an instant snapshot, so this
-          // should be rare - but the popup must never hang or lie.
-          try {
-            const cfgS = await loadCfg();
-            const baseS = (cfgS.hubUrl || DEFAULTS.hubUrl)
-              .replace(/\/+$/, "");
+          // /health did not answer within 8 s (still starting).
+          // v2.8: TWO hubs are probed - the SELF hub (always, it owns
+          // Share Receive + config) and, when Share Send routes there,
+          // the LAN PC hub. The active print target answers first in
+          // the reply; self facts ride along as self_*.
+          const probe = async (base) => {
             const ctl = new AbortController();
             const timer = setTimeout(() => ctl.abort(), 8000);
-            let hres, hdata;
             try {
-              hres = await fetch(baseS + "/health",
-                                 { cache: "no-store",
-                                   signal: ctl.signal });
-              hdata = await hres.json();
+              const r = await fetch(base.replace(/\/+$/, "") + "/health",
+                                    { cache: "no-store", signal: ctl.signal });
+              const d = await r.json();
+              return d && d.ok ? d
+                : { ok: false, reason: "offline", error: "HTTP " + r.status };
+            } catch (e) {
+              const slow = e && e.name === "AbortError";
+              return { ok: false,
+                       reason: slow ? "slow"
+                         : e && e.locked ? "locked"
+                         : e && e.auth ? "auth"
+                         : "offline",
+                       error: slow ? "hub is listening but /health did not "
+                                     + "answer within 8 s - still starting"
+                                   : (e && e.message) || String(e) };
             } finally {
               clearTimeout(timer);
             }
-            reply(hdata && hdata.ok ? hdata
-                  : { ok: false, reason: "offline",
-                      error: "HTTP " + hres.status });
+          };
+          try {
+            const cfgS = await loadCfg();
+            const lanUsed = cfgS.lanSend === true && !!cfgS.hubUrlLan;
+            const selfSt = await probe(cfgS.hubUrl || DEFAULTS.hubUrl);
+            let out;
+            if (lanUsed) {
+              const lanSt = await probe(cfgS.hubUrlLan);
+              out = Object.assign({}, lanSt, {
+                lan_used: true,
+                lan_url: cfgS.hubUrlLan,
+                lan_ok: lanSt.ok,
+                lan_reason: lanSt.reason || "",
+                self_ok: selfSt.ok,
+                self_version: selfSt.version || "",
+                self_share_lan: selfSt.share_lan,
+                self_paused: selfSt.paused,
+                ok: lanSt.ok });
+              if (!lanSt.ok && selfSt.ok) {
+                out.error = "the LAN PC is not reachable (" +
+                  (lanSt.error || lanSt.reason || "offline") + ") - " +
+                  "the Self PC hub is fine; turn Share Send OFF to " +
+                  "print on this PC";
+              }
+            } else {
+              out = Object.assign({}, selfSt, {
+                lan_used: false,
+                self_ok: selfSt.ok,
+                self_share_lan: selfSt.share_lan });
+            }
+            reply(out);
           } catch (e) {
-            const slow = e && (e.name === "AbortError");
-            reply({ ok: false,
-                    reason: slow ? "slow"
-                          : e && e.locked ? "locked"
-                          : e && e.auth ? "auth"
-                          : "offline",
-                    error: slow ? "hub is listening but /health did not " +
-                                  "answer within 8 s - still starting"
-                                : (e && e.message) || String(e) });
+            reply({ ok: false, reason: "offline",
+                    error: (e && e.message) || String(e) });
           }
           break;
+        }
         case "retryInfo": {
           const q = await retryQueueInfo();
           reply({ ok: true, count: q.length });
@@ -1166,10 +1249,10 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
           break;
         }
         case "queueShift": {
-          // v2.7.0: Share SEND MODE gate - when the user turned it off in
-          // the popup, nothing may leave this browser toward another PC.
+          // v2.7.0 gate, v2.8 wording: Share Send OFF = nothing leaves
+          // this browser toward another PC (shift included).
           const cfgQ = await loadCfg();
-          if (cfgQ.lanSend === false) {
+          if (cfgQ.lanSend !== true) {
             reply({ ok: false,
                      error: "Share Send Mode is OFF - turn it on in the " +
                             "popup (LAN sharing > Share Send Mode) to " +
@@ -1196,12 +1279,37 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
           reply(await hubFetch("/history/clear", { method: "POST",
                                                   body: {} }));
           break;
-        case "hubJobs":
-          reply(await hubFetch("/jobs?limit=" + (msg.limit || 100)));
+        case "hubJobs": {
+          // v2.8: Recent jobs follow the ACTIVE print target - when
+          // Share Send is ON the list shows the LAN PC's jobs.
+          const jt = msg.target === "print" ? await resolveTarget() : "self";
+          reply(await hubFetch("/jobs?limit=" + (msg.limit || 100), {}, jt));
           break;
-        case "queueAction":
-          reply(await hubFetch("/queue/" + msg.action, { method: "POST", body: {} }));
+        }
+        case "queueAction": {
+          // v2.8: pause/resume follows the ACTIVE print target too
+          const qt = msg.target === "print" ? await resolveTarget() : "self";
+          reply(await hubFetch("/queue/" + msg.action,
+                               { method: "POST", body: {} }, qt));
           break;
+        }
+        case "openHubPage": {
+          // v2.8: open the dashboard / audit log of Self PC or LAN PC
+          // ("Open hub dashboard & Open audit log self and lan managed
+          // separately"). msg.page = "/dashboard" | "/audit" | "/docs";
+          // msg.target = "self" | "lan" | "active".
+          const cfgO = await loadCfg();
+          const t = msg.target === "lan" ? "lan"
+                  : msg.target === "active" ? await resolveTarget()
+                  : "self";
+          const baseO = hubBase(cfgO, t);
+          const tokO = t === "lan" ? (cfgO.hubTokenLan || cfgO.token || "")
+                                   : (cfgO.token || "");
+          chrome.tabs.create({ url: baseO + (msg.page || "/dashboard") +
+            "?token=" + encodeURIComponent(tokO) });
+          reply({ ok: true, target: t, base: baseO });
+          break;
+        }
         case "jobAction":
           reply(await hubFetch(`/jobs/${msg.id}/${msg.action}`,
                                { method: "POST", body: {} }));

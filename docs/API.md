@@ -128,8 +128,39 @@ The queue is **DB-driven** (SQLite): pending jobs survive hub restarts, and jobs
 | `GET /jobs/{id}/file` | Download the original PDF of a job |
 | `POST /jobs/{id}/reprint` | Queue an exact copy of the job |
 | `POST /jobs/{id}/cancel` | Cancel a queued job; if it is printing, the print process is killed |
+| `GET /dropzone` | **v2.8.0** DropZone status (enabled, folder, waiting/done counts) |
+| `POST /dropzone/open` | **v2.8.0** Open the DropZone folder on the hub PC (loopback only) |
+| `GET /send` | **v2.8.0** The send portal page (upload a PDF from any device; token required) |
+| `POST /send` | **v2.8.0** Upload + print a PDF (`multipart -F file=@x.pdf`, `application/pdf` body, or JSON `pdf_base64`) |
+| `POST /restart` | **v2.8.0** Restart the hub cleanly (it relaunches itself; queued jobs are kept) |
 | `POST /jobs/bulk-reprint` | **v2.7.0** Reprint many jobs in one call |
 | `POST /history/clear` | **v2.7.0** Delete every FINISHED job from the history |
+
+### POST /send (v2.8.0) - print WITHOUT the extension
+```bash
+curl -X POST -H "X-AdvPrint-Token: $TOKEN" -F "file=@report.pdf" \
+     "http://127.0.0.1:9235/send?title=Lab report"
+# or raw body:
+curl -X POST -H "X-AdvPrint-Token: $TOKEN" -H "Content-Type: application/pdf" \
+     --data-binary @report.pdf "http://127.0.0.1:9235/send"
+```
+Accepts multipart (`file`/`pdf` field), a raw `application/pdf` body or JSON
+`{"pdf_base64": "..."}`. Only real PDFs are accepted (25 MB cap). The job is
+queued on the hub's printers exactly like any other job - `source: "send"`.
+
+### GET /dropzone + POST /dropzone/open (v2.8.0)
+`GET` returns `{"ok":true,"enabled":true,"dir":"...","waiting":0,"done":2,
+"delete":false,"custom_dir":"","is_default":true}`. Change the settings with
+`POST /config {"drop_enabled":true,"drop_dir":"C:\\Drop","drop_delete":false}`.
+Every PDF that lands in the watched folder is printed and moved to `done\`
+(or deleted when `drop_delete` is true) - this is the "MS Word style"
+print path for apps without the extension.
+
+### POST /restart (v2.8.0)
+The hub relaunches ITSELF as a new process (the new process waits for the
+old listener to release the port). Queued jobs, settings and history are
+kept. The tray menu (Restart hub), AdvPrint Tool [14] and the dashboard
+button all use this endpoint.
 
 ### POST /jobs/bulk-reprint (v2.7.0)
 

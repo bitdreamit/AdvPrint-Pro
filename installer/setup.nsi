@@ -1,38 +1,44 @@
 ; ============================================================
 ;  AdvPrint Pro (Advanced Printer) - Windows one-time installer
 ;  by Bit Dream IT - Innovative Healthcare Solutions
-;  v2.7.0 - built with NSIS 3.11 on Linux
+;  v2.8.0 - built with NSIS 3.11 on Linux
 ; ------------------------------------------------------------
 ;  - PER-MACHINE install to %ProgramFiles%\AdvPrintPro with
-;    REAL administrator rights (v2.6.4): the exe requests admin
-;    via its manifest, so Windows shows the UAC prompt by itself
-;    ("installation permission" is set correctly, automatically).
-;    Users without admin: use the portable FULL zip instead
-;    (docs, chapter "Portable install").
+;    REAL administrator rights: the exe requests admin via its
+;    manifest, so Windows shows the UAC prompt by itself
+;    ("auto permission to install" - nothing is half-installed).
+;    Silent install:  AdvPrint-Pro-Setup-2.8.0.exe /S
+;    (elevation still applies - Windows shows UAC once.)
+;  - v2.8 UPGRADE / UNINSTALL FIX (the v2.7.x pain "service not
+;    uninstalled, some files abort install"): BEFORE any file is
+;    touched, hub-stop.ps1  1) stops the optional "AdvPrint"
+;    service (with wait + PID kill),  2) DELETES the service
+;    registration (Setup re-installs it fresh when ticked),
+;    3) kills every process running from the install folder,
+;    4) frees TCP 9235. Old program folders are wiped, so no
+;    stale file can ever abort the new install again.
+;  - firewall rule for LAN sharing is added automatically
+;    (removed on uninstall)
 ;  - COMPLETE payload: hub + desktop tool + tray + service +
-;    extension + docs + SumatraPDF (PDF print engine, bundled)
-;    + FULL bundled Python 3.11.9 runtime (the v2.5.3 download
-;    was incomplete - that is why Windows said "cannot access";
-;    this setup can never do that again)
+;    extension + docs + bundled Python 3.11.9 runtime
 ;  - runtime ships AdvPrintPro.exe (= pythonw.exe renamed):
 ;    Task Manager shows "AdvPrintPro", never "python"
 ;  - auto-run = NORMAL STARTUP APP (visible in Task Manager >
 ;    Startup apps; old PrintHub Pro auto-run/task is removed)
-;  - optional: run as a REAL Windows service (headless, services.msc)
 ;  - cleans up ALL older installs on upgrade (per-user
 ;    %LOCALAPPDATA%\AdvPrintPro copy AND the old "PrintHub Pro")
 ;  - real uninstaller with Add/Remove Programs entry
-;  Silent install:  AdvPrint-Pro-Setup-2.7.0.exe /S
 ; ============================================================
 
 Unicode true
 Name "AdvPrint Pro (Advanced Printer)"
-OutFile "/home/z/my-project/build/AdvPrint-270-installer/AdvPrint-Pro-Setup-2.7.0.exe"
+OutFile "/home/z/my-project/build/AdvPrint-280-installer/AdvPrint-Pro-Setup-2.8.0.exe"
 InstallDir "$PROGRAMFILES64\AdvPrintPro"
 InstallDirRegKey HKLM "Software\AdvPrintPro" "InstallDir"
-; v2.6.4: full admin rights - the Windows UAC prompt appears by itself
-; when the setup starts (requestedExecutionLevel requireAdministrator).
-; Nothing is installed "half-permissioned" any more.
+; full admin rights - the Windows UAC prompt appears by itself when
+; the setup starts (requestedExecutionLevel requireAdministrator).
+; This is the "auto permission": Windows elevates the exe, no manual
+; right-click needed, on ANY PC.
 RequestExecutionLevel admin
 SetCompressor /SOLID lzma
 SetDatablockOptimize on
@@ -40,10 +46,10 @@ ShowInstDetails show
 ShowUnInstDetails show
 ManifestDPIAware true
 
-VIProductVersion "2.7.0.0"
+VIProductVersion "2.8.0.0"
 VIAddVersionKey ProductName "AdvPrint Pro (Advanced Printer)"
-VIAddVersionKey FileVersion "2.7.0"
-VIAddVersionKey ProductVersion "2.7.0"
+VIAddVersionKey FileVersion "2.8.0"
+VIAddVersionKey ProductVersion "2.8.0"
 VIAddVersionKey CompanyName "Bit Dream IT - Innovative Healthcare Solutions"
 VIAddVersionKey LegalCopyright "MIT License"
 VIAddVersionKey FileDescription "AdvPrint Pro - silent printing for any web page, PDF or application (setup)"
@@ -51,12 +57,13 @@ VIAddVersionKey FileDescription "AdvPrint Pro - silent printing for any web page
 !include "MUI2.nsh"
 !include "FileFunc.nsh"
 !include "LogicLib.nsh"
+!include "Sections.nsh"      ; ${SF_SELECTED} for the service pre-tick
 
-!define MUI_ICON   "/home/z/my-project/build/AdvPrint-270-installer/installer.ico"
-!define MUI_UNICON "/home/z/my-project/build/AdvPrint-270-installer/installer.ico"
+!define MUI_ICON   "/home/z/my-project/build/AdvPrint-280-installer/installer.ico"
+!define MUI_UNICON "/home/z/my-project/build/AdvPrint-280-installer/installer.ico"
 !define MUI_ABORTWARNING
 !insertmacro MUI_PAGE_WELCOME
-!insertmacro MUI_PAGE_LICENSE "/home/z/my-project/build/AdvPrint-270-installer/LICENSE"
+!insertmacro MUI_PAGE_LICENSE "/home/z/my-project/build/AdvPrint-280-installer/LICENSE"
 !insertmacro MUI_PAGE_COMPONENTS
 !insertmacro MUI_PAGE_INSTFILES
 !define MUI_FINISHPAGE_RUN
@@ -156,7 +163,6 @@ Function RemoveLegacyInstalls
   DetailPrint "Removing older AdvPrint Pro / legacy auto-runs..."
   Delete "$SMSTARTUP\PrintHub Pro.lnk"
   nsExec::Exec 'schtasks /Delete /TN "$\"PrintHub Pro$\"" /F'
-  nsExec::Exec 'net stop AdvPrintHub'
   nsExec::Exec 'sc delete AdvPrintHub'
   nsExec::Exec 'sc delete "PrintHub"'
   DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\PrintHubPro"
@@ -179,51 +185,61 @@ Section "AdvPrint Pro hub (required)" SEC_MAIN
   SetShellVarContext all
   Call RemoveLegacyInstalls
 
-  DetailPrint "Stopping any hub already running on port 9235..."
-  nsExec::Exec 'powershell -NoProfile -Command "Get-NetTCPConnection -LocalPort 9235 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess | ForEach-Object { Stop-Process -Id $$_ -Force -ErrorAction SilentlyContinue }"'
-  ; v2.6.4: also kill by image name - a hub running on a DIFFERENT port
-  ; (or a half-upgraded zombie from a previous setup) must never survive
-  ; into the new install with an old token in memory.
-  DetailPrint "Stopping any AdvPrint Pro hub process still running..."
-  nsExec::Exec 'taskkill /F /IM AdvPrintPro.exe'
-  nsExec::Exec 'taskkill /F /IM PrintHubPro.exe'
-  Sleep 600
+  ; ---- v2.8 BULLET-PROOF STOP (fixes "some file abort install") ----
+  ; hub-stop.ps1 stops the service (wait + PID kill), DELETES the
+  ; service registration, kills every process under $INSTDIR and
+  ; frees TCP 9235 - so no locked file can abort the upgrade.
+  DetailPrint "Stopping the service and every hub process (v2.8 bullet-proof stop)..."
+  SetOutPath "$PLUGINSDIR"
+  File "/oname=hub-stop.ps1" "/home/z/my-project/build/AdvPrint-280-installer/stage/install/hub-stop.ps1"
+  nsExec::Exec 'powershell -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\hub-stop.ps1" "$INSTDIR"'
+  Pop $R8
+  Sleep 700
+
+  ; ---- wipe OLD program folders so stale files can never survive ----
+  DetailPrint "Removing old program files (clean upgrade)..."
+  RMDir /r "$INSTDIR\hub"
+  RMDir /r "$INSTDIR\install"
+  RMDir /r "$INSTDIR\extension"
+  RMDir /r "$INSTDIR\docs"
+  RMDir /r "$INSTDIR\runtime"
 
   DetailPrint "Copying program files..."
   SetOutPath "$INSTDIR\hub"
-  File "/home/z/my-project/build/AdvPrint-270-installer/stage/hub/advprint.py"
-  File "/home/z/my-project/build/AdvPrint-270-installer/stage/hub/tool.py"
-  File "/home/z/my-project/build/AdvPrint-270-installer/stage/hub/tray_windows.py"
-  File "/home/z/my-project/build/AdvPrint-270-installer/stage/hub/service_main.py"
-  File "/oname=advprint.ico" "/home/z/my-project/build/AdvPrint-270-installer/stage/hub/advprint.ico"
+  File "/home/z/my-project/build/AdvPrint-280-installer/stage/hub/advprint.py"
+  File "/home/z/my-project/build/AdvPrint-280-installer/stage/hub/tool.py"
+  File "/home/z/my-project/build/AdvPrint-280-installer/stage/hub/tray_windows.py"
+  File "/home/z/my-project/build/AdvPrint-280-installer/stage/hub/service_main.py"
+  File "/oname=advprint.ico" "/home/z/my-project/build/AdvPrint-280-installer/stage/hub/advprint.ico"
   SetOutPath "$INSTDIR\hub\service"
-  File "/home/z/my-project/build/AdvPrint-270-installer/stage/hub/service/AdvPrintProService.cs"
+  File "/home/z/my-project/build/AdvPrint-280-installer/stage/hub/service/AdvPrintProService.cs"
   SetOutPath "$INSTDIR\install"
-  File "/home/z/my-project/build/AdvPrint-270-installer/stage/install/install-windows.bat"
-  File "/home/z/my-project/build/AdvPrint-270-installer/stage/install/UNINSTALL-WINDOWS.bat"
-  File "/home/z/my-project/build/AdvPrint-270-installer/stage/install/START-ADVPRINT.vbs"
-  File "/home/z/my-project/build/AdvPrint-270-installer/stage/install/INSTALL-WINDOWS-SERVICE.bat"
-  File "/home/z/my-project/build/AdvPrint-270-installer/stage/install/REMOVE-WINDOWS-SERVICE.bat"
-  File "/home/z/my-project/build/AdvPrint-270-installer/stage/install/service-install.ps1"
-  File "/home/z/my-project/build/AdvPrint-270-installer/stage/install/service-remove.ps1"
+  File "/home/z/my-project/build/AdvPrint-280-installer/stage/install/install-windows.bat"
+  File "/home/z/my-project/build/AdvPrint-280-installer/stage/install/UNINSTALL-WINDOWS.bat"
+  File "/home/z/my-project/build/AdvPrint-280-installer/stage/install/START-ADVPRINT.vbs"
+  File "/home/z/my-project/build/AdvPrint-280-installer/stage/install/INSTALL-WINDOWS-SERVICE.bat"
+  File "/home/z/my-project/build/AdvPrint-280-installer/stage/install/REMOVE-WINDOWS-SERVICE.bat"
+  File "/home/z/my-project/build/AdvPrint-280-installer/stage/install/service-install.ps1"
+  File "/home/z/my-project/build/AdvPrint-280-installer/stage/install/service-remove.ps1"
+  File "/home/z/my-project/build/AdvPrint-280-installer/stage/install/hub-stop.ps1"
   SetOutPath "$INSTDIR\docs"
-  File "/home/z/my-project/build/AdvPrint-270-installer/stage/docs/AdvPrint-Pro-Full-Guide.html"
+  File "/home/z/my-project/build/AdvPrint-280-installer/stage/docs/AdvPrint-Pro-Full-Guide.html"
   SetOutPath "$INSTDIR"
-  File "/oname=README.md" "/home/z/my-project/build/AdvPrint-270-installer/stage/README.md"
-  File "/oname=LICENSE" "/home/z/my-project/build/AdvPrint-270-installer/LICENSE"
-  File "/oname=advprint.ico" "/home/z/my-project/build/AdvPrint-270-installer/installer.ico"
+  File "/oname=README.md" "/home/z/my-project/build/AdvPrint-280-installer/stage/README.md"
+  File "/oname=LICENSE" "/home/z/my-project/build/AdvPrint-280-installer/LICENSE"
+  File "/oname=advprint.ico" "/home/z/my-project/build/AdvPrint-280-installer/installer.ico"
   DetailPrint "SumatraPDF: not bundled - the installer auto-installs it via winget when missing (needs internet once)."
 
   DetailPrint "Installing the bundled Python 3.11.9 runtime (standalone - no system Python needed)..."
   SetOutPath "$INSTDIR\runtime"
-  File /r "/home/z/my-project/build/AdvPrint-270-installer/runtime\*.*"
+  File /r "/home/z/my-project/build/AdvPrint-280-installer/runtime\*.*"
 
   DetailPrint "Resolving the bundled launcher..."
   Call FindPythonW
   WriteRegStr HKLM "Software\AdvPrintPro" "InstallDir" "$INSTDIR"
   WriteRegStr HKLM "Software\AdvPrintPro" "PythonW" "$R0"
 
-  ; ---- SumatraPDF info (bundled copy already installed above) ----
+  ; ---- SumatraPDF info ----
   ${If} ${FileExists} "$INSTDIR\tools\SumatraPDF.exe"
     DetailPrint "SumatraPDF installed (bundled - silent PDF printing ready)."
   ${ElseIf} ${FileExists} "$PROGRAMFILES\SumatraPDF\SumatraPDF.exe"
@@ -243,6 +259,11 @@ Section "AdvPrint Pro hub (required)" SEC_MAIN
     ${EndIf}
   ${EndIf}
 
+  ; ---- v2.8: firewall rule so LAN sharing works out of the box ----
+  DetailPrint "Adding the firewall rule for LAN sharing (TCP 9235)..."
+  nsExec::Exec 'netsh advfirewall firewall delete-rule name="AdvPrint Pro" dir=in'
+  nsExec::Exec 'netsh advfirewall firewall add rule name="AdvPrint Pro" dir=in action=allow protocol=TCP localport=9235'
+
   ; ---- auto-run as a normal STARTUP APP (visible + controllable) ----
   DetailPrint "Registering auto-run as a Startup app..."
   ${If} $R0 != ""
@@ -255,8 +276,10 @@ Section "AdvPrint Pro hub (required)" SEC_MAIN
     ${EndIf}
   ${Else}
     DetailPrint "No usable pythonw.exe (bundled runtime missing + no system Python)."
-    MessageBox MB_ICONEXCLAMATION|MB_OK \
-      "Setup could not prepare the bundled Python runtime and found no system Python.$\n$\nPlease re-download AdvPrint-Pro-Setup-2.7.0.exe (the file may be damaged in transit) and run it again."
+    ${IfNot} ${Silent}
+      MessageBox MB_ICONEXCLAMATION|MB_OK \
+        "Setup could not prepare the bundled Python runtime and found no system Python.$\n$\nPlease re-download AdvPrint-Pro-Setup-2.8.0.exe (the file may be damaged in transit) and run it again."
+    ${EndIf}
   ${EndIf}
 
   ; ---- shortcuts + uninstaller (Start Menu: all users) ----
@@ -275,7 +298,7 @@ Section "AdvPrint Pro hub (required)" SEC_MAIN
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\AdvPrintPro" \
     "DisplayName" "AdvPrint Pro (Advanced Printer) by Bit Dream IT"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\AdvPrintPro" \
-    "DisplayVersion" "2.7.0"
+    "DisplayVersion" "2.8.0"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\AdvPrintPro" \
     "Publisher" "Bit Dream IT - Innovative Healthcare Solutions"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\AdvPrintPro" \
@@ -286,11 +309,19 @@ Section "AdvPrint Pro hub (required)" SEC_MAIN
     "NoModify" 1
   WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\AdvPrintPro" \
     "NoRepair" 1
+
+  ; v2.8: silent installs (/S) skip the Finish page - start the hub
+  ; here so the install is complete and running without any click.
+  ${If} ${Silent}
+    DetailPrint "Silent install - starting the hub..."
+    Call LaunchHub
+  ${EndIf}
 SectionEnd
 
 Section "Run as Windows service (optional, headless)" SEC_SERVICE
   DetailPrint "Installing the AdvPrint Windows service (services.msc)..."
-  ; service_main.py registers with the python.exe from OUR runtime
+  ; hub-stop.ps1 already removed any old registration - this is a
+  ; FRESH install of the service pointing at the new runtime
   nsExec::ExecToLog '"$INSTDIR\runtime\python.exe" "$INSTDIR\hub\advprint.py" service-install'
   Pop $R9
 SectionEnd
@@ -298,28 +329,28 @@ SectionEnd
 Section "Install browser extension files" SEC_EXT
   DetailPrint "Installing extension files to $INSTDIR\extension..."
   SetOutPath "$INSTDIR\extension"
-  File "/home/z/my-project/build/AdvPrint-270-installer/stage/extension/manifest.json"
-  File "/home/z/my-project/build/AdvPrint-270-installer/stage/extension/background.js"
-  File "/home/z/my-project/build/AdvPrint-270-installer/stage/extension/i18n.js"
-  File "/home/z/my-project/build/AdvPrint-270-installer/stage/extension/managed.json"
-  File "/home/z/my-project/build/AdvPrint-270-installer/stage/extension/options.html"
-  File "/home/z/my-project/build/AdvPrint-270-installer/stage/extension/options.js"
-  File "/home/z/my-project/build/AdvPrint-270-installer/stage/extension/popup.html"
-  File "/home/z/my-project/build/AdvPrint-270-installer/stage/extension/popup.js"
+  File "/home/z/my-project/build/AdvPrint-280-installer/stage/extension/manifest.json"
+  File "/home/z/my-project/build/AdvPrint-280-installer/stage/extension/background.js"
+  File "/home/z/my-project/build/AdvPrint-280-installer/stage/extension/i18n.js"
+  File "/home/z/my-project/build/AdvPrint-280-installer/stage/extension/managed.json"
+  File "/home/z/my-project/build/AdvPrint-280-installer/stage/extension/options.html"
+  File "/home/z/my-project/build/AdvPrint-280-installer/stage/extension/options.js"
+  File "/home/z/my-project/build/AdvPrint-280-installer/stage/extension/popup.html"
+  File "/home/z/my-project/build/AdvPrint-280-installer/stage/extension/popup.js"
   SetOutPath "$INSTDIR\extension\content"
-  File "/home/z/my-project/build/AdvPrint-270-installer/stage/extension/content/api.js"
-  File "/home/z/my-project/build/AdvPrint-270-installer/stage/extension/content/hook.js"
-  File "/home/z/my-project/build/AdvPrint-270-installer/stage/extension/content/relay.js"
+  File "/home/z/my-project/build/AdvPrint-280-installer/stage/extension/content/api.js"
+  File "/home/z/my-project/build/AdvPrint-280-installer/stage/extension/content/hook.js"
+  File "/home/z/my-project/build/AdvPrint-280-installer/stage/extension/content/relay.js"
   SetOutPath "$INSTDIR\extension\icons"
-  File "/home/z/my-project/build/AdvPrint-270-installer/stage/extension/icons/icon16.png"
-  File "/home/z/my-project/build/AdvPrint-270-installer/stage/extension/icons/icon32.png"
-  File "/home/z/my-project/build/AdvPrint-270-installer/stage/extension/icons/icon48.png"
-  File "/home/z/my-project/build/AdvPrint-270-installer/stage/extension/icons/icon128.png"
+  File "/home/z/my-project/build/AdvPrint-280-installer/stage/extension/icons/icon16.png"
+  File "/home/z/my-project/build/AdvPrint-280-installer/stage/extension/icons/icon32.png"
+  File "/home/z/my-project/build/AdvPrint-280-installer/stage/extension/icons/icon48.png"
+  File "/home/z/my-project/build/AdvPrint-280-installer/stage/extension/icons/icon128.png"
   DetailPrint "Extension ready: chrome://extensions > Developer mode > Load unpacked > $INSTDIR\extension"
 SectionEnd
 
 LangString DescMain    ${LANG_ENGLISH} "The AdvPrint Pro hub, bundled Python 3.11 runtime, bundled SumatraPDF, tray icon, auto-run at logon, desktop tool and full documentation. Required."
-LangString DescService ${LANG_ENGLISH} "Run the hub headless as a real Windows service (services.msc). For servers / shared PCs. The normal auto-run already covers desktop use."
+LangString DescService ${LANG_ENGLISH} "Run the hub headless as a real Windows service (services.msc). For servers / shared PCs. The normal auto-run already covers desktop use. On upgrade an existing service is stopped, removed and reinstalled fresh automatically."
 LangString DescExt     ${LANG_ENGLISH} "Browser extension files installed to $INSTDIR\extension - load once via chrome://extensions > Load unpacked."
 
 !insertmacro MUI_FUNCTION_DESCRIPTION_BEGIN
@@ -328,26 +359,74 @@ LangString DescExt     ${LANG_ENGLISH} "Browser extension files installed to $IN
   !insertmacro MUI_DESCRIPTION_TEXT ${SEC_EXT}     "$(DescExt)"
 !insertmacro MUI_FUNCTION_DESCRIPTION_END
 
+; ---------------- .onInit: keep the service across upgrades ---------
+; (defined AFTER the sections so ${SEC_SERVICE} exists at compile time)
+Function .onInit
+  ; v2.8: when the optional AdvPrint service is ALREADY installed,
+  ; pre-tick the service section so the upgrade reinstalls it fresh
+  ; after hub-stop.ps1 removed the old registration. Silent installs
+  ; (/S) behave exactly the same.
+  nsExec::ExecToStack 'sc query AdvPrint'
+  Pop $R0                       ; exit code: 0 = exists, 1060 = not installed
+  Pop $R1                       ; (output, unused)
+  ${If} $R0 == "0"
+    SectionSetFlags ${SEC_SERVICE} ${SF_SELECTED}
+    DetailPrint "Existing AdvPrint service detected - it will be reinstalled fresh."
+  ${EndIf}
+FunctionEnd
+
 
 ; ================= uninstaller =================
 Section "Uninstall"
-  DetailPrint "Stopping the hub and the service..."
+  DetailPrint "Stopping the service and every hub process (v2.8 bullet-proof stop)..."
   SetShellVarContext all
-  nsExec::Exec 'net stop AdvPrint'
-  nsExec::Exec 'sc delete AdvPrint'
-  nsExec::Exec 'powershell -NoProfile -Command "Get-NetTCPConnection -LocalPort 9235 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess | ForEach-Object { Stop-Process -Id $$_ -Force -ErrorAction SilentlyContinue }"'
-  DetailPrint "Removing auto-run and shortcuts..."
+  ${If} ${FileExists} "$INSTDIR\install\hub-stop.ps1"
+    nsExec::Exec 'powershell -NoProfile -ExecutionPolicy Bypass -File "$INSTDIR\install\hub-stop.ps1" "$INSTDIR"'
+  ${Else}
+    ; helper missing (very old install) - do the minimum inline
+    nsExec::Exec 'net stop AdvPrint /y'
+    nsExec::Exec 'sc delete AdvPrint'
+    nsExec::Exec 'taskkill /F /IM AdvPrintPro.exe'
+    nsExec::Exec 'powershell -NoProfile -Command "Get-NetTCPConnection -LocalPort 9235 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess | ForEach-Object { Stop-Process -Id $$_ -Force -ErrorAction SilentlyContinue }"'
+  ${EndIf}
+  Sleep 700
+
+  DetailPrint "Removing auto-run, shortcuts and the firewall rule..."
   Delete "$SMSTARTUP\AdvPrint Pro.lnk"
   Delete "$SMSTARTUP\PrintHub Pro.lnk"
   nsExec::Exec 'schtasks /Delete /TN "$\"PrintHub Pro$\"" /F'
   Delete "$SMPROGRAMS\AdvPrint Pro\*.lnk"
   RMDir "$SMPROGRAMS\AdvPrint Pro"
+  nsExec::Exec 'netsh advfirewall firewall delete-rule name="AdvPrint Pro" dir=in'
   DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\AdvPrintPro"
   DeleteRegKey HKLM "Software\AdvPrintPro"
   ; also clean a pre-2.6.4 per-user install if one is still around
   DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\AdvPrintPro"
   DeleteRegKey HKCU "Software\AdvPrintPro"
+
+  ; v2.8: retry the folder removal - a just-killed process can hold a
+  ; handle for another moment; after 3 sweeps leftover junk (AV locks)
+  ; is reported instead of silently keeping the Revo Uninstaller pain.
+  StrCpy $R0 0
+uninst_sweep:
+  IntOp $R0 $R0 + 1
   RMDir /r "$INSTDIR"
-  MessageBox MB_ICONINFORMATION|MB_OK \
-    "AdvPrint Pro uninstalled.$\n$\nYour print history and settings in %USERPROFILE%\.advprint were kept.$\nDelete that folder manually if you do not want them."
+  ${If} ${FileExists} "$INSTDIR"
+    ${AndIf} $R0 < 3
+    Sleep 900
+    Goto uninst_sweep
+  ${EndIf}
+  ${If} ${FileExists} "$INSTDIR"
+    DetailPrint "Some files could not be removed (antivirus / in use). Leftover folder: $INSTDIR"
+    ${IfNot} ${Silent}
+      MessageBox MB_ICONEXCLAMATION|MB_OK \
+        "AdvPrint Pro is uninstalled, but Windows kept a few files in:$\n$INSTDIR$\n$\nThis happens when antivirus software briefly holds them. Delete the folder manually in a minute - or just ignore it; it is inert."
+    ${EndIf}
+  ${Else}
+    DetailPrint "Program folder fully removed."
+    ${IfNot} ${Silent}
+      MessageBox MB_ICONINFORMATION|MB_OK \
+        "AdvPrint Pro uninstalled.$\n$\nYour print history and settings in %USERPROFILE%\.advprint were kept.$\nDelete that folder manually if you do not want them."
+    ${EndIf}
+  ${EndIf}
 SectionEnd

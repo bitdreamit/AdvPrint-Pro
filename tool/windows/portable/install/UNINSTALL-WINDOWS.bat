@@ -1,9 +1,11 @@
 @echo off
 REM ============================================================
-REM  AdvPrint Pro - Windows uninstall  (v2.5.0)
-REM  Removes the Startup-app shortcut (and the legacy logon task
-REM  from v1.2-v1.4) and stops the hub.
+REM  AdvPrint Pro - Windows uninstall  (v2.8)
+REM  v2.8: ALSO stops and removes the optional "AdvPrint" service
+REM  (stop + wait + PID kill + sc delete) before touching files,
+REM  and removes the firewall rule. Fixes "service not uninstalled".
 REM  Does NOT delete your print data or the Chrome extension.
+REM  Run as Administrator for the service + firewall steps.
 REM ============================================================
 title AdvPrint Pro Uninstall
 echo.
@@ -17,18 +19,25 @@ if not exist "%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\AdvPrint P
 )
 echo [..] Removing legacy logon task "AdvPrint Pro" (v1.2-v1.4) ...
 schtasks /Delete /TN "AdvPrint Pro" /F >nul 2>&1
-echo [OK] Done
 
-echo [..] Stopping any hub on port 9235 ...
-set KILLED=
-for /f "tokens=5" %%a in ('netstat -aon 2^>nul ^| findstr /r /c:":9235 .*LISTENING"') do (
-  taskkill /F /PID %%a >nul 2>&1 && set KILLED=1
+echo [..] Stopping the AdvPrint service + hub (v2.8 bullet-proof stop) ...
+set HERE=%~dp0
+powershell -NoProfile -ExecutionPolicy Bypass -File "%HERE%hub-stop.ps1" >nul 2>&1
+if errorlevel 1 (
+  net stop AdvPrint /y >nul 2>&1
+  sc delete AdvPrint >nul 2>&1
 )
-if defined KILLED (
-  echo [OK] Hub stopped
+sc query AdvPrint 2>nul | findstr /i "SERVICE_NAME" >nul 2>&1
+if not errorlevel 1 (
+  echo [!] The service entry is still listed - run once more as Administrator,
+  echo     or reboot (Windows marks it for deletion, gone after restart).
 ) else (
-  echo [OK] Hub was not running
+  echo [OK] Service removed / was not installed
 )
+
+echo [..] Removing the firewall rule ...
+netsh advfirewall firewall delete-rule name="AdvPrint Pro" dir=in >nul 2>&1
+echo [OK] Firewall rule removed (if it existed)
 
 echo.
 echo [OK] AdvPrint Pro uninstalled.

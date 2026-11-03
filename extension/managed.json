@@ -30,7 +30,11 @@
     },
     "lang": {
       "type": "string",
-      "enum": ["auto", "en", "bn"],
+      "enum": [
+        "auto",
+        "en",
+        "bn"
+      ],
       "default": "auto",
       "description": "v2.0 UI language: auto (browser language), en (English) or bn (Bangla)."
     },
@@ -54,7 +58,7 @@
     },
     "closeAfterPrint": {
       "type": "boolean",
-      "description": "Close the tab automatically after a rule auto-prints its URL (no browser view)"
+      "description": "Close the tab automatically after a rule auto-prints its URL. v2.8 DEFAULT: false (tabs stay open unless you opt in)."
     },
     "rules": {
       "type": "array",
@@ -67,7 +71,10 @@
           },
           "type": {
             "type": "string",
-            "enum": ["glob", "regex"],
+            "enum": [
+              "glob",
+              "regex"
+            ],
             "description": "v2.0: how 'pattern' is interpreted - glob (1.x default) or regular expression."
           },
           "title": {
@@ -95,6 +102,19 @@
           }
         }
       }
+    },
+    "hubUrlLan": {
+      "type": "string",
+      "description": "v2.8 LAN PC profile: the OTHER PC's hub URL (share-send target). Empty = no LAN PC configured."
+    },
+    "hubTokenLan": {
+      "type": "string",
+      "description": "v2.8 the LAN PC hub's token (must match that PC's ADVPRINT_TOKEN)."
+    },
+    "lanSend": {
+      "type": "boolean",
+      "default": false,
+      "description": "v2.8 Share Send ROUTE: true = print jobs go to the LAN PC hub (hubUrlLan/hubTokenLan); false = jobs print on the Self PC hub (hubUrl/token)."
     }
   }
 }

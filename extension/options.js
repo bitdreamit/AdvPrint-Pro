@@ -66,6 +66,14 @@ function startQueueLoop() {
 async function pickDefaultTab() {
   const hash = (location.hash || "").replace("#", "");
   if (hash) {
+    if (hash === "lan-settings") {
+      // v2.8: the popup's "Share Send ON without a LAN PC" flow lands
+      // here - open the Settings tab and scroll to the LAN PC profile.
+      showTab("settings");
+      const el = document.getElementById("lan-settings");
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
     showTab(hash === "api" ? "about" : hash);
     return;
   }
@@ -425,6 +433,9 @@ async function loadAll() {
   const c = cfg.cfg;
   $("hubUrl").value = c.hubUrl || "";
   $("token").value = c.token || "";
+  // v2.8: LAN PC profile (Connection 2)
+  $("hubUrlLan").value = c.hubUrlLan || "";
+  $("hubTokenLan").value = c.hubTokenLan || "";
   $("enabled").checked = c.enabled !== false;
   $("queueMode").checked = c.queueMode !== false;
   $("retryOffline").checked = c.retryOffline !== false;
@@ -432,7 +443,8 @@ async function loadAll() {
   $("debugMode").checked = !!c.debugMode;   // v2.3 Debug switch
   $("autoPrintAllPdfs").checked = c.autoPrintAllPdfs !== false;
   $("hookPrint").checked = !!c.hookPrint;
-  $("closeAfterPrint").checked = c.closeAfterPrint !== false;
+  // v2.8: DEFAULT OFF - only an explicitly stored true closes tabs
+  $("closeAfterPrint").checked = c.closeAfterPrint === true;
   $("failFallback").value = c.failFallback === "none" ? "none" : "tab";
   $("contextMenu").checked = !!c.contextMenu;
   $("badge").checked = !!c.badge;
@@ -447,12 +459,16 @@ async function loadAll() {
 async function saveAll() {
   // v2.6.5: an empty token field keeps the STORED token - the legacy
   // default is never silently re-written by saving with a cleared field.
+  // v2.8: the same rule protects the LAN PC token (hubTokenLan).
   const tok = $("token").value.trim();
+  const tokLan = $("hubTokenLan").value.trim();
   const r = await send({
     type: "saveCfg",
     patch: {
       hubUrl: $("hubUrl").value.trim() || "http://127.0.0.1:9235",
       ...(tok ? { token: tok } : {}),
+      hubUrlLan: $("hubUrlLan").value.trim(),
+      ...(tokLan ? { hubTokenLan: tokLan } : {}),
       enabled: $("enabled").checked,
       queueMode: $("queueMode").checked,
       debugMode: $("debugMode").checked,   // v2.3: background also syncs
@@ -800,6 +816,61 @@ $("bDbgLivetest").addEventListener("click", async () => {
 
 /* ---------- wire up ---------- */
 $("bTestHub").addEventListener("click", () => testHub(true));
+
+/* ---------- v2.8: LAN PC profile test + clear ---------- */
+$("bTestHubLan").addEventListener("click", async () => {
+  const url = $("hubUrlLan").value.trim();
+  if (!url) {
+    $("hubStateLan").textContent = "enter the LAN PC hub URL first";
+    $("hubStateLan").style.color = "#dc2626";
+    return;
+  }
+  // save what is typed (empty LAN token keeps the stored one)
+  const prev = await send({ type: "getCfg" });
+  const tokLan = $("hubTokenLan").value.trim();
+  await send({ type: "saveCfg", patch: {
+    hubUrlLan: url,
+    ...(tokLan ? { hubTokenLan: tokLan } : {}) } });
+  const c = (await send({ type: "getCfg" })).cfg || {};
+  const el = $("hubStateLan");
+  el.textContent = "checking ...";
+  el.style.color = "#64748b";
+  const base = url.replace(/\/+$/, "");
+  try {
+    // /health is open - proves the hub is reachable at all
+    const h = await fetch(base + "/health", { cache: "no-store" })
+      .then((r) => r.json());
+    if (!h || !h.ok) throw new Error("no AdvPrint hub there");
+    // then verify the token with a real authed call
+    const s = await fetch(base + "/stats", { cache: "no-store",
+      headers: { "X-AdvPrint-Token": c.hubTokenLan || c.token || "" } })
+      .then((r) => r.json());
+    if (s && s.ok) {
+      el.textContent = "CONNECTED - LAN PC hub v" + (h.version || "?") +
+        " - Share Send can print there";
+      el.style.color = "#16a34a";
+    } else {
+      el.textContent = "HUB REACHABLE but the token was rejected - " +
+        "copy that PC's token (dashboard or: python advprint.py token)";
+      el.style.color = "#d97706";
+    }
+  } catch (e) {
+    el.textContent = "OFFLINE / not an AdvPrint hub (" + e.message + ")";
+    el.style.color = "#dc2626";
+  }
+});
+
+$("bClearLan").addEventListener("click", async () => {
+  if (!confirm("Forget the LAN PC profile?\n\nBoth the URL and the token are cleared and Share Send turns off (printing goes back to this PC).")) return;
+  await send({ type: "saveCfg", patch: { hubUrlLan: "", hubTokenLan: "",
+                                         lanSend: false } });
+  $("hubUrlLan").value = "";
+  $("hubTokenLan").value = "";
+  $("hubStateLan").textContent = "LAN PC profile cleared";
+  $("hubStateLan").style.color = "#64748b";
+  saved("LAN PC profile cleared - printing on the Self PC");
+});
+
 $("bReloadPrinters").addEventListener("click", loadPrinters);
 $("bAddRule").addEventListener("click", () => {
   $("rulesBody").appendChild(ruleRow({ pattern: "", printer: "", action: "auto", auto: false }));
@@ -837,16 +908,25 @@ $("langSelect").addEventListener("change", async () => {
   AdvPrintI18n.apply(lang);
 });
 
-/* v2.0: hub dashboard + audit log (token comes from the saved config) */
-async function openHubPath(path) {
+/* v2.0: hub dashboard + audit log (token comes from the saved config).
+ * v2.8: FOUR entries - dashboard and audit log for the SELF PC and for
+ * the LAN PC profile, managed separately. */
+async function openHubPath(path, target = "self") {
   const cfg = await send({ type: "getCfg" });
   if (!cfg.ok) return;
-  const base = (cfg.cfg.hubUrl || "http://127.0.0.1:9235").replace(/\/+$/, "");
+  const c = cfg.cfg;
+  const lan = target === "lan";
+  const base = (lan ? c.hubUrlLan : c.hubUrl || "http://127.0.0.1:9235")
+    .replace(/\/+$/, "");
+  if (!base) { saved("Set the LAN PC hub URL first (Connection 2)"); return; }
+  const tok = lan ? (c.hubTokenLan || c.token || "") : (c.token || "");
   chrome.tabs.create({ url: base + path + "?token=" +
-                       encodeURIComponent(cfg.cfg.token || "") });
+                       encodeURIComponent(tok) });
 }
 $("bDashboard").addEventListener("click", () => openHubPath("/dashboard"));
 $("bAudit").addEventListener("click", () => openHubPath("/audit"));
+$("bDashboardLan").addEventListener("click", () => openHubPath("/dashboard", "lan"));
+$("bAuditLan").addEventListener("click", () => openHubPath("/audit", "lan"));
 $("bOpenDocs").addEventListener("click", () => openHubPath("/docs"));
 
 /* ---------- v2.2: LAN / PCs wiring ---------- */

@@ -28,7 +28,7 @@ from conftest import wait_until  # noqa: E402
 def test_health_open_no_token(hub):
     code, d = hub.get("/health", token=None)
     assert code == 200 and d["ok"] is True
-    assert d["version"] == "2.7.0"
+    assert d["version"] == "2.8.0"
     assert d["v2"] is True
     assert "100% local" in d["branding"]
 
@@ -538,13 +538,13 @@ def test_v1_database_migration(tmp_path):
 
 
 def test_version_anchors():
-    assert advprint.VERSION == "2.7.0"
+    assert advprint.VERSION == "2.8.0"
     # repo/package layout: tool/windows/portable/hub -> root/extension
     root = os.path.dirname(os.path.dirname(os.path.dirname(
         os.path.dirname(os.path.dirname(advprint.__file__)))))
     ext = os.path.join(root, "extension", "manifest.json")
     with open(ext) as f:
-        assert json.load(f)["version"] == "2.7.0"
+        assert json.load(f)["version"] == "2.8.0"
 
 
 def test_log_rotation(tmp_path):
@@ -1051,7 +1051,7 @@ def test_v26_token_current_loopback_only(hub):
     code, d = hub.get("/token/current")
     assert code == 200 and d["ok"] is True
     assert d["token"] == hub.token
-    assert d["app"] == "AdvPrint Pro" and d["version"] == "2.7.0"
+    assert d["app"] == "AdvPrint Pro" and d["version"] == "2.8.0"
 
 
 def test_v26_token_current_rejects_remote(hub):
@@ -1125,8 +1125,8 @@ def test_v261_tray_module_ships_and_parses():
 
 
 def test_v261_version_single_source():
-    assert advprint.VERSION == "2.7.0"
-    assert advprint.VERSION_NAME.startswith("v2.7.0")
+    assert advprint.VERSION == "2.8.0"
+    assert advprint.VERSION_NAME.startswith("v2.8.0")
 
 
 def test_v261_cli_cmd_full_path():
@@ -1161,7 +1161,7 @@ def test_v261_tool_has_diagnose_menu():
     assert "def _manual_command()" in src
     assert "Unblock-File" in src                     # MOTW repair
     assert "[13] Diagnose & fix" in src
-    assert "Choose [0-13]" in src
+    assert "Choose [0-14]" in src
     assert "The hub did not answer within 30 seconds" in src
 
 
@@ -1283,9 +1283,16 @@ def test_v264_setup_exe_kills_zombie_hubs():
     src = open(os.path.join(os.path.dirname(advprint.__file__),
                             "..", "..", "..", "..",
                             "installer", "setup.nsi"), encoding="utf-8").read()
-    assert "taskkill /F /IM AdvPrintPro.exe" in src
-    assert "taskkill /F /IM PrintHubPro.exe" in src
-    assert 'VIProductVersion "2.7.0.0"' in src
+    # v2.8: the kill-by-image logic moved into hub-stop.ps1, which
+    # setup.nsi extracts and runs BEFORE touching any file
+    assert "hub-stop.ps1" in src
+    stopps = open(os.path.join(os.path.dirname(advprint.__file__),
+                               "..", "install", "hub-stop.ps1"),
+                  encoding="utf-8").read()
+    assert "Stop-Process -Name AdvPrintPro" in stopps
+    assert "Stop-Process -Name PrintHubPro" in stopps
+    assert "sc.exe delete AdvPrint" in stopps
+    assert 'VIProductVersion "2.8.0.0"' in src
 
 
 # ---------------- v2.6.8: printer-name self-heal + menu guard ----------
@@ -1549,3 +1556,261 @@ def test_v270_missing_file_is_skipped_not_fatal(hub, clean_queue, tmp_path):
     assert "no longer stored" in (d["results"][0]["error"] or "")
     advprint.db_update(d["results"][1]["job_id"], status="canceled",
                        error="test done")
+
+
+# ============================================================
+# v2.8.0 - two hub profiles / DropZone / send portal / restart
+# ============================================================
+def _v280_hub_src():
+    return open(os.path.join(os.path.dirname(advprint.__file__),
+                             "advprint.py"), encoding="utf-8").read()
+
+
+def _v280_pdf(tmp_path, name="z.pdf", big="AdvPrint Pro v2.8 test"):
+    data, _ = advprint.thermal_pdf_bytes("#big %s\nline" % big, "t280",
+                                         paper="a4")
+    p = tmp_path / name
+    p.write_bytes(data)
+    return str(p), data
+
+
+def test_v280_version_and_config_keys():
+    assert advprint.VERSION == "2.8.0"
+    for k in ("drop_enabled", "drop_dir", "drop_delete"):
+        assert k in advprint.CFG and k in advprint.CONFIG_KEYS
+        assert k in advprint.CONFIG_TYPES
+    assert advprint.CONFIG_TYPES["drop_enabled"] is bool
+    assert advprint.CONFIG_TYPES["drop_delete"] is bool
+    assert advprint.CONFIG_TYPES["drop_dir"] is str
+
+
+def test_v280_dropzone_default_dir_and_stats():
+    d = advprint.drop_dir()
+    assert d == os.path.join(advprint.CFG["data_dir"], "DropZone")
+    st = advprint.drop_stats()
+    assert st["ok"] and st["enabled"] and st["waiting"] == 0
+
+
+def test_v280_dropzone_watcher_prints_and_moves(hub, clean_queue, cfg_reset,
+                                                tmp_path):
+    """v2.8.0: a PDF dropped into the DropZone is picked up, printed and
+    moved to done/ - the 'MS Word style' path without the extension."""
+    advprint.CFG["drop_enabled"] = True
+    advprint.CFG["drop_dir"] = str(tmp_path / "zone")
+    advprint.CFG["drop_delete"] = False
+    _p, data = _v280_pdf(tmp_path, "dropped.pdf")
+    zone = advprint.drop_dir()
+    os.makedirs(os.path.join(zone, "done"), exist_ok=True)
+    dst = os.path.join(zone, "dropped.pdf")
+    with open(dst, "wb") as f:
+        f.write(data)
+    before = len(hub.printed)
+    advprint._drop_scan()          # first poll: learns the size
+    advprint._drop_scan()          # second poll: stable -> picks it up
+    assert not os.path.exists(dst), "PDF must move out of the zone"
+    assert os.path.exists(os.path.join(zone, "done", "dropped.pdf"))
+    assert wait_until(lambda: len(hub.printed) == before + 1), \
+        "the dropzone job must actually print (worker is async)"
+    rows = [j for j in advprint.db_list(limit=20)
+            if j["source"] == "dropzone" and j["title"] == "DropZone: dropped"]
+    assert rows, "a dropzone job must be in the history"
+    advprint.db_update(rows[0]["id"], status="canceled", error="test done")
+    advprint.CFG["drop_dir"] = ""
+
+
+def test_v280_dropzone_non_pdf_is_not_printed(cfg_reset, tmp_path):
+    """A file named .pdf that is not a PDF is moved aside untouched, and
+    never printed."""
+    advprint.CFG["drop_dir"] = str(tmp_path / "zone2")
+    zone = advprint.drop_dir()
+    os.makedirs(os.path.join(zone, "done"), exist_ok=True)
+    junk = os.path.join(zone, "fake.pdf")
+    with open(junk, "wb") as f:
+        f.write(b"definitely not a pdf")
+    before = len(hub.printed) if False else 0
+    advprint._drop_process(junk)
+    assert not os.path.exists(junk)
+    assert os.path.exists(os.path.join(zone, "done", "fake.pdf"))
+    advprint.CFG["drop_dir"] = ""
+
+
+def test_v280_dropzone_scan_skips_incomplete(cfg_reset, tmp_path):
+    """_drop_scan leaves files alone until the size is stable twice."""
+    advprint.CFG["drop_dir"] = str(tmp_path / "zone3")
+    zone = advprint.drop_dir()
+    os.makedirs(zone, exist_ok=True)
+    p = os.path.join(zone, "growing.pdf")
+    with open(p, "wb") as f:
+        f.write(b"%PDF-1.4 tiny")
+    advprint._drop_scan()
+    advprint._drop_scan()
+    assert os.path.exists(p), "a <200-byte file must never be picked"
+    os.unlink(p)
+    advprint.CFG["drop_dir"] = ""
+
+
+def test_v280_dropzone_config_roundtrip(hub, cfg_reset, tmp_path):
+    code, d = hub.post("/config", {"drop_enabled": False,
+                                   "drop_dir": str(tmp_path / "w"),
+                                   "drop_delete": True})
+    assert code == 200 and d["ok"], d
+    code, st = hub.get("/dropzone")
+    assert code == 200 and st["ok"]
+    assert st["enabled"] is False and st["delete"] is True
+    assert st["custom_dir"] == str(tmp_path / "w")
+    assert st["is_default"] is False
+    code, cfg = hub.get("/config")
+    assert cfg["drop_enabled"] is False and cfg["drop_delete"] is True
+
+
+def test_v280_send_multipart_prints(hub, clean_queue, tmp_path):
+    """v2.8.0: POST /send with a multipart PDF queues a real job."""
+    p, _ = _v280_pdf(tmp_path, "lab-report.pdf")
+    with open(p, "rb") as f:
+        raw = f.read()
+    boundary = "----advprint280"
+    body = (("--%s\r\nContent-Disposition: form-data; name=\"file\"; "
+             "filename=\"lab-report.pdf\"\r\nContent-Type: "
+             "application/pdf\r\n\r\n" % boundary).encode()
+            + raw + ("\r\n--%s--\r\n" % boundary).encode())
+    req = urllib.request.Request(hub.base + "/send", data=body,
+                                 method="POST")
+    req.add_header("X-AdvPrint-Token", hub.token)
+    req.add_header("Content-Type",
+                   "multipart/form-data; boundary=%s" % boundary)
+    with urllib.request.urlopen(req, timeout=8) as r:
+        d = json.loads(r.read().decode())
+    assert d["ok"] and d["job_id"], d
+    j = advprint.db_get(d["job_id"])
+    assert j["source"] == "send" and j["title"] == "Send: lab-report"
+    advprint.db_update(d["job_id"], status="canceled", error="test done")
+
+
+def test_v280_send_raw_body_and_guards(hub, clean_queue, tmp_path):
+    p, raw = _v280_pdf(tmp_path, "raw.pdf")
+    # raw application/pdf body works (POST auth = token HEADER, the
+    # v2.0.2 rule every mutating call follows)
+    req = urllib.request.Request(hub.base + "/send?title=rawtest",
+                                 data=raw, method="POST")
+    req.add_header("Content-Type", "application/pdf")
+    req.add_header("X-AdvPrint-Token", hub.token)
+    with urllib.request.urlopen(req, timeout=8) as r:
+        d = json.loads(r.read().decode())
+    assert d["ok"]
+    advprint.db_update(d["job_id"], status="canceled", error="test done")
+    # no token -> 401 (pdf content-type so the raw path reaches auth)
+    try:
+        req = urllib.request.Request(hub.base + "/send", data=raw,
+                                     method="POST")
+        req.add_header("Content-Type", "application/pdf")
+        urllib.request.urlopen(req, timeout=8)
+        assert False, "must require a token"
+    except urllib.error.HTTPError as e:
+        assert e.code == 401, e.code
+    # non-PDF -> 400
+    req = urllib.request.Request(hub.base + "/send", data=b"hello",
+                                 method="POST")
+    req.add_header("Content-Type", "application/pdf")
+    req.add_header("X-AdvPrint-Token", hub.token)
+    try:
+        urllib.request.urlopen(req, timeout=8)
+        assert False, "non-PDF must be refused"
+    except urllib.error.HTTPError as e:
+        assert e.code == 400
+        assert "only PDF" in e.read().decode()
+
+
+def test_v280_send_portal_page(hub):
+    code, d = hub.get("/send")
+    assert code == 200 or isinstance(d, dict)
+    req = urllib.request.Request(hub.base + "/send?token=" + hub.token)
+    with urllib.request.urlopen(req, timeout=8) as r:
+        html = r.read().decode()
+    assert "Send a PDF to print" in html
+    assert "/send?token=" in html
+    assert "100% local" in html
+
+
+def test_v280_restart_guard_and_listing(hub):
+    """POST /restart needs the token; the root endpoint list advertises
+    the v2.8 routes. (A real restart is NOT triggered in tests.)"""
+    # NOTE: an empty body - b"{}" without a JSON content-type hits the
+    # urlencoded fallback (400) before auth; empty body reaches auth.
+    try:
+        urllib.request.urlopen(urllib.request.Request(
+            hub.base + "/restart", data=b"", method="POST"), timeout=8)
+        assert False, "restart must require a token"
+    except urllib.error.HTTPError as e:
+        assert e.code == 401, e.code
+    code, root = hub.get("/")
+    eps = " ".join(root["endpoints"])
+    assert "/restart" in eps and "/send" in eps and "/dropzone" in eps
+
+
+def test_v280_dropzone_open_loopback(hub, cfg_reset, tmp_path,
+                                     monkeypatch):
+    """POST /dropzone/open creates the folder and opens it (the opener
+    is monkeypatched - no real window in tests)."""
+    advprint.CFG["drop_dir"] = str(tmp_path / "zone4")
+    opened = []
+    if advprint.IS_WIN:
+        monkeypatch.setattr(advprint.os, "startfile",
+                            lambda p: opened.append(p), raising=False)
+    else:
+        monkeypatch.setattr(advprint.subprocess, "Popen",
+                            lambda argv, **kw: opened.append(argv[1]))
+    code, d = hub.post("/dropzone/open", {})
+    assert code == 200 and d["ok"], d
+    assert opened and opened[0] == d["dir"]
+    assert os.path.isdir(os.path.join(d["dir"], "done"))
+    advprint.CFG["drop_dir"] = ""
+
+
+def test_v280_source_wiring_restart_tray_tool_installer():
+    """The restart path, tray menu item, tool menu [14], installer stop
+    script and the extension dual-profile keys all exist in source."""
+    src = _v280_hub_src()
+    assert "ADVPRINT_RESTART" in src
+    assert "def _restart_and_exit()" in src
+    assert '"on_restart": _restart' in src
+    tray = open(os.path.join(os.path.dirname(advprint.__file__),
+                             "tray_windows.py"), encoding="utf-8").read()
+    assert '"Restart hub", M_RESTART' in tray
+    tool = open(os.path.join(os.path.dirname(advprint.__file__),
+                             "tool.py"), encoding="utf-8").read()
+    assert "[14] Restart AdvPrint" in tool
+    assert 'cmd == "restart"' in tool
+    root = os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.dirname(os.path.dirname(advprint.__file__)))))  # tree root
+    portable = os.path.join(root, "tool", "windows", "portable")
+    stopps1 = os.path.join(portable, "install", "hub-stop.ps1")
+    assert os.path.isfile(stopps1)
+    stopps = open(stopps1, encoding="utf-8").read()
+    assert "sc.exe delete AdvPrint" in stopps
+    assert "Stop-Process" in stopps
+    nsi = open(os.path.join(root, "installer", "setup.nsi"),
+               encoding="utf-8").read()
+    assert "hub-stop.ps1" in nsi
+    assert "2.8.0" in nsi and "${IfNot} ${Silent}" in nsi
+    # extension dual profile
+    ext = os.path.join(root, "extension")
+    bg = open(os.path.join(ext, "background.js"), encoding="utf-8").read()
+    assert "hubUrlLan" in bg and "hubTokenLan" in bg
+    assert 'closeAfterPrint: false' in bg
+    assert "resolveTarget" in bg
+    pop = open(os.path.join(ext, "popup.html"), encoding="utf-8").read()
+    assert "swHook" in pop
+    opt = open(os.path.join(ext, "options.html"), encoding="utf-8").read()
+    assert "hubUrlLan" in opt and "bDashboardLan" in opt
+    man = json.load(open(os.path.join(ext, "manifest.json")))
+    assert man["version"] == "2.8.0"
+
+
+def test_v280_lan_profile_never_auto_heals():
+    """hubFetch must skip the loopback token auto-heal for the LAN
+    target - healing would overwrite the LAN token with this PC's."""
+    root = os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.dirname(os.path.dirname(advprint.__file__)))))
+    src = open(os.path.join(root, "extension", "background.js"),
+               encoding="utf-8").read()
+    assert 'target !== "lan"' in src

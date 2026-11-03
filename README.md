@@ -13,6 +13,40 @@ Web page ──► Chrome extension ──► AdvPrint Pro hub (localhost:9235) 
 
 ---
 
+## What's new in v2.8.0 (two hub profiles + DropZone + bullet-proof uninstall)
+
+The ten most-requested features, all in one release:
+
+- **Two hub profiles — Self PC + LAN PC.** Options → **Connection 1 (Self PC)** keeps this computer's `hubUrl` + `token`; **Connection 2 (LAN PC)** keeps the OTHER PC's hub URL + its token. **Share Send Mode** in the popup is now the routing switch: **ON → every print job goes to the LAN PC**, **OFF → jobs print on this PC**. The popup status line names the active target, and Recent jobs / Pause follow it.
+- **Share Receive Mode** (this PC accepts jobs from other PCs) stays the hub-side `share_lan` switch — receiving is configured on the PC that owns the printer.
+- **window.print() on/off in the popup** — one click turns the silent-print interception on or off (same switch as Options → Behavior).
+- **Dashboard + Audit log, Self and LAN separately** — four buttons in Options: *Open dashboard / audit log — Self PC* and *— LAN PC*; the popup footer opens the active target.
+- **Close tab after auto-print is now default OFF** — tabs stay open unless you explicitly opt in (Options → Behavior).
+- **DropZone + Send portal — printing WITHOUT the extension.** The hub watches a folder: in Word/Excel/ANY app choose *Microsoft Print to PDF* and save into the DropZone — the page prints seconds later (dashboard → DropZone card; `POST /dropzone/open` opens the folder). Phones/tablets/other PCs print through the built-in **Send portal** (`/send`, token-protected, same as every endpoint).
+- **Restart hub** — in the tray menu, AdvPrint Tool [14] and the dashboard button: the hub relaunches itself cleanly (new process waits for the port; queued jobs, settings and history are kept).
+- **Bullet-proof upgrade & uninstall.** The setup now runs `hub-stop.ps1` BEFORE touching files: stops the optional *AdvPrint* service (wait + PID kill), **deletes the service registration** (reinstalled fresh when ticked — upgrades keep it automatically), kills every process under the install folder and frees TCP 9235. Old program folders are wiped, so no stale file can abort an install any more; the uninstaller retries the folder sweep and reports leftovers honestly.
+- **Silent install** `AdvPrint-Pro-Setup-2.8.0.exe /S` — elevation is requested by the exe manifest itself ("auto permission" on any PC), the hub auto-starts after a silent install, and the firewall rule for LAN sharing (TCP 9235) is added automatically (removed on uninstall).
+- **New A + printer logo** — the letter A drawn as a printer: the crossbar is the output slot and a printed page slides out of it. Same mark in the extension, popup, dashboard, tray icon, installer and docs.
+
+Nothing removed: every v2.7.0 feature (history manager, share toggles, live test tool) is unchanged.
+
+## What's new in v2.8.0 (two hub profiles + DropZone + bullet-proof uninstall)
+
+The ten most-requested features, all in one release:
+
+- **Two hub profiles — Self PC + LAN PC.** Options → **Connection 1 (Self PC)** keeps this computer's `hubUrl` + `token`; **Connection 2 (LAN PC)** keeps the OTHER PC's hub URL + its token. **Share Send Mode** in the popup is now the routing switch: **ON → every print job goes to the LAN PC**, **OFF → jobs print on this PC**. The popup status line names the active target, and Recent jobs / Pause follow it.
+- **Share Receive Mode** (this PC accepts jobs from other PCs) stays the hub-side `share_lan` switch — receiving is configured on the PC that owns the printer.
+- **window.print() on/off in the popup** — one click turns the silent-print interception on or off (same switch as Options → Behavior).
+- **Dashboard + Audit log, Self and LAN separately** — four buttons in Options: *Open dashboard / audit log — Self PC* and *— LAN PC*; the popup footer opens the active target.
+- **Close tab after auto-print is now default OFF** — tabs stay open unless you explicitly opt in (Options → Behavior).
+- **DropZone + Send portal — printing WITHOUT the extension.** The hub watches a folder: in Word/Excel/ANY app choose *Microsoft Print to PDF* and save into the DropZone — the page prints seconds later (dashboard → DropZone card; `POST /dropzone/open` opens the folder). Phones/tablets/other PCs print through the built-in **Send portal** (`/send`, token-protected, same as every endpoint).
+- **Restart hub** — in the tray menu, AdvPrint Tool [14] and the dashboard button: the hub relaunches itself cleanly (new process waits for the port; queued jobs, settings and history are kept).
+- **Bullet-proof upgrade & uninstall.** The setup now runs `hub-stop.ps1` BEFORE touching files: stops the optional *AdvPrint* service (wait + PID kill), **deletes the service registration** (reinstalled fresh when ticked — upgrades keep it automatically), kills every process under the install folder and frees TCP 9235. Old program folders are wiped, so no stale file can abort an install any more; the uninstaller retries the folder sweep and reports leftovers honestly.
+- **Silent install** `AdvPrint-Pro-Setup-2.8.0.exe /S` — elevation is requested by the exe manifest itself ("auto permission" on any PC), the hub auto-starts after a silent install, and the firewall rule for LAN sharing (TCP 9235) is added automatically (removed on uninstall).
+- **New A + printer logo** — the letter A drawn as a printer: the crossbar is the output slot and a printed page slides out of it. Same mark in the extension, popup, dashboard, tray icon, installer and docs.
+
+Nothing removed: every v2.7.0 feature (history manager, share toggles, live test tool) is unchanged.
+
 ## What's new in v2.7.0 (history manager + share modes + layout fix)
 
 - **Job history manager** (dashboard + Options > History): filter by any status (incl. one-click "Not printed"), search by title / printer / #id, tick rows with check/uncheck-all, **Reprint selected**, **Reprint all non-printed**, **Clear ALL history** — finished jobs only, waiting jobs are never touched. New API: `POST /jobs/bulk-reprint`, `POST /history/clear`.

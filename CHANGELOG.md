@@ -1,6 +1,92 @@
 # Changelog - AdvPrint Pro (Advanced Printer)
 by Bit Dream IT - Innovative Healthcare Solutions
 
+## v2.8.0 - TWO HUB PROFILES + DROPZONE + BULLET-PROOF UNINSTALL (2026-11-03)
+
+Ten requested features on the working v2.7.0 baseline. Nothing removed.
+
+### New: two hub profiles - Self PC + LAN PC (share-send routing)
+- The extension keeps TWO full profiles: **Self PC** (hubUrl + token,
+  Options > Connection 1) and **LAN PC** (hubUrlLan + hubTokenLan,
+  Options > Connection 2 - share-send target).
+- The popup **Share Send Mode** toggle is now the print ROUTE:
+  ON -> every print job goes to the LAN PC hub; OFF -> jobs print on
+  this PC's own hub. The popup status line names the active target;
+  Recent jobs + Pause/Resume follow it; the popup test page prints on
+  the active target; retry-parked jobs flush to the active target.
+- Turning Share Send ON without a LAN PC opens Options at the LAN PC
+  section (options.html#lan-settings) instead of failing silently.
+- **Connect** on the LAN PC profile verifies reachability AND the
+  token; **Clear** forgets the profile. hubFetch gained explicit
+  targets ("self" | "lan"); LAN 401s never trigger the loopback
+  token auto-heal (that would overwrite the LAN token with this
+  PC's token).
+
+### New: DropZone + Send portal - print WITHOUT the extension
+- **DropZone** (dashboard card + GET /dropzone): the hub watches a
+  folder (default <data>\DropZone; drop_dir / drop_delete settings,
+  live on/off - the watcher re-reads the config every poll). Any PDF
+  saved into the folder is printed and moved to done\ (or deleted) -
+  print from Word/Excel/ANY app via "Microsoft Print to PDF".
+  POST /dropzone/open opens the folder on the hub PC (loopback only).
+- **Send portal** (GET /send + POST /send): upload a PDF from any
+  phone / tablet / PC on the LAN; same token auth as every endpoint;
+  multipart (curl -F), raw application/pdf body or pdf_base64 JSON;
+  PDF-magic check, 25 MB cap, audited, source "send".
+
+### New: Restart hub (tray + tool + dashboard + API)
+- Tray menu **Restart hub**, AdvPrint Tool **[14] Restart AdvPrint**
+  (+ CLI `tool.py restart`), dashboard **Restart hub** button and
+  POST /restart: the hub relaunches ITSELF as a new process. The new
+  process (ADVPRINT_RESTART=1) skips the single-instance pre-check
+  and waits up to 12 s for the old listener to release the port.
+  Queued jobs, settings and history are kept; hub.restart is audited.
+
+### Fixed: bullet-proof upgrade + uninstall ("some file abort install")
+- Setup now runs **hub-stop.ps1** BEFORE copying any file: stops the
+  optional AdvPrint service (polite stop -> wait -> PID kill),
+  DELETES the service registration (sc delete), kills every process
+  under the install folder + anything on TCP 9235 + renamed hub
+  images. Old hub/install/extension/docs/runtime folders are wiped
+  so no stale file can abort or shadow the new install.
+- .onInit pre-ticks the service section when a service exists, so
+  upgrades reinstall the service fresh automatically.
+- Uninstaller: same stop script, firewall rule removed, 3x folder
+  sweep retry, honest leftover report (silent-mode safe).
+- service-remove.ps1 verifies + force-removes; portable
+  UNINSTALL-WINDOWS.bat stops/removes the service + firewall rule.
+- Setup adds the LAN firewall rule (TCP 9235) automatically.
+
+### New: silent install on any PC
+- `AdvPrint-Pro-Setup-2.8.0.exe /S`: elevation is requested by the
+  exe manifest itself (UAC once), the hub auto-starts after a silent
+  install, no interactive popup can block it (silent-safe uninstall
+  included).
+
+### New: popup window.print() on/off + close-tab default OFF
+- Popup **window.print() hook** switch (same setting as Options >
+  Behavior) - one click turns silent interception on/off; the hook
+  refused-call message points to the popup switch.
+- **closeAfterPrint now defaults to false** - auto-printed URLs keep
+  their tabs open unless the user opts in.
+
+### New: dashboard / audit log for Self PC and LAN PC separately
+- Options > Settings: Open dashboard - Self PC / Open audit log -
+  Self PC / Open dashboard - LAN PC / Open audit log - LAN PC (each
+  with the right token). Popup footer Dashboard link opens the
+  ACTIVE target. background gained openHubPage {target}.
+
+### New: A + printer logo
+- The letter A drawn as a printer: the crossbar is the output slot
+  and a printed page slides out of it. New crisp assets: extension
+  icons 16/32/48/128, tray + installer ICO (16..256), dashboard +
+  popup inline SVG, 440x280 promo tile, docs/logo-512.png.
+
+### Tests
+(- 13 new hub tests (dropzone watcher/pickup/move, /send variants,
+  /restart auth, /dropzone/open loopback guard, config round-trip of
+  the new keys, send portal HTML). Suite: 130/130.
+
 ## v2.7.0 - HISTORY MANAGER + SHARE MODES + LAYOUT FIX (2026-11-01)
 
 ### New: the Job history is a real manager now (dashboard + extension)

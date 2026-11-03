@@ -1,6 +1,40 @@
-AdvPrint Pro (Advanced Printer) v2.7.0 - START HERE
+AdvPrint Pro (Advanced Printer) v2.8.0 - START HERE
 ====================================================
 by Bit Dream IT - Innovative Healthcare Solutions
+
+WHAT'S NEW IN 2.8.0 (TWO HUB PROFILES + DROPZONE + BULLET-PROOF UNINSTALL)
+==========================================================================
+
+  1. TWO HUB PROFILES - Self PC + LAN PC.
+     Options > Connection 1 = this PC (hub URL + token).
+     Options > Connection 2 = the OTHER PC's hub (URL + token).
+     Popup > Share Send Mode:  ON  = print jobs go to the LAN PC
+                               OFF = print jobs stay on this PC.
+  2. SHARE RECEIVE MODE = this PC accepts jobs from other PCs
+     (hub-side switch; configure it on the PC that owns the printer).
+  3. window.print() ON/OFF switch right in the popup.
+  4. Dashboard + Audit log for Self PC and LAN PC separately
+     (4 buttons in Options > Settings).
+  5. Close tab after auto-print is now DEFAULT OFF.
+  6. DROPZONE + SEND PORTAL - print WITHOUT the extension:
+     - Dashboard > DropZone: pick the folder; in Word / Excel / any
+       app print to "Microsoft Print to PDF" and save the PDF into
+       that folder - AdvPrint prints it seconds later.
+     - /send portal: any phone / tablet / PC on the LAN uploads a
+       PDF and it prints (token required, 100% local).
+  7. RESTART HUB - tray menu, AdvPrint Tool [14] and the dashboard:
+     clean self-relaunch, nothing is lost.
+  8. BULLET-PROOF UPGRADE + UNINSTALL: setup stops and REMOVES the
+     service before touching files, wipes old program folders and
+     frees port 9235 - "some file abort install" is fixed. The
+     service is reinstalled automatically on upgrade.
+  9. SILENT INSTALL: AdvPrint-Pro-Setup-2.8.0.exe /S - the exe
+     requests admin by itself (UAC once), the hub auto-starts and
+     the firewall rule for LAN sharing is added automatically.
+ 10. NEW LOGO: the letter A drawn as a printer - the crossbar is the
+     output slot and a printed page slides out of it.
+  FILES IN THIS RELEASE: AdvPrint-Pro-Setup-2.8.0.exe (Windows),
+  advprint-pro_2.8.0_all.deb (Linux), AdvPrint-Pro-v2.8.0-FULL.zip.
 
 WHAT'S NEW IN 2.7.0 (HISTORY MANAGER + SHARE MODES + CLEAN LAYOUT)
   0. JOB HISTORY IS NOW A REAL MANAGER (hub dashboard "Job history"
@@ -35,7 +69,7 @@ WHAT'S NEW IN 2.7.0 (HISTORY MANAGER + SHARE MODES + CLEAN LAYOUT)
      the real manifest version (was stuck at 2.6.4), popup version
      badge follows the manifest, new en+Bangla strings for every new
      control, LAN tab cross-references the popup switches, and the
-     setup.nsi / deb / docs all speak 2.7.0.
+     setup.nsi / deb / docs all speak 2.7.0 (superseded by 2.8.0).
   FILES IN THIS RELEASE: AdvPrint-Pro-Setup-2.7.0.exe (Windows),
   advprint-pro_2.7.0_all.deb (Linux), AdvPrint-Pro-v2.7.0-FULL.zip.
 
@@ -289,7 +323,7 @@ WHY DID MY OLD VERSION SAY "cannot access" ON THE SETUP EXE?
   No manual Security-tab work is needed anywhere.
 
 UPDATE IN 3 STEPS
-  1. Run AdvPrint-Pro-Setup-2.7.0.exe (installs over the old
+  1. Run AdvPrint-Pro-Setup-2.8.0.exe (installs over the old
      version; history + settings migrate to .advprint automatically).
      Portable users: extract the new zip over the old folder, then
      AdvPrint-Tool.bat > [13] once (unblocks), then [1] Start.
@@ -323,12 +357,12 @@ FILES IN THIS PACKAGE
                    AdvPrint-Pro-Full-Guide.html + .pdf, release notes
   tests\           pytest suite + pytest.ini
   installer\       setup.nsi - NSIS 3 source that builds
-                   AdvPrint-Pro-Setup-2.7.0.exe (per-machine, UAC)
+                   AdvPrint-Pro-Setup-2.8.0.exe (per-machine, UAC)
   prebuilt\        READY installers, no build needed:
-                   AdvPrint-Pro-Setup-2.7.0.exe (Windows setup,
+                   AdvPrint-Pro-Setup-2.8.0.exe (Windows setup,
                    ~9.5 MB - run it, UAC appears, done)
-                   advprint-pro_2.7.0_all.deb (Linux deb -
-                   sudo dpkg -i advprint-pro_2.7.0_all.deb)
+                   advprint-pro_2.8.0_all.deb (Linux deb -
+                   sudo dpkg -i advprint-pro_2.8.0_all.deb)
   README.md / CHANGELOG.md / LICENSE / pytest.ini / .gitignore
   SHA256SUMS.txt
 
@@ -340,6 +374,6 @@ SUPPORT
   Bug report? Debug tab -> Copy report - and attach hub.log from
   the data folder (%USERPROFILE%\.advprint\hub.log).
 
-AdvPrint Pro (Advanced Printer) v2.7.0
+AdvPrint Pro (Advanced Printer) v2.8.0
 by Bit Dream IT - Innovative Healthcare Solutions
 100% local - no cloud - no tracking - MIT license

@@ -43,6 +43,8 @@ AdvPrintPro\
 │   │       ├── install\             install-windows.bat, START-PRINT-HUB.vbs,
 │   │       │                        UNINSTALL-WINDOWS.bat, Windows-SERVICE
 │   │       │                        install/remove (.bat + .ps1), unix scripts
+│   │       │                        v2.8: hub-stop.ps1 (bullet-proof
+│   │       │                        service + process stop for setup)
 │   │       └── installer\runtime\   bundled Python 3.11 (gitignored in the
 │   │                                repo; shipped here so the zip is
 │   │                                self-contained)

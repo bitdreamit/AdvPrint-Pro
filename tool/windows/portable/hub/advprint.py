@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # ============================================================
-#  AdvPrint Pro v2.7.0  -  Print from any web page to any printer
+#  AdvPrint Pro v2.8.0  -  Print from any web page to any printer
 #  by Bit Dream IT  -  MIT licensed, 100% local & open source
 #  AdvPrint Pro - Version 2.7.0 - by Bit Dream IT - MIT license
 #  100% local - no cloud, no tracking.
@@ -91,10 +91,14 @@ if _HUB_DIR not in sys.path:
     sys.path.insert(0, _HUB_DIR)
 
 
-VERSION = "2.7.0"
-VERSION_NAME = ("v2.7.0 (history manager: filter / tick / bulk reprint /"
-                " clear; live test tool fixed inside the dashboard layout;"
-                " Share Receive + Send toggles in the popup)")
+VERSION = "2.8.0"
+VERSION_NAME = ("v2.8.0 (two hub profiles: Self PC + LAN PC with share-send"
+                " routing; window.print() on/off in the popup; dashboard +"
+                " audit log opened for Self and LAN separately; close-tab"
+                " after auto-print default OFF; DropZone + /send portal -"
+                " print from ANY PC or app without the extension; Restart"
+                " hub in the tray + dashboard; bullet-proof uninstall and"
+                " upgrade; new printer-A logo)")
 FULL_BRAND = ("AdvPrint Pro (Advanced Printer) by "
               "Bit Dream IT - Innovative Healthcare Solutions")
 BRANDING = ("AdvPrint Pro (Advanced Printer) - Version %s - by "
@@ -219,6 +223,18 @@ CFG = {
                                       #  SumatraPDF.exe (dashboard Settings /
                                       #  config.json / ADVPRINT_SUMATRA).
                                       #  Empty = auto-find (dynamic per user).
+
+    # ---- v2.8 settings ----
+    "drop_enabled": True,             # v2.8 DROP ZONE: watch a folder and
+                                      #  print every PDF that lands in it -
+                                      #  "MS Word style" printing from ANY
+                                      #  app WITHOUT the extension: print to
+                                      #  "Microsoft Print to PDF", save into
+                                      #  the DropZone, AdvPrint prints it
+    "drop_dir": "",                   # folder to watch (empty =
+                                      #  <data dir>/DropZone)
+    "drop_delete": False,             # True = delete the PDF after pickup,
+                                      #  False = move it into DropZone/done
 }
 
 # env overrides that win over config.json (back-compat for 1.x users)
@@ -234,7 +250,8 @@ CONFIG_KEYS = ("token", "token_header_only", "allowed_origins",
                "reprint_reason_required", "peer_hubs", "peer_forwarding",
                "share_lan", "escpos_codepage", "thermal_text_engine",
                "log_max_mb", "log_backups", "debug", "instant_auto_queue",
-               "printer", "file_dir", "sumatra_path")
+               "printer", "file_dir", "sumatra_path",
+               "drop_enabled", "drop_dir", "drop_delete")
 CONFIG_TYPES = {"token_header_only": bool, "allowed_origins": list,
                 "pdf_url_allowed_hosts": list, "max_auth_failures": int,
                 "lockout_minutes": int, "lockout_exempt_loopback": bool,
@@ -247,7 +264,9 @@ CONFIG_TYPES = {"token_header_only": bool, "allowed_origins": list,
                 "peer_hubs": list, "peer_forwarding": bool,
                 "log_max_mb": int, "log_backups": int,
                 "debug": bool, "instant_auto_queue": bool,
-                "sumatra_path": str}   # v2.5: manual SumatraPDF.exe override
+                "sumatra_path": str,   # v2.5: manual SumatraPDF.exe override
+                "drop_enabled": bool, "drop_dir": str,
+                "drop_delete": bool}   # v2.8 DropZone settings
 
 DEFAULT_TOKEN_WARNING = False   # True while the legacy default token is active
 BOUND_LAN = False               # True once the listener actually bound 0.0.0.0
@@ -2780,6 +2799,9 @@ def parse_multipart(raw, ctype):
         name = nm.group(1).decode("utf-8", "replace") if nm else ""
         if b'filename="' in head or name in ("pdf", "file"):
             fdata = content
+            fn = re.search(rb'filename="([^"]*)"', head)   # v2.8: keep it
+            if fn:
+                fields["filename"] = fn.group(1).decode("utf-8", "replace")
         else:
             fields[name] = content.decode("utf-8", "replace")
     return fdata, fields
@@ -3178,6 +3200,19 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(code)
         self._cors()
         self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        try:
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+
+    def _send_html(self, code, html):
+        """v2.8: HTML page answer (send portal, error pages)."""
+        body = html.encode("utf-8")
+        self.send_response(code)
+        self._cors()
+        self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         try:
@@ -3618,7 +3653,10 @@ class Handler(BaseHTTPRequestHandler):
                               "/export/history.csv", "/export/audit.csv",
                               "/diagnostics", "/config (GET/POST)",
                               "/token/rotate (POST)", "/token/current",
-                              "/livetest (POST)", "/peers"],
+                              "/livetest (POST)", "/peers",
+                              "/dropzone (GET) + /dropzone/open (POST),"
+                              " /send (GET portal, POST upload),"
+                              " /restart (POST) - v2.8"],
             })
         if route == "/printers":
             dp = default_printer_cached()
@@ -3699,6 +3737,15 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, redacted_config())
         if route == "/peers":
             return self._send(200, {"ok": True, "peers": probe_peers()})
+        if route == "/dropzone":                    # v2.8 DropZone status
+            st = drop_stats()
+            st["delete"] = bool(CFG.get("drop_delete"))
+            st["custom_dir"] = (CFG.get("drop_dir") or "").strip()
+            st["is_default"] = not st["custom_dir"]
+            return self._send(200, st)
+        if route == "/send":                        # v2.8 send portal page
+            tok = qt or CFG["token"]
+            return self._send_html(200, send_portal_html(tok))
         if route == "/testprint":
             kind = (q.get("kind") or ["a4"])[0]
             if kind not in ("a4", "thermal"):
@@ -3788,19 +3835,23 @@ class Handler(BaseHTTPRequestHandler):
         ctype = (self.headers.get("Content-Type") or "").lower()
         raw_pdf = None
         try:
-            if route == "/print" and ("application/pdf" in ctype or
-                                      "application/octet-stream" in ctype):
+            if route in ("/print", "/send") and (
+                    "application/pdf" in ctype or
+                    "application/octet-stream" in ctype):
                 # RAW BINARY upload - zero base64 cost.
                 # application/pdf        -> PDF bytes (default)
                 # application/octet-stream + ?kind=raw or ?lang=escpos|zpl
                 #                        -> RAW printer bytes (ESC/POS / ZPL)
                 # POST the bytes directly; parameters ride the query string:
                 # /print?title=...&printer=...&copies=2&token=...
+                # v2.8: /send accepts the same bodies (send portal upload)
                 body = {}
                 raw_pdf = read_raw_body(self)
-            elif route == "/print" and "multipart/form-data" in ctype:
-                # multipart upload (Laravel Http::attach, curl -F, forms):
-                # file field 'pdf'/'file' = PDF bytes, text fields = params
+            elif route in ("/print", "/send") and \
+                    "multipart/form-data" in ctype:
+                # multipart upload (Laravel Http::attach, curl -F, forms,
+                # the v2.8 /send portal page): file field 'pdf'/'file' =
+                # PDF bytes, text fields = params
                 raw_pdf, body = parse_multipart(
                     read_raw_body(self), self.headers.get("Content-Type"))
             else:
@@ -3897,6 +3948,88 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, {"ok": True, "deleted": n,
                                     "message": "%d finished job(s) removed "
                                                "from the history" % n})
+
+        # POST /send - v2.8: print WITHOUT the extension. The send portal
+        # page (/send) and any LAN device (phone, tablet, another PC,
+        # curl -F) upload a PDF here; it is printed on this PC's printers
+        # exactly like a hub job. Same token auth as every other route.
+        if route == "/send":
+            fname = str(body.get("filename") or "send")
+            if raw_pdf is None:
+                if "multipart/form-data" in ctype:
+                    raw_pdf, pbody = parse_multipart(
+                        read_raw_body(self),
+                        self.headers.get("Content-Type"))
+                    fname = str(pbody.get("filename") or fname)
+                    body.update(pbody)
+                elif body.get("pdf_base64"):
+                    # JSON mode, same as /print: {"pdf_base64": "..."}
+                    import base64 as _b64
+                    try:
+                        raw_pdf = _b64.b64decode(
+                            str(body.get("pdf_base64")), validate=False)
+                    except Exception:
+                        raw_pdf = None
+                    fname = str(body.get("title") or "send")
+                else:
+                    return self._send(400, {"ok": False, "error":
+                        "send a PDF: multipart -F file=@report.pdf, an "
+                        "application/pdf body, or JSON pdf_base64"})
+            if not raw_pdf or not raw_pdf.startswith(b"%PDF"):
+                return self._send(400, {"ok": False, "error":
+                    "only PDF files can be printed here"})
+            if len(raw_pdf) > MAX_PDF:
+                return self._send(413, {"ok": False, "error":
+                    "PDF too large - the limit is %d MB"
+                    % (MAX_PDF // (1024 * 1024))})
+            title = str(body.get("title") or fname) or "send"
+            if title.lower().endswith(".pdf"):
+                title = title[:-4]
+            job, dup = enqueue_print("a4", ("Send: " + title)[:90], raw_pdf,
+                                     source="send", dedupe=False,
+                                     origin_ip=ip)
+            db_audit("print", job_id=job, site=site, ip=ip,
+                     printer=CFG.get("printer") or "(default)",
+                     details="send portal upload (%d KB)"
+                             % (len(raw_pdf) // 1024))
+            log("[SEND] '%s' uploaded (%d KB) -> job #%d%s"
+                % (fname, len(raw_pdf) // 1024, job,
+                   " (already in the queue)" if dup else ""))
+            return self._send(200, {"ok": True, "job_id": job})
+
+        # POST /restart - v2.8: relaunch the hub as a NEW process and exit
+        # this one (same as the tray menu Restart). The new process waits
+        # for this one to release the port (ADVPRINT_RESTART=1).
+        if route == "/restart":
+            db_audit("hub.restart", actor="api", site=site, ip=ip,
+                     details="restart requested (dashboard/API)")
+            log("[RESTART] restart requested via HTTP - relaunching")
+            threading.Timer(0.7, _restart_and_exit).start()
+            return self._send(200, {"ok": True, "message":
+                "Restarting - the hub is back in a few seconds"})
+
+        # POST /dropzone/open - v2.8: open the DropZone folder in
+        # Explorer (loopback only - a remote PC cannot pop windows here)
+        if route == "/dropzone/open":
+            if not self._is_loopback():
+                return self._send(403, {"ok": False, "error":
+                    "loopback only - open the folder on the hub PC"})
+            d = drop_dir()
+            try:
+                os.makedirs(os.path.join(d, "done"), exist_ok=True)
+            except OSError:
+                pass
+            try:
+                if IS_WIN:
+                    os.startfile(d)                       # noqa: S606
+                elif IS_MAC:
+                    subprocess.Popen(["open", d])
+                else:
+                    subprocess.Popen(["xdg-open", d])
+            except Exception as e:
+                return self._send(500, {"ok": False, "error":
+                    "cannot open the folder: %s" % e})
+            return self._send(200, {"ok": True, "dir": d})
 
         # POST /jobs/{id}/retry - failed/dead/held jobs, optionally on
         # ANOTHER printer (dead-letter recovery)
@@ -5362,7 +5495,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   .paging{display:flex;gap:8px;align-items:center;margin-top:8px;font-size:12px;color:var(--mut)}
 </style></head><body>
 <header>
-  <div class="logo">A</div>
+  <div class="logo"><svg viewBox="0 0 64 64" width="30" height="30" aria-label="AdvPrint Pro - A + printer logo"><defs><linearGradient id="lgA" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2563eb"/><stop offset="1" stop-color="#1e3a8a"/></linearGradient></defs><rect x="1" y="1" width="62" height="62" rx="14" fill="url(#lgA)"/><path d="M14 52 L32 12 L50 52" fill="none" stroke="#fff" stroke-width="8.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M22 39.5 H42" stroke="#fff" stroke-width="8.5" stroke-linecap="round"/><rect x="24.5" y="43.5" width="15" height="13" rx="2" fill="#fff"/><rect x="27.5" y="47" width="9" height="1.9" rx="0.9" fill="#1d4ed8"/><rect x="27.5" y="51" width="6.5" height="1.9" rx="0.9" fill="#1d4ed8"/></svg></div>
   <h1>AdvPrint Pro <small>@@BRANDING@@</small></h1>
   <span class="verbadge">v@@VERSION@@</span>
   <button class="primary" onclick="rotateToken()">Rotate token</button>
@@ -5381,6 +5514,8 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     <a href="/audit.csv@@Q@@"><button>Audit CSV</button></a>
     <a href="/diagnostics@@Q@@"><button>Diagnostics JSON</button></a>
     <a href="/debug@@Q@@"><button><b>Debug</b></button></a>
+    <a href="/send@@Q@@"><button title="v2.8: upload a PDF from any device on the LAN - no extension needed"><b>Send portal</b></button></a>
+    <button onclick="restartHub()" title="v2.8: clean relaunch - the hub restarts itself and comes back in a few seconds">Restart hub</button>
     <button onclick="location='/health'">Health JSON</button>
   </div>
   <div class="cards">
@@ -5393,6 +5528,23 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   <h2>LAN sharing &amp; other PCs <small style="text-transform:none;letter-spacing:0">&nbsp;- v2.2: share this printer over the network, shift jobs to another PC</small></h2>
   <div class="panel" id="lanCard"><table><tbody id="lanBody">
     <tr><td>Loading LAN status...</td></tr></tbody></table></div>
+  <h2>DropZone - print WITHOUT the extension <small style="text-transform:none;letter-spacing:0">&nbsp;- v2.8: save a PDF into the folder, AdvPrint prints it (works from any Windows app, MS Word style)</small></h2>
+  <div class="panel ltbox" id="dzCard">
+    <div class="hbar">
+      <b>DropZone: </b><span id="dzState" class="st queued">loading...</span>
+      <span class="mono" id="dzDirShow" style="color:var(--mut)"></span>
+      <span style="flex:1"></span>
+      <button onclick="dzOpen()">Open folder</button>
+      <button id="dzToggleBtn" onclick="dzToggle()">Disable</button>
+    </div>
+    <div class="hbar">
+      <label style="flex:1;min-width:280px">Watched folder (empty = data folder + DropZone):
+        <input type="text" id="dzDir" style="width:100%" placeholder="C:\Users\you\Desktop\DropZone"></label>
+      <button onclick="dzSave()">Save</button>
+      <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="dzDelete"> delete the PDF after printing (otherwise moved to done\)</label>
+    </div>
+    <p style="font-size:13px;color:#334155;margin:2px 0 0">Print from ANY app without the extension: <b>Print</b> &rarr; choose <b>Microsoft Print to PDF</b> &rarr; save the PDF into the DropZone folder. AdvPrint Pro prints it seconds later (the file moves to <span class="mono">done\</span>). Phones/tablets print through the <b>Send portal</b> button above (or <span class="mono">/send</span>) - also 100% local.</p>
+  </div>
   <h2>Debug <small style="text-transform:none;letter-spacing:0">&nbsp;- v2.3: WHY is nothing printing? one card, one answer</small></h2>
   <div class="panel" id="dbgCard"><table><tbody id="dbgBody">
     <tr><td>Loading debug status...</td></tr></tbody></table></div>
@@ -5746,13 +5898,66 @@ function copyDebug(){
     .then(()=>msg("debug report copied to clipboard - attach it to your bug report"))
     .catch(()=>msg("copy failed - open /debug and copy manually"));
 }
+/* ---- v2.8: DropZone card - print without the extension ---- */
+async function loadDz(){
+  try{
+    const d=await jget("/dropzone");
+    const s=document.getElementById("dzState");
+    if(!s)return;
+    s.className="st "+(d.enabled?(d.waiting?"scheduled":"printed"):"held");
+    s.textContent=d.enabled
+      ?(d.waiting?(""+d.waiting+" PDF waiting")
+                  :(""+d.done+" printed (done folder)"))
+      :"OFF";
+    document.getElementById("dzDirShow").textContent=d.dir||"";
+    const di=document.getElementById("dzDir");
+    if(di&&document.activeElement!==di)di.value=d.custom_dir||"";
+    document.getElementById("dzDelete").checked=!!d.delete;
+    document.getElementById("dzToggleBtn").textContent=d.enabled?"Disable":"Enable";
+  }catch(e){}
+}
+async function dzToggle(){
+  const d=await jget("/dropzone");
+  const r=await act("/config",{drop_enabled:!d.enabled});
+  if(r.ok)msg("DropZone "+(!d.enabled?"ON - PDFs saved into the folder print automatically":"OFF - the folder is not watched any more"));
+  else msg(r.error||"failed");
+  setTimeout(loadDz,400);
+}
+async function dzSave(){
+  const dir=document.getElementById("dzDir").value.trim();
+  const del=document.getElementById("dzDelete").checked;
+  const r=await act("/config",{drop_dir:dir,drop_delete:del});
+  if(r.ok)msg("DropZone saved - "+(dir?"watching "+dir:"using the default folder")+(del?", PDFs are deleted after printing":", printed PDFs move to done\\"));
+  else msg(r.error||"failed");
+  setTimeout(loadDz,400);
+}
+async function dzOpen(){
+  const r=await act("/dropzone/open",{});
+  if(r.ok)msg("DropZone folder opened: "+r.dir);
+  else msg(r.error||"failed - open it manually on the hub PC");
+}
+/* ---- v2.8: Restart hub - clean self-relaunch with health polling ---- */
+async function restartHub(){
+  if(!confirm("Restart the AdvPrint Pro hub now?\n\nThe hub relaunches itself - queued jobs, settings and history are kept. The page reconnects automatically."))return;
+  msg("Restarting the hub...");
+  try{await act("/restart",{});}catch(_){}
+  let tries=0;
+  const t=setInterval(async()=>{
+    tries++;
+    try{
+      const r=await fetch("/health",{cache:"no-store"});
+      if(r.ok){clearInterval(t);msg("Hub is back (v"+(await r.json()).version+")");location.reload();return;}
+    }catch(_){}
+    if(tries>40){clearInterval(t);msg("The hub did not come back within 40 s - start it from the tray icon or AdvPrint Tool.");}
+  },1000);
+}
 async function rotateToken(){
   if(!confirm("Generate a NEW token? The old one stops working immediately."))return;
   const r=await act("/token/rotate");
   if(r.ok){prompt("Your NEW token - copy it into the extension Options page:",r.token);}
   else msg(r.error||"failed");
 }
-refresh();loadHistory();loadLan();loadDebug();
+refresh();loadHistory();loadLan();loadDebug();loadDz();
 setInterval(refresh,5000);setInterval(loadHistory,10000);
 setInterval(loadLan,15000);setInterval(loadDebug,15000);
 async function ltSend(){
@@ -6025,6 +6230,266 @@ def lan_ip():
     finally:
         s.close()
 
+# ------------------------------------------------------------
+# v2.8 - DROP ZONE: print from ANY PC/app without the extension.
+# Watch a folder; every PDF that lands in it is printed and moved
+# into done/. This is the "MS Word print share" feature: in Word /
+# Excel / any Windows app choose the printer "Microsoft Print to
+# PDF", save into the DropZone - the page comes out of the real
+# printer seconds later. No extension, no driver, no cloud.
+# ------------------------------------------------------------
+_DROP_SEEN = {}                    # path -> size seen on the previous poll
+DROP_POLL_SECONDS = 2.5
+
+def drop_dir():
+    """Active DropZone folder (config drop_dir or <data>/DropZone)."""
+    d = (CFG.get("drop_dir") or "").strip()
+    if not d:
+        d = os.path.join(CFG["data_dir"], "DropZone")
+    return d
+
+def drop_stats():
+    """Cheap status for GET /dropzone + the dashboard card."""
+    d = drop_dir()
+    out = {"ok": True, "enabled": bool(CFG.get("drop_enabled")),
+           "dir": d, "waiting": 0, "done": 0}
+    try:
+        out["waiting"] = len([n for n in os.listdir(d)
+                              if n.lower().endswith(".pdf")])
+    except OSError:
+        pass
+    try:
+        out["done"] = len([n for n in os.listdir(os.path.join(d, "done"))
+                           if n.lower().endswith(".pdf")])
+    except OSError:
+        pass
+    return out
+
+def _drop_move(path, sub):
+    """Move a picked-up PDF into DropZone/<sub> (done)."""
+    if CFG.get("drop_delete"):
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+        return
+    dst_dir = os.path.join(drop_dir(), sub)
+    try:
+        os.makedirs(dst_dir, exist_ok=True)
+        dst = os.path.join(dst_dir, os.path.basename(path))
+        try:
+            os.replace(path, dst)
+        except OSError:
+            root, ext = os.path.splitext(os.path.basename(path))
+            dst = os.path.join(dst_dir, "%s-%d%s" % (root, os.getpid(), ext))
+            os.replace(path, dst)
+    except OSError as e:
+        log("[DROP] cannot move %s into %s/ (%s)"
+            % (os.path.basename(path), sub, e))
+
+def _drop_process(path):
+    """Enqueue one PDF found in the DropZone, then move it away."""
+    name = os.path.basename(path)
+    try:
+        with open(path, "rb") as f:
+            data = f.read()
+    except OSError as e:
+        log("[DROP] cannot read %s (%s)" % (name, e))
+        return
+    if not data.startswith(b"%PDF"):
+        log("[DROP] %s is not a PDF - only PDF files are printed; "
+            "moved to done/ untouched" % name)
+        _drop_move(path, "done")
+        return
+    try:
+        job, dup = enqueue_print("a4", "DropZone: " + name[:-4], data,
+                                 source="dropzone", dedupe=False,
+                                 origin_ip="dropzone")
+    except Exception as e:
+        log("[DROP] enqueue failed for %s: %s" % (name, e))
+        return
+    _drop_move(path, "done")
+    log("[DROP] '%s' picked up -> job #%d%s"
+        % (name, job, " (already printed before)" if dup else ""))
+
+def _drop_scan():
+    """One poll over the DropZone. A file is only taken when it is a
+    stable, complete PDF (size seen twice + %PDF magic)."""
+    d = drop_dir()
+    try:
+        entries = [n for n in os.listdir(d)
+                   if n.lower().endswith(".pdf")]
+    except OSError:
+        return
+    for name in entries:
+        p = os.path.join(d, name)
+        try:
+            if not os.path.isfile(p):
+                continue
+            sz = os.path.getsize(p)
+        except OSError:
+            continue
+        if sz <= 0:
+            continue
+        if _DROP_SEEN.get(p) != sz:
+            _DROP_SEEN[p] = sz      # wait one more poll - writer may be done
+            continue
+        if sz < 200:
+            continue
+        try:
+            with open(p, "rb") as f:
+                head = f.read(5)
+        except OSError:
+            continue
+        if head != b"%PDF-":
+            continue
+        _drop_process(p)
+        _DROP_SEEN.pop(p, None)
+
+def drop_watcher():
+    """Background loop - prints every PDF that lands in the DropZone.
+    v2.8.1: the loop ALWAYS runs and re-reads the config every poll, so
+    the DropZone can be switched on/off live from the dashboard without
+    restarting the hub."""
+    logged = False
+    while True:
+        try:
+            if CFG.get("drop_enabled"):
+                d = drop_dir()
+                try:
+                    os.makedirs(os.path.join(d, "done"), exist_ok=True)
+                except OSError as e:
+                    log("[DROP] cannot create the DropZone %s (%s)"
+                        % (d, e))
+                if not logged:
+                    log("[DROP] DropZone active: %s" % d)
+                    log("[DROP] print from ANY app: Print -> 'Microsoft "
+                        "Print to PDF' -> save into this folder - it "
+                        "prints automatically")
+                    logged = True
+                _drop_scan()
+            else:
+                _DROP_SEEN.clear()
+                logged = False
+        except Exception as e:
+            log("[DROP] scan error: %s" % e)
+        time.sleep(DROP_POLL_SECONDS)
+
+def start_drop_watcher():
+    threading.Thread(target=drop_watcher, daemon=True,
+                     name="advprint-dropzone").start()
+
+# ------------------------------------------------------------
+# v2.8 - SEND PORTAL (/send): a tiny upload page served by the hub,
+# so ANY device on the LAN (phone, tablet, a PC without the
+# extension) can print a PDF through this PC's printers.
+# Token required - same as every other endpoint.
+# ------------------------------------------------------------
+def send_portal_html(token):
+    q = "?token=" + quote(token or "")
+    return """<!DOCTYPE html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AdvPrint Pro - Send a PDF to print</title><style>
+ body{font:15px/1.55 "Segoe UI",system-ui,sans-serif;background:#f5f8fc;
+      color:#0f172a;margin:0;padding:24px}
+ .box{max-width:520px;margin:4vh auto;background:#fff;border:1px solid #e2e8f0;
+      border-radius:14px;padding:22px;box-shadow:0 8px 30px #0f172a14}
+ h1{font-size:19px;margin:0 0 4px} p{color:#475569;margin:6px 0 14px}
+ input[type=file]{width:100%;border:1px dashed #94a3b8;border-radius:10px;
+      padding:14px;background:#f8fafc}
+ button{width:100%;margin-top:14px;border:none;border-radius:10px;
+      background:#1d4ed8;color:#fff;font:700 15px "Segoe UI",system-ui;
+      padding:12px;cursor:pointer}
+ button:disabled{background:#94a3b8}
+ #out{margin-top:12px;font-size:14px;display:none;border-radius:9px;
+      padding:10px 12px}
+ #out.ok{display:block;background:#dcfce7;color:#166534}
+ #out.bad{display:block;background:#fee2e2;color:#991b1b}
+ .brand{font-size:11px;color:#94a3b8;text-align:center;margin-top:14px}
+</style></head><body><div class="box">
+ <h1>Send a PDF to print</h1>
+ <p>This uploads the file to the AdvPrint Pro hub on this network and
+    prints it immediately on the default printer. 100% local.</p>
+ <input type="file" id="f" accept="application/pdf,.pdf">
+ <button id="go" onclick="up()">Print it</button>
+ <div id="out"></div>
+ <div class="brand">AdvPrint Pro v@@VERSION@@ - by Bit Dream IT -
+   100% local - no cloud, no tracking</div>
+</div>
+<script>
+const TOK = new URLSearchParams(location.search).get("token") || "";
+async function up(){
+  const fi = document.getElementById("f");
+  const out = document.getElementById("out");
+  const b = document.getElementById("go");
+  out.className = ""; out.style.display = "none";
+  if (!fi.files.length) { out.textContent = "Choose a PDF first.";
+    out.className = "bad"; return; }
+  const file = fi.files[0];
+  if (!/\\.pdf$/i.test(file.name)) { out.textContent =
+    "Only PDF files can be printed here."; out.className = "bad"; return; }
+  b.disabled = true; b.textContent = "Uploading...";
+  try {
+    const fd = new FormData();
+    fd.append("file", file, file.name);
+    const r = await fetch("/send@@Q@@", { method: "POST", body: fd });
+    const d = await r.json();
+    if (d.ok) { out.textContent = "Sent! Printing as job #" + d.job_id +
+      " - watch the printer."; out.className = "ok"; }
+    else { out.textContent = "Failed: " + (d.error || ("HTTP " + r.status));
+      out.className = "bad"; }
+  } catch (e) { out.textContent = "Upload failed: " + e;
+    out.className = "bad"; }
+  b.disabled = false; b.textContent = "Print it";
+}
+</script></body></html>""".replace("@@VERSION@@", VERSION).replace("@@Q@@", q)
+
+# ------------------------------------------------------------
+# v2.8 - RESTART: the tray menu and the dashboard button relaunch
+# the hub as a NEW process and exit this one. The new process is
+# started with ADVPRINT_RESTART=1 so it waits for the old listener
+# to let go of the port instead of hitting the single-instance guard.
+# ------------------------------------------------------------
+def _relaunch_process():
+    try:
+        exe = launcher_exe()
+        base = hub_dir()
+        script = os.path.join(base, "advprint.py")
+        env = dict(os.environ)
+        env["ADVPRINT_RESTART"] = "1"
+        if IS_WIN:
+            DETACHED = 0x00000008 | 0x00000200   # DETACHED_PROCESS | NEW_GROUP
+            si = subprocess.STARTUPINFO()
+            try:
+                si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            except AttributeError:
+                pass
+            subprocess.Popen([exe, script, "serve"], cwd=base, env=env,
+                             creationflags=DETACHED, startupinfo=si,
+                             stdin=subprocess.DEVNULL,
+                             stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL)
+        else:
+            subprocess.Popen([sys.executable, script, "serve"], cwd=base,
+                             env=env, stdin=subprocess.DEVNULL,
+                             stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL,
+                             start_new_session=True)
+        log("[RESTART] new hub process launched - this process exits now")
+        return True
+    except Exception as e:
+        log("[RESTART] FAILED to launch the new hub process: %s" % e)
+        return False
+
+def _restart_and_exit():
+    """v2.8: launch the replacement hub, then leave. If the launch FAILS
+    this process stays alive - a restart must never take printing down."""
+    if _relaunch_process():
+        threading.Timer(1.0, os._exit, args=(0,)).start()
+    else:
+        log("[RESTART] keeping THIS process alive - the new hub could not "
+            "be started (check hub.log)")
+
 def cmd_serve():
     # v2.6.1: bracket EVERY startup in hub.log - if the hub dies on this
     # PC, hub.log now always shows how far it got and why it stopped.
@@ -6037,6 +6502,7 @@ def cmd_serve():
         db_init()
         start_worker()
         start_health_refresher()
+        start_drop_watcher()      # v2.8 DropZone: folder -> printer
     except Exception:
         import traceback
         log("[BOOT] FATAL: startup failed before opening the port:")
@@ -6051,30 +6517,47 @@ def cmd_serve():
     addr = (host, CFG["port"])
     global BOUND_LAN
     BOUND_LAN = (host == "0.0.0.0")
-    # v2.6.3 single-instance pre-check: when OUR hub already answers on
-    # the port, this second start exits cleanly BEFORE touching the
-    # socket (previously the second instance could double-bind).
-    try:
-        with urllib.request.urlopen(
-                "http://127.0.0.1:%d/health" % CFG["port"], timeout=2) as r:
-            pre = json.loads(r.read().decode("utf-8", "replace"))
-        if pre.get("app") == APP_NAME:
-            log("[BOOT] AdvPrint Pro v%s is ALREADY running on port %d -"
-                " this second start exits (single-instance guard)."
-                % (pre.get("version", "?"), CFG["port"]))
-            time.sleep(0.8)
+    # v2.8 RESTART support: the replacement process (ADVPRINT_RESTART=1,
+    # set by _relaunch_process) SKIPS the single-instance pre-check - the
+    # old hub is still answering during its last second - and instead
+    # WAITS up to 12 s for the old listener to release the port.
+    restarting = _env("RESTART") == "1"
+    if restarting:
+        log("[RESTART] ADVPRINT_RESTART=1 - waiting for the previous hub "
+            "process to release port %d" % CFG["port"])
+    else:
+        # v2.6.3 single-instance pre-check: when OUR hub already answers on
+        # the port, this second start exits cleanly BEFORE touching the
+        # socket (previously the second instance could double-bind).
+        try:
+            with urllib.request.urlopen(
+                    "http://127.0.0.1:%d/health" % CFG["port"],
+                    timeout=2) as r:
+                pre = json.loads(r.read().decode("utf-8", "replace"))
+            if pre.get("app") == APP_NAME:
+                log("[BOOT] AdvPrint Pro v%s is ALREADY running on port %d -"
+                    " this second start exits (single-instance guard)."
+                    % (pre.get("version", "?"), CFG["port"]))
+                time.sleep(0.8)
+                return
+        except Exception:
+            pass
+    deadline = time.time() + (12.0 if restarting else 0.0)
+    while True:
+        try:
+            httpd = HubServer(addr, Handler)
+            break
+        except OSError as e:
+            if restarting and time.time() < deadline:
+                time.sleep(0.5)       # old process is shutting down
+                continue
+            # second instance guard: hub already running? do not scare the user
+            log("FATAL: cannot bind %s:%d (%s)"
+                % (CFG["host"], CFG["port"], e))
+            log("AdvPrint Pro is probably ALREADY running (check the tray icon"
+                " near the clock, or Task Manager -> 'AdvPrintPro'). Exiting.")
+            time.sleep(1.2)
             return
-    except Exception:
-        pass
-    try:
-        httpd = HubServer(addr, Handler)
-    except OSError as e:
-        # second instance guard: hub already running? do not scare the user
-        log("FATAL: cannot bind %s:%d (%s)" % (CFG["host"], CFG["port"], e))
-        log("AdvPrint Pro is probably ALREADY running (check the tray icon"
-            " near the clock, or Task Manager -> 'AdvPrintPro'). Exiting.")
-        time.sleep(1.2)
-        return
     httpd.daemon_threads = True
     # v2.6.3: warm the health snapshot BEFORE the first request (cheap:
     # cached printer data only - no PowerShell on this path).
@@ -6137,6 +6620,15 @@ def _start_tray(httpd):
         newv = not autostart_enabled()
         return autostart_set(newv)
 
+    def _restart():
+        # v2.8: Restart hub - relaunch as a NEW process, then exit this
+        # one. Used after changing share_lan / host settings so the user
+        # never has to find the process in Task Manager.
+        db_audit("hub.restart", actor="tray",
+                 details="restart from the tray menu")
+        log("[RESTART] restart requested from the tray menu")
+        threading.Timer(0.4, _restart_and_exit).start()
+
     def _exit():
         log("AdvPrint Pro stopped from the tray icon menu")
         threading.Timer(0.5, os._exit, args=(0,)).start()
@@ -6156,12 +6648,13 @@ def _start_tray(httpd):
             "on_pause_toggle": _pause_toggle,
             "is_autostart": autostart_enabled,
             "on_autostart_toggle": _auto_toggle,
+            "on_restart": _restart,
             "on_exit": _exit,
         },
         logf=log)
     log("[TRAY] icon active next to the clock - right-click it for the"
         " control menu (Open dashboard / test page / pause / auto-run"
-        " / exit).")
+        " / restart / exit).")
 
 def cmd_testprint(kind):
     db_init(); start_worker()

@@ -84,18 +84,35 @@ async function loadSwitches() {
   const off = cfg.cfg.enabled === false;
   $("swEnabled").checked = !off;
   $("swQueue").checked = cfg.cfg.queueMode !== false;
-  // v2.7.0: Share SEND Mode - extension-side switch (this browser may
-  // shift/send jobs to peer PCs). Share RECEIVE state comes from the
-  // hub in refresh() (health share_lan).
-  $("swShareTx").checked = cfg.cfg.lanSend !== false;
-  renderShareTxState(cfg.cfg.lanSend !== false);
+  // v2.8: window.print() hook on/off - the SAME switch as Options >
+  // Behavior, right here so it can be flipped in one click.
+  $("swHook").checked = !!cfg.cfg.hookPrint;
+  renderHookState(!!cfg.cfg.hookPrint);
+  // v2.8: Share SEND Mode = the print ROUTE (LAN PC vs this PC).
+  // Share RECEIVE state comes from the hub in refresh() (self share_lan).
+  $("swShareTx").checked = cfg.cfg.lanSend === true;
+  await renderShareTxState(cfg.cfg.lanSend === true, cfg.cfg);
   renderEnabledState(off);
 }
 
-function renderShareTxState(on) {
-  $("swShareTxSub").textContent = on ? AdvPrintI18n.t("popShareTxOn")
-                                     : AdvPrintI18n.t("popShareTxOff");
+async function renderShareTxState(on, cfg) {
+  let sub;
+  if (!on) {
+    sub = AdvPrintI18n.t("popShareTxOff");
+  } else {
+    const c = cfg || (await send({ type: "getCfg" })).cfg || {};
+    sub = c.hubUrlLan
+      ? (AdvPrintI18n.t("popShareTxOnLan") + " " + c.hubUrlLan)
+      : AdvPrintI18n.t("popShareTxNoUrl");
+  }
+  $("swShareTxSub").textContent = sub;
   $("swShareTxRow").classList.toggle("off", !on);
+}
+
+function renderHookState(on) {
+  $("swHookSub").textContent = on ? AdvPrintI18n.t("popHookOn")
+                                  : AdvPrintI18n.t("popHookOff");
+  $("swHookRow").classList.toggle("off", !on);
 }
 
 function renderShareRxState(on, reachable) {
@@ -141,20 +158,45 @@ $("swShareRx").addEventListener("change", async () => {
   }
 });
 
-/* v2.7.0: Share Send Mode - extension-side switch. OFF = this browser
- * refuses every shift/send-to-peer request (background queueShift). */
+/* v2.8: window.print() on/off - one click in the popup (the same
+ * switch also lives in Options > Behavior > Intercept window.print()). */
+$("swHook").addEventListener("change", async () => {
+  const on = $("swHook").checked;
+  await send({ type: "saveCfg", patch: { hookPrint: on } });
+  renderHookState(on);
+  msg(on ? AdvPrintI18n.t("popHookOnMsg")
+         : AdvPrintI18n.t("popHookOffMsg"), "info");
+});
+
+/* v2.8: Share Send Mode = the print ROUTE. ON sends every print job to
+ * the LAN PC hub (Options > LAN PC profile), OFF prints on this PC.
+ * When no LAN PC is configured, Options opens at the LAN section. */
 $("swShareTx").addEventListener("change", async () => {
   const on = $("swShareTx").checked;
+  if (on) {
+    const cfg = await send({ type: "getCfg" });
+    if (!cfg.ok || !cfg.cfg.hubUrlLan) {
+      $("swShareTx").checked = false;
+      msg(AdvPrintI18n.t("popShareTxNoUrl"), "err");
+      chrome.tabs.create({ url: "options.html#lan-settings" });
+      return;
+    }
+  }
   await send({ type: "saveCfg", patch: { lanSend: on } });
-  renderShareTxState(on);
-  msg(AdvPrintI18n.t(on ? "popShareTxMsgOn" : "popShareTxMsgOff"), "info");
+  await renderShareTxState(on);
+  msg(on ? AdvPrintI18n.t("popShareTxMsgOn")
+         : AdvPrintI18n.t("popShareTxMsgOff"), "info");
+  refresh();
 });
 
 async function refresh() {
   const st = await send({ type: "hubStatus" });
   if (st.ok) {
+    // v2.8: the status line names the ACTIVE print target
     $("dot").classList.add("on");
-    $("stat").textContent = `Connected - hub v${st.version} on ${st.os}`;
+    $("stat").textContent = st.lan_used
+      ? `Printing on LAN PC - hub v${st.version}`
+      : `Connected - hub v${st.version} on ${st.os}`;
     $("connect").textContent = "";
     paused = !!st.paused;
     const qs = $("qstate");
@@ -166,14 +208,16 @@ async function refresh() {
     $("bPause").textContent = paused ? AdvPrintI18n.t("popResume")
                                      : AdvPrintI18n.t("popPause");
     $("qpend").textContent = st.pending ? st.pending + " pending" : "";
-    // v2.7.0: Share RECEIVE state lives in the hub (/health share_lan)
-    renderShareRxState(!!st.share_lan, true);
+    // v2.8: Share RECEIVE state lives on the SELF hub (/health share_lan)
+    renderShareRxState(!!st.self_share_lan, st.self_ok !== false);
     showOffline(false);
     // v2.1.0: token rejected earlier (KEY state) -> red banner; once an
     // authed call succeeds below, the flag is cleared again
     const ap = await chrome.storage.local.get({ authProblem: null });
     if (ap.authProblem) {
       showTokenWarning(true, ap.authProblem.why);
+    } else if (st.lan_used && st.lan_reason === "auth") {
+      showTokenWarning(true, "token");   // LAN PC rejected its token
     } else {
       showTokenWarning(!!st.default_token_warning, "default");
     }
@@ -221,7 +265,7 @@ async function refresh() {
     msg(AdvPrintI18n.t("popHubOfflineHint"), "err");
   }
 
-  const jobs = await send({ type: "hubJobs", limit: 8 });
+  const jobs = await send({ type: "hubJobs", limit: 8, target: "print" });
   const box = $("jobs");
   box.innerHTML = "";
   if (jobs.ok) {
@@ -318,18 +362,23 @@ $("bShot").addEventListener("click", async () => {
 });
 
 $("bTest").addEventListener("click", async () => {
+  // v2.8: the test page prints on the ACTIVE target (LAN PC when
+  // Share Send is on), exactly like a normal print job would.
   const cfg = await send({ type: "getCfg" });
   if (!cfg.ok) return msg("Config error", "err");
-  const base = cfg.cfg.hubUrl.replace(/\/+$/, "");
+  const c = cfg.cfg;
+  const lan = c.lanSend === true && c.hubUrlLan;
+  const base = (lan ? c.hubUrlLan : c.hubUrl).replace(/\/+$/, "");
   const res = await fetch(base + "/testprint?kind=a4", {
-    headers: { "X-AdvPrint-Token": cfg.cfg.token }
+    headers: { "X-AdvPrint-Token": lan ? (c.hubTokenLan || c.token) : c.token }
   }).then((r) => r.json()).catch((e) => ({ ok: false, error: String(e) }));
   if (res.ok) { msg("Test page queued as job #" + res.job_id, "info"); refresh(); }
   else msg("Failed: " + (res.error || "hub offline"), "err");
 });
 
 $("bPause").addEventListener("click", async () => {
-  const r = await send({ type: "queueAction", action: paused ? "resume" : "pause" });
+  const r = await send({ type: "queueAction", action: paused ? "resume" : "pause",
+                         target: "print" });
   if (r.ok) refresh(); else msg("Failed: " + r.error, "err");
 });
 
@@ -350,6 +399,12 @@ $("bPrintHeld").addEventListener("click", async () => {
 });
 
 $("bOpts").addEventListener("click", () => chrome.runtime.openOptionsPage());
+/* v2.8: footer Dashboard link - opens the ACTIVE target's dashboard
+ * (Self PC, or the LAN PC when Share Send is on). */
+$("lnkDash").addEventListener("click", (e) => {
+  e.preventDefault();
+  send({ type: "openHubPage", page: "/dashboard", target: "active" });
+});
 $("lnkDebug").addEventListener("click", (e) => {
   e.preventDefault();
   chrome.tabs.create({ url: "options.html#debug" });
@@ -368,9 +423,10 @@ AdvPrintI18n.currentLang().then((lang) => {
   const off = document.body.classList.contains("off");
   $("swEnabledSub").textContent = off ? AdvPrintI18n.t("popEnabledOff")
                                       : AdvPrintI18n.t("popEnabledOn");
-  // v2.7.0: re-render the share switch sub-labels in the chosen language
+  // v2.8: re-render the share + hook switch sub-labels in the language
   renderShareTxState($("swShareTx").checked);
   renderShareRxState($("swShareRx").checked, !$("swShareRx").disabled);
+  renderHookState($("swHook").checked);
 });
 
 /* v2.7.0: the version badge always matches the real manifest version */

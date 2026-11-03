@@ -6,7 +6,8 @@ Gives the hub a REAL identity on Windows:
   * a printer-badge icon in the tray area (bottom-right corner)
   * tooltip "AdvPrint Pro vX.Y - running on http://127.0.0.1:PORT"
   * right-click menu:  Open dashboard / Print test page /
-    Pause queue (check) / Start at Windows logon (check) / Exit
+    Pause queue (check) / Start at Windows logon (check) /
+    Restart hub (v2.8) / Exit
   * double-click opens the status (health) page
 
 v2.6.2 - SELF-DRAWN MENU (shell-theme proof):
@@ -34,6 +35,7 @@ Callbacks (all optional):
     on_pause_toggle()    -> user clicked Pause/Resume; returns new paused state
     is_autostart()->bool -> checkmark when menu is built
     on_autostart_toggle()-> user clicked Start at logon; returns new state
+    on_restart()         -> "Restart hub" (v2.8): relaunch + exit
     on_exit()            -> "Exit"
 """
 
@@ -86,7 +88,8 @@ DWMWA_WINDOW_CORNER_PREFERENCE = 33     # Win11 rounded corners (fail-safe)
 DWMWCP_ROUND       = 2
 
 # menu item ids (high word safety: keep < 0x8000)
-M_OPEN, M_TEST, M_PAUSE, M_AUTO, M_EXIT = 1001, 1002, 1003, 1004, 1005
+M_OPEN, M_TEST, M_PAUSE, M_AUTO, M_EXIT, M_RESTART = (
+    1001, 1002, 1003, 1004, 1005, 1006)
 
 # menu colors (COLORREF = 0x00BBGGRR)
 COL_BG     = 0x301B0D              # dark navy  RGB(13, 27, 48)
@@ -740,6 +743,7 @@ class Tray(object):
             ("sep",),
             ("Pause queue", M_PAUSE, paused),
             ("Start at Windows logon", M_AUTO, auto),
+            ("Restart hub", M_RESTART, False),
             ("sep",),
             ("Exit", M_EXIT, False),
         ]
@@ -798,6 +802,11 @@ class Tray(object):
         elif cmd == M_AUTO:
             new_auto = bool(self._cb("on_autostart_toggle"))
             self._log("autostart %s (tray)" % ("ON" if new_auto else "OFF"))
+        elif cmd == M_RESTART:
+            # v2.8: the callback launches the new hub and schedules the
+            # exit - the tray icon of THIS process disappears with it.
+            self._log("restart requested from the tray menu")
+            self._cb("on_restart")
         elif cmd == M_EXIT:
             self._log("exit requested from tray")
             self.stop()

@@ -118,7 +118,7 @@
     <h1>AdvPrint Pro</h1>
     <p>Print from any web page to any printer &middot; silent &middot; 100% local &middot; MIT open source</p>
   </div>
-  <span class="verchip" id="verChip">v2.7.0</span>
+  <span class="verchip" id="verChip">v2.8.0</span>
   <span class="pill" id="hubPill" title="Live hub status (checked automatically)"><i class="pdot" id="pillDot"></i><span id="pillTxt">checking…</span></span>
 </header>
 
@@ -236,8 +236,8 @@
     </div>
 
     <section style="border:none;padding:0;margin:0">
-      <h2>Connection</h2>
-      <p class="sub">Link the extension to the AdvPrint Pro hub running on this computer.</p>
+      <h2>Connection 1 - Self PC (this computer)</h2>
+      <p class="sub">The hub + printers on THIS computer. Used when Share Send Mode is OFF (default).</p>
       <div class="row">
         <label>Hub URL</label>
         <input type="text" id="hubUrl" placeholder="http://127.0.0.1:9235">
@@ -257,8 +257,32 @@
         until changed (the hub will warn you).
         <b>Detect token</b> fills the current token automatically from the running hub (v2.6 one-click fix - also offered on the dashboard error page itself).</div>
       <div class="row" style="margin-top:8px">
-        <button id="bDashboard" data-i18n="optDashboard">Open hub dashboard</button>
-        <button id="bAudit" data-i18n="optAudit">Open audit log</button>
+        <button id="bDashboard" data-i18n="optDashboard" title="Open THIS PC's hub dashboard (http://127.0.0.1:9235/dashboard)">Open dashboard - Self PC</button>
+        <button id="bAudit" data-i18n="optAudit" title="Open THIS PC's hub audit log">Open audit log - Self PC</button>
+      </div>
+    </section>
+
+    <section id="lan-settings" style="border:none;padding:0;margin-top:18px">
+      <h2>Connection 2 - LAN PC (share-send target)</h2>
+      <p class="sub">v2.8: a SECOND hub profile. Put the OTHER PC's hub URL + its token here; turning <b>Share Send Mode</b> ON in the popup sends every print job to that PC. OFF (default) prints on the Self PC above.</p>
+      <div class="row">
+        <label>LAN PC hub URL</label>
+        <input type="text" id="hubUrlLan" placeholder="http://192.168.0.60:9235">
+      </div>
+      <div class="row">
+        <label>LAN PC token</label>
+        <input type="password" id="hubTokenLan" placeholder="that PC's hub token">
+        <button class="primary" id="bTestHubLan">Connect</button>
+        <button id="bClearLan" title="Forget the LAN PC profile (URL + token)">Clear</button>
+        <span id="hubStateLan" class="mono"></span>
+      </div>
+      <div class="note">On the OTHER PC: enable <b>Share Receive Mode</b> (its popup or LAN tab =
+        <span class="mono">share_lan</span>), <b>restart its hub</b> and allow TCP 9235 through the
+        firewall once. Copy its token there (dashboard or <span class="mono">python advprint.py token</span>).
+        Your own PC does NOT need Share Receive ON to send - receiving is the OTHER PC's switch.</div>
+      <div class="row" style="margin-top:8px">
+        <button id="bDashboardLan" title="Open the LAN PC's hub dashboard in a browser">Open dashboard - LAN PC</button>
+        <button id="bAuditLan" title="Open the LAN PC's hub audit log">Open audit log - LAN PC</button>
       </div>
     </section>
 
@@ -383,8 +407,8 @@
       </div>
       <div class="toggle">
         <input type="checkbox" id="closeAfterPrint">
-        <div><b>Close tab after auto-print</b>
-          <p>When a rule auto-prints an opened URL, the tab is closed right after the job is queued - zero browser view, the paper just comes out.</p></div>
+        <div><b>Close tab after auto-print (default OFF)</b>
+          <p>OFF (default): auto-printed URLs keep their tab open like a normal page. ON: when a rule auto-prints an opened URL, the tab is closed right after the job is queued - zero browser view, the paper just comes out. You opt in; AdvPrint never closes tabs on its own by default.</p></div>
       </div>
       <div class="toggle">
         <select id="failFallback">
@@ -571,8 +595,11 @@
     </div>
     <div class="note">v2.7.0: the same two switches live in the <b>popup</b> -
       <b>Share Receive Mode</b> (= this "Enable" button, hub-side
-      <span class="mono">share_lan</span>) and <b>Share Send Mode</b> (extension-side:
-      OFF locks every shift/send-to-peer button in this browser).</div>
+      <span class="mono">share_lan</span>) and <b>Share Send Mode</b>.
+      v2.8: Share Send now has its own <b>full profile</b> - Settings &rarr;
+      <b>Connection 2 - LAN PC</b> (URL + token). With Share Send ON, every print
+      job from this browser prints on that PC; OFF prints here. This PC does
+      NOT need Receive ON to send - Receive is the OTHER PC's switch.</div>
     <div class="note" id="lanHint">After enabling: <b>restart the hub</b>
       (tray icon &rarr; Exit, start AdvPrint Pro again) and allow the port
       through the firewall once:<br>
@@ -605,7 +632,8 @@
   <section class="panel" id="panel-about">
     <div id="api" style="margin-top:-70px;padding-top:70px"></div>
     <h2>About AdvPrint Pro</h2>
-    <p class="sub">Version <b id="aboutVer">2.7.0</b> &middot; AdvPrint (Advanced Printer) by Bit Dream IT - Innovative Healthcare Solutions &middot; MIT license &middot; 100% local - no cloud, no tracking.</p>
+    <p class="sub">Version <b id="aboutVer">2.8.0</b> &middot; AdvPrint (Advanced Printer) by Bit Dream IT - Innovative Healthcare Solutions &middot; MIT license &middot; 100% local - no cloud, no tracking.</p>
+    <p class="sub">v2.8.0 highlights: <b>two hub profiles</b> - Self PC + LAN PC (Settings &rarr; Connection 1 / 2) with Share Send routing prints between them &middot; <b>window.print() on/off</b> switch right in the popup &middot; <b>dashboard + audit log</b> for Self and LAN PC opened separately &middot; <b>Close tab after auto-print</b> is now default OFF &middot; <b>DropZone + Send portal</b>: print from ANY app or device without the extension (dashboard &rarr; DropZone / hub <span class="mono">/send</span>) &middot; <b>Restart hub</b> in the tray menu, AdvPrint Tool and the dashboard &middot; bullet-proof <b>upgrade &amp; uninstall</b> (service stopped + removed automatically) &middot; new <b>A + printer</b> logo.</p>
     <p class="sub">v2.7.0 highlights: <b>History manager</b> - filter, search, tick rows, <b>Reprint selected</b>, <b>Reprint all non-printed</b>, <b>Clear ALL history</b> (waiting jobs are never touched) &middot; <b>Share Receive / Send Mode</b> toggles right in the popup &middot; the dashboard's <b>Live debug &amp; test tool</b> now sits properly inside the page &middot; new API: <span class="mono">POST /jobs/bulk-reprint</span>, <span class="mono">POST /history/clear</span>.</p>
     <p class="sub">v2.3 highlights: <b>Debug tab</b> - see WHEN / WHY / WHERE printing fails (hub problems + browser error reports, one Copy button) &middot; <b>instant print</b> (Queue mode OFF) with auto-queue fallback when no printer is active &middot; v2.2: <b>Default print options</b> (copies, odd/even/custom pages, per-sheet n-up, <b>quality draft/normal/high AND DPI</b>, scale, margins, duplex, paper, layout) &middot; <b>LAN / PCs tab</b>: LAN sharing, peers, shift single jobs or the whole queue to another PC &middot; the hub serves the full user guide at <b>/docs</b>.</p>
     <div class="gh">
