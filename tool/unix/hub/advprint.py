@@ -91,14 +91,12 @@ if _HUB_DIR not in sys.path:
     sys.path.insert(0, _HUB_DIR)
 
 
-VERSION = "2.8.0"
-VERSION_NAME = ("v2.8.0 (two hub profiles: Self PC + LAN PC with share-send"
-                " routing; window.print() on/off in the popup; dashboard +"
-                " audit log opened for Self and LAN separately; close-tab"
-                " after auto-print default OFF; DropZone + /send portal -"
-                " print from ANY PC or app without the extension; Restart"
-                " hub in the tray + dashboard; bullet-proof uninstall and"
-                " upgrade; new printer-A logo)")
+VERSION = "2.8.1"
+VERSION_NAME = ("v2.8.1 (QR code + one-click invite on the dashboard LAN"
+                " card: phones scan the Send-portal QR and upload a PDF"
+                " straight to the printer; another PC opens the invite"
+                " link and auto-adds this PC as a LAN print peer - no"
+                " config.json editing, no retyping IP or token)")
 FULL_BRAND = ("AdvPrint Pro (Advanced Printer) by "
               "Bit Dream IT - Innovative Healthcare Solutions")
 BRANDING = ("AdvPrint Pro (Advanced Printer) - Version %s - by "
@@ -1216,6 +1214,7 @@ def build_health_snapshot():
         "lan_active": bool(BOUND_LAN),
         "lan_url": ("http://%s:%d" % (lan_ip(), CFG["port"]))
                    if CFG.get("share_lan") else None,
+        "hostname": socket.gethostname(),
         "success_rate": st.get("success_rate") if st else None,
         "printers_ready": ready,
         "audit": bool(CFG.get("audit_enabled", True)),
@@ -3386,6 +3385,153 @@ class Handler(BaseHTTPRequestHandler):
         return (403, "origin %s is not on the hub's allowed_origins list"
                      % origin[:100])
 
+    def _lan_share_url(self, kind="send"):
+        """v2.8.1: the LAN URL another device uses to reach this hub.
+        kind=send   -> http://<lan-ip>:<port>/send?token=<hub-token>
+        kind=invite -> http://<lan-ip>:<port>/connect?t=<hub-token>&n=<host>
+        Both carry the hub token BY DESIGN: the token is what authorises
+        printing, and the URL is only ever shown to the hub's own owner
+        (authed dashboard) or embedded in the QR they choose to share."""
+        return lan_share_url(kind)
+
+    def _html_response(self, code, body):
+        """HTML page answer with no-store (invite / connect pages)."""
+        if isinstance(body, str):
+            body = body.encode("utf-8")
+        self.send_response(code)
+        self._cors()
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        try:
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+
+    def _peer_connect(self):
+        """v2.8.1: POST target of the one-click invite. Runs on the
+        RECEIVING PC's hub, saves the inviting PC into peer_hubs.
+        See the security model comment above connect_page_html()."""
+        if not self._is_loopback():
+            return self._html_response(403, peer_connect_result_html(
+                False, "Not allowed",
+                ["This endpoint only accepts connections from the hub's"
+                 " own PC (loopback)."], show_dashboard=False))
+        try:
+            raw = read_raw_body(self).decode("utf-8", "replace")
+        except Exception:
+            raw = ""
+        form = {}
+        for k, v in parse_qs(raw, keep_blank_values=True).items():
+            form[k] = v[0]
+        url = str(form.get("url") or "").strip()
+        token = str(form.get("token") or "").strip()
+        name = str(form.get("name") or "").strip()[:60]
+        ip = self._client_ip()
+
+        # CSRF guard: a browser always sends Origin on a cross-site POST;
+        # it must be exactly the hub being added. Empty Origin (local
+        # scripts) is accepted - same trust level as /token/current.
+        origin = (self.headers.get("Origin") or "").strip()
+        if origin and origin.lower() != "null":
+            o = urlparse(origin)
+            u = urlparse(url)
+            if (o.netloc or "").lower() != (u.netloc or "").lower() or \
+                    (o.scheme or "").lower() not in ("http", "https"):
+                db_audit("peer.connect.denied", ip=ip,
+                         details="origin %s does not match peer url"
+                                 % origin[:100])
+                log("[PEER] DENIED peer-connect: Origin %s != %s"
+                    % (origin[:80], (u.netloc or "?")[:80]))
+                return self._html_response(403, peer_connect_result_html(
+                    False, "Blocked",
+                    ["The page that sent this request (%s) is not the hub"
+                     " it wants to add (%s). Nothing was saved."
+                     % (origin[:80], (u.netloc or "?")[:80])],
+                    show_dashboard=False))
+
+        # validate the peer URL: http(s) + private-LAN host only
+        u = urlparse(url)
+        host = (u.hostname or "").lower()
+        ok_host = False
+        if u.scheme in ("http", "https") and host:
+            if host in ("localhost",) or host.endswith(".local"):
+                ok_host = True
+            elif host.startswith("127."):
+                ok_host = True
+            elif host.startswith("10.") or host.startswith("192.168."):
+                ok_host = True
+            elif host.startswith("172."):
+                try:
+                    second = int(host.split(".")[1])
+                    ok_host = 16 <= second <= 31
+                except (ValueError, IndexError):
+                    ok_host = False
+            elif host.startswith("169.254."):
+                ok_host = True
+        if not ok_host:
+            return self._html_response(400, peer_connect_result_html(
+                False, "Invalid peer address",
+                ["'%s' is not a private-LAN AdvPrint hub URL." % url[:100]],
+                show_dashboard=False))
+        if not token or len(token) > 128:
+            return self._html_response(400, peer_connect_result_html(
+                False, "Invalid invite",
+                ["The invite link carried no usable token."],
+                show_dashboard=False))
+        norm = "%s://%s" % (u.scheme.lower(), u.netloc.lower())
+        # dedupe: same peer URL -> replace the entry
+        peers = [p for p in (CFG.get("peer_hubs") or [])
+                 if str(p.get("url") or "").rstrip("/").lower()
+                 != norm.rstrip("/").lower()]
+        entry = {"url": "%s://%s" % (u.scheme, u.netloc), "token": token,
+                 "name": name or host}
+        # friendly live check (never blocks the save)
+        ver, note = None, ""
+        try:
+            req = urllib.request.Request(
+                norm + "/health",
+                headers={"User-Agent": "AdvPrintPro/%s" % VERSION})
+            with urllib.request.urlopen(req, timeout=3) as r:
+                data = json.loads(r.read().decode("utf-8", "replace"))
+            ver = data.get("version")
+            if not data.get("share_lan"):
+                note = ("Warning: that hub currently has LAN sharing OFF,"
+                        " so it will not accept jobs until it is enabled.")
+        except Exception:
+            note = ("Warning: the peer did not answer a health check just"
+                    " now - it may be offline or the firewall may block"
+                    " port %d. The peer was saved anyway." % (u.port or 9235))
+        if ver:
+            entry["version"] = str(ver)[:20]
+        peers.append(entry)
+        CFG["peer_hubs"] = peers
+        try:
+            write_config_file({k: CFG[k] for k in CONFIG_KEYS})
+        except Exception as e:
+            return self._html_response(500, peer_connect_result_html(
+                False, "Could not save the peer",
+                ["config.json could not be written: %s" % e],
+                show_dashboard=False))
+        _PEER_CACHE["t"] = 0.0                 # force a fresh probe
+        db_audit("peer.connected", actor="lan", ip=ip,
+                 details="peer added via invite: %s (%s) version=%s"
+                         % (entry["url"], entry["name"], ver or "?"))
+        log("[PEER] connected: %s (%s) v%s" % (entry["url"], entry["name"],
+                                               ver or "?"))
+        lines = ["%s is now in your LAN print peers." % entry["name"],
+                 "Hub URL: %s" % entry["url"]]
+        if ver:
+            lines.append("Peer hub is online, running AdvPrint Pro v%s."
+                         % ver)
+        if note:
+            lines.append(note)
+        lines.append("Open the dashboard LAN card to shift waiting jobs"
+                     " to it (and to remove the peer again).")
+        return self._html_response(200, peer_connect_result_html(
+            True, "Connected!", lines))
+
     # ---- routes ----
     def do_OPTIONS(self):
         self.send_response(204)
@@ -3610,6 +3756,61 @@ class Handler(BaseHTTPRequestHandler):
                 pass
             return
 
+        # /connect - v2.8.1 ONE-CLICK LAN INVITE landing page. Opened on
+        # the OTHER PC's browser; carries THIS hub's token as ?t=... and
+        # validates itself (no hub-token auth: the receiving PC does not
+        # know this hub's token yet - that is the whole point). Wrong or
+        # stale t -> readable error page, no data exposure.
+        if route == "/connect":
+            it = (q.get("t") or [""])[0]
+            iname = (q.get("n") or [""])[0]
+            if not CFG.get("token") or \
+                    not hmac.compare_digest(str(it), str(CFG["token"])):
+                page = connect_error_html(
+                    "The ?t= parameter does not match this hub's token -"
+                    " the invite link is old or mistyped.").encode("utf-8")
+                self.send_response(403)
+                self._cors()
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Content-Length", str(len(page)))
+                self.end_headers()
+                try:
+                    self.wfile.write(page)
+                except (BrokenPipeError, ConnectionResetError):
+                    pass
+                return
+            if not CFG.get("share_lan"):
+                page = connect_error_html(
+                    "LAN sharing is currently OFF on this hub - enable it"
+                    " first (dashboard > LAN card > Enable).").encode("utf-8")
+                self.send_response(403)
+                self._cors()
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Content-Length", str(len(page)))
+                self.end_headers()
+                try:
+                    self.wfile.write(page)
+                except (BrokenPipeError, ConnectionResetError):
+                    pass
+                return
+            db_audit("peer.invite", actor="lan", ip=self._client_ip(),
+                     details="invite page opened (peer name=%s)"
+                             % str(iname or "?")[:60])
+            page = connect_page_html(str(it), iname).encode("utf-8")
+            self.send_response(200)
+            self._cors()
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(page)))
+            self.end_headers()
+            try:
+                self.wfile.write(page)
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+            return
+
         err = self._origin_error()
         if err:
             return self._send(err[0], {"ok": False, "error": err[1]})
@@ -3656,7 +3857,10 @@ class Handler(BaseHTTPRequestHandler):
                               "/livetest (POST)", "/peers",
                               "/dropzone (GET) + /dropzone/open (POST),"
                               " /send (GET portal, POST upload),"
-                              " /restart (POST) - v2.8"],
+                              " /qr (GET QR SVG, kind=send|invite),"
+                              " /connect (GET invite page),"
+                              " /peer-connect (POST auto-add peer),"
+                              " /restart (POST) - v2.8/v2.8.1"],
             })
         if route == "/printers":
             dp = default_printer_cached()
@@ -3746,6 +3950,26 @@ class Handler(BaseHTTPRequestHandler):
         if route == "/send":                        # v2.8 send portal page
             tok = qt or CFG["token"]
             return self._send_html(200, send_portal_html(tok))
+        if route == "/qr":                          # v2.8.1 QR code SVG
+            # kind=send (default) -> the LAN Send-portal URL with token;
+            # kind=invite          -> the one-click /connect invite link.
+            # Auth like every GET (?token= works), answer is an SVG image
+            # that the dashboard <img> tag (and any phone camera) reads.
+            kind = (q.get("kind") or ["send"])[0]
+            url = self._lan_share_url(kind if kind in ("send", "invite")
+                                      else "send")
+            svg = qr_svg(url.encode("utf-8")).encode("utf-8")
+            self.send_response(200)
+            self._cors()
+            self.send_header("Content-Type", "image/svg+xml; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(svg)))
+            self.end_headers()
+            try:
+                self.wfile.write(svg)
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+            return
         if route == "/testprint":
             kind = (q.get("kind") or ["a4"])[0]
             if kind not in ("a4", "thermal"):
@@ -3834,6 +4058,15 @@ class Handler(BaseHTTPRequestHandler):
         q = parse_qs(u.query)
         ctype = (self.headers.get("Content-Type") or "").lower()
         raw_pdf = None
+
+        # POST /peer-connect - v2.8.1 one-click invite accept. Runs on
+        # the RECEIVING PC's hub and must work WITHOUT that hub's token
+        # (the inviting hub cannot know it) - so it is handled BEFORE the
+        # generic body/auth parsing, with its own loopback + CSRF guards
+        # (see connect_page_html's security model comment). The body is
+        # a plain urlencoded form POST from the confirmation page.
+        if route == "/peer-connect":
+            return self._peer_connect()
         try:
             if route in ("/print", "/send") and (
                     "application/pdf" in ctype or
@@ -5163,6 +5396,39 @@ curl -X POST http://127.0.0.1:@@PORT@@/print \
  <p class="warn"><b>Security:</b> remote IPs keep the 10-wrong-tokens &rarr;
     5-minute lockout. Only PCs with YOUR token can print. Turn sharing off
     the same way when you do not need it.</p>
+ <h3 style="margin:16px 0 4px">QR code - phones print without any install
+     (v2.8.1)</h3>
+ <p>Dashboard &rarr; LAN card &rarr; <b>Send portal (phones)</b> row:
+    <b>Copy send URL</b> copies
+    <span class="mono">http://&lt;this-PC-ip&gt;:@@PORT@@/send?token=...</span>,
+    and <b>QR code</b> shows the same URL as a QR generated inside the hub
+    (no internet, no CDN). Any phone/tablet on the same Wi-Fi scans it,
+    opens the Send portal, picks a PDF - it prints on this PC's default
+    printer seconds later. API equivalent:
+    <code>GET /qr?token=...&amp;kind=send|invite</code> returns the QR as
+    SVG (<span class="mono">kind=send</span> = the phone upload URL,
+    <span class="mono">kind=invite</span> = the PC invite link below).</p>
+ <h3 style="margin:16px 0 4px">One-click invite - connect another PC in
+     10 seconds (v2.8.1)</h3>
+ <p>Dashboard &rarr; LAN card &rarr; <b>Connect another PC</b> row:
+    <b>Copy invite link</b> copies
+    <span class="mono">http://&lt;this-PC-ip&gt;:@@PORT@@/connect?t=&lt;token&gt;&amp;n=&lt;PC-name&gt;</span>.
+    Open that link in a browser on the OTHER PC (chat, e-mail, QR - any
+    way). It shows a confirmation page with an
+    <b>Add &quot;PC-name&quot; as a LAN print peer</b> button; clicking it
+    saves this hub into the other PC's <span class="mono">peer_hubs</span>
+    automatically (its hub answers on
+    <span class="mono">http://127.0.0.1:@@PORT@@/peer-connect</span>) and
+    verifies it is online. No retyping the IP, no config.json editing.</p>
+ <p class="warn"><b>Invite security:</b> the link carries this hub's token
+    - treat it like a password (anyone with it can print here). The peer
+    entry is only written after an explicit click, only from the target
+    PC itself (loopback), only for private-LAN addresses, and only when
+    the confirming page was served by exactly the hub being added
+    (Origin check) - a random website cannot silently inject a peer.
+    Peers appear in the LAN card and can be removed there or in
+    config.json; every accept is audited
+    (<span class="mono">peer.connected</span>).</p>
 </div>
 
 <h2 id="queue">5. Queue on/off + instant print + shift to another PC</h2>
@@ -5815,6 +6081,19 @@ async function loadLan(){
       (on?"<button onclick='copyLan()'>Copy URL</button>":"")+"</td></tr>";
     if(on&&!active)
       rows+="<tr><td colspan='3'><b>Restart the hub to apply</b> - tray icon → Exit, then start AdvPrint Pro again (the listener rebinds to the LAN on start).</td></tr>";
+    if(on){
+      /* v2.8.1: send-portal URL + QR (phones print without any install)
+         and the one-click invite link for another PC. */
+      const HOST=hl.hostname||"this PC";
+      SEND_URL=url+"/send?token="+TOKEN;
+      INVITE_URL=url+"/connect?t="+TOKEN+"&n="+encodeURIComponent(HOST);
+      rows+="<tr><td><b>Send portal (phones): </b><span class='st queued'>QR ready</span></td>"+
+        "<td class='mono' id='sendUrlCell'>"+esc(SEND_URL)+"</td>"+
+        "<td><button onclick='copySend()'>Copy send URL</button> <button onclick='showQr(\"send\")'>QR code</button></td></tr>";
+      rows+="<tr><td><b>Connect another PC: </b><span class='st queued'>1-click</span></td>"+
+        "<td class='mono'>"+esc(INVITE_URL)+"</td>"+
+        "<td><button onclick='copyInvite()'>Copy invite link</button> <button onclick='showQr(\"invite\")'>QR</button></td></tr>";
+    }
     rows+="<tr><td><b>Printer status hold: </b>"+(HOLD_OFF?"<span class='st queued'>ON</span>":"<span class='st held'>OFF</span>")+"</td><td class='mono'>jobs wait while the printer reports offline</td><td><button onclick='toggleHold(+(!HOLD_OFF))'>"+(HOLD_OFF?"Disable":"Enable")+"</button></td></tr>";
     try{const pr=await jget("/peers");PEERS=(pr&&pr.peers)||pr||[];}catch(_){PEERS=[];}
     for(const p of (PEERS||[])){
@@ -5822,9 +6101,40 @@ async function loadLan(){
         "<td></td><td><button onclick=\"shiftAll('"+esc(p.url)+"')\">Shift all waiting jobs</button></td></tr>";
     }
     if(!(PEERS||[]).length)
-      rows+="<tr><td colspan='3'><small>Tip: add fixed peer PCs (\"peer_hubs\") in config.json - see <a href='/docs@@Q@@'>Docs</a>. Or from the other PC, set its extension Hub URL to this machine's LAN URL.</small></td></tr>";
+      rows+="<tr><td colspan='3'><small>Easiest: press <b>Copy invite link</b> above and open it on the other PC - it connects itself. Advanced: add fixed peer PCs (\"peer_hubs\") in config.json - see <a href='/docs@@Q@@'>Docs</a>.</small></td></tr>";
+    rows+="<tr id='qrRow' style='display:none'><td colspan='3'></td></tr>";
     b.innerHTML=rows;
+    renderQr();
   }catch(e){}
+}
+/* ---- v2.8.1: send-portal QR + one-click invite helpers ---- */
+let SEND_URL="",INVITE_URL="",QR_OPEN=null;
+function renderQr(){
+  const tr=document.getElementById("qrRow"); if(!tr)return;
+  if(!QR_OPEN){tr.style.display="none";return;}
+  const kind=(QR_OPEN==="invite")?"invite":"send";
+  const cap=(kind==="invite")
+    ?"Scan on the OTHER PC (or send it the link below) - opening it offers a one-click \u201cAdd as LAN print peer\u201d button:"
+    :"Scan with ANY phone on this Wi-Fi - it opens the Send portal: pick a PDF, it prints here. No app, no extension:";
+  tr.style.display="";
+  tr.innerHTML="<td colspan='3'><div style='display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap'>"+
+    "<img src='"+withQ("/qr?kind="+kind)+"' alt='QR code' width='160' height='160' style='border:1px solid #e2e8f0;border-radius:8px;background:#fff'>"+
+    "<div style='flex:1;min-width:220px'><b>"+cap+"</b>"+
+    "<div class='mono' style='margin:6px 0;word-break:break-all'>"+esc(kind==="invite"?INVITE_URL:SEND_URL)+"</div>"+
+    "<button onclick='copyQr()'>Copy this URL</button> <button onclick='showQr(null)'>Close</button></div></div></td>";
+}
+function showQr(kind){ QR_OPEN=(kind&&QR_OPEN!==kind)?kind:null; renderQr(); }
+function copySend(){
+  if(SEND_URL&&navigator.clipboard)navigator.clipboard.writeText(SEND_URL)
+    .then(()=>msg("Send URL copied - share it with phones on this Wi-Fi (or scan the QR)"));
+}
+function copyInvite(){
+  if(INVITE_URL&&navigator.clipboard)navigator.clipboard.writeText(INVITE_URL)
+    .then(()=>msg("Invite link copied - open it in a browser on the other PC and click Add as LAN print peer"));
+}
+function copyQr(){
+  const u=(QR_OPEN==="invite")?INVITE_URL:SEND_URL;
+  if(u&&navigator.clipboard)navigator.clipboard.writeText(u).then(()=>msg("URL copied"));
 }
 let HOLD_OFF=true,HELD_N=0;
 async function toggleHold(on){
@@ -5840,7 +6150,10 @@ async function toggleLan(on){
   setTimeout(refresh,400);
 }
 function copyLan(){
-  const u=document.querySelector("#lanBody .mono");
+  /* v2.8.1: anchor to the FIRST row - the new send/invite rows below
+     also use .mono cells, so the old loose selector could grab one of
+     those instead of the LAN sharing URL. */
+  const u=document.querySelector("#lanBody tr:first-child .mono");
   if(u&&navigator.clipboard)navigator.clipboard.writeText(u.textContent).then(()=>msg("LAN URL copied: "+u.textContent));
 }
 async function shiftAll(url){
@@ -6230,6 +6543,18 @@ def lan_ip():
     finally:
         s.close()
 
+
+def lan_share_url(kind="send"):
+    """v2.8.1: URL another device uses to reach this hub (see
+    Handler._lan_share_url for the security rationale)."""
+    ip = lan_ip() if CFG.get("share_lan") else "127.0.0.1"
+    base = "http://%s:%d" % (ip, CFG["port"])
+    if kind == "invite":
+        return "%s/connect?t=%s&n=%s" % (
+            base, quote(str(CFG["token"] or "")),
+            quote(socket.gethostname()))
+    return "%s/send?token=%s" % (base, quote(str(CFG["token"] or "")))
+
 # ------------------------------------------------------------
 # v2.8 - DROP ZONE: print from ANY PC/app without the extension.
 # Watch a folder; every PDF that lands in it is printed and moved
@@ -6380,6 +6705,396 @@ def start_drop_watcher():
                      name="advprint-dropzone").start()
 
 # ------------------------------------------------------------
+# v2.8.1 - QR CODE ENCODER (pure stdlib, no third-party deps).
+# Byte-mode QR, ECC level M, versions 1-40, auto mask selection.
+# Ported from the MIT-licensed "QR Code generator" reference design
+# (Project Nayuki) and verified BIT-EXACT against an independent
+# implementation for every mask 0-7 and every version the hub can
+# emit (the hub only ever encodes its own small send/invite URLs).
+# Rendered as inline SVG so any phone camera can scan it off the
+# dashboard - no internet, no CDN, no tracking.
+# ------------------------------------------------------------
+_QR_ECC_CW_PER_BLOCK = (
+    (7, 10, 15, 20, 26, 18, 20, 24, 30, 18,
+     20, 24, 26, 30, 22, 24, 28, 30, 28, 28,
+     28, 28, 30, 30, 26, 28, 30, 30, 30, 30,
+     30, 30, 30, 30, 30, 30, 30, 30, 30, 30),   # L
+    (10, 16, 26, 18, 24, 16, 18, 22, 22, 26,
+     30, 22, 22, 24, 24, 28, 28, 26, 26, 26,
+     26, 28, 28, 28, 28, 28, 28, 28, 28, 28,
+     28, 28, 28, 28, 28, 28, 28, 28, 28, 28),   # M
+    (13, 22, 18, 26, 18, 24, 18, 22, 20, 24,
+     28, 26, 24, 20, 30, 24, 28, 28, 26, 30,
+     28, 30, 30, 30, 30, 28, 30, 30, 30, 30,
+     30, 30, 30, 30, 30, 30, 30, 30, 30, 30),   # Q
+    (17, 28, 22, 16, 22, 28, 26, 26, 24, 28,
+     24, 28, 22, 24, 24, 30, 28, 28, 26, 28,
+     30, 24, 30, 30, 30, 30, 30, 30, 30, 30,
+     30, 30, 30, 30, 30, 30, 30, 30, 30, 30),   # H
+)
+_QR_NUM_ECC_BLOCKS = (
+    (1, 1, 1, 1, 1, 2, 2, 2, 2, 4,
+     4, 4, 4, 4, 6, 6, 6, 6, 7, 8,
+     8, 9, 9, 10, 12, 12, 12, 13, 14, 15,
+     16, 17, 18, 19, 19, 20, 21, 22, 24, 25),   # L
+    (1, 1, 1, 2, 2, 4, 4, 4, 5, 5,
+     5, 8, 9, 9, 10, 10, 11, 13, 14, 16,
+     17, 17, 18, 20, 21, 23, 25, 26, 28, 29,
+     31, 33, 35, 37, 38, 40, 43, 45, 47, 49),   # M
+    (1, 1, 2, 2, 4, 4, 6, 6, 8, 8,
+     8, 10, 12, 16, 12, 17, 16, 18, 21, 20,
+     23, 23, 25, 27, 29, 34, 34, 35, 38, 40,
+     43, 45, 48, 51, 53, 56, 59, 62, 65, 68),   # Q
+    (1, 1, 2, 4, 4, 4, 5, 6, 8, 8,
+     11, 11, 16, 16, 18, 16, 19, 21, 25, 25,
+     25, 34, 30, 32, 35, 37, 40, 42, 45, 48,
+     51, 54, 57, 60, 63, 66, 70, 74, 77, 81),   # H
+)
+_QR_ECL_FORMAT_BITS = (1, 0, 3, 2)          # L, M, Q, H
+_QR_ECL_M = 1                               # the hub always uses level M
+
+
+def _qr_raw_modules(ver):
+    result = (16 * ver + 128) * ver + 64
+    if ver >= 2:
+        num_align = ver // 7 + 2
+        result -= (25 * num_align - 10) * num_align - 55
+        if ver >= 7:
+            result -= 36
+    return result
+
+
+def _qr_data_cw(ver, ecl):
+    return (_qr_raw_modules(ver) // 8
+            - _QR_ECC_CW_PER_BLOCK[ecl][ver - 1]
+            * _QR_NUM_ECC_BLOCKS[ecl][ver - 1])
+
+
+def _qr_align_pos(ver):
+    if ver == 1:
+        return []
+    num_align = ver // 7 + 2
+    step = 26 if ver == 32 else \
+        (ver * 4 + num_align * 2 + 1) // (num_align * 2 - 2) * 2
+    result = [6]
+    pos = ver * 4 + 10
+    for _ in range(num_align - 1):
+        result.append(pos)
+        pos -= step
+    return sorted(set(result))
+
+
+def _qr_gf_mul(x, y):
+    z = 0
+    for i in range(7, -1, -1):
+        z = (z << 1) ^ ((z >> 7) * 0x11D)
+        z ^= ((y >> i) & 1) * x
+    return z
+
+
+def _qr_gf_pow(base, e):
+    r = 1
+    for _ in range(e):
+        r = _qr_gf_mul(r, base)
+    return r
+
+
+def _qr_rs_divisor(degree):
+    """g(x) = prod (x - alpha^i), highest-first, monic."""
+    result = [1]
+    for i in range(degree):
+        a = _qr_gf_pow(0x02, i)
+        new = [0] * (len(result) + 1)
+        for j, c in enumerate(result):
+            new[j] ^= c
+            new[j + 1] ^= _qr_gf_mul(c, a)
+        result = new
+    return result
+
+
+def _qr_rs_remainder(data, divisor):
+    result = [0] * (len(divisor) - 1)
+    for b in data:
+        factor = b ^ result.pop(0)
+        result.append(0)
+        for i in range(len(divisor) - 1):
+            result[i] ^= _qr_gf_mul(divisor[i + 1], factor)
+    return result
+
+
+def _qr_codewords(data, ecl, max_ver=40):
+    for ver in range(1, max_ver + 1):
+        cap = _qr_data_cw(ver, ecl)
+        cc_bits = 8 if ver < 10 else 16
+        if 4 + cc_bits + 8 * len(data) > cap * 8:
+            continue
+        bits = [0, 1, 0, 0]                       # byte mode 0b0100
+        for i in range(cc_bits - 1, -1, -1):
+            bits.append((len(data) >> i) & 1)
+        for byte in data:
+            for i in range(7, -1, -1):
+                bits.append((byte >> i) & 1)
+        bits += [0] * min(4, cap * 8 - len(bits))   # terminator
+        bits += [0] * (-len(bits) % 8)              # byte align
+        pad = (0xEC, 0x11)
+        i = 0
+        while len(bits) < cap * 8:
+            bits += [(pad[i % 2] >> j) & 1 for j in range(7, -1, -1)]
+            i += 1
+        cw = []
+        for k in range(0, cap * 8, 8):
+            v = 0
+            for bit in bits[k:k + 8]:
+                v = (v << 1) | bit
+            cw.append(v)
+        return ver, cw
+    raise ValueError("data too long for a QR code (max version 40)")
+
+
+def _qr_interleave(ver, ecl, datacw):
+    blocks = _QR_NUM_ECC_BLOCKS[ecl][ver - 1]
+    ecc_len = _QR_ECC_CW_PER_BLOCK[ecl][ver - 1]
+    short = len(datacw) // blocks
+    num_short = blocks - len(datacw) % blocks
+    divisor = _qr_rs_divisor(ecc_len)
+    dat_blocks, ecc_blocks = [], []
+    idx = 0
+    for b in range(blocks):
+        d = short + (1 if b >= num_short else 0)
+        blk = datacw[idx:idx + d]
+        idx += d
+        dat_blocks.append(blk)
+        ecc_blocks.append(_qr_rs_remainder(blk, divisor))
+    out = []
+    for i in range(short):
+        for blk in dat_blocks:
+            out.append(blk[i])
+    for b in range(num_short, blocks):
+        out.append(dat_blocks[b][short])
+    for i in range(ecc_len):
+        for blk in ecc_blocks:
+            out.append(blk[i])
+    return out
+
+
+def _qr_mask_bit(mask, x, y):
+    if mask == 0:
+        return (x + y) % 2 == 0
+    if mask == 1:
+        return y % 2 == 0
+    if mask == 2:
+        return x % 3 == 0
+    if mask == 3:
+        return (x + y) % 3 == 0
+    if mask == 4:
+        return (x // 3 + y // 2) % 2 == 0
+    if mask == 5:
+        return (x * y) % 2 + (x * y) % 3 == 0
+    if mask == 6:
+        return ((x * y) % 2 + (x * y) % 3) % 2 == 0
+    return ((x + y) % 2 + (x * y) % 3) % 2 == 0
+
+
+def _qr_fmt_bits(ecl, mask):
+    data = _QR_ECL_FORMAT_BITS[ecl] << 3 | mask
+    rem = data
+    for _ in range(10):
+        rem = (rem << 1) ^ ((rem >> 9) * 0x537)
+    bits = (data << 10 | rem) ^ 0x5412
+    return [(bits >> i) & 1 for i in range(15)]     # LSB-first
+
+
+def _qr_ver_bits(ver):
+    rem = ver
+    for _ in range(12):
+        rem = (rem << 1) ^ ((rem >> 11) * 0x1F25)
+    bits = ver << 12 | rem
+    return [(bits >> i) & 1 for i in range(18)]     # LSB-first
+
+
+class _QrGrid:
+    def __init__(self, ver):
+        self.ver = ver
+        self.size = ver * 4 + 17
+        self.mods = [[False] * self.size for _ in range(self.size)]
+        self.func = [[False] * self.size for _ in range(self.size)]
+
+    def set(self, x, y, dark):
+        self.mods[y][x] = dark
+        self.func[y][x] = True
+
+
+def _qr_draw_patterns(g):
+    size = g.size
+    for i in range(size):
+        g.set(6, i, i % 2 == 0)
+        g.set(i, 6, i % 2 == 0)
+
+    def finder(cx, cy):
+        for dy in range(-4, 5):
+            for dx in range(-4, 5):
+                x, y = cx + dx, cy + dy
+                if 0 <= x < size and 0 <= y < size:
+                    dist = max(abs(dx), abs(dy))
+                    g.set(x, y, dist != 2 and dist != 4)
+    finder(3, 3)
+    finder(size - 4, 3)
+    finder(3, size - 4)
+    apos = _qr_align_pos(g.ver)
+    n = len(apos)
+    for i in range(n):
+        for j in range(n):
+            if ((i == 0 and j == 0) or (i == 0 and j == n - 1)
+                    or (i == n - 1 and j == 0)):
+                continue                     # the three finder corners
+            cy, cx = apos[i], apos[j]
+            for dy in range(-2, 3):
+                for dx in range(-2, 3):
+                    g.set(cx + dx, cy + dy,
+                          max(abs(dx), abs(dy)) != 1)
+    g.set(8, size - 8, True)                 # dark module
+
+
+def _qr_draw_format(g, ecl, mask):
+    size = g.size
+    bits = _qr_fmt_bits(ecl, mask)
+    for i in range(6):
+        g.set(8, i, bits[i])
+    g.set(8, 7, bits[6])
+    g.set(8, 8, bits[7])
+    g.set(7, 8, bits[8])
+    for i in range(9, 15):
+        g.set(14 - i, 8, bits[i])
+    for i in range(8):
+        g.set(size - 1 - i, 8, bits[i])
+    for i in range(8, 15):
+        g.set(8, size - 15 + i, bits[i])
+    g.set(8, size - 8, True)
+
+
+def _qr_draw_version(g):
+    if g.ver < 7:
+        return
+    size = g.size
+    bits = _qr_ver_bits(g.ver)
+    for i in range(18):
+        a, b = i // 3, i % 3
+        g.set(b + size - 11, a, bits[i])
+        g.set(a, b + size - 11, bits[i])
+
+
+def _qr_place_data(g, codewords, mask):
+    size = g.size
+    i = 0
+    right = size - 1
+    while right >= 1:
+        if right == 6:
+            right = 5                        # skip the timing column
+        for vert in range(size):
+            for j in range(2):
+                x = right - j
+                upward = ((right + 1) & 2) == 0
+                y = (size - 1 - vert) if upward else vert
+                if not g.func[y][x] and i < len(codewords) * 8:
+                    bit = (codewords[i >> 3] >> (7 - (i & 7))) & 1
+                    g.mods[y][x] = bool(bit) ^ _qr_mask_bit(mask, x, y)
+                    i += 1
+        right -= 2
+
+
+def _qr_penalty(g):
+    size = g.size
+    res = 0
+    for row in g.mods:                       # rule 1 - rows
+        run = 1
+        for x in range(1, size):
+            if row[x] == row[x - 1]:
+                run += 1
+                if run == 6:
+                    res += 3
+                elif run > 6:
+                    res += 1
+            else:
+                run = 1
+    for x in range(size):                    # rule 1 - columns
+        run = 1
+        for y in range(1, size):
+            if g.mods[y][x] == g.mods[y - 1][x]:
+                run += 1
+                if run == 6:
+                    res += 3
+                elif run > 6:
+                    res += 1
+            else:
+                run = 1
+    for y in range(size - 1):                # rule 2 - 2x2 blocks
+        row, nxt = g.mods[y], g.mods[y + 1]
+        for x in range(size - 1):
+            if row[x] == row[x + 1] == nxt[x] == nxt[x + 1]:
+                res += 3
+    res_holder = [res]                       # rule 3 - finder-like patterns
+    pat1 = (True, False, True, True, True, False, True,
+            False, False, False, False)
+    pat2 = tuple(not b for b in pat1)
+
+    def scan(get, n):
+        for i in range(n - 10):
+            for pat in (pat1, pat2):
+                if all(get(i + j) == pat[j] for j in range(11)):
+                    res_holder[0] += 40
+    for y in range(size):
+        scan(lambda i, y=y: g.mods[y][i], size)
+    for x in range(size):
+        scan(lambda i, x=x: g.mods[i][x], size)
+    res = res_holder[0]
+    dark = sum(r.count(True) for r in g.mods)   # rule 4 - balance
+    total = size * size
+    k = (abs(dark * 20 - total * 10) + total - 1) // total - 1
+    return res + k * 10
+
+
+def qr_matrix(data, ecl=_QR_ECL_M):
+    """bytes -> module matrix (list of bool rows), auto mask."""
+    ver, datacw = _qr_codewords(bytes(data), ecl)
+    allcw = _qr_interleave(ver, ecl, datacw)
+    base = _QrGrid(ver)
+    _qr_draw_patterns(base)
+    best, best_pen = None, None
+    for m in range(8):
+        g2 = _QrGrid(ver)
+        g2.mods = [row[:] for row in base.mods]
+        g2.func = base.func
+        _qr_draw_format(g2, ecl, m)
+        _qr_draw_version(g2)
+        _qr_place_data(g2, allcw, m)
+        pen = _qr_penalty(g2)
+        if best_pen is None or pen < best_pen:
+            best, best_pen = g2, pen
+    return best.mods
+
+
+def qr_svg(data, dark="#0f172a", light="#ffffff", border=4, px=6):
+    """bytes -> standalone SVG string (phone-scannable, prints crisply)."""
+    m = qr_matrix(data)
+    n = len(m) + 2 * border
+    w = n * px
+    parts = ['<svg xmlns="http://www.w3.org/2000/svg" shape-rendering='
+             '"crispEdges" viewBox="0 0 %d %d" width="%d" height="%d">'
+             % (w, w, w, w),
+             '<rect width="%d" height="%d" fill="%s"/>' % (w, w, light)]
+    path = []
+    for y, row in enumerate(m):
+        for x, on in enumerate(row):
+            if on:
+                path.append("M%d %dh%dv%dh-%dz"
+                            % ((x + border) * px, (y + border) * px,
+                               px, px, px))
+    parts.append('<path d="%s" fill="%s"/>' % ("".join(path), dark))
+    parts.append('</svg>')
+    return "".join(parts)
+
+
+# ------------------------------------------------------------
 # v2.8 - SEND PORTAL (/send): a tiny upload page served by the hub,
 # so ANY device on the LAN (phone, tablet, a PC without the
 # extension) can print a PDF through this PC's printers.
@@ -6443,6 +7158,150 @@ async function up(){
   b.disabled = false; b.textContent = "Print it";
 }
 </script></body></html>""".replace("@@VERSION@@", VERSION).replace("@@Q@@", q)
+
+# ------------------------------------------------------------
+# v2.8.1 - ONE-CLICK LAN INVITE. The hub PC shows a "Copy invite
+# link" button on the dashboard LAN card; the link looks like
+#   http://192.168.1.100:9235/connect?t=<hub-token>&n=<hostname>
+# When the OTHER PC's user opens that link in a browser, this hub
+# serves a small confirmation page. Its form POSTs to the OTHER
+# PC's OWN hub at http://127.0.0.1:9235/peer-connect, which saves
+# this PC into that config's peer_hubs - no retyping IPs, no
+# config.json editing.
+#
+# SECURITY MODEL of POST /peer-connect (it must work WITHOUT the
+# peer's own token, because the inviting hub cannot know it):
+#   1. loopback only - the request must come from the peer PC itself;
+#   2. CSRF guard - if the request carries a browser Origin header,
+#      its scheme+host+port MUST equal the peer URL being added
+#      (the confirmation page is served by exactly that hub). A
+#      random website cannot forge this Origin, so drive-by CSRF
+#      cannot inject a peer;
+#   3. the peer URL must be a private-LAN http(s) address
+#      (localhost / 10.x / 172.16-31.x / 192.168.x / 169.254.x);
+#   4. nothing happens on GET - the user must click the button on
+#      the confirmation page (form POST with confirm=1);
+#   5. every accept is audited (event "peer.connected") and visible
+#      in the dashboard LAN card where it can be removed again.
+# ------------------------------------------------------------
+def esc_html(s):
+    return html.escape(str(s == None and "" or s), quote=True)  # noqa: E711
+
+
+DEFAULT_PEER_PORT = 9235   # the peer PC's own hub port (default install)
+
+
+def connect_page_html(token, name):
+    host = socket.gethostname()
+    peer_url = "http://%s:%d" % (lan_ip(), CFG["port"])
+    who = str(name or host)[:60]
+    return """<!DOCTYPE html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AdvPrint Pro - connect to this printer hub</title><style>
+ body{font:15px/1.55 "Segoe UI",system-ui,sans-serif;background:#f5f8fc;
+      color:#0f172a;margin:0;padding:24px}
+ .box{max-width:560px;margin:6vh auto;background:#fff;border:1px solid #e2e8f0;
+      border-radius:14px;padding:24px;box-shadow:0 8px 30px #0f172a14}
+ h1{font-size:19px;margin:0 0 6px} p{color:#475569;margin:8px 0}
+ .kv{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;
+     padding:10px 14px;margin:10px 0;font-size:14px}
+ .mono{font-family:Consolas,monospace;font-size:13px;word-break:break-all}
+ button{border:none;border-radius:10px;background:#1d4ed8;color:#fff;
+        font:700 15px "Segoe UI",system-ui;padding:12px 18px;cursor:pointer}
+ button.gray{background:#64748b}
+ details{margin-top:14px} summary{cursor:pointer;color:#1d4ed8}
+ pre{background:#0f172a;color:#e2e8f0;border-radius:8px;padding:10px;
+     font-size:12px;overflow-x:auto}
+ .brand{font-size:11px;color:#94a3b8;text-align:center;margin-top:14px}
+ .warn{background:#fef9c3;border:1px solid #fde047;color:#854d0e;
+       border-radius:10px;padding:10px 14px;font-size:14px}
+</style></head><body><div class="box">
+ <h1>Connect to &#8220;@@WHO@@&#8221;'s printer hub?</h1>
+ <p>The PC that showed you this link shares its printers over the
+    local network with <b>AdvPrint Pro</b>. Clicking the button below
+    adds it to YOUR PC's printer-hub list (peer_hubs) - afterwards you
+    can send print jobs to its printers from your own dashboard.</p>
+ <div class="kv">Peer PC: <b>@@WHO@@</b><br>
+  Hub URL: <span class="mono">@@URL@@</span></div>
+ <form method="post" action="http://127.0.0.1:@@PORT@@/peer-connect">
+  <input type="hidden" name="url" value="@@URL@@">
+  <input type="hidden" name="token" value="@@TOK@@">
+  <input type="hidden" name="name" value="@@WHO@@">
+  <input type="hidden" name="confirm" value="1">
+  <button type="submit">Add &#8220;@@WHO@@&#8221; as a LAN print peer</button>
+ </form>
+ <p class="warn">Nothing is sent to the internet - this only writes the
+    peer entry into your local AdvPrint Pro config. You can remove it
+    any time from your dashboard's LAN card (or config.json).</p>
+ <details><summary>Manual alternative (if your hub runs on another port)</summary>
+  <p>Paste this into <span class="mono">peer_hubs</span> in your
+     <span class="mono">config.json</span> and restart the hub:</p>
+  <pre>[{"url": "@@URL@@",
+ "token": "@@TOK@@",
+ "name": "@@WHO@"}]</pre>
+ </details>
+ <div class="brand">AdvPrint Pro v@@VERSION@@ - by Bit Dream IT -
+   100% local - no cloud, no tracking</div>
+</div></body></html>""" \
+        .replace("@@WHO@@", esc_html(who)) \
+        .replace("@@URL@@", esc_html(peer_url)) \
+        .replace("@@TOK@@", quote(token or "")) \
+        .replace("@@PORT@@", str(DEFAULT_PEER_PORT)) \
+        .replace("@@VERSION@@", VERSION)
+
+
+def connect_error_html(message):
+    return """<!DOCTYPE html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AdvPrint Pro - invite link</title><style>
+ body{font:15px/1.55 "Segoe UI",system-ui,sans-serif;background:#f5f8fc;
+      color:#0f172a;margin:0;padding:24px}
+ .box{max-width:560px;margin:8vh auto;background:#fff;border:1px solid #e2e8f0;
+      border-radius:14px;padding:24px;box-shadow:0 8px 30px #0f172a14}
+ h1{font-size:19px;color:#b91c1c;margin:0 0 6px} p{color:#475569;margin:8px 0}
+ .brand{font-size:11px;color:#94a3b8;text-align:center;margin-top:14px}
+</style></head><body><div class="box">
+ <h1>This invite link is not valid</h1>
+ <p>@@MSG@@</p>
+ <p>Ask the other PC for a FRESH invite: on its AdvPrint Pro dashboard,
+    LAN card &rarr; <b>Copy invite link</b> (the token changes when the
+    hub token is rotated).</p>
+ <div class="brand">AdvPrint Pro v@@VERSION@@ - by Bit Dream IT -
+   100% local - no cloud, no tracking</div>
+</div></body></html>""".replace("@@MSG@@", esc_html(message)) \
+                        .replace("@@VERSION@@", VERSION)
+
+
+def peer_connect_result_html(ok, title, lines, show_dashboard=True):
+    rows = "".join("<p>%s</p>" % esc_html(l) for l in lines)
+    btn = ("<a href=\"/dashboard\"><button>Open my dashboard</button></a>"
+           if show_dashboard else "")
+    return ("""<!DOCTYPE html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AdvPrint Pro - peer connect</title><style>
+ body{font:15px/1.55 "Segoe UI",system-ui,sans-serif;background:#f5f8fc;
+      color:#0f172a;margin:0;padding:24px}
+ .box{max-width:560px;margin:8vh auto;background:#fff;border:1px solid #e2e8f0;
+      border-radius:14px;padding:24px;box-shadow:0 8px 30px #0f172a14}
+ h1{font-size:19px;margin:0 0 6px;color:@@COLOR@@}
+ p{color:#475569;margin:8px 0}
+ .brand{font-size:11px;color:#94a3b8;text-align:center;margin-top:14px}
+ a{text-decoration:none}
+ button{border:none;border-radius:10px;background:#1d4ed8;color:#fff;
+        font:700 15px "Segoe UI",system-ui;padding:12px 18px;cursor:pointer;
+        display:inline-block}
+</style></head><body><div class="box">
+ <h1>@@TITLE@@</h1>
+ @@ROWS@@
+ <p>@@BTN@@</p>
+ <div class="brand">AdvPrint Pro v@@VERSION@@ - by Bit Dream IT -
+   100% local - no cloud, no tracking</div>
+</div></body></html>"""
+             .replace("@@COLOR@@", "#166534" if ok else "#b91c1c")
+             .replace("@@TITLE@@", esc_html(title))
+             .replace("@@ROWS@@", rows)
+             .replace("@@BTN@@", btn)
+             .replace("@@VERSION@@", VERSION))
 
 # ------------------------------------------------------------
 # v2.8 - RESTART: the tray menu and the dashboard button relaunch

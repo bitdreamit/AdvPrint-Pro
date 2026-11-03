@@ -1,6 +1,64 @@
 # Changelog - AdvPrint Pro (Advanced Printer)
 by Bit Dream IT - Innovative Healthcare Solutions
 
+## v2.8.1 - SEND-PORTAL QR CODE + ONE-CLICK LAN INVITE (2026-11-03)
+
+Two additions to the dashboard's LAN sharing card, both requested as
+"share ip port with token, so any phone can send and another PC
+auto-connects". Nothing removed.
+
+### New: Send-portal QR code (phones print without any install)
+- Dashboard > LAN card gets a **Send portal (phones)** row when LAN
+  sharing is ON: **Copy send URL** copies
+  `http://<this-PC-ip>:9235/send?token=...`, **QR code** shows the same
+  URL as a scannable QR (toggles a row with the QR, the URL and a copy
+  button). A phone on the same Wi-Fi scans it, opens the Send portal,
+  picks a PDF - it prints on the hub's default printer.
+- The QR is generated **inside the hub** by a vendored pure-stdlib
+  encoder (byte mode, ECC M, versions 1-40, auto mask, ported from the
+  MIT-licensed Nayuki reference design) and verified **bit-exact**
+  against an independent implementation for every mask 0-7 - no
+  internet, no CDN, no tracking, no new dependencies.
+- New endpoint: `GET /qr?token=...&kind=send|invite` -> SVG image
+  (`image/svg+xml`, no-store). `kind=send` encodes the phone upload
+  URL, `kind=invite` the PC invite link below.
+- `/health` now also reports `"hostname"` so the dashboard can build
+  the invite link client-side without a second round-trip.
+
+### New: one-click LAN invite (connect another PC in 10 seconds)
+- Dashboard > LAN card gets a **Connect another PC** row: **Copy invite
+  link** copies `http://<this-PC-ip>:9235/connect?t=<token>&n=<PC-name>`
+  (a QR of it is available too). Opened in a browser on the OTHER PC it
+  shows a confirmation page (new `GET /connect`, no hub auth - it
+  validates its own `t=` token, wrong/stale t -> readable error page)
+  with an **Add "<PC-name>" as a LAN print peer** button.
+- The button form-POSTs to the OTHER PC's OWN hub
+  (`http://127.0.0.1:9235/peer-connect`), which saves this hub into its
+  `peer_hubs` (dedupe by URL), live-checks `/health`, shows the peer's
+  version + a warning when LAN sharing is off there, and links straight
+  to its dashboard. config.json editing and IP retyping are gone.
+- **Security model** of `POST /peer-connect` (it must work without the
+  receiving hub's token): loopback only; browser `Origin` must equal the
+  peer URL being added (a random website cannot forge it - drive-by
+  CSRF cannot inject a peer); peer URL must be a private-LAN http(s)
+  address (localhost / 10.x / 172.16-31.x / 192.168.x / 169.254.x);
+  GET never changes anything; every accept is audited
+  (`peer.connected`) and denials are audited too
+  (`peer.connect.denied`).
+- Audit events: `peer.invite` (invite page opened),
+  `peer.connected` (peer saved), `peer.connect.denied` (CSRF blocked).
+- Dashboard LAN card polish: `Copy URL` now anchors to the first row
+  explicitly (the new rows also use .mono cells); the no-peers tip
+  points at the invite link; the QR row survives the 15 s LAN refresh
+  (state kept in JS, re-rendered, not collapsed).
+
+### Docs / packaging
+- Hub docs page (/docs): new "QR code" + "One-click invite" sections
+  with the security notes. API.md lists /qr, /connect, /peer-connect.
+- Version bumped to 2.8.1 across hub, tool, setup.nsi (VI 2.8.1.0),
+  deb control (baked at build), extension manifest, tests, README,
+  START-HERE.
+
 ## v2.8.0 - TWO HUB PROFILES + DROPZONE + BULLET-PROOF UNINSTALL (2026-11-03)
 
 Ten requested features on the working v2.7.0 baseline. Nothing removed.

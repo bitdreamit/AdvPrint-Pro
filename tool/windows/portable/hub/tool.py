@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 # ============================================================
 #  AdvPrint Pro - Control Tool  (the friendly one-stop tool)
-#  v2.8.0 - menu [14] Restart AdvPrint added, nothing removed
+#  v2.8.1 - menu [14] Restart AdvPrint added, nothing removed
 # ------------------------------------------------------------
 #  One menu for everything a normal user needs:
 #    start / stop / status, auto-run on/off, Windows service

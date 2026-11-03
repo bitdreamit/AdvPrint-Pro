@@ -144,7 +144,7 @@ def cfg_reset(hub):
              "hold_offline", "reprint_reason_required", "reprint_watermark",
              "printer_groups", "profiles", "peer_forwarding",
              "lockout_exempt_loopback", "max_auth_failures",
-             "lockout_minutes")}
+             "lockout_minutes", "peer_hubs", "share_lan")}
     yield hub
     advprint.CFG.update(snap)
     advprint._AUTH_FAILS.clear()

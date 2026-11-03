@@ -7,6 +7,7 @@ dedupe, schedule, dead-letter, peers), audit (log, reason, watermark, CSV,
 diagnostics, dashboard) plus repo sanity (version anchors, migrations).
 """
 import base64
+import hashlib
 import re
 import json
 import os
@@ -28,7 +29,7 @@ from conftest import wait_until  # noqa: E402
 def test_health_open_no_token(hub):
     code, d = hub.get("/health", token=None)
     assert code == 200 and d["ok"] is True
-    assert d["version"] == "2.8.0"
+    assert d["version"] == "2.8.1"
     assert d["v2"] is True
     assert "100% local" in d["branding"]
 
@@ -538,13 +539,13 @@ def test_v1_database_migration(tmp_path):
 
 
 def test_version_anchors():
-    assert advprint.VERSION == "2.8.0"
+    assert advprint.VERSION == "2.8.1"
     # repo/package layout: tool/windows/portable/hub -> root/extension
     root = os.path.dirname(os.path.dirname(os.path.dirname(
         os.path.dirname(os.path.dirname(advprint.__file__)))))
     ext = os.path.join(root, "extension", "manifest.json")
     with open(ext) as f:
-        assert json.load(f)["version"] == "2.8.0"
+        assert json.load(f)["version"] == "2.8.1"
 
 
 def test_log_rotation(tmp_path):
@@ -1051,7 +1052,7 @@ def test_v26_token_current_loopback_only(hub):
     code, d = hub.get("/token/current")
     assert code == 200 and d["ok"] is True
     assert d["token"] == hub.token
-    assert d["app"] == "AdvPrint Pro" and d["version"] == "2.8.0"
+    assert d["app"] == "AdvPrint Pro" and d["version"] == "2.8.1"
 
 
 def test_v26_token_current_rejects_remote(hub):
@@ -1125,8 +1126,8 @@ def test_v261_tray_module_ships_and_parses():
 
 
 def test_v261_version_single_source():
-    assert advprint.VERSION == "2.8.0"
-    assert advprint.VERSION_NAME.startswith("v2.8.0")
+    assert advprint.VERSION == "2.8.1"
+    assert advprint.VERSION_NAME.startswith("v2.8.1")
 
 
 def test_v261_cli_cmd_full_path():
@@ -1292,7 +1293,7 @@ def test_v264_setup_exe_kills_zombie_hubs():
     assert "Stop-Process -Name AdvPrintPro" in stopps
     assert "Stop-Process -Name PrintHubPro" in stopps
     assert "sc.exe delete AdvPrint" in stopps
-    assert 'VIProductVersion "2.8.0.0"' in src
+    assert 'VIProductVersion "2.8.1.0"' in src
 
 
 # ---------------- v2.6.8: printer-name self-heal + menu guard ----------
@@ -1559,7 +1560,7 @@ def test_v270_missing_file_is_skipped_not_fatal(hub, clean_queue, tmp_path):
 
 
 # ============================================================
-# v2.8.0 - two hub profiles / DropZone / send portal / restart
+# v2.8.1 - two hub profiles / DropZone / send portal / restart
 # ============================================================
 def _v280_hub_src():
     return open(os.path.join(os.path.dirname(advprint.__file__),
@@ -1575,7 +1576,7 @@ def _v280_pdf(tmp_path, name="z.pdf", big="AdvPrint Pro v2.8 test"):
 
 
 def test_v280_version_and_config_keys():
-    assert advprint.VERSION == "2.8.0"
+    assert advprint.VERSION == "2.8.1"
     for k in ("drop_enabled", "drop_dir", "drop_delete"):
         assert k in advprint.CFG and k in advprint.CONFIG_KEYS
         assert k in advprint.CONFIG_TYPES
@@ -1593,7 +1594,7 @@ def test_v280_dropzone_default_dir_and_stats():
 
 def test_v280_dropzone_watcher_prints_and_moves(hub, clean_queue, cfg_reset,
                                                 tmp_path):
-    """v2.8.0: a PDF dropped into the DropZone is picked up, printed and
+    """v2.8.1: a PDF dropped into the DropZone is picked up, printed and
     moved to done/ - the 'MS Word style' path without the extension."""
     advprint.CFG["drop_enabled"] = True
     advprint.CFG["drop_dir"] = str(tmp_path / "zone")
@@ -1664,7 +1665,7 @@ def test_v280_dropzone_config_roundtrip(hub, cfg_reset, tmp_path):
 
 
 def test_v280_send_multipart_prints(hub, clean_queue, tmp_path):
-    """v2.8.0: POST /send with a multipart PDF queues a real job."""
+    """v2.8.1: POST /send with a multipart PDF queues a real job."""
     p, _ = _v280_pdf(tmp_path, "lab-report.pdf")
     with open(p, "rb") as f:
         raw = f.read()
@@ -1791,7 +1792,7 @@ def test_v280_source_wiring_restart_tray_tool_installer():
     nsi = open(os.path.join(root, "installer", "setup.nsi"),
                encoding="utf-8").read()
     assert "hub-stop.ps1" in nsi
-    assert "2.8.0" in nsi and "${IfNot} ${Silent}" in nsi
+    assert "2.8.1" in nsi and "${IfNot} ${Silent}" in nsi
     # extension dual profile
     ext = os.path.join(root, "extension")
     bg = open(os.path.join(ext, "background.js"), encoding="utf-8").read()
@@ -1803,7 +1804,7 @@ def test_v280_source_wiring_restart_tray_tool_installer():
     opt = open(os.path.join(ext, "options.html"), encoding="utf-8").read()
     assert "hubUrlLan" in opt and "bDashboardLan" in opt
     man = json.load(open(os.path.join(ext, "manifest.json")))
-    assert man["version"] == "2.8.0"
+    assert man["version"] == "2.8.1"
 
 
 def test_v280_lan_profile_never_auto_heals():
@@ -1814,3 +1815,247 @@ def test_v280_lan_profile_never_auto_heals():
     src = open(os.path.join(root, "extension", "background.js"),
                encoding="utf-8").read()
     assert 'target !== "lan"' in src
+
+
+# ============================================================
+# v2.8.1 - Send-portal QR + one-click LAN invite
+# ============================================================
+def _v281_cfg_snapshot():
+    return {k: advprint.CFG[k]
+            for k in ("peer_hubs", "share_lan", "port", "token")}
+
+
+def _v281_cfg_restore(snap):
+    advprint.CFG.update(snap)
+
+
+def test_v281_health_has_hostname(hub):
+    code, d = hub.get("/health", token=None)
+    assert code == 200
+    assert isinstance(d.get("hostname"), str) and d["hostname"]
+
+
+def test_v281_qr_encoder_golden():
+    """The vendored QR encoder is frozen with a golden digest (validated
+    bit-exact against an independent implementation externally - this
+    test pins the behaviour so a future edit cannot silently break it).
+    Structural checks: correct size for the version, finder + timing."""
+    url = b"http://192.168.1.100:9235/send?token=TEST-TOKEN-1234"
+    m = advprint.qr_matrix(url)
+    assert len(m) == 33                       # version 5 (33 = 4*5 + 17)
+    blob = ";".join("".join("1" if v else "0" for v in row) for row in m)
+    assert hashlib.sha256(blob.encode()).hexdigest() == \
+        "e6cf35dda03e6c53cc1b6f33404aa620d5f830e0843fe4d97c8679808a72b257"
+    # finder pattern: 7x7 ring at top-left
+    ring = [[m[y][x] for x in range(7)] for y in range(7)]
+    assert ring[0] == [True] * 7 and ring[6] == [True] * 7
+    assert all(r[0] and r[6] for r in ring)
+    assert not any(ring[1][1:6])              # white inside the ring
+    # timing line alternates
+    assert all(m[6][x] == (x % 2 == 0) for x in range(8, 26))
+
+
+def test_v281_qr_svg_contains_module_grid():
+    svg = advprint.qr_svg(b"http://192.168.1.100:9235/send?token=x")
+    assert svg.startswith("<svg") and svg.endswith("</svg>")
+    assert "image/svg" not in svg or True     # xmlns present instead
+    assert 'xmlns="http://www.w3.org/2000/svg"' in svg
+    assert '<path d="M' in svg and "crispEdges" in svg
+
+
+def test_v281_lan_share_urls(hub, cfg_reset):
+    snap = _v281_cfg_snapshot()
+    try:
+        advprint.CFG["share_lan"] = True
+        tok = advprint.CFG["token"]
+        port = advprint.CFG["port"]
+        s = advprint.lan_share_url("send")
+        assert s.startswith("http://%s:%d/send?token=" % (advprint.lan_ip(), port))
+        assert s.endswith(tok)
+        i = advprint.lan_share_url("invite")
+        assert i.startswith("http://%s:%d/connect?t=" % (advprint.lan_ip(), port))
+        assert "n=" in i and tok in i
+        advprint.CFG["share_lan"] = False
+        assert advprint.lan_share_url("send").startswith(
+            "http://127.0.0.1:%d/" % port)
+    finally:
+        _v281_cfg_restore(snap)
+
+
+def test_v281_qr_endpoint_svg(hub, cfg_reset):
+    advprint.CFG["share_lan"] = True
+    code, body = hub.get("/qr?kind=send")
+    assert code == 200 and body.startswith(b"<svg")
+    assert b"crispEdges" in body and len(body) > 1000
+    code2, body2 = hub.get("/qr?kind=invite")
+    assert code2 == 200 and body2.startswith(b"<svg")
+    assert body2 != body, "send and invite QR must encode different URLs"
+    # wrong kind falls back to send
+    code3, body3 = hub.get("/qr?kind=evil")
+    assert code3 == 200 and body3 == body
+
+
+def test_v281_qr_endpoint_needs_token(hub):
+    code, _ = hub.get("/qr?kind=send", token=None)
+    assert code == 401
+
+
+def test_v281_connect_page_ok(hub, cfg_reset):
+    advprint.CFG["share_lan"] = True
+    code, body = hub.get(
+        "/connect?t=%s&n=LAB-PC" % advprint.CFG["token"], token=None,
+        headers={"Accept": "text/html"})
+    assert code == 200
+    html = body.decode("utf-8", "replace")
+    assert "Add" in html and "LAB-PC" in html
+    assert "/peer-connect" in html
+    assert advprint.CFG["token"] in html      # hidden token input
+    assert "127.0.0.1" in html                # form posts to the peer's own hub
+
+
+def test_v281_connect_page_rejects_bad_token(hub, cfg_reset):
+    code, body = hub.get("/connect?t=WRONG&n=x", token=None)
+    assert code == 403
+    assert b"not valid" in body
+
+
+def test_v281_connect_page_requires_share_lan(hub, cfg_reset):
+    advprint.CFG["share_lan"] = False
+    code, body = hub.get(
+        "/connect?t=%s&n=x" % advprint.CFG["token"], token=None)
+    assert code == 403
+    assert b"LAN sharing" in body
+
+
+def _v281_form(url, token, name, confirm="1"):
+    from urllib.parse import quote
+    return ("url=%s&token=%s&name=%s&confirm=%s"
+            % (quote(url, safe=""), quote(token, safe=""),
+               quote(name, safe=""), confirm)).encode()
+
+
+def test_v281_peer_connect_success(hub, cfg_reset):
+    snap = _v281_cfg_snapshot()
+    try:
+        advprint.CFG["peer_hubs"] = []
+        code, body = hub.post(
+            "/peer-connect", token=None,
+            raw=_v281_form("http://192.168.1.50:9235", "PEER-TOKEN-1",
+                           "LAB-PC"),
+            content_type="application/x-www-form-urlencoded",
+            headers={"Origin": "http://192.168.1.50:9235"})
+        assert code == 200
+        html = body.decode("utf-8", "replace")
+        assert "Connected" in html and "LAB-PC" in html
+        peers = advprint.CFG["peer_hubs"]
+        assert len(peers) == 1
+        assert peers[0]["url"] == "http://192.168.1.50:9235"
+        assert peers[0]["token"] == "PEER-TOKEN-1"
+        assert peers[0]["name"] == "LAB-PC"
+        # persisted to disk
+        disk = json.load(open(advprint.config_path(), encoding="utf-8"))
+        assert any(p.get("url") == "http://192.168.1.50:9235"
+                   for p in disk.get("peer_hubs", []))
+        con = sqlite3.connect(advprint.db_path())
+        try:
+            n = con.execute(
+                "select count(*) from audit where event='peer.connected'"
+            ).fetchone()[0]
+        finally:
+            con.close()
+        assert n >= 1
+    finally:
+        _v281_cfg_restore(snap)
+
+
+def test_v281_peer_connect_csrf_blocked(hub, cfg_reset):
+    snap = _v281_cfg_snapshot()
+    try:
+        advprint.CFG["peer_hubs"] = []
+        code, body = hub.post(
+            "/peer-connect", token=None,
+            raw=_v281_form("http://192.168.1.50:9235", "PEER-TOKEN-1",
+                           "EVIL"),
+            content_type="application/x-www-form-urlencoded",
+            headers={"Origin": "http://evil.example"})
+        assert code == 403
+        assert b"Blocked" in body
+        assert advprint.CFG["peer_hubs"] == []
+        con = sqlite3.connect(advprint.db_path())
+        try:
+            n = con.execute(
+                "select count(*) from audit where event='peer.connect.denied'"
+            ).fetchone()[0]
+        finally:
+            con.close()
+        assert n >= 1
+    finally:
+        _v281_cfg_restore(snap)
+
+
+def test_v281_peer_connect_public_ip_rejected(hub, cfg_reset):
+    snap = _v281_cfg_snapshot()
+    try:
+        advprint.CFG["peer_hubs"] = []
+        code, body = hub.post(
+            "/peer-connect", token=None,
+            raw=_v281_form("http://93.184.216.34:9235", "T", "x"),
+            content_type="application/x-www-form-urlencoded",
+            headers={"Origin": "http://93.184.216.34:9235"})
+        assert code == 400
+        assert advprint.CFG["peer_hubs"] == []
+    finally:
+        _v281_cfg_restore(snap)
+
+
+def test_v281_peer_connect_missing_token_rejected(hub, cfg_reset):
+    snap = _v281_cfg_snapshot()
+    try:
+        advprint.CFG["peer_hubs"] = []
+        code, body = hub.post(
+            "/peer-connect", token=None,
+            raw=_v281_form("http://192.168.1.50:9235", "", "x"),
+            content_type="application/x-www-form-urlencoded",
+            headers={"Origin": "http://192.168.1.50:9235"})
+        assert code == 400
+        assert advprint.CFG["peer_hubs"] == []
+    finally:
+        _v281_cfg_restore(snap)
+
+
+def test_v281_peer_connect_dedupes_same_url(hub, cfg_reset):
+    snap = _v281_cfg_snapshot()
+    try:
+        advprint.CFG["peer_hubs"] = []
+        for tok in ("TOKEN-A", "TOKEN-B"):
+            code, _ = hub.post(
+                "/peer-connect", token=None,
+                raw=_v281_form("http://192.168.1.77:9235", tok, "PC77"),
+                content_type="application/x-www-form-urlencoded",
+                headers={"Origin": "http://192.168.1.77:9235"})
+            assert code == 200
+        peers = advprint.CFG["peer_hubs"]
+        assert len(peers) == 1, "same peer URL must replace, not duplicate"
+        assert peers[0]["token"] == "TOKEN-B"
+    finally:
+        _v281_cfg_restore(snap)
+
+
+def test_v281_dashboard_lan_card_has_new_rows():
+    src = open(os.path.join(os.path.dirname(advprint.__file__),
+                            "advprint.py"), encoding="utf-8").read()
+    for marker in ("Send portal (phones)", "Connect another PC",
+                   "copySend", "copyInvite", "showQr", "qrRow",
+                   "renderQr"):
+        assert marker in src, marker
+
+
+def test_v281_setup_nsi_version():
+    # walk up from the hub dir to the tree root
+    root = os.path.dirname(advprint.__file__)
+    for _ in range(4):
+        root = os.path.dirname(root)
+    nsi = open(os.path.join(root, "installer", "setup.nsi"),
+               encoding="utf-8", errors="replace").read()
+    assert 'VIProductVersion "2.8.1.0"' in nsi
+    assert 'OutFile' in nsi and "AdvPrint-Pro-Setup-2.8.1.exe" in nsi

@@ -5,7 +5,7 @@
 <title>AdvPrint Pro (Advanced Printer) — Full Setup Guide A to Z</title>
 <style>
   @page { size: A4; margin: 16mm 15mm 16mm 15mm;
-          @bottom-center { content: "AdvPrint Pro 2.8.0 — Full Setup Guide — page " counter(page) " / " counter(pages);
+          @bottom-center { content: "AdvPrint Pro 2.8.1 — Full Setup Guide — page " counter(page) " / " counter(pages);
                            font: 9.5px "Segoe UI", sans-serif; color: #64748b; } }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font: 10.5px/1.55 "Segoe UI", "Noto Sans", sans-serif; color: #0f172a; }
@@ -61,7 +61,7 @@
   <div class="sub">Advanced Printer — silent printing for every web page, PDF, application and receipt printer</div>
   <div class="org">by Bit Dream IT — Innovative Healthcare Solutions</div>
   <div class="meta">
-    Version 2.8.0 — Enterprise Edition<br>
+    Version 2.8.1 — Enterprise Edition<br>
     Full Setup Guide — A to Z<br><br>
     100% local · no cloud · no tracking · MIT licensed<br>
     Windows 7/8/10/11 · Windows Server · Debian/Ubuntu/Mint · macOS
@@ -124,8 +124,8 @@ Your printer — or ~/.advprint/files if the destination is "save as PDF"</pre>
 <h2>2. Install in 3 minutes</h2>
 <h3>2.1 Windows — the one-time installer (recommended)</h3>
 <ol>
-<li>Download <span class="mono">AdvPrint-Pro-v2.8.0-FULL.zip</span> and unzip it.</li>
-<li>Run <span class="mono">AdvPrint-Pro-Setup-2.8.0.exe</span>. Windows asks for admin once (UAC — the exe requests it itself), no Python needed —
+<li>Download <span class="mono">AdvPrint-Pro-v2.8.1-FULL.zip</span> and unzip it.</li>
+<li>Run <span class="mono">AdvPrint-Pro-Setup-2.8.1.exe</span>. Windows asks for admin once (UAC — the exe requests it itself), no Python needed —
     the setup carries a <b>complete Python 3.11.9 runtime</b> (this is exactly what the broken 2.5.3 download missed:
     if an installer is smaller than ~9&nbsp;MB it is incomplete — re-download).</li>
 <li>Setup registers the <b>Startup app "AdvPrint Pro"</b> (Task Manager → Startup apps), creates Start Menu
@@ -146,7 +146,7 @@ the hub is a plain stdlib Python script, signed-off and open source (MIT).</div>
 </ol>
 
 <h3>2.3 Linux / Debian / Ubuntu / Mint — the .deb</h3>
-<pre>sudo apt install ./advprint-pro_2.8.0_all.deb
+<pre>sudo apt install ./advprint-pro_2.8.1_all.deb
 advprint-start            # start now
 advprint token            # show the current token
 advprint livetest         # full A-to-Z self-test</pre>
@@ -281,6 +281,8 @@ All cards refresh live (5–15 s).</p>
 <tr><td>Queue (waiting + printing)</td><td>Cancel · Print now · Shift per job.</td></tr>
 <tr><td><b>Job history (v2.7.0)</b></td><td>Full manager: <b>filter</b> by status (incl. one-click “Not printed”), <b>search</b> title/printer/#id, load 50/100/300/1000, paging, <b>tick rows</b> (check / uncheck all) with a live “N selected” counter, <b>Reprint selected</b>, <b>Reprint all non-printed</b>, <b>Clear ALL history</b> (finished jobs only — waiting jobs are never touched), per-row Retry / Reprint.</td></tr>
 <tr><td>Audit trail</td><td>Latest events: who printed what from where, reprint reasons, token errors.</td></tr>
+<tr><td><b>Send portal QR (v2.8.1)</b></td><td>LAN card &rarr; <b>Copy send URL</b> / <b>QR code</b>: phones scan the QR and upload a PDF to the Send portal — it prints on the default printer. The QR is drawn by a QR encoder embedded in the hub (verified bit-exact; no internet used).</td></tr>
+<tr><td><b>One-click invite (v2.8.1)</b></td><td>LAN card &rarr; <b>Copy invite link</b>: open the link on another PC and click <i>Add as LAN print peer</i> — the peer is saved into that PC's config automatically and health-checked. Removable any time from the same LAN card.</td></tr>
 <tr><td><b>DropZone (v2.8.0)</b></td><td>Print WITHOUT the extension: pick a folder; in Word / Excel / ANY app print to “Microsoft Print to PDF” and save the PDF into it — AdvPrint prints it seconds later and moves it to <span class="mono">done\\</span>. Live on/off (no restart), delete-after-print option, <b>Open folder</b> button. Phones/tablets print through the <b>Send portal</b> button (<span class="mono">/send</span>) — token-protected, 100% local.</td></tr>
 <tr><td><b>Restart hub (v2.8.0)</b></td><td>One button in the toolbar: the hub relaunches ITSELF as a new process (queued jobs, settings and history kept) and this page reloads automatically when <span class="mono">/health</span> answers again. Same restart lives in the tray menu (Restart hub), AdvPrint Tool [14] and <span class="mono">POST /restart</span>.</td></tr>
 <tr><td>Live debug &amp; test tool + Hub settings</td><td><b>Send test print &amp; watch live</b> (job → printer verdict), <b>Release ALL held jobs</b>, <b>Full self-test (A-to-Z)</b>, SumatraPDF path setting. <b>v2.7.0:</b> both panels now sit properly INSIDE the page (they used to hang below it, unstyled and full-width).</td></tr>
@@ -311,6 +313,22 @@ Files land in <span class="mono">~/Downloads/AdvPrint</span> or the folder set i
 
 <!-- ============ 7 ============ -->
 <h2>7. LAN / IP — share one printer with every PC</h2>
+<div class="note" style="border:1px solid #a7f3d0;background:#ecfdf5;border-radius:10px;padding:12px 14px;margin:10px 0 14px">
+<b>v2.8.1 — QR CODE FOR PHONES + ONE-CLICK INVITE (both 100% local).</b><br>
+<b>Send portal (phones)</b> row on the dashboard LAN card: <b>Copy send URL</b> copies
+<span class="mono">http://&lt;this-PC-ip&gt;:9235/send?token=…</span> and <b>QR code</b> shows the same URL
+as a scannable QR (generated inside the hub — no internet, no CDN). Any phone or tablet on the same
+Wi-Fi scans it, opens the Send portal, picks a PDF — it prints on this PC's default printer seconds later.<br>
+<b>Connect another PC</b> row: <b>Copy invite link</b> copies
+<span class="mono">http://&lt;this-PC-ip&gt;:9235/connect?t=&lt;token&gt;&amp;n=&lt;PC-name&gt;</span>. Open that link on the
+OTHER PC (chat, e-mail, QR — any way): it shows a confirmation page with an <b>Add "PC-name" as a LAN print
+peer</b> button. One click saves this hub into the other PC's <span class="mono">peer_hubs</span> automatically
+(its own hub does the writing via <span class="mono">POST /peer-connect</span>), checks the hub is online and
+shows the peer's version. No retyping IP or token, no config.json editing. Safe by design: loopback-only,
+private-LAN URLs only, explicit click required, Origin must match the added hub, and every accept is audited
+(<span class="mono">peer.connected</span>). API: <span class="mono">GET /qr?token=…&amp;kind=send|invite</span>
+returns the QR as SVG.
+</div>
 <div class="note" style="border:1px solid #bfdbfe;background:#eff6ff;border-radius:10px;padding:12px 14px;margin:10px 0 14px">
 <b>v2.8.0 — TWO HUB PROFILES (Self PC + LAN PC).</b> The extension now keeps two complete
 hub profiles. <b>Connection 1 - Self PC</b> = this computer's hub URL + token (used when
@@ -405,7 +423,7 @@ environment variables (<span class="mono">ADVPRINT_*</span>; legacy <span class=
 <!-- ============ 11 ============ -->
 <h2>11. Enterprise edition — silent install, policy, service</h2>
 <h3>11.1 Silent / scripted Windows install</h3>
-<pre>AdvPrint-Pro-Setup-2.8.0.exe /S          # silent (UAC once), hub auto-starts
+<pre>AdvPrint-Pro-Setup-2.8.1.exe /S          # silent (UAC once), hub auto-starts
 # enterprise rollout via Intune/GPO/SCCM: run per user, no elevation needed</pre>
 <h3>11.2 Managed policy (force settings on all PCs)</h3>
 <p>Deploy <span class="mono">extension/managed.json</span> content as Chrome policy
@@ -463,7 +481,7 @@ curl -X POST -H "X-AdvPrint-Token: $TOKEN" http://127.0.0.1:9235/livetest</pre>
 <h2>13. Troubleshooting — every known problem and its fix</h2>
 <table>
 <tr><th>Symptom</th><th>Cause → Fix</th></tr>
-<tr><td>Setup says <i>cannot access / Access is denied</i></td><td>Incomplete/damaged download (pre-2.6 bug) or Mark-of-the-Web → re-download the 2.8.0 zip (setup ≈ 9.7 MB), right-click zip → Properties → Unblock, or run <span class="mono">install-windows.bat</span> which unblocks automatically.</td></tr>
+<tr><td>Setup says <i>cannot access / Access is denied</i></td><td>Incomplete/damaged download (pre-2.6 bug) or Mark-of-the-Web → re-download the 2.8.1 zip (setup ≈ 9.7 MB), right-click zip → Properties → Unblock, or run <span class="mono">install-windows.bat</span> which unblocks automatically.</td></tr>
 <tr><td>Dashboard shows “needs the current token”</td><td>Stale bookmark → press the green <b>Fix it now</b> button on that very page (hub PC), or tray → Open dashboard, or extension → Detect token.</td></tr>
 <tr><td>Extension shows 401 / token rejected</td><td>Options → Settings → <b>Detect token</b> (or paste the token from <span class="mono">advprint token</span>). After a rotation always re-detect.</td></tr>
 <tr><td>Nothing prints, no error</td><td>Debug tab → Run full self-test → fix the [!!] line (usually SumatraPDF missing or no default printer). Then send a test print &amp; watch live.</td></tr>
@@ -523,7 +541,7 @@ Linux: <span class="mono">sudo apt remove advprint-pro</span> + <span class="mon
 the tray always opens the dashboard with the right token, and the error page itself offers the one-click fix.
 That is the v2.6 promise: <b>auto security, zero manual Security-tab surgery</b>.</div>
 
-<p style="margin-top:18px;color:#64748b;font-size:9.5px">AdvPrint Pro (Advanced Printer) v2.8.0 —
+<p style="margin-top:18px;color:#64748b;font-size:9.5px">AdvPrint Pro (Advanced Printer) v2.8.1 —
 by Bit Dream IT — Innovative Healthcare Solutions — MIT license — 100% local, no cloud, no tracking.
 Repository: github.com/bitdreamit/AdvPrint-Pro</p>
 
