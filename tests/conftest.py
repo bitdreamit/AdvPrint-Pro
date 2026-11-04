@@ -103,6 +103,11 @@ def hub(tmp_path_factory):
     h = Hub("http://127.0.0.1:%d" % port, advprint.CFG["token"])
 
     # ---- stub the OS print backends (no real printer in CI) ----
+    # keep the REAL functions - v2.9 destination tests re-bind them to
+    # drive a full worker -> IP-printer end-to-end print
+    h.real_print_file = advprint.print_file
+    h.real_print_raw = advprint.print_raw
+
     def fake_print_file(path, kind="a4", printer="", copies=1, job_id=None,
                         pages=None, duplex=None, paper_size=None, tray=None,
                         per_sheet=None, quality=None):

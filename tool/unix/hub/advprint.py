@@ -60,6 +60,7 @@ import sys
 import tempfile
 import threading
 import time
+import urllib.error
 import urllib.request
 import webbrowser
 from datetime import datetime, timedelta
@@ -92,8 +93,8 @@ if _HUB_DIR not in sys.path:
     sys.path.insert(0, _HUB_DIR)
 
 
-VERSION = "2.9.0"
-VERSION_NAME = ("v2.9.0 (NETWORK PRINTER MODE: add this PC like a real"
+VERSION = "2.9.1"
+VERSION_NAME = ("v2.9.1 (NETWORK PRINTER MODE: add this PC like a real"
                 " IP printer - IPP at /ipp/print for Windows 10/11 'add a"
                 " printer by URL' and phone print services, plus a"
                 " JetDirect RAW listener on TCP 9100 for the classic"
@@ -103,7 +104,14 @@ VERSION_NAME = ("v2.9.0 (NETWORK PRINTER MODE: add this PC like a real"
                 " QR is FIXED (token now accepted from the portal link in"
                 " token_header_only mode too), the extension shows ONE"
                 " version everywhere read from the manifest, and the tray"
-                " menu is smooth - every action runs in its own thread)")
+                " menu is smooth - every action runs in its own thread."
+                " Print DESTINATION is any printer - the OS default,"
+                " any installed printer, or an upstream IP printer (raw"
+                " JetDirect or IPP): PCs and phones that add this hub as"
+                " THEIR network printer print through exactly that"
+                " destination. NEW IN 2.9.1: responsive dashboard tables"
+                " - every column, button and option is visible on load,"
+                " no more content hidden inside an inner scroll)")
 FULL_BRAND = ("AdvPrint Pro (Advanced Printer) by "
               "Bit Dream IT - Innovative Healthcare Solutions")
 BRANDING = ("AdvPrint Pro (Advanced Printer) - Version %s - by "
@@ -213,6 +221,18 @@ CFG = {
     "raw_printer_port": 9100,         # v2.9: JetDirect RAW listener port for
                                       #  Windows "Standard TCP/IP port"
                                       #  printers (0 = off)
+    "dest_mode": "",                  # v2.9: where jobs print. "" = auto
+                                      #  (old behaviour: the selected
+                                      #  printer when one is set, otherwise
+                                      #  the OS default). ANY printer works:
+                                      #  "default" | "selected" | "ip"
+    "ip_printer_host": "",            # v2.9: upstream network printer IP /
+                                      #  hostname (dest_mode "ip" forwards
+                                      #  every job there)
+    "ip_printer_port": 0,             # v2.9: 0 = protocol default
+                                      #  (raw -> 9100, ipp -> 631)
+    "ip_printer_proto": "raw",        # v2.9: "raw" (JetDirect) or
+                                      #  "ipp" (IPP Print-Job)
     "escpos_codepage": "cp437",       # v2.1: raw ESC/POS text codepage
                                       #  (cp437/cp850/cp866/... - Bangla is
                                       #  NOT in any codepage: the hub auto-
@@ -266,6 +286,8 @@ CONFIG_KEYS = ("token", "token_header_only", "allowed_origins",
                "share_lan", "escpos_codepage", "thermal_text_engine",
                "log_max_mb", "log_backups", "debug", "instant_auto_queue",
                "printer", "file_dir", "sumatra_path",
+               "dest_mode", "ip_printer_host", "ip_printer_port",
+               "ip_printer_proto",
                "drop_enabled", "drop_dir", "drop_delete")
 CONFIG_TYPES = {"token_header_only": bool, "allowed_origins": list,
                 "pdf_url_allowed_hosts": list, "max_auth_failures": int,
@@ -281,6 +303,8 @@ CONFIG_TYPES = {"token_header_only": bool, "allowed_origins": list,
                 "log_max_mb": int, "log_backups": int,
                 "debug": bool, "instant_auto_queue": bool,
                 "sumatra_path": str,   # v2.5: manual SumatraPDF.exe override
+                "dest_mode": str, "ip_printer_host": str,
+                "ip_printer_port": int, "ip_printer_proto": str,
                 "drop_enabled": bool, "drop_dir": str,
                 "drop_delete": bool}   # v2.8 DropZone settings
 
@@ -1234,6 +1258,21 @@ def build_health_snapshot():
                    if CFG.get("share_lan") else None,
         "raw_printer_port": int(CFG.get("raw_printer_port") or 0),
         "raw_active": bool(_RAW_TCP is not None),
+        # v2.9: print destination - ANY printer (default / selected / IP)
+        "dest_mode": (CFG.get("dest_mode")
+                      or ("selected" if CFG.get("printer")
+                          else "default")),
+        "selected_printer": CFG.get("printer") or "",
+        "dest_display": dest_display(),
+        "ip_printer": {"host": CFG.get("ip_printer_host") or "",
+                       "port": int(CFG.get("ip_printer_port") or 0),
+                       "proto": CFG.get("ip_printer_proto") or "raw"},
+        # v2.9: IP PRINTER MODE - the hub IS a network printer (any PC
+        # or phone can add it at /ipp/print or the RAW port) and every
+        # incoming job prints to the configured destination
+        "ip_printer_mode": bool(CFG.get("share_lan") and (
+            CFG.get("ipp_printer", True) or
+            int(CFG.get("raw_printer_port") or 0) > 0)),
         "lan_active": bool(BOUND_LAN),
         "lan_url": ("http://%s:%d" % (lan_ip(), CFG["port"]))
                    if CFG.get("share_lan") else None,
@@ -1822,6 +1861,177 @@ def fix_printer_name(name, st):
     return None, None
 
 
+# ------------------------------------------------------------
+# v2.9: print DESTINATION routing - ANY printer.
+# Every PC or phone can add THIS hub as their IP printer; the hub then
+# delivers every incoming job to the destination configured here: the
+# OS default printer, ANY installed printer ("selected"), or an
+# upstream IP printer (a real network printer at IP:port - JetDirect
+# RAW or IPP Print-Job). A per-job printer name always wins.
+# ------------------------------------------------------------
+
+
+def resolve_dest(explicit=""):
+    """WHERE does a print job go? Returns ("local", name) - name ""
+    means the OS default printer - or ("ip", (host, port, proto)).
+    A per-job printer name always wins and is always local."""
+    if explicit:
+        return "local", str(explicit)
+    mode = str(CFG.get("dest_mode") or "")
+    if mode not in ("default", "selected", "ip"):
+        # legacy behaviour: an empty dest_mode follows the old chain -
+        # the selected printer when one is set, otherwise the default
+        mode = "selected" if CFG.get("printer") else "default"
+    if mode == "ip":
+        host = str(CFG.get("ip_printer_host") or "").strip()
+        if host:
+            proto = str(CFG.get("ip_printer_proto") or "raw").lower()
+            if proto not in ("raw", "ipp"):
+                proto = "raw"
+            try:
+                port = int(CFG.get("ip_printer_port") or 0)
+            except (TypeError, ValueError):
+                port = 0
+            if port <= 0:
+                port = 631 if proto == "ipp" else 9100
+            return "ip", (host, port, proto)
+        return "local", ""          # not configured - OS default
+    if mode == "selected":
+        return "local", CFG.get("printer") or ""
+    return "local", ""              # OS default printer
+
+
+def dest_display():
+    """Human name of the configured destination (no per-job override)."""
+    kind, dest = resolve_dest()
+    if kind == "ip":
+        return "IP printer %s:%d (%s)" % (dest[0], dest[1], dest[2])
+    return dest or "(default printer)"
+
+
+def ip_printer_probe(dest, timeout=3.0):
+    """TCP reachability of the upstream IP printer: 'ready'|'offline'."""
+    host, port, _proto = dest
+    try:
+        s = socket.create_connection((host, port), timeout=timeout)
+        try:
+            s.close()
+        except OSError:
+            pass
+        return "ready"
+    except Exception:
+        return "offline"
+
+
+def _raw_client_send(host, port, data):
+    """JetDirect: connect, stream the bytes, drain the silent ACK."""
+    s = socket.create_connection((host, port), timeout=20)
+    try:
+        view = memoryview(data)
+        while view:
+            sent = s.send(view[:65536])
+            if sent <= 0:
+                raise RuntimeError("IP printer closed the connection")
+            view = view[sent:]
+        try:                        # most printers never answer - just wait
+            s.settimeout(4)
+            while s.recv(4096):
+                pass
+        except (socket.timeout, OSError):
+            pass
+    finally:
+        try:
+            s.close()
+        except OSError:
+            pass
+
+
+def _ipp_client_print(host, port, data, title, docformat, copies=1):
+    """Minimal IPP 1.1 Print-Job CLIENT for the upstream IP printer.
+    Raises RuntimeError on any transport or IPP error."""
+    path = "/ipp/print"
+    rid = (int(time.time() * 1000) & 0x7FFFFFFF) or 1
+    opg = _ipp_group(0x01, [
+        _ipp_attr(0x47, "attributes-charset", "utf-8"),
+        _ipp_attr(0x48, "attributes-natural-language", "en"),
+        _ipp_attr(0x45, "printer-uri", "ipp://%s:%d%s" % (host, port, path)),
+        _ipp_attr(0x42, "requesting-user-name", "AdvPrint Pro"),
+        _ipp_attr(0x42, "job-name", (title or "AdvPrint Pro job")[:80]),
+        _ipp_attr(0x49, "document-format", docformat),
+    ])
+    jobg = b""
+    if copies > 1:                  # copies is a job-template integer
+        jobg = _ipp_group(0x02, [
+            _ipp_attr(0x21, "copies",
+                      int(copies).to_bytes(4, "big", signed=True))])
+    body = (bytes((1, 1)) + (0x0002).to_bytes(2, "big") +
+            int(rid).to_bytes(4, "big") + opg + jobg + b"\x03" + data)
+    req = urllib.request.Request(
+        "http://%s:%d%s" % (host, port, path), data=body, method="POST",
+        headers={"Content-Type": IPP_MIME,
+                 "User-Agent": "AdvPrint-Pro/%s" % VERSION})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            code = r.getcode()
+            payload = r.read(65536)
+    except urllib.error.HTTPError as e:
+        code = e.code
+        try:
+            payload = e.read(65536)
+        except Exception:
+            payload = b""
+    except Exception as e:
+        raise RuntimeError("IP printer %s:%d unreachable: %s"
+                           % (host, port, e))
+    if code != 200:
+        raise RuntimeError("IP printer answered HTTP %s" % code)
+    if len(payload) >= 4 and payload[0] == 1:
+        st = int.from_bytes(payload[2:4], "big")
+        if st >= 0x0400:            # client-/server-error band
+            raise RuntimeError("IP printer IPP error 0x%04X" % st)
+    else:
+        log("[IPP] printer reply not IPP-shaped (HTTP %s) -"
+            " assuming accepted" % code)
+
+
+def ip_printer_send(data, title, dest=None, docformat="application/pdf",
+                    copies=1):
+    """Push bytes to the upstream IP printer (dest_mode "ip").
+    Returns a display name like 'IP printer 192.168.1.50:9100 (raw)'."""
+    if dest is None:
+        kind, dest = resolve_dest()
+        if kind != "ip":
+            raise RuntimeError("no IP printer destination is configured"
+                               " (Settings > Print destination)")
+    host, port, proto = dest
+    host = str(host).strip()
+    if not host:
+        raise RuntimeError("IP printer host is empty")
+    copies = max(1, min(int(copies or 1), 50))
+    if proto == "ipp":
+        _ipp_client_print(host, port, data, title, docformat, copies)
+    else:
+        for _i in range(copies):
+            _raw_client_send(host, port, data)
+    return "IP printer %s:%d (%s)" % (host, port, proto)
+
+
+def _print_file_to_ip(path, _kind, dest, copies, job_id=None):
+    """Print a stored file (PDF) straight to the upstream IP printer.
+    Modern network printers accept PDF directly on the JetDirect port;
+    IPP receives it as application/pdf."""
+    title = os.path.splitext(os.path.basename(path))[0] or "AdvPrint Pro job"
+    with open(path, "rb") as f:
+        data = f.read()
+    name = ip_printer_send(data, title, dest,
+                           docformat="application/pdf", copies=copies)
+    if job_id:
+        log("[PRINT] job #%d -> %s (%s)" % (job_id, name, title))
+    else:
+        log("[PRINT] -> %s (%s)" % (name, title))
+    return name
+
+
 def print_file(path, kind="a4", printer="", copies=1, job_id=None,
                pages=None, duplex=None, paper_size=None, tray=None,
                per_sheet=None, quality=None, dpi=None):
@@ -1837,7 +2047,12 @@ def print_file(path, kind="a4", printer="", copies=1, job_id=None,
     "600", "600dpi" or dpi=600 into that form before calling us).
     """
     copies = max(1, min(int(copies or 1), 50))
-    target = printer or CFG["printer"] or default_printer() or ""
+    # v2.9: destination routing - ANY printer. A per-job name always
+    # wins; otherwise the hub destination (default / selected / IP).
+    dkind, dtarget = resolve_dest(printer)
+    if dkind == "ip":
+        return _print_file_to_ip(path, kind, dtarget, copies, job_id)
+    target = dtarget or default_printer() or ""
 
     def register(proc):
         with _CURRENT_LOCK:
@@ -2326,24 +2541,43 @@ def worker():
             if CFG.get("debug"):
                 log("[DEBUG] worker picked job #%d (%s) for printer %r"
                     % (job["id"], job.get("kind"), job.get("printer")))
+            # v2.9: resolve the destination ONCE - ANY printer: per-job
+            # name, OS default, selected printer or the upstream IP printer.
+            dkind, dest = resolve_dest(job.get("printer") or "")
             # HOLD: printer offline / out of paper / error state (raw jobs
             # skip the status check - receipt printers rarely report state)
             if CFG.get("hold_offline", True) and job.get("kind") != "raw":
-                pstat = printer_ready(job.get("printer") or "")
+                if dkind == "ip":
+                    # the destination is the network printer - probe ITS
+                    # reachability, never a local printer's state
+                    pstat = ip_printer_probe(dest)
+                else:
+                    pstat = printer_ready(job.get("printer") or "")
                 if pstat in ("offline", "paper-out", "error"):
-                    _hold_job(job, "printer '%s' is %s - job held until it"
-                                  " is ready ('Print now' overrides this,"
-                                  " or switch off 'Printer status hold' in"
-                                  " the dashboard)"
-                                  % (job.get("printer") or "default", pstat))
+                    if dkind == "ip":
+                        why = ("IP printer %s:%d is unreachable - job held"
+                               " until it answers ('Print now' overrides"
+                               " this, or switch off 'Printer status hold'"
+                               " in the dashboard)" % (dest[0], dest[1]))
+                    else:
+                        why = ("printer '%s' is %s - job held until it"
+                               " is ready ('Print now' overrides this,"
+                               " or switch off 'Printer status hold' in"
+                               " the dashboard)"
+                               % (job.get("printer") or "default", pstat))
+                    _hold_job(job, why)
                     continue
-                if pstat != "ready" and _try_peer_forward(job):
+                if pstat != "ready" and dkind != "ip" and \
+                        _try_peer_forward(job):
                     continue
             # v2.5: virtual PDF printer (Microsoft Print to PDF etc.) ->
             # save the PDF directly - no renderer, no Save-As dialog.
-            if job.get("kind") != "raw" and is_virtual_pdf_printer(
-                    job.get("printer") or CFG.get("printer")
-                    or default_printer() or ""):
+            # v2.9: NEVER applies when the destination is the IP printer
+            # (the remote printer decides what to do with the bytes).
+            if job.get("kind") != "raw" and dkind != "ip" and \
+                    is_virtual_pdf_printer(
+                        job.get("printer") or CFG.get("printer")
+                        or default_printer() or ""):
                 _save_virtual_pdf(job)
                 continue
             t0 = time.time()
@@ -2507,7 +2741,11 @@ def enqueue_print(kind, title, data, printer="", copies=1,
     # prints automatically). Raw/ESC-POS jobs skip the check - receipt
     # printers rarely report a usable status.
     if direct and CFG.get("instant_auto_queue", True) and kind != "raw":
-        pstat = printer_ready(printer)
+        # v2.9: probe the REAL destination - with dest_mode "ip" that is
+        # the upstream network printer, never the local default
+        _dkind, _dtarget = resolve_dest(printer)
+        pstat = (ip_printer_probe(_dtarget) if _dkind == "ip"
+                 else printer_ready(printer))
         if pstat in ("offline", "paper-out", "error"):
             auto_hold = pstat
             direct = False
@@ -2548,10 +2786,13 @@ def _print_now(job_id, path, kind, printer, copies):
         log("[DEBUG] instant print job #%d -> %r (kind=%s, copies=%d)"
             % (job_id, printer or "OS default", kind, copies))
     try:
+        dkind, dtarget = resolve_dest(printer)   # v2.9: ANY printer
         if kind == "raw":
             with open(path, "rb") as f:
                 data = f.read()
             target = print_raw(data, printer, job_id=job_id)
+        elif dkind == "ip":
+            target = _print_file_to_ip(path, kind, dtarget, copies, job_id)
         elif is_virtual_pdf_printer(
                 printer or CFG.get("printer") or default_printer() or ""):
             # v2.6.7: virtual PDF printers (Microsoft Print to PDF /
@@ -3097,7 +3338,15 @@ def raw_print_windows(data, printer, job_id=None, title="raw"):
 
 def print_raw(data, printer="", job_id=None, title="raw"):
     """Print RAW bytes (ESC/POS / ZPL / PCL) directly to the printer."""
-    target = printer or CFG["printer"] or default_printer() or ""
+    # v2.9: destination routing - ANY printer. Raw bytes go out as-is;
+    # the printer language is whatever the sender chose.
+    dkind, dtarget = resolve_dest(printer)
+    if dkind == "ip":
+        name = ip_printer_send(data, title or "raw", dtarget,
+                               docformat="application/octet-stream")
+        log("[RAW] -> %s (%d bytes)" % (name, len(data)))
+        return name
+    target = dtarget or default_printer() or ""
     if not target:
         raise RuntimeError("raw printing needs a printer name"
                            " (no OS default printer found)")
@@ -4362,7 +4611,7 @@ class Handler(BaseHTTPRequestHandler):
                                      source="send", dedupe=False,
                                      origin_ip=ip)
             db_audit("print", job_id=job, site=site, ip=ip,
-                     printer=CFG.get("printer") or "(default)",
+                     printer=dest_display(),
                      details="send portal upload (%d KB)"
                              % (len(raw_pdf) // 1024))
             log("[SEND] '%s' uploaded (%d KB) -> job #%d%s"
@@ -4606,6 +4855,18 @@ class Handler(BaseHTTPRequestHandler):
                 if key not in CONFIG_TYPES:
                     return self._send(400, {
                         "ok": False, "error": "unknown config key '%s'" % key})
+                # v2.9: friendly validation for the destination keys
+                if key == "dest_mode" and str(val) not in (
+                        "", "default", "selected", "ip"):
+                    return self._send(400, {
+                        "ok": False,
+                        "error": "dest_mode must be '', 'default',"
+                                 " 'selected' or 'ip'"})
+                if key == "ip_printer_proto" and str(val) not in (
+                        "raw", "ipp"):
+                    return self._send(400, {
+                        "ok": False,
+                        "error": "ip_printer_proto must be 'raw' or 'ipp'"})
                 want = CONFIG_TYPES[key]
                 try:
                     if want is bool:
@@ -4660,6 +4921,42 @@ class Handler(BaseHTTPRequestHandler):
             if lan_info:
                 resp["lan"] = lan_info
             return self._send(200, resp)
+
+        # POST /ip-printer/test - v2.9: check the upstream IP printer
+        # (the dest_mode "ip" destination). Uses the form values when
+        # given, so the user can test BEFORE saving. TCP reachability
+        # + latency - the same probe the print worker uses to hold jobs
+        # while the IP printer is down.
+        if route == "/ip-printer/test":
+            try:
+                host = str((body or {}).get("host")
+                           or CFG.get("ip_printer_host") or "").strip()
+                port = int((body or {}).get("port")
+                           or CFG.get("ip_printer_port") or 0)
+                proto = str((body or {}).get("proto")
+                            or CFG.get("ip_printer_proto")
+                            or "raw").lower()
+                if proto not in ("raw", "ipp"):
+                    proto = "raw"
+                if port <= 0:
+                    port = 631 if proto == "ipp" else 9100
+            except (TypeError, ValueError):
+                return self._send(400, {"ok": False,
+                                        "error": "bad host/port"})
+            if not host:
+                return self._send(400, {
+                    "ok": False,
+                    "error": "type the IP printer's IP or hostname first"})
+            t0 = time.time()
+            pstat = ip_printer_probe((host, port, proto), timeout=4.0)
+            ms = int((time.time() - t0) * 1000)
+            return self._send(200, {
+                "ok": pstat == "ready", "state": pstat, "ms": ms,
+                "target": "%s:%d (%s)" % (host, port, proto),
+                "error": None if pstat == "ready" else
+                         "no answer on TCP %d - check the IP, the port"
+                         " and that this PC and the printer are on the"
+                         " same network" % port})
 
         # POST /firewall/allow - v2.8.2 one-click Windows firewall fix.
         # Loopback ONLY: a UAC elevation prompt is a local, physical-
@@ -5904,13 +6201,19 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   .warn button{float:right}
   h2{font-size:12px;letter-spacing:.08em;text-transform:uppercase;
      color:var(--mut);margin:18px 0 8px}
+  /* v2.9.1 RESPONSIVE TABLES: panels no longer hide columns behind an
+     inner horizontal scrollbar - cells wrap instead, so EVERY column,
+     button and option is visible on load at any window width. */
   .panel{background:var(--card);border:1px solid #e2e8f0;border-radius:12px;
-         padding:6px 12px;overflow-x:auto}
+         padding:6px 12px}
   table{width:100%;border-collapse:collapse;font-size:13px}
   th{color:var(--mut);text-align:left;font-weight:600;padding:7px 8px;
      border-bottom:1px solid #eef2f7}
-  td{padding:7px 8px;border-bottom:1px solid #f4f7fb;white-space:nowrap}
-  .st{font-size:11px;font-weight:700;padding:2px 8px;border-radius:9px}
+  td{padding:7px 8px;border-bottom:1px solid #f4f7fb;white-space:normal;
+     overflow-wrap:anywhere;word-break:break-word;vertical-align:top}
+  .st{font-size:11px;font-weight:700;padding:2px 8px;border-radius:9px;
+      white-space:nowrap;display:inline-block;overflow-wrap:normal;
+      word-break:normal}
   .st.printed,.st.queued,.ready{background:#dcfce7;color:#166534}
   .st.printing,.st.forwarded{background:#dbeafe;color:#1e40af}
   .st.saved,.st.scheduled{background:#fef9c3;color:#854d0e}
@@ -5919,7 +6222,8 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   .ready{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:9px}
   .offline,.paper-out,.error{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:9px}
   button{border:1px solid #dbe2ee;background:#fff;border-radius:7px;
-         padding:5px 10px;font:600 12px "Segoe UI",system-ui;cursor:pointer}
+         padding:5px 10px;font:600 12px "Segoe UI",system-ui;cursor:pointer;
+         white-space:nowrap;overflow-wrap:normal;word-break:normal}
   button:hover{border-color:var(--blue);color:var(--blue)}
   button.primary{background:var(--blue);border-color:var(--blue);color:#fff}
   .bar{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px}
@@ -5944,6 +6248,19 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   .verbadge{font:700 11px "Segoe UI",system-ui;background:rgba(255,255,255,.14);
        border:1px solid rgba(255,255,255,.35);border-radius:9px;padding:3px 10px}
   .paging{display:flex;gap:8px;align-items:center;margin-top:8px;font-size:12px;color:var(--mut)}
+  /* v2.9.1: form controls must never push their row into a scroll -
+     they shrink/wrap instead, and the IP printer fields stack cleanly. */
+  input[type=text],input[type=search],select{max-width:100%}
+  .hbar label{max-width:100%}
+  #destIpWrap{display:none;flex-wrap:wrap;gap:8px;align-items:center}
+  @media (max-width:640px){
+    main{padding:10px}
+    header{padding:14px 12px}
+    .cards{grid-template-columns:repeat(2,1fr)}
+    table{font-size:12px}
+    th,td{padding:6px 5px}
+    button{padding:6px 9px}
+  }
 </style></head><body>
 <header>
   <div class="logo"><svg viewBox="0 0 64 64" width="30" height="30" aria-label="AdvPrint Pro - A + printer logo"><defs><linearGradient id="lgA" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2563eb"/><stop offset="1" stop-color="#1e3a8a"/></linearGradient></defs><rect x="1" y="1" width="62" height="62" rx="14" fill="url(#lgA)"/><path d="M14 52 L32 12 L50 52" fill="none" stroke="#fff" stroke-width="8.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M22 39.5 H42" stroke="#fff" stroke-width="8.5" stroke-linecap="round"/><rect x="24.5" y="43.5" width="15" height="13" rx="2" fill="#fff"/><rect x="27.5" y="47" width="9" height="1.9" rx="0.9" fill="#1d4ed8"/><rect x="27.5" y="51" width="6.5" height="1.9" rx="0.9" fill="#1d4ed8"/></svg></div>
@@ -6019,6 +6336,24 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
       <button onclick="ltSaveSumatra()">Save</button>
       <span id="ltCfgMsg" style="font-size:12px;color:var(--mut)"></span>
     </div>
+  </div>
+  <h2>Print destination <small style="text-transform:none;letter-spacing:0">&nbsp;- v2.9: ANY printer - OS default / selected / IP printer (network)</small></h2>
+  <div class="panel ltbox">
+    <div class="hbar">
+      <label>Print to: <select id="destSel" onchange="destPick()"></select></label>
+      <span id="destIpWrap">
+        <label>IP: <input type="text" id="destIp" size="15" placeholder="e.g. 192.168.1.50"></label>
+        <label>Port: <input type="text" id="destPort" size="5" placeholder="auto"></label>
+        <select id="destProto">
+          <option value="raw">RAW (JetDirect 9100)</option>
+          <option value="ipp">IPP</option>
+        </select>
+      </span>
+      <button class="primary" onclick="destSave()">Save destination</button>
+      <button onclick="destTest()">Test</button>
+      <span id="destMsg" style="font-size:12px;color:var(--mut)"></span>
+    </div>
+    <p style="font-size:13px;color:#334155;margin:2px 0 0">Where every job prints: the OS <b>default printer</b>, <b>any installed printer</b> (picked from the list), or an <b>IP printer</b> - a real network printer at IP:port (RAW&nbsp;9100 or IPP). PCs and phones that added <i>this</i> hub as their network printer print through exactly this destination, so one setting routes everything.</p>
   </div>
   <h2>Printers</h2>
   <div class="panel" id="printers"><table><tbody>
@@ -6282,6 +6617,14 @@ async function loadLan(){
       /* v2.9.0: NETWORK PRINTER rows - add this PC like a physical IP
          printer from Windows ("add a printer") or phone print services. */
       IPP_URL=url+"/ipp/print";
+      /* v2.9: IP PRINTER MODE - the one row that says it all: other
+         devices add THIS PC as their network printer, this PC prints
+         every job to the configured destination (default / selected /
+         IP printer). */
+      const ippMode=!!hl.ip_printer_mode;
+      rows+="<tr><td><b>IP Printer mode: </b>"+(ippMode?"<span class='st queued'>ACTIVE</span>":"<span class='st held'>OFF</span>")+"</td>"+
+        "<td class='mono'>every PC or phone adds this PC as their network printer &rarr; jobs print to "+esc(hl.dest_display||"(default printer)")+"</td>"+
+        "<td>"+(ippMode?"":"<button onclick='ippModeOn()'>Turn on</button> ")+"<button onclick='showQr(\"ipp\")'>QR</button></td></tr>";
       if(hl.ipp_printer!==false){
         rows+="<tr><td><b>Network printer (IPP): </b><span class='st queued'>READY</span></td>"+
           "<td class='mono' id='ippUrlCell'>"+esc(IPP_URL)+"</td>"+
@@ -6384,7 +6727,20 @@ async function toggleLan(on){
   else if(r.ok)
     msg("LAN sharing saved.");
   else msg(r.error||"failed");
-  setTimeout(()=>{loadLan();refresh();},400);
+  setTimeout(()=>{loadLan();loadDest();refresh();},400);
+}
+async function ippModeOn(){
+  /* v2.9: ONE click - this PC BECOMES the network printer for every
+     device on the LAN (IPP printer URL + RAW 9100 port) and prints
+     every incoming job to the destination picked in "Print
+     destination" (default / selected / IP printer). */
+  msg("Turning on IP Printer mode...");
+  const body={share_lan:true,ipp_printer:true};
+  if(!(HEALTH&&HEALTH.raw_printer_port>0))body.raw_printer_port=9100;
+  const r=await act("/config",body);
+  if(r.ok)msg("IP Printer mode ON - on any PC or phone add THIS PC as a printer: "+IPP_URL+" (or the RAW port 9100). Every job prints to the destination set in 'Print destination'.");
+  else msg(r.error||"failed");
+  setTimeout(()=>{loadLan();loadDest();refresh();},400);
 }
 async function fwAllow(){
   /* v2.8.2: one-click Windows firewall fix (single UAC prompt). */
@@ -6525,7 +6881,7 @@ async function rotateToken(){
   if(r.ok){prompt("Your NEW token - copy it into the extension Options page:",r.token);}
   else msg(r.error||"failed");
 }
-refresh();loadHistory();loadLan();loadDebug();loadDz();
+refresh();loadHistory();loadLan();loadDest();loadDebug();loadDz();
 setInterval(refresh,5000);setInterval(loadHistory,10000);
 setInterval(loadLan,15000);setInterval(loadDebug,15000);
 async function ltSend(){
@@ -6588,6 +6944,63 @@ async function ltSaveSumatra(){
   const r=await act("/config",{sumatra_path:v});
   document.getElementById("ltCfgMsg").textContent=
     r.ok?("saved"+(r.changed&&r.changed.length?" ("+r.changed.join(", ")+")":"")):"failed";}
+/* ---- v2.9: print destination - ANY printer (default / selected / IP) ---- */
+let DEST={mode:"default",sel:"",display:"",ip:{host:"",port:0,proto:"raw"}};
+async function loadDest(){
+  try{
+    const hl=await jget("/health");
+    DEST.mode=hl.dest_mode||"default";
+    DEST.sel=hl.selected_printer||"";
+    DEST.display=hl.dest_display||"";
+    DEST.ip=hl.ip_printer||{host:"",port:0,proto:"raw"};
+    const sel=document.getElementById("destSel"); if(!sel)return;
+    let opts="<option value='__default__'"+(DEST.mode==="default"?" selected":"")+">(OS default printer)</option>";
+    try{
+      const pr=await jget("/printers");
+      ((pr&&pr.printers)||[]).forEach(p=>{
+        const on=(DEST.mode==="selected"&&p.name===DEST.sel)?" selected":"";
+        opts+="<option value='"+esc(p.name)+"'"+on+">"+esc(p.name)+(p.is_default?"  (default)":p.is_group?"  (group)":"")+"</option>";});
+    }catch(_){}
+    opts+="<option value='__ip__'"+(DEST.mode==="ip"?" selected":"")+">IP printer (network)...</option>";
+    sel.innerHTML=opts;
+    document.getElementById("destIp").value=DEST.ip.host||"";
+    document.getElementById("destPort").value=DEST.ip.port||"";
+    document.getElementById("destProto").value=DEST.ip.proto||"raw";
+    destPick();
+  }catch(_){}
+}
+function destPick(){
+  const v=document.getElementById("destSel").value;
+  /* v2.9.1: "flex" (was inline) - the wrap span is a flex row now, so the
+     IP / Port / Proto fields wrap under each other instead of overflowing. */
+  document.getElementById("destIpWrap").style.display=(v==="__ip__")?"flex":"none";
+}
+function destBody(){
+  const v=document.getElementById("destSel").value;
+  if(v==="__default__")return{dest_mode:"default"};
+  if(v==="__ip__")return{dest_mode:"ip",
+    ip_printer_host:document.getElementById("destIp").value.trim(),
+    ip_printer_port:parseInt(document.getElementById("destPort").value,10)||0,
+    ip_printer_proto:document.getElementById("destProto").value};
+  return{dest_mode:"selected",printer:v};
+}
+async function destSave(){
+  const m=document.getElementById("destMsg");
+  const r=await act("/config",destBody());
+  if(r.ok){await loadDest();m.textContent="saved - jobs now print to "+DEST.display;}
+  else m.textContent=r.error||"save failed";
+}
+async function destTest(){
+  const m=document.getElementById("destMsg");
+  const v=document.getElementById("destSel").value;
+  if(v!=="__ip__"){m.textContent="pick 'IP printer (network)...' in the list first, then Test";return;}
+  m.textContent="testing...";
+  const r=await act("/ip-printer/test",{
+    host:document.getElementById("destIp").value.trim(),
+    port:parseInt(document.getElementById("destPort").value,10)||0,
+    proto:document.getElementById("destProto").value});
+  m.textContent=r.ok?("IP printer answers - "+r.ms+" ms ("+r.target+")"):(r.error||"test failed");
+}
 </script></body></html>"""
 
 # ------------------------------------------------------------
@@ -7118,7 +7531,7 @@ def route_print_payload(data, title, ip, source="raw9100"):
         job, dup = enqueue_print("a4", title[:90], data, source=source,
                                  dedupe=False, origin_ip=ip)
         db_audit("print", job_id=job, ip=ip, site="lan",
-                 printer=CFG.get("printer") or "(default)",
+                 printer=dest_display(),
                  details="%s PDF payload (%d KB)%s"
                          % (source, len(data) // 1024,
                             " (duplicate held)" if dup else ""))
@@ -7131,7 +7544,7 @@ def route_print_payload(data, title, ip, source="raw9100"):
         job, dup = enqueue_print("a4", title[:90], pdf, source=source,
                                  dedupe=False, origin_ip=ip)
         db_audit("print", job_id=job, ip=ip, site="lan",
-                 printer=CFG.get("printer") or "(default)",
+                 printer=dest_display(),
                  details="%s JPEG payload (%d KB)" % (source,
                                                       len(data) // 1024))
         return job, "jpeg"
@@ -7144,12 +7557,11 @@ def route_print_payload(data, title, ip, source="raw9100"):
                  details="%s raw passthrough failed: %s" % (source, e))
         raise ValueError("raw passthrough failed: %s" % e)
     db_audit("print", job_id=0, ip=ip, site="lan",
-             printer=CFG.get("printer") or "(default)",
+             printer=dest_display(),
              details="%s raw passthrough %s (%d KB)"
                      % (source, _sniff_lang(data), len(data) // 1024))
     log("[RAW9100] %s payload from %s (%d KB) -> %s"
-        % (_sniff_lang(data), ip, len(data) // 1024,
-           CFG.get("printer") or "(default)"))
+        % (_sniff_lang(data), ip, len(data) // 1024, dest_display()))
     return 0, _sniff_lang(data)
 
 def _sniff_lang(data):

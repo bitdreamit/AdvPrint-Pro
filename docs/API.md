@@ -43,6 +43,35 @@ Payload routing is the same as IPP. The listener binds the PC's LAN IP
 (never 0.0.0.0), follows `share_lan`, rebinds on DHCP changes and stops
 when LAN sharing is turned off.
 
+### Print destination - default / selected / IP printer *(v2.9.0)*
+
+The hub routes every job (local API, extension, send portal, IPP, RAW)
+to the configured destination - ANY printer:
+
+| key | meaning |
+| --- | --- |
+| `dest_mode` | `"default"` = OS default printer &middot; `"selected"` = the printer named in `printer` &middot; `"ip"` = forward to the upstream IP printer &middot; `""` = legacy auto (selected when `printer` is set, else default) |
+| `ip_printer_host` | upstream network printer IP / hostname |
+| `ip_printer_port` | 0 = protocol default (RAW 9100 / IPP 631) |
+| `ip_printer_proto` | `"raw"` (JetDirect: stream the bytes) or `"ipp"` (IPP 1.1 Print-Job to `/ipp/print`, `application/pdf`, `copies` supported) |
+
+- A per-job `printer` name (body/query of `/print`, extension,
+  printer groups) always wins and is always local.
+- The queue honours the destination: with `dest_mode:"ip"` the hold
+  check probes the IP printer's TCP reachability (the job is HELD with
+  "IP printer x.x.x.x:9100 is unreachable" while it is down), the
+  virtual-PDF-printer save path is skipped, and the instant
+  (queue-off) path routes the same way.
+- `POST /ip-printer/test` *(token)* - body `{"host": "192.168.1.50",
+  "port": 0, "proto": "raw"}` (port/proto optional - falls back to the
+  saved config) &rarr; `{"ok": true, "state": "ready", "ms": 12,
+  "target": "192.168.1.50:9100 (raw)"}`. Test BEFORE saving - the
+  dashboard "Print destination" card has the same button.
+- `/health` adds `dest_mode`, `selected_printer`, `dest_display`,
+  `ip_printer` and the derived **`ip_printer_mode`** flag (LAN sharing
+  ON + IPP/RAW listener = this PC is addable as a network printer by
+  any PC or phone, and every job prints to the chosen destination).
+
 ---
 
 ## GET /health *(no token)*

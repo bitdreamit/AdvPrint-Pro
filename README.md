@@ -13,7 +13,7 @@ Web page ──► Chrome extension ──► AdvPrint Pro hub (localhost:9235) 
 
 ---
 
-## What's new in v2.9.0 (network printer mode + phone auth fix + smooth tray)
+## What's new in v2.9.1 (network printer mode + phone auth fix + smooth tray + responsive dashboard)
 
 Base: v2.8.2 ("it work fine"). Nothing removed. Three things:
 
@@ -22,6 +22,7 @@ Base: v2.8.2 ("it work fine"). Nothing removed. Three things:
   - **JetDirect RAW listener on TCP 9100** (`"raw_printer_port"`, 0 = off) — Windows "Add a printer using TCP/IP address" with device type *Generic Network Card* and your real printer's driver: Windows renders ANY file (Word, Excel, photos, web) and streams the print-ready bytes here; the hub prints them. ESC/POS and ZPL apps can use the same socket. Follows `share_lan`, rebinds on DHCP changes, never binds 0.0.0.0.
   - **Smart payload routing** for both: `%PDF` → the normal PDF pipeline (History, audit, reprint); JPEG → single-page PDF (pure-stdlib DCTDecode); PostScript / PCL / ESC/POS / ZPL → RAW passthrough. Every job is audited with the source IP.
   - The dashboard LAN card shows both rows (URL + copy + QR for IPP, port + status + "How to add" for RAW) and `GET /qr?kind=ipp` renders the printer URL as a QR. The one-click firewall fix now adds BOTH ports in a single UAC prompt (9235 + 9100).
+- **Print destination — ANY printer (default / selected / IP printer).** The hub not only RECEIVES like an IP printer; it routes every job to the destination picked in the new **Print destination** dashboard card: the OS **default printer**, **any installed printer**, or an upstream **IP printer** (a real network printer at IP:port — JetDirect RAW or IPP Print-Job; `POST /ip-printer/test` checks reachability). Phones and PCs that added this hub as THEIR IP printer print through exactly that destination. A per-job `printer` name always wins. `/health` reports `dest_mode` / `dest_display` / `ip_printer` / `ip_printer_mode`.
 - **Phone "Auth fail" on the Send portal FIXED.** With `token_header_only: true` the portal page opened on the phone but the upload POST could never authenticate (a phone cannot send the `X-AdvPrint-Token` header) — so every phone got "invalid or missing token" after picking a PDF while PCs kept working. `/send` POST now accepts the token from the query/body (the same shared QR-link transport the GET page always used); the token is still required, every other endpoint stays header-strict, and the portal also sends the token as a hidden form field. A wrong token answers with a clear "re-scan the fresh QR" message.
 - **One version everywhere (extension).** Popup badge, Options header chip and the About panel all read `chrome.runtime.getManifest().version` — the manifest is the single source; the hardcoded HTML copies (stuck at 2.8.0) can never drift again.
 - **Smooth tray menu.** Every tray action (dashboard, test page, pause, autostart, restart, firewall) runs on its own thread — a slow action can no longer freeze the icon or lag the next right-click. The menu font is cached per DPI scale.
@@ -59,7 +60,7 @@ The ten most-requested features, all in one release:
 - **DropZone + Send portal — printing WITHOUT the extension.** The hub watches a folder: in Word/Excel/ANY app choose *Microsoft Print to PDF* and save into the DropZone — the page prints seconds later (dashboard → DropZone card; `POST /dropzone/open` opens the folder). Phones/tablets/other PCs print through the built-in **Send portal** (`/send`, token-protected, same as every endpoint).
 - **Restart hub** — in the tray menu, AdvPrint Tool [14] and the dashboard button: the hub relaunches itself cleanly (new process waits for the port; queued jobs, settings and history are kept).
 - **Bullet-proof upgrade & uninstall.** The setup now runs `hub-stop.ps1` BEFORE touching files: stops the optional *AdvPrint* service (wait + PID kill), **deletes the service registration** (reinstalled fresh when ticked — upgrades keep it automatically), kills every process under the install folder and frees TCP 9235. Old program folders are wiped, so no stale file can abort an install any more; the uninstaller retries the folder sweep and reports leftovers honestly.
-- **Silent install** `AdvPrint-Pro-Setup-2.9.0.exe /S` — elevation is requested by the exe manifest itself ("auto permission" on any PC), the hub auto-starts after a silent install, and the firewall rule for LAN sharing (TCP 9235) is added automatically (removed on uninstall).
+- **Silent install** `AdvPrint-Pro-Setup-2.9.1.exe /S` — elevation is requested by the exe manifest itself ("auto permission" on any PC), the hub auto-starts after a silent install, and the firewall rule for LAN sharing (TCP 9235) is added automatically (removed on uninstall).
 - **New A + printer logo** — the letter A drawn as a printer: the crossbar is the output slot and a printed page slides out of it. Same mark in the extension, popup, dashboard, tray icon, installer and docs.
 
 Nothing removed: every v2.7.0 feature (history manager, share toggles, live test tool) is unchanged.

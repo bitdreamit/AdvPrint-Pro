@@ -63,7 +63,40 @@ status + "How to add" for RAW). `GET /qr?kind=ipp` renders the printer
 URL as a QR code. The one-click **Allow in firewall** now opens ONE UAC
 prompt and adds both rules (hub port + 9100).
 
-## 2. FIXED: phone "Auth fail" on the Send portal QR
+## 2. NEW: Print destination - ANY printer (default / selected / IP printer)
+
+The hub does not just RECEIVE jobs like an IP printer - it also
+decides where they print. The new **Print destination** dashboard card
+(config `dest_mode` / `ip_printer_host` / `ip_printer_port` /
+`ip_printer_proto`) offers ANY printer:
+
+- **default** - the OS default printer (the classic behaviour).
+- **selected** - ANY installed printer, picked from the live list.
+- **ip** - an upstream IP printer: a real network printer at IP:port,
+  spoken with **JetDirect RAW** (stream the bytes) or **IPP
+  Print-Job** (`/ipp/print`, `application/pdf`, `copies` supported).
+
+How it fits the IP-printer feature: a phone or PC that added THIS hub
+as their network printer prints through exactly this destination - one
+setting routes everything. A per-job `printer` name (API, extension,
+groups) always wins.
+
+The queue honours the destination everywhere:
+
+- the hold check probes the IP printer's reachability ("IP printer
+  x.x.x.x:9100 is unreachable - job held") instead of a local printer;
+- the virtual-PDF-printer save path never hijacks an IP-routed job;
+- the instant (queue-off) path routes the same way;
+- audits and the History tab name the real destination.
+
+`POST /ip-printer/test` checks reachability + latency (also the
+**Test** button in the card). `/health` reports `dest_mode`,
+`dest_display`, `ip_printer` and the derived **`ip_printer_mode`**
+flag. The LAN card shows **IP Printer mode: ACTIVE** in one row
+("every PC or phone adds this PC as their network printer -> jobs
+print to ...").
+
+## 3. FIXED: phone "Auth fail" on the Send portal QR
 
 Reported: scanning the Send-portal QR with ANY phone opened the portal,
 but after picking a PDF it answered *"invalid or missing token"*
@@ -82,7 +115,7 @@ as a hidden form field (survives QR apps that mangle URLs), and a wrong
 token now answers with a clear phone-friendly message ("re-scan the
 fresh QR code from the dashboard").
 
-## 3. NEW: one version everywhere in the extension
+## 4. NEW: one version everywhere in the extension
 
 The popup badge, the Options header chip and the About panel all show
 the version read live from `chrome.runtime.getManifest().version`. The
@@ -90,7 +123,7 @@ manifest is the single source of truth - the old hardcoded HTML copies
 (stuck at 2.8.0 in some places) can never drift again. Hub version and
 extension version ship in lockstep (2.9.0).
 
-## 4. NEW: smooth tray menu
+## 5. NEW: smooth tray menu
 
 Every tray action now runs on its own thread - Open dashboard, Print
 test page, Pause queue, Start at logon, Restart hub, Allow LAN in
@@ -99,7 +132,7 @@ the UAC prompt) froze the tray icon and made the next right-click feel
 laggy. The menu font is also cached per DPI scale instead of being
 rebuilt on every right-click.
 
-## 5. Update / install / uninstall
+## 6. Update / install / uninstall
 
 - Install over the old version - settings, history and the data folder
   (`~/.advprint`) are kept. The service is stopped + replaced during
@@ -108,12 +141,17 @@ rebuilt on every right-click.
   (elevation via the exe manifest, hub starts automatically, firewall
   rules for TCP 9235 + 9100 are added automatically).
 
-## 6. Verification for this release
+## 7. Verification for this release
 
-- `pytest`: **168 passed, 1 skipped** (14 new v2.9.0 tests).
+- `pytest`: **189 passed, 1 skipped** (35 new v2.9.0 tests: 14
+  network-printer + 21 destination-routing).
 - Live self-check (`live_selfcheck_290.py`, real hub process, fake
-  CUPS): **64/64 OK** - includes the phone flow in BOTH token modes,
+  CUPS): **73/73 OK** - includes the phone flow in BOTH token modes,
   IPP attribute + print (pdf/jpeg/zpl), the RAW 9100 socket print,
-  share_lan on/off rebind, firewall/selftest routes and the CLI.
+  share_lan on/off rebind, firewall/selftest routes, the CLI and the
+  9 new destination checks (/ip-printer/test reachable + refused,
+  dest_mode=ip round-trip, health dest_display, ip_printer_mode,
+  END-TO-END /print -> queue -> worker -> JetDirect sink, restore).
 - Files: `AdvPrint-Pro-Setup-2.9.0.exe`, `advprint-pro_2.9.0_all.deb`,
-  `AdvPrint-Pro-2.9.0-source.zip`, SHA256SUMS.txt.
+  `AdvPrint-Pro-2.9.0-source.zip`, `AdvPrint-Pro-2.9.0-FULL.zip`
+  (everything in one bundle), Full Guide (HTML + PDF), SHA256SUMS.

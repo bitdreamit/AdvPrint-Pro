@@ -1,6 +1,47 @@
 # Changelog - AdvPrint Pro (Advanced Printer)
 by Bit Dream IT - Innovative Healthcare Solutions
 
+## v2.9.1 - RESPONSIVE DASHBOARD TABLES + FULL DOCS (2026-11-04)
+
+One focused fix on top of the 2.9.0 network-printer release - the
+dashboard no longer hides anything behind an inner scrollbar - plus a
+full documentation refresh and clean version numbering (one version
+everywhere: hub, extension, setup, deb, docs).
+
+- **Responsive dashboard tables (fix).** Every dashboard card table
+  (LAN sharing, Debug, Printers, Queue, Job history, Audit trail and
+  the new **Print destination** card) used `overflow-x:auto` with
+  `white-space:nowrap` cells, so on a narrow window the right-hand
+  columns/buttons disappeared into a horizontal scroll INSIDE the card
+  and were invisible on load. Cells now **wrap**: long job titles and
+  paths break (`overflow-wrap:anywhere`), status chips stay on one
+  line, action buttons flow onto the next line - **every column,
+  button and option is visible the moment the page loads**, no inner
+  scrolling. On phones the cards go 2-up, controls shrink, and the
+  Print destination IP / Port / Proto fields stack cleanly (flex wrap;
+  the span now toggles display:flex instead of display:inline).
+  Pure CSS/JS - no settings change, no data migration; hard-refresh
+  the dashboard (Ctrl+F5) after updating.
+- **Full documentation refresh.** The Full Guide (HTML + PDF, 14
+  chapters) covers the whole v2.9.x feature set end to end: the
+  network printer mode (IPP `/ipp/print` + JetDirect RAW 9100), the
+  **Print destination** card (default / selected / IP printer + Test),
+  the phone "Auth fail" fix, `POST /ip-printer/test`, the new
+  `/health` destination fields, the settings reference rows for
+  `dest_mode` / `ip_printer_host` / `ip_printer_port` /
+  `ip_printer_proto` / `ipp_printer` / `raw_printer_port`, and three
+  new troubleshooting rows (phone auth fail, IP-printer held jobs,
+  dashboard cut-off). Release notes v2.9.1 ship separately.
+- **Version hygiene.** This tree was briefly labelled 2.9.0 twice
+  (the original network-printer build and the follow-up work); to end
+  the confusion the follow-up ships as **2.9.1**. Hub VERSION,
+  dashboard/portal badges, extension manifest + popup + Options +
+  About (single manifest source), Setup exe (NSIS
+  VIProductVersion/DisplayVersion/filenames), deb package, VERSION.txt,
+  START-HERE.txt, README, CHANGELOG and docs all say 2.9.1 now. The
+  v2.9.0 entry below still documents the network-printer features;
+  2.9.1 = those features + the responsive-table fix + docs.
+
 ## v2.9.0 - NETWORK PRINTER MODE + PHONE AUTH FIX + SMOOTH TRAY (2026-11-04)
 
 Three things in one release: the hub becomes a real IP-printable network
@@ -31,6 +72,25 @@ portal is fixed, and the tray menu stops lagging.
     on CUPS). Every job is audited with the source IP and size-bounded
     (`MAX_PDF`). Both switches live in config.json / `/config`
     (`ipp_printer`, `raw_printer_port`) and apply without a restart.
+- **Print DESTINATION - ANY printer (new).** The hub does not just
+  RECEIVE like an IP printer - it also routes every job to the
+  destination you pick (dashboard card "Print destination"; config
+  `dest_mode` / `ip_printer_host` / `ip_printer_port` /
+  `ip_printer_proto`): the OS **default printer**, **any installed
+  printer**, or an upstream **IP printer** (a real network printer at
+  IP:port - JetDirect RAW or an IPP Print-Job with `application/pdf`
+  and `copies`). A per-job `printer` name always wins. The whole
+  pipeline honours it: the hold check probes the IP printer's
+  reachability instead of a local printer ("IP printer x.x.x.x:9100 is
+  unreachable - job held"), the virtual-PDF-printer save path never
+  hijacks an IP-routed job, the instant (queue-off) path routes the
+  same way, and audits name the real destination. New
+  `POST /ip-printer/test` (reachability + latency, testable before
+  saving). `/health` reports `dest_mode`, `dest_display`,
+  `selected_printer`, `ip_printer` and the derived
+  **`ip_printer_mode`** flag - LAN sharing + IPP/RAW listener means
+  every PC or phone can add this PC as THEIR network printer and
+  every job prints to the chosen destination.
 - **Phone "Auth fail" FIXED.** With `token_header_only: true` the Send
   portal page opened on the phone but the browser UPLOAD could never
   authenticate (a phone cannot send the `X-AdvPrint-Token` header), so
@@ -53,16 +113,26 @@ portal is fixed, and the tray menu stops lagging.
 - **Firewall covers the printer port too.** The one-click "Allow in
   firewall" (dashboard + tray) now adds BOTH rules in a single UAC
   prompt: the hub port (9235) and the RAW printer port (9100).
-- Dashboard LAN card: new **Network printer (IPP)** row (URL + copy +
-  QR), **RAW printer port** row with a "How to add" hint, and a
-  step-by-step add-printer hint under the card. `/qr?kind=ipp` renders
-  the printer URL as a QR.
-- Tests: 14 new tests (phone auth in both token modes, IPP attribute
-  response, IPP Print-Job pdf/jpeg/zpl, validate/garbage/unknown-op,
-  payload sniffing, size guard, ipp off, QR kinds, health fields,
-  version single-source, tray threading, firewall RAW port). Live
-  self-check: 64/64. Version bumped across hub, setup.nsi (VI
-  2.9.0.0), extension manifest, docs.
+- Dashboard LAN card: new **IP Printer mode** row (ACTIVE/OFF + the
+  destination jobs print to + one-click Turn on + QR), **Network
+  printer (IPP)** row (URL + copy + QR), **RAW printer port** row
+  with a "How to add" hint, and a step-by-step add-printer hint under
+  the card. `/qr?kind=ipp` renders the printer URL as a QR. New
+  **Print destination** card picks default / any installed printer /
+  IP printer (with IP/port/protocol + Test button).
+- Tests: 35 new tests - 14 for the network printer (phone auth in both
+  token modes, IPP attribute response, IPP Print-Job pdf/jpeg/zpl,
+  validate/garbage/unknown-op, payload sniffing, size guard, ipp off,
+  QR kinds, health fields, version single-source, tray threading,
+  firewall RAW port) + 21 destination-routing tests (resolve_dest
+  modes/legacy/override, IPP client framing incl. copies + error
+  propagation, /config validation, /health destination fields,
+  /ip-printer/test reachable + refused, ip_printer_mode flag,
+  worker -> JetDirect sink END-TO-END, hold while the IP printer is
+  down, raw routing to the sink, selected/default regression).
+  Live self-check: 73/73 (9 new destination checks incl. the full
+  /print -> queue -> worker -> JetDirect sink print). Version bumped
+  across hub, setup.nsi (VI 2.9.0.0), extension manifest, docs.
 
 ## v2.8.2 - LAN SHARING APPLIES LIVE + WINDOWS FIREWALL ONE-CLICK (2026-11-04)
 

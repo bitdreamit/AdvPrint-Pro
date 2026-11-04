@@ -61,7 +61,7 @@
   <div class="sub">Advanced Printer — silent printing for every web page, PDF, application and receipt printer</div>
   <div class="org">by Bit Dream IT — Innovative Healthcare Solutions</div>
   <div class="meta">
-    Version 2.9.0 — Enterprise Edition<br>
+    Version 2.9.1 — Enterprise Edition<br>
     Full Setup Guide — A to Z<br><br>
     100% local · no cloud · no tracking · MIT licensed<br>
     Windows 7/8/10/11 · Windows Server · Debian/Ubuntu/Mint · macOS
@@ -124,8 +124,8 @@ Your printer — or ~/.advprint/files if the destination is "save as PDF"</pre>
 <h2>2. Install in 3 minutes</h2>
 <h3>2.1 Windows — the one-time installer (recommended)</h3>
 <ol>
-<li>Download <span class="mono">AdvPrint-Pro-2.9.0-source.zip</span> and unzip it.</li>
-<li>Run <span class="mono">AdvPrint-Pro-Setup-2.9.0.exe</span>. Windows asks for admin once (UAC — the exe requests it itself), no Python needed —
+<li>Download <span class="mono">AdvPrint-Pro-2.9.1-source.zip</span> and unzip it.</li>
+<li>Run <span class="mono">AdvPrint-Pro-Setup-2.9.1.exe</span>. Windows asks for admin once (UAC — the exe requests it itself), no Python needed —
     the setup carries a <b>complete Python 3.11.9 runtime</b> (this is exactly what the broken 2.5.3 download missed:
     if an installer is smaller than ~9&nbsp;MB it is incomplete — re-download).</li>
 <li>Setup registers the <b>Startup app "AdvPrint Pro"</b> (Task Manager → Startup apps), creates Start Menu
@@ -146,7 +146,7 @@ the hub is a plain stdlib Python script, signed-off and open source (MIT).</div>
 </ol>
 
 <h3>2.3 Linux / Debian / Ubuntu / Mint — the .deb</h3>
-<pre>sudo apt install ./advprint-pro_2.9.0_all.deb
+<pre>sudo apt install ./advprint-pro_2.9.1_all.deb
 advprint-start            # start now
 advprint token            # show the current token
 advprint livetest         # full A-to-Z self-test</pre>
@@ -283,6 +283,7 @@ All cards refresh live (5–15 s).</p>
 <tr><td>Audit trail</td><td>Latest events: who printed what from where, reprint reasons, token errors.</td></tr>
 <tr><td><b>LAN sharing applies live (v2.8.2)</b></td><td>Toggling <b>LAN sharing</b> starts/stops a second listener on this PC’s LAN IP INSIDE the same request — no hub restart, 127.0.0.1 never stops answering, DHCP IP changes are followed automatically. A failed LAN bind is only logged and can never stop local printing.</td></tr>
 <tr><td><b>Firewall one-click + Test LAN (v2.8.2)</b></td><td>LAN card shows <b>Windows firewall: ALLOWED / BLOCKED</b> and an <b>Allow in firewall</b> button (one UAC prompt; also in the tray menu). <b>Test LAN</b> makes the hub call its own LAN URL: PASS + another PC still failing = firewall; FAIL = listener problem (hub.log explains).</td></tr>
+<tr><td><b>Print destination (v2.9.1)</b></td><td><b>ANY printer</b> - one card decides where every job prints: the OS <b>default printer</b>, <b>any installed printer</b> (picked from the live list), or an upstream <b>IP printer</b> at IP:port (<b>RAW JetDirect 9100</b> or <b>IPP</b>). <b>Save destination</b> applies instantly, the <b>Test</b> button pings the IP printer (reachability + latency) before saving, and with <span class="mono">dest_mode:"ip"</span> the queue <b>holds</b> jobs while that printer is unreachable (reason shows in the queue row; <b>Print now</b> forces). PCs and phones that added <i>this</i> hub as their network printer print through exactly this destination - one setting routes everything. <span class="mono">v2.9.1:</span> the card and ALL dashboard tables are fully responsive - every column, button and option is visible on load, nothing hides inside an inner scrollbar.</td></tr>
 <tr><td><b>Network printer - IPP (v2.9.0)</b></td><td>The hub is a real IPP printer at <span class="mono">http://&lt;lan-ip&gt;:9235/ipp/print</span> (same port as the hub - no extra firewall rule). Windows 10/11: Add printer → “Select a shared printer by name” → paste the URL (built-in Microsoft IPP Class Driver). Phones: print services that accept a manual IPP address. No token - printer protocol, size-bounded, audited, switchable with <span class="mono">"ipp_printer": false</span>.</td></tr>
 <tr><td><b>Network printer - RAW 9100 (v2.9.0)</b></td><td>JetDirect listener on <b>TCP 9100</b> (<span class="mono">"raw_printer_port"</span>, 0 = off) while LAN sharing is ON: Windows “Add a printer using TCP/IP address” → this PC’s IP + port 9100 + device type <b>Generic Network Card</b> + your real printer’s driver. Windows renders any file and streams the print-ready bytes; the hub prints them. ESC/POS and ZPL apps can open the same socket.</td></tr>
 <tr><td><b>Send portal QR (v2.8.1)</b></td><td>LAN card &rarr; <b>Copy send URL</b> / <b>QR code</b>: phones scan the QR and upload a PDF to the Send portal — it prints on the default printer. The QR is drawn by a QR encoder embedded in the hub (verified bit-exact; no internet used).</td></tr>
@@ -318,7 +319,8 @@ Files land in <span class="mono">~/Downloads/AdvPrint</span> or the folder set i
 <!-- ============ 7 ============ -->
 <h2>7. LAN / IP — share one printer with every PC</h2>
 <div class="note" style="border:1px solid #a7f3d0;background:#ecfdf5;border-radius:10px;padding:12px 14px;margin:10px 0 14px">
-<b>v2.9.0 — NETWORK PRINTER MODE + PHONE AUTH FIX + SMOOTH TRAY.</b> The hub is now a real IP-printable network printer: add it from another PC with “Select a shared printer by name” → <span class="mono">http://&lt;this-PC-IP&gt;:9235/ipp/print</span> (Windows installs it with the built-in Microsoft IPP Class Driver) or the classic <b>“Add a printer using TCP/IP address”</b> flow — the hub listens on <b>TCP 9100</b> (JetDirect RAW) while LAN sharing is ON. PDF, JPEG, PostScript, PCL, ESC/POS and ZPL payloads are all routed to the real printer and every job lands in History + Audit. The phone <b>“Auth fail” on the Send portal QR is fixed</b> (the portal upload now accepts the token from the QR link in every token mode). The extension shows <b>one version everywhere</b> (read from the manifest), and every tray action runs in its own thread so the menu never lags.<br><br><b>v2.8.2 — LAN SHARING APPLIES LIVE + FIREWALL ONE-CLICK.</b> The reported problem “LAN sharing ON but the LAN IP does not answer” is fixed at the root: no restart needed any more, the firewall state is visible, one click adds the rule, and Test LAN pinpoints the failing side.<br><br>
+<b>v2.9.1 — RESPONSIVE DASHBOARD + POLISH.</b> The dashboard tables (LAN card, Debug, Printers, Queue, Job history, Audit, <b>Print destination</b>) no longer push wide rows into an inner horizontal scrollbar: cells wrap, long titles break, action buttons flow onto the next line - <b>every column and option is visible the moment the page loads</b>, on any window width (and on phones the cards go 2-up, controls shrink). The IP / Port / Proto fields of the Print destination card stack cleanly when they appear. Pure CSS/JS change - no settings, no data migration, install over 2.9.0 (or 2.8.2) and refresh.<br><br>
+<b>v2.9.0 — NETWORK PRINTER MODE + PHONE AUTH FIX + SMOOTH TRAY.</b> The hub is now a real IP-printable network printer: add it from another PC with “Select a shared printer by name” → <span class="mono">http://&lt;this-PC-IP&gt;:9235/ipp/print</span> (Windows installs it with the built-in Microsoft IPP Class Driver) or the classic <b>“Add a printer using TCP/IP address”</b> flow — the hub listens on <b>TCP 9100</b> (JetDirect RAW) while LAN sharing is ON. PDF, JPEG, PostScript, PCL, ESC/POS and ZPL payloads are all routed to the real printer and every job lands in History + Audit. <b>Print destination — ANY printer:</b> the new dashboard card picks where every job prints — the OS <b>default printer</b>, <b>any installed printer</b>, or an upstream <b>IP printer</b> (a real network printer at IP:port, RAW JetDirect or IPP; the <b>Test</b> button pings it, and with <span class="mono">dest_mode:"ip"</span> the queue holds jobs while that printer is unreachable). Phones and PCs that added this hub as their IP printer print through exactly that destination; the LAN card <b>“IP Printer mode”</b> row shows the whole chain with a one-click <b>Turn on</b>. The phone <b>“Auth fail” on the Send portal QR is fixed</b> (the portal upload now accepts the token from the QR link in every token mode). The extension shows <b>one version everywhere</b> (read from the manifest), and every tray action runs in its own thread so the menu never lags.<br><br><b>v2.8.2 — LAN SHARING APPLIES LIVE + FIREWALL ONE-CLICK.</b> The reported problem “LAN sharing ON but the LAN IP does not answer” is fixed at the root: no restart needed any more, the firewall state is visible, one click adds the rule, and Test LAN pinpoints the failing side.<br><br>
 <b>v2.8.1 — QR CODE FOR PHONES + ONE-CLICK INVITE (both 100% local).</b><br>
 <b>Send portal (phones)</b> row on the dashboard LAN card: <b>Copy send URL</b> copies
 <span class="mono">http://&lt;this-PC-ip&gt;:9235/send?token=…</span> and <b>QR code</b> shows the same URL
@@ -392,6 +394,9 @@ environment variables (<span class="mono">ADVPRINT_*</span>; legacy <span class=
 <tr><td class="mono">file_dir / keep_files</td><td>~/Downloads/AdvPrint / true</td><td>Save-as-PDF destination; keep files for reprint.</td></tr>
 <tr><td class="mono">drop_enabled / drop_dir / drop_delete</td><td>true / "" / false</td><td><b>v2.8.0 DropZone</b>: watch a folder and print every PDF that lands in it (default folder <span class="mono">data\DropZone</span>; drop_delete=true deletes instead of moving to <span class="mono">done\</span>).</td></tr>
 <tr><td class="mono">sumatra_path</td><td>"</td><td>Manual SumatraPDF.exe path (empty = auto-find).</td></tr>
+<tr><td class="mono">dest_mode / printer</td><td>"" / ""</td><td><b>v2.9.0 Print destination</b>: where jobs print — <span class="mono">default</span> = OS default printer, <span class="mono">selected</span> = the printer named in <span class="mono">printer</span> (any installed printer), <span class="mono">ip</span> = forward to the upstream IP printer. A per-job <span class="mono">printer</span> always wins.</td></tr>
+<tr><td class="mono">ip_printer_host / ip_printer_port / ip_printer_proto</td><td>"" / 0 / raw</td><td><b>v2.9.0</b> the upstream IP printer: IP or hostname, port (0 = protocol default: RAW 9100 / IPP 631), protocol <span class="mono">raw</span> (JetDirect) or <span class="mono">ipp</span>. Test with <span class="mono">POST /ip-printer/test</span> or the card's Test button.</td></tr>
+<tr><td class="mono">ipp_printer / raw_printer_port</td><td>true / 9100</td><td><b>v2.9.0 IP printer (inbound)</b>: this hub IS a network printer — IPP at <span class="mono">/ipp/print</span> and the JetDirect RAW port for "Add a printer using TCP/IP address".</td></tr>
 <tr><td class="mono">debug</td><td>false</td><td>Verbose [DEBUG] logs + client error reports in /debug.</td></tr>
 <tr><td class="mono">log_max_mb / log_backups</td><td>5 / 3</td><td>hub.log rotation.</td></tr>
 </table>
@@ -456,7 +461,20 @@ the default on desktops; if both run, the second exits gracefully (port guard).<
 <h2>12. HTTP API quick reference</h2>
 <p>Auth: header <span class="mono">X-AdvPrint-Token</span> (legacy <span class="mono">X-PrintHub-Token</span> accepted),
 or <span class="mono">?token=</span> on GET navigation. Full docs: <span class="mono">docs/API.md</span> and the hub's own <span class="mono">/docs</span> page.</p>
-<pre># v2.8.0 - DropZone / send portal / restart (no extension needed)
+<pre># v2.9.x - NETWORK PRINTER MODE: print INTO this hub from any device
+#   IPP (Windows "Select a shared printer by name", phones):
+curl -X POST -H "Content-Type: application/pdf" --data-binary @report.pdf \
+     http://<lan-ip>:9235/ipp/print            # no token - printer protocol
+#   RAW JetDirect: anything streamed to TCP 9100 prints the same way.
+# Print destination - route every job to an upstream IP printer:
+curl -X POST -H "X-AdvPrint-Token: $TOKEN" -H "Content-Type: application/json" \
+  -d '{"dest_mode":"ip","ip_printer_host":"192.168.1.50",
+       "ip_printer_port":9100,"ip_printer_proto":"raw"}' \
+  http://127.0.0.1:9235/config
+curl -X POST -H "X-AdvPrint-Token: $TOKEN" \
+     "http://127.0.0.1:9235/ip-printer/test?host=192.168.1.50&port=9100&proto=raw"
+
+# v2.8.0 - DropZone / send portal / restart (no extension needed)
 curl -H "X-AdvPrint-Token: $TOKEN" http://127.0.0.1:9235/dropzone
 curl -X POST -H "X-AdvPrint-Token: $TOKEN" -F "file=@report.pdf" \
      "http://127.0.0.1:9235/send?title=Report"   # upload + print
@@ -510,6 +528,9 @@ curl -X POST -H "X-AdvPrint-Token: $TOKEN" http://127.0.0.1:9235/livetest</pre>
 <tr><td><span class="mono">printer 'X...X not found</span> — the name shows TWICE in a row (e.g. <span class="mono">CanonCanon</span>)</td><td>A stored printer name was typed/pasted twice. <b>Self-healed in 2.6.8</b> — the hub collapses the doubled name to the real printer, prints, and corrects the history (audit: <span class="mono">printer.corrected</span>). Old dead jobs: just press <b>Retry</b>. Still check Settings → Printer for the stale entry.</td></tr>
 <tr><td>Every page prints TWICE — two sheets, and the log shows two <span class="mono">[OK] job #N</span> lines</td><td>Queue Mode OFF race in v2.6.8 and earlier: the FIFO worker and the direct thread both grabbed the same job. <b>Fixed in 2.6.9</b> — the job row is created in its final state, one job = one sheet. Not a printer or driver problem (the printer was innocent). Upgrade the hub to 2.6.9+; nothing to change on the printer.</td></tr>
 <tr><td>Right-click "Print this page" fails with <i>Cannot access contents of url chrome-extension://…</i></td><td>The menu was used on a browser-internal page (chrome://, settings, extension page). <b>Fixed in 2.6.8</b> — the menu now only appears on printable pages (http/https/file) and shows a friendly notice otherwise.</td></tr>
+<tr><td>Phone shows <i>invalid or missing token</i> (“Auth fail”) on the Send portal</td><td>Old builds accepted the token header only, which a phone browser cannot send. <b>Fixed in 2.9.0</b> - the /send upload accepts the token from the QR link itself in every token mode; re-open the QR URL (regenerate it from the LAN card if the token was rotated).</td></tr>
+<tr><td>Jobs show <i>held - IP printer x.x.x.x:9100 is unreachable</i></td><td><span class="mono">dest_mode:"ip"</span> and the Test/probe says the upstream printer is down: fix the printer (power/cable/IP change), then <b>Print now</b> or Release ALL held jobs. Check the address with the card's <b>Test</b> button first.</td></tr>
+<tr><td>Dashboard tables/buttons are cut off, must scroll inside the card to see all options</td><td><b>Fixed in 2.9.1</b> - tables wrap instead of scrolling; update the hub and hard-refresh the dashboard (Ctrl+F5).</td></tr>
 <tr><td>HP Laser 103/107/108 shows <i>offline</i></td><td>That is the printer device itself (USB/network/sleep), not a hub error — check cable/power, set it online in Windows, then <b>Retry</b> the held jobs.</td></tr>
 </table>
 
@@ -546,7 +567,7 @@ Linux: <span class="mono">sudo apt remove advprint-pro</span> + <span class="mon
 the tray always opens the dashboard with the right token, and the error page itself offers the one-click fix.
 That is the v2.6 promise: <b>auto security, zero manual Security-tab surgery</b>.</div>
 
-<p style="margin-top:18px;color:#64748b;font-size:9.5px">AdvPrint Pro (Advanced Printer) v2.8.1 —
+<p style="margin-top:18px;color:#64748b;font-size:9.5px">AdvPrint Pro (Advanced Printer) v2.9.1 —
 by Bit Dream IT — Innovative Healthcare Solutions — MIT license — 100% local, no cloud, no tracking.
 Repository: github.com/bitdreamit/AdvPrint-Pro</p>
 
