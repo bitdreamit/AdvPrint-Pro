@@ -88,8 +88,8 @@ DWMWA_WINDOW_CORNER_PREFERENCE = 33     # Win11 rounded corners (fail-safe)
 DWMWCP_ROUND       = 2
 
 # menu item ids (high word safety: keep < 0x8000)
-M_OPEN, M_TEST, M_PAUSE, M_AUTO, M_EXIT, M_RESTART = (
-    1001, 1002, 1003, 1004, 1005, 1006)
+M_OPEN, M_TEST, M_PAUSE, M_AUTO, M_EXIT, M_RESTART, M_FIREWALL = (
+    1001, 1002, 1003, 1004, 1005, 1006, 1007)
 
 # menu colors (COLORREF = 0x00BBGGRR)
 COL_BG     = 0x301B0D              # dark navy  RGB(13, 27, 48)
@@ -744,6 +744,7 @@ class Tray(object):
             ("Pause queue", M_PAUSE, paused),
             ("Start at Windows logon", M_AUTO, auto),
             ("Restart hub", M_RESTART, False),
+            ("Allow LAN in firewall", M_FIREWALL, False),
             ("sep",),
             ("Exit", M_EXIT, False),
         ]
@@ -807,6 +808,12 @@ class Tray(object):
             # exit - the tray icon of THIS process disappears with it.
             self._log("restart requested from the tray menu")
             self._cb("on_restart")
+        elif cmd == M_FIREWALL:
+            # v2.8.2: one-click Windows firewall rule (single UAC
+            # prompt). The callback runs it in a helper thread so the
+            # tray never freezes while the UAC dialog is open.
+            self._log("firewall allow requested from the tray menu")
+            self._cb("on_firewall")
         elif cmd == M_EXIT:
             self._log("exit requested from tray")
             self.stop()

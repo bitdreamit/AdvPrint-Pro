@@ -135,6 +135,12 @@ The queue is **DB-driven** (SQLite): pending jobs survive hub restarts, and jobs
 | `GET /qr` | **v2.8.1** QR code as SVG (`kind=send` = phone upload URL, `kind=invite` = PC invite link; token required) |
 | `GET /connect` | **v2.8.1** One-click invite landing page (`?t=<hub-token>&n=<PC-name>`; validates its own token) |
 | `POST /peer-connect` | **v2.8.1** Auto-add a LAN peer from an invite (loopback + Origin-validated form POST; no token by design) |
+| `GET /lan/selftest` | **v2.8.2** Server-side LAN check: the hub connects to its own LAN URL and reports PASS/FAIL with the reason (token required) |
+| `POST /firewall/allow` | **v2.8.2** One-click Windows firewall rule for the hub port (loopback-only; triggers one UAC prompt) |
+| `GET /lan/selftest` | **v2.8.2** Server-side LAN check: the hub connects to its own LAN URL and reports PASS/FAIL with the reason (token required) |
+| `POST /firewall/allow` | **v2.8.2** One-click Windows firewall rule for the hub port (loopback-only; triggers one UAC prompt) |
+| `POST /config` (share_lan) | **v2.8.2** now applies LIVE - the response carries `"lan":{"rebound":true,"lan_error":null}` once the LAN listener is already serving |
+| `POST /config` (share_lan) | **v2.8.2** now applies LIVE - the response carries `"lan":{"rebound":true,"lan_error":null}` once the LAN listener is already serving |
 | `POST /restart` | **v2.8.0** Restart the hub cleanly (it relaunches itself; queued jobs are kept) |
 | `POST /jobs/bulk-reprint` | **v2.7.0** Reprint many jobs in one call |
 | `POST /history/clear` | **v2.7.0** Delete every FINISHED job from the history |

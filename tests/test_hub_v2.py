@@ -29,7 +29,7 @@ from conftest import wait_until  # noqa: E402
 def test_health_open_no_token(hub):
     code, d = hub.get("/health", token=None)
     assert code == 200 and d["ok"] is True
-    assert d["version"] == "2.8.1"
+    assert d["version"] == "2.8.2"
     assert d["v2"] is True
     assert "100% local" in d["branding"]
 
@@ -539,13 +539,13 @@ def test_v1_database_migration(tmp_path):
 
 
 def test_version_anchors():
-    assert advprint.VERSION == "2.8.1"
+    assert advprint.VERSION == "2.8.2"
     # repo/package layout: tool/windows/portable/hub -> root/extension
     root = os.path.dirname(os.path.dirname(os.path.dirname(
         os.path.dirname(os.path.dirname(advprint.__file__)))))
     ext = os.path.join(root, "extension", "manifest.json")
     with open(ext) as f:
-        assert json.load(f)["version"] == "2.8.1"
+        assert json.load(f)["version"] == "2.8.2"
 
 
 def test_log_rotation(tmp_path):
@@ -1052,7 +1052,7 @@ def test_v26_token_current_loopback_only(hub):
     code, d = hub.get("/token/current")
     assert code == 200 and d["ok"] is True
     assert d["token"] == hub.token
-    assert d["app"] == "AdvPrint Pro" and d["version"] == "2.8.1"
+    assert d["app"] == "AdvPrint Pro" and d["version"] == "2.8.2"
 
 
 def test_v26_token_current_rejects_remote(hub):
@@ -1126,8 +1126,8 @@ def test_v261_tray_module_ships_and_parses():
 
 
 def test_v261_version_single_source():
-    assert advprint.VERSION == "2.8.1"
-    assert advprint.VERSION_NAME.startswith("v2.8.1")
+    assert advprint.VERSION == "2.8.2"
+    assert advprint.VERSION_NAME.startswith("v2.8.2")
 
 
 def test_v261_cli_cmd_full_path():
@@ -1293,7 +1293,7 @@ def test_v264_setup_exe_kills_zombie_hubs():
     assert "Stop-Process -Name AdvPrintPro" in stopps
     assert "Stop-Process -Name PrintHubPro" in stopps
     assert "sc.exe delete AdvPrint" in stopps
-    assert 'VIProductVersion "2.8.1.0"' in src
+    assert 'VIProductVersion "2.8.2.0"' in src
 
 
 # ---------------- v2.6.8: printer-name self-heal + menu guard ----------
@@ -1576,7 +1576,7 @@ def _v280_pdf(tmp_path, name="z.pdf", big="AdvPrint Pro v2.8 test"):
 
 
 def test_v280_version_and_config_keys():
-    assert advprint.VERSION == "2.8.1"
+    assert advprint.VERSION == "2.8.2"
     for k in ("drop_enabled", "drop_dir", "drop_delete"):
         assert k in advprint.CFG and k in advprint.CONFIG_KEYS
         assert k in advprint.CONFIG_TYPES
@@ -1792,7 +1792,7 @@ def test_v280_source_wiring_restart_tray_tool_installer():
     nsi = open(os.path.join(root, "installer", "setup.nsi"),
                encoding="utf-8").read()
     assert "hub-stop.ps1" in nsi
-    assert "2.8.1" in nsi and "${IfNot} ${Silent}" in nsi
+    assert "2.8.2" in nsi and "${IfNot} ${Silent}" in nsi
     # extension dual profile
     ext = os.path.join(root, "extension")
     bg = open(os.path.join(ext, "background.js"), encoding="utf-8").read()
@@ -1804,7 +1804,7 @@ def test_v280_source_wiring_restart_tray_tool_installer():
     opt = open(os.path.join(ext, "options.html"), encoding="utf-8").read()
     assert "hubUrlLan" in opt and "bDashboardLan" in opt
     man = json.load(open(os.path.join(ext, "manifest.json")))
-    assert man["version"] == "2.8.1"
+    assert man["version"] == "2.8.2"
 
 
 def test_v280_lan_profile_never_auto_heals():
@@ -2057,5 +2057,78 @@ def test_v281_setup_nsi_version():
         root = os.path.dirname(root)
     nsi = open(os.path.join(root, "installer", "setup.nsi"),
                encoding="utf-8", errors="replace").read()
-    assert 'VIProductVersion "2.8.1.0"' in nsi
-    assert 'OutFile' in nsi and "AdvPrint-Pro-Setup-2.8.1.exe" in nsi
+    assert 'VIProductVersion "2.8.2.0"' in nsi
+    assert 'OutFile' in nsi and "AdvPrint-Pro-Setup-2.8.2.exe" in nsi
+
+
+# ============================================================
+# v2.8.2 - LAN sharing applies LIVE + firewall one-click
+# ============================================================
+
+def test_v282_share_lan_applies_live(hub):
+    """The reported 2.8.1 bug: 'LAN sharing ON but the LAN IP does not
+    answer - only 127.0.0.1 works'. The toggle must start/stop the LAN
+    listener INSIDE the POST /config request - no hub restart."""
+    try:
+        code, d = hub.post("/config", {"share_lan": True})
+        assert code == 200 and d["ok"]
+        assert d.get("lan", {}).get("rebound") is True
+        err = d["lan"].get("lan_error")
+        code, h = hub.get("/health")
+        if err is None:
+            # bind succeeded: the LAN listener is really serving
+            assert h["lan_active"] is True
+            assert h["lan_bind_ip"] == h["lan_ip"]
+            assert h["lan_bind_ip"] != "127.0.0.1"
+            # ...and it actually answers HTTP on the LAN IP itself
+            u = "http://%s:%d/health" % (h["lan_bind_ip"],
+                                         advprint.CFG["port"])
+            with urllib.request.urlopen(u, timeout=5) as r:
+                body = json.loads(r.read().decode("utf-8", "replace"))
+            assert body["app"] == advprint.APP_NAME
+        else:
+            # no routable LAN IP in this environment - say so honestly
+            assert h["lan_active"] is False
+            assert ("LAN IP" in err) or ("bind" in err)
+        # the self-test endpoint mirrors the same truth
+        code, st = hub.get("/lan/selftest")
+        assert code == 200
+        assert st["ok"] is (err is None)
+        if st["ok"]:
+            assert st["url"].startswith("http://%s:%d"
+                                        % (h["lan_ip"],
+                                           advprint.CFG["port"]))
+    finally:
+        code, d = hub.post("/config", {"share_lan": False})
+        assert code == 200 and d["ok"]
+        code, h = hub.get("/health")
+        assert h["lan_active"] is False
+        assert h["share_lan"] is False
+
+
+def test_v282_firewall_route_loopback_ok(hub):
+    """POST /firewall/allow answers from loopback (a no-op OK on
+    non-Windows, a real netsh attempt on Windows)."""
+    code, d = hub.post("/firewall/allow", {})
+    if advprint.IS_WIN:
+        assert code in (200, 400)
+    else:
+        assert code == 200 and d["ok"] is True
+    assert "firewall_ok" in d
+
+
+def test_v282_health_has_lan_diagnostics(hub):
+    code, h = hub.get("/health")
+    assert code == 200
+    assert "lan_ip" in h and "lan_bind_ip" in h
+    assert h["firewall_ok"] is None or isinstance(h["firewall_ok"], bool)
+
+
+def test_v282_dashboard_has_live_rebind_ui():
+    src = open(os.path.join(os.path.dirname(advprint.__file__),
+                            "advprint.py"), encoding="utf-8").read()
+    for marker in ("Allow in firewall", "Test LAN", "lanSelftest",
+                   "fwAllow", "/firewall/allow", "/lan/selftest",
+                   "lan_listen_start", "lan_listen_ensure",
+                   "RIGHT NOW (no restart needed)"):
+        assert marker in src, marker

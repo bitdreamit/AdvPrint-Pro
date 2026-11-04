@@ -13,6 +13,16 @@ Web page ──► Chrome extension ──► AdvPrint Pro hub (localhost:9235) 
 
 ---
 
+## What's new in v2.8.2 (LAN sharing applies live + firewall one-click)
+
+Fixes the field report **"LAN sharing is ON but `http://<lan-ip>:9235` does not answer - only 127.0.0.1 works"**:
+
+- **Live LAN rebind — no restart, zero downtime.** The loopback listener (`127.0.0.1:9235`) always stays up; toggling LAN sharing now starts/stops a SECOND listener bound to the PC's **specific LAN IP** inside the same HTTP request. A failed LAN bind is only logged — it can never take local printing down. DHCP IP changes are followed automatically within seconds.
+- **Windows firewall: state + one-click fix.** The dashboard LAN card shows ALLOWED / BLOCKED / unknown (`firewall_ok` in `/health`) and an **Allow in firewall** button (one UAC prompt, rule for the current port); the tray menu gains **Allow LAN in firewall**. `POST /firewall/allow` is loopback-only by design.
+- **Test LAN.** `GET /lan/selftest` — the hub connects to its own LAN URL and reports PASS/FAIL with the reason: PASS + another PC still failing = firewall; FAIL = listener problem (hub.log explains).
+
+Nothing removed: every v2.8.1 feature (send-portal QR, one-click invite) is unchanged.
+
 ## What's new in v2.8.1 (QR code + one-click LAN invite)
 
 Two additions to the dashboard's LAN sharing card — both 100% local:
@@ -34,7 +44,7 @@ The ten most-requested features, all in one release:
 - **DropZone + Send portal — printing WITHOUT the extension.** The hub watches a folder: in Word/Excel/ANY app choose *Microsoft Print to PDF* and save into the DropZone — the page prints seconds later (dashboard → DropZone card; `POST /dropzone/open` opens the folder). Phones/tablets/other PCs print through the built-in **Send portal** (`/send`, token-protected, same as every endpoint).
 - **Restart hub** — in the tray menu, AdvPrint Tool [14] and the dashboard button: the hub relaunches itself cleanly (new process waits for the port; queued jobs, settings and history are kept).
 - **Bullet-proof upgrade & uninstall.** The setup now runs `hub-stop.ps1` BEFORE touching files: stops the optional *AdvPrint* service (wait + PID kill), **deletes the service registration** (reinstalled fresh when ticked — upgrades keep it automatically), kills every process under the install folder and frees TCP 9235. Old program folders are wiped, so no stale file can abort an install any more; the uninstaller retries the folder sweep and reports leftovers honestly.
-- **Silent install** `AdvPrint-Pro-Setup-2.8.1.exe /S` — elevation is requested by the exe manifest itself ("auto permission" on any PC), the hub auto-starts after a silent install, and the firewall rule for LAN sharing (TCP 9235) is added automatically (removed on uninstall).
+- **Silent install** `AdvPrint-Pro-Setup-2.8.2.exe /S` — elevation is requested by the exe manifest itself ("auto permission" on any PC), the hub auto-starts after a silent install, and the firewall rule for LAN sharing (TCP 9235) is added automatically (removed on uninstall).
 - **New A + printer logo** — the letter A drawn as a printer: the crossbar is the output slot and a printed page slides out of it. Same mark in the extension, popup, dashboard, tray icon, installer and docs.
 
 Nothing removed: every v2.7.0 feature (history manager, share toggles, live test tool) is unchanged.

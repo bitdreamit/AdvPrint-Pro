@@ -1,6 +1,17 @@
 # Changelog - AdvPrint Pro (Advanced Printer)
 by Bit Dream IT - Innovative Healthcare Solutions
 
+## v2.8.2 - LAN SHARING APPLIES LIVE + WINDOWS FIREWALL ONE-CLICK (2026-11-04)
+
+Fixes the field report "LAN sharing ON but http://<lan-ip>:9235 does not answer - only 127.0.0.1 works".
+
+- **Live LAN rebind - the share switch now works instantly.** The hub keeps its loopback listener (127.0.0.1) up at all times and runs LAN sharing on a SECOND listener bound to the PC's specific LAN IP. Toggling LAN sharing (dashboard, extension Options or `POST /config`) starts/stops that listener inside the same HTTP request - no hub restart, zero downtime, and a failed LAN bind can never take local printing down. New internals: `lan_listen_start/stop/ensure` (`lan_active` in `/health` now reflects the real bind).
+- **DHCP-proof.** A 3 s watcher follows LAN IP changes automatically: if the router hands the PC a new address, the LAN listener rebinds itself and logs `[LAN] LAN IP changed ... - rebinding`.
+- **Windows firewall: detected and one-click fixed.** `/health` reports `firewall_ok` (netsh rule query, cached 30 s). The dashboard LAN card shows ALLOWED / BLOCKED / unknown plus an **Allow in firewall** button (single UAC prompt, rule for the current port); the tray menu gains **Allow LAN in firewall**. `POST /firewall/allow` is loopback-only by design.
+- **Test LAN.** New `GET /lan/selftest`: the hub connects to its own LAN URL and reports PASS/FAIL with the exact reason - PASS + another PC still failing = firewall; FAIL = listener problem (hub.log explains).
+- **Dashboard copy rewritten** - no more "RESTART the hub to apply"; the LAN card now shows the firewall row, the Test LAN button and honest error text when a bind fails.
+- Docs page (`/docs`), START-HERE, README, API.md and the Full Guide updated for the new behaviour. Version bumped to 2.8.2 across hub, tray, setup.nsi (VI 2.8.2.0), extension manifest.
+
 ## v2.8.1 - SEND-PORTAL QR CODE + ONE-CLICK LAN INVITE (2026-11-03)
 
 Two additions to the dashboard's LAN sharing card, both requested as

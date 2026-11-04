@@ -91,12 +91,13 @@ if _HUB_DIR not in sys.path:
     sys.path.insert(0, _HUB_DIR)
 
 
-VERSION = "2.8.1"
-VERSION_NAME = ("v2.8.1 (QR code + one-click invite on the dashboard LAN"
-                " card: phones scan the Send-portal QR and upload a PDF"
-                " straight to the printer; another PC opens the invite"
-                " link and auto-adds this PC as a LAN print peer - no"
-                " config.json editing, no retyping IP or token)")
+VERSION = "2.8.2"
+VERSION_NAME = ("v2.8.2 (LAN sharing now applies LIVE: the LAN listener"
+                " starts/stops the moment the dashboard switch is toggled -"
+                " no hub restart, loopback never blinks; Windows firewall"
+                " detect + one-click 'Allow in firewall' on the dashboard"
+                " and in the tray menu, plus a Test LAN self-check that"
+                " answers 'why can the other PC not connect?' in one click)")
 FULL_BRAND = ("AdvPrint Pro (Advanced Printer) by "
               "Bit Dream IT - Innovative Healthcare Solutions")
 BRANDING = ("AdvPrint Pro (Advanced Printer) - Version %s - by "
@@ -109,6 +110,8 @@ GITHUB_REPO = "bitdreamit/AdvPrint-Pro"
 GITHUB_RELEASES = "https://github.com/%s/releases" % GITHUB_REPO
 SERVICE_NAME = "AdvPrint"          # optional Windows service (services.msc)
 SERVICE_DISPLAYNAME = "AdvPrint Pro Service"
+FIREWALL_RULE_NAME = "AdvPrint Pro"   # netsh rule (added by the installer
+                                      # AND by the one-click allow button)
 IS_WIN = sys.platform == "win32"
 IS_MAC = sys.platform == "darwin"
 HIDE = 0x08000000 if IS_WIN else 0          # no console window flash on Windows
@@ -1214,6 +1217,10 @@ def build_health_snapshot():
         "lan_active": bool(BOUND_LAN),
         "lan_url": ("http://%s:%d" % (lan_ip(), CFG["port"]))
                    if CFG.get("share_lan") else None,
+        # v2.8.2: diagnostics for "the other PC cannot connect"
+        "lan_ip": lan_ip(),
+        "lan_bind_ip": _LAN_BIND_IP,
+        "firewall_ok": firewall_rule_ok(),
         "hostname": socket.gethostname(),
         "success_rate": st.get("success_rate") if st else None,
         "printers_ready": ready,
@@ -1251,6 +1258,12 @@ def start_health_refresher():
         while True:
             try:
                 build_health_snapshot()
+            except Exception:
+                pass
+            # v2.8.2: keep the LAN listener aligned with the config AND
+            # with DHCP IP changes - no user action, no restart ever.
+            try:
+                lan_listen_ensure()
             except Exception:
                 pass
             time.sleep(3.0)
@@ -3947,6 +3960,27 @@ class Handler(BaseHTTPRequestHandler):
             st["custom_dir"] = (CFG.get("drop_dir") or "").strip()
             st["is_default"] = not st["custom_dir"]
             return self._send(200, st)
+        if route == "/lan/selftest":                # v2.8.2 one-click check
+            # Answers "why can the other PC not connect?": the hub tests
+            # its own LAN URL server-side. A PASS proves the listener is
+            # reachable on the LAN IP of THIS PC - a DIFFERENT PC that
+            # still fails is the firewall (click 'Allow in firewall').
+            u = "http://%s:%d/health" % (lan_ip(), CFG["port"])
+            try:
+                with urllib.request.urlopen(u, timeout=5) as r:
+                    data = json.loads(r.read().decode("utf-8", "replace"))
+                res = {"ok": True, "url": u,
+                       "version": data.get("version"),
+                       "note": "the listener answers on this PC's LAN IP; "
+                               "if a DIFFERENT PC still cannot connect, "
+                               "allow TCP %d in the firewall"
+                               % CFG["port"]}
+            except Exception as e:
+                res = {"ok": False, "url": u, "error": str(e),
+                       "hint": "the LAN listener is not answering - "
+                               "toggle LAN sharing off/on, then check "
+                               "hub.log"}
+            return self._send(200, res)
         if route == "/send":                        # v2.8 send portal page
             tok = qt or CFG["token"]
             return self._send_html(200, send_portal_html(tok))
@@ -4499,8 +4533,43 @@ class Handler(BaseHTTPRequestHandler):
                     build_health_snapshot()
                 except Exception:
                     pass
-            return self._send(200, {"ok": True, "changed": changed,
-                                    "config": redacted_config()})
+            lan_info = None
+            if "share_lan" in changed:
+                # v2.8.2: LAN sharing applies LIVE - the dedicated LAN
+                # listener starts/stops right here, before the response
+                # leaves. No hub restart. Loopback is never touched.
+                if _env("HOST"):
+                    BOUND_LAN = bool(CFG.get("share_lan"))
+                    lan_info = {"rebound": False, "lan_error": None,
+                                "note": "ADVPRINT_HOST pins the main bind "
+                                        "- restart the hub to apply"}
+                elif CFG.get("share_lan"):
+                    err = lan_listen_start()
+                    lan_info = {"rebound": True, "lan_error": err}
+                else:
+                    lan_listen_stop()
+                    lan_info = {"rebound": True, "lan_error": None}
+            resp = {"ok": True, "changed": changed,
+                    "config": redacted_config()}
+            if lan_info:
+                resp["lan"] = lan_info
+            return self._send(200, resp)
+
+        # POST /firewall/allow - v2.8.2 one-click Windows firewall fix.
+        # Loopback ONLY: a UAC elevation prompt is a local, physical-
+        # user action - never trigger it from a LAN client request.
+        if route == "/firewall/allow":
+            if self._client_ip() not in ("127.0.0.1", "::1",
+                                         "::ffff:127.0.0.1"):
+                return self._send(403, {
+                    "ok": False,
+                    "error": "open the dashboard on THIS PC "
+                             "(http://127.0.0.1:%d) to change the "
+                             "firewall" % CFG["port"]})
+            ok, err = firewall_allow()
+            return self._send(200 if ok else 400,
+                              {"ok": ok, "error": err,
+                               "firewall_ok": firewall_rule_ok()})
 
         # POST /debug/report - v2.3: the extension (Debug mode ON) and
         # the desktop tool send every error HERE so /debug can show why
@@ -5379,12 +5448,22 @@ curl -X POST http://127.0.0.1:@@PORT@@/print \
       &bull; Extension Options &rarr; <b>LAN / PCs</b> tab &rarr; "Enable LAN sharing"<br>
       &bull; Hub dashboard &rarr; "LAN sharing &amp; other PCs" card &rarr; Enable<br>
       &bull; API: <code>POST /config</code> with <code>{"share_lan": true}</code></li>
-  <li>The hub restarts its listener on <code>0.0.0.0:@@PORT@@</code> and the
-      dashboard/LAN tab shows this PC's address, e.g.
-      <code>http://192.168.0.50:@@PORT@@</code>.</li>
-  <li><b>Allow the port through the firewall</b> (Windows Defender):
+  <li><b>v2.8.2: it applies INSTANTLY.</b> The hub keeps its loopback
+      listener on <code>127.0.0.1:@@PORT@@</code> (local printing never
+      stops) and starts a SECOND listener on this PC's LAN IP, e.g.
+      <code>192.168.0.50:@@PORT@@</code> - no hub restart needed, and
+      disabling the switch stops the LAN listener at once. If the
+      router gives the PC a new IP (DHCP), the listener follows it
+      automatically within seconds.</li>
+  <li><b>Firewall (Windows)</b> - the dashboard shows the state and a
+      one-click <b>Allow in firewall</b> button (also in the tray
+      menu); it adds this rule after one UAC prompt:
       <pre>netsh advfirewall firewall add rule name="AdvPrint Pro" dir=in ^
-  action=allow protocol=TCP localport=@@PORT@@</pre></li>
+  action=allow protocol=TCP localport=@@PORT@@</pre>
+      The button lives at dashboard &rarr; LAN card &rarr;
+      <i>Windows firewall</i> row. <b>Test LAN</b> (same row) checks
+      the listener from the hub itself: if it passes but a DIFFERENT
+      PC still cannot connect, it is the firewall.</li>
   <li><b>From another PC</b> - pick ONE:<br>
       &bull; Install the same extension there and set <b>Hub URL</b> to
       <code>http://192.168.0.50:@@PORT@@</code> + the same token<br>
@@ -6080,7 +6159,7 @@ async function loadLan(){
       "<td><button onclick='toggleLan("+(on?"false":"true")+")'>"+(on?"Disable":"Enable")+"</button> "+
       (on?"<button onclick='copyLan()'>Copy URL</button>":"")+"</td></tr>";
     if(on&&!active)
-      rows+="<tr><td colspan='3'><b>Restart the hub to apply</b> - tray icon → Exit, then start AdvPrint Pro again (the listener rebinds to the LAN on start).</td></tr>";
+      rows+="<tr><td colspan='3'><b>The LAN listener is NOT running</b> (the setting is saved but the bind failed) - toggle LAN sharing off/on once, then check hub.log. Local printing on 127.0.0.1 is NOT affected.</td></tr>";
     if(on){
       /* v2.8.1: send-portal URL + QR (phones print without any install)
          and the one-click invite link for another PC. */
@@ -6093,6 +6172,16 @@ async function loadLan(){
       rows+="<tr><td><b>Connect another PC: </b><span class='st queued'>1-click</span></td>"+
         "<td class='mono'>"+esc(INVITE_URL)+"</td>"+
         "<td><button onclick='copyInvite()'>Copy invite link</button> <button onclick='showQr(\"invite\")'>QR</button></td></tr>";
+      /* v2.8.2: firewall status + one-click allow + server-side LAN
+         self-test - answers 'why can the other PC not connect?' */
+      if(hl.os==="windows"){
+        const fw=hl.firewall_ok;
+        rows+="<tr><td><b>Windows firewall: </b>"+(fw===true?"<span class='st queued'>ALLOWED</span>":fw===false?"<span class='st held'>BLOCKED</span>":"<span class='st held'>unknown</span>")+"</td>"+
+          "<td class='mono'>"+(fw===false?"other PCs cannot connect until TCP "+location.port+" is allowed":fw===true?"inbound TCP "+location.port+" allowed for LAN PCs":"click the button, then accept the Windows UAC prompt")+"</td>"+
+          "<td>"+(fw===true?"":"<button onclick='fwAllow()'>Allow in firewall</button> ")+"<button onclick='lanSelftest()'>Test LAN</button></td></tr>";
+      } else {
+        rows+="<tr><td><b>LAN check: </b></td><td class='mono'>does the listener answer on this PC's LAN IP?</td><td><button onclick='lanSelftest()'>Test LAN</button></td></tr>";
+      }
     }
     rows+="<tr><td><b>Printer status hold: </b>"+(HOLD_OFF?"<span class='st queued'>ON</span>":"<span class='st held'>OFF</span>")+"</td><td class='mono'>jobs wait while the printer reports offline</td><td><button onclick='toggleHold(+(!HOLD_OFF))'>"+(HOLD_OFF?"Disable":"Enable")+"</button></td></tr>";
     try{const pr=await jget("/peers");PEERS=(pr&&pr.peers)||pr||[];}catch(_){PEERS=[];}
@@ -6144,10 +6233,39 @@ async function toggleHold(on){
   setTimeout(loadLan,400);
 }
 async function toggleLan(on){
+  /* v2.8.2: applies LIVE - the hub starts/stops the LAN listener inside
+     this request. No restart, and 127.0.0.1 never stops answering. */
+  msg(on?"Enabling LAN sharing - starting the LAN listener...":"Disabling LAN sharing - stopping the LAN listener...");
   const r=await act("/config",{share_lan:on});
-  if(r.ok)msg(on?"LAN sharing saved - RESTART the hub (tray icon → Exit, start again) so other PCs can connect. Check the firewall!":"LAN sharing disabled - restart the hub to unbind the LAN");
+  if(r.ok&&r.lan&&r.lan.rebound&&!r.lan.lan_error)
+    msg(on?"LAN sharing ON - other PCs can connect RIGHT NOW (no restart needed). If one still cannot: click 'Test LAN', then 'Allow in firewall'."
+          :"LAN sharing OFF - this PC only (127.0.0.1) again. Local printing never stopped.");
+  else if(r.ok&&r.lan&&r.lan.lan_error)
+    msg("LAN sharing saved, but the LAN listener could not start: "+r.lan.lan_error);
+  else if(r.ok&&r.lan&&r.lan.note)
+    msg(r.lan.note);
+  else if(r.ok)
+    msg("LAN sharing saved.");
   else msg(r.error||"failed");
-  setTimeout(refresh,400);
+  setTimeout(()=>{loadLan();refresh();},400);
+}
+async function fwAllow(){
+  /* v2.8.2: one-click Windows firewall fix (single UAC prompt). */
+  msg("Adding the firewall rule - ACCEPT the Windows UAC prompt...");
+  const r=await act("/firewall/allow",{});
+  if(r.ok)msg("Firewall rule added - LAN PCs can now reach the hub. Try printing from the other PC.");
+  else msg(r.error||"could not add the rule");
+  setTimeout(loadLan,600);
+}
+async function lanSelftest(){
+  /* v2.8.2: the hub connects to its own LAN URL - proves the listener
+     is up. A DIFFERENT PC still failing after this = firewall. */
+  msg("Testing the LAN listener from the hub itself...");
+  try{
+    const r=await jget("/lan/selftest");
+    if(r.ok)msg("LAN listener OK - "+r.url+" answers. If a DIFFERENT PC still cannot connect, it is the firewall: click 'Allow in firewall'.");
+    else msg("LAN test FAILED - "+r.url+" - "+(r.error||"?")+" "+(r.hint||""));
+  }catch(e){msg("LAN test failed: "+e);}
 }
 function copyLan(){
   /* v2.8.1: anchor to the FIRST row - the new send/invite rows below
@@ -6554,6 +6672,174 @@ def lan_share_url(kind="send"):
             base, quote(str(CFG["token"] or "")),
             quote(socket.gethostname()))
     return "%s/send?token=%s" % (base, quote(str(CFG["token"] or "")))
+
+# ------------------------------------------------------------
+# v2.8.2 LIVE LAN REBIND - fixes "toggled LAN sharing ON but
+# http://<lan-ip>:9235 does not answer". In 2.8.1 the flag was only
+# SAVED and the hub had to be RESTARTED to rebind its single listener
+# - easy to miss, so the LAN IP stayed dead. Now the loopback
+# listener (127.0.0.1) ALWAYS stays up - the dashboard, the extension
+# and this PC never lose the hub - and LAN sharing runs a SECOND
+# listener bound to this machine's SPECIFIC LAN IP (e.g.
+# 192.168.1.244:9235). A specific-IP bind coexists with the loopback
+# bind on every OS, so toggling the switch simply starts/stops the
+# second listener: instantly, zero downtime, and a failed LAN bind
+# can never take local printing down.
+# ------------------------------------------------------------
+_LAN_HTTPD = None                 # the second (LAN) listener, or None
+_LAN_THREAD = None
+_LAN_BIND_IP = None               # LAN IP the second listener is on
+
+def lan_listen_active():
+    """True while the dedicated LAN listener is serving."""
+    return _LAN_HTTPD is not None
+
+def lan_listen_start():
+    """Bind the LAN listener to this PC's CURRENT LAN IP. Returns an
+    error string, or None on success. Never touches the loopback hub:
+    if this bind fails, 127.0.0.1 keeps answering."""
+    global _LAN_HTTPD, _LAN_THREAD, _LAN_BIND_IP, BOUND_LAN
+    if _LAN_HTTPD is not None:
+        return None
+    if _env("HOST"):
+        # Power user pinned the main bind with ADVPRINT_HOST (e.g.
+        # 0.0.0.0): that listener already covers the LAN - do not open
+        # a second one, trust the boot-time BOUND_LAN value.
+        return None
+    ip = lan_ip()
+    if ip in ("127.0.0.1", "::1", ""):
+        return ("no LAN IP found (Wi-Fi/Ethernet disconnected?) - "
+                "connect to the network and toggle LAN sharing again")
+    port = int(CFG.get("port", 9235))
+    try:
+        httpd = HubServer((ip, port), Handler)
+    except OSError as e:
+        return ("cannot bind %s:%d (%s) - another program may own the "
+                "port, or the network card just changed" % (ip, port, e))
+    except Exception as e:
+        return "cannot bind %s:%d (%s)" % (ip, port, e)
+    httpd.daemon_threads = True
+    _LAN_HTTPD = httpd
+    _LAN_BIND_IP = ip
+    _LAN_THREAD = threading.Thread(
+        target=httpd.serve_forever, kwargs={"poll_interval": 0.2},
+        name="advprint-lan", daemon=True)
+    _LAN_THREAD.start()
+    BOUND_LAN = True
+    log("[LAN] listener UP on http://%s:%d - other PCs and phones can "
+        "print now (the loopback listener was never touched)"
+        % (ip, port))
+    try:
+        build_health_snapshot()
+    except Exception:
+        pass
+    return None
+
+def lan_listen_stop():
+    """Stop the dedicated LAN listener (loopback hub keeps running)."""
+    global _LAN_HTTPD, _LAN_THREAD, _LAN_BIND_IP, BOUND_LAN
+    httpd = _LAN_HTTPD
+    if httpd is None:
+        return
+    _LAN_HTTPD = None
+    _LAN_THREAD = None
+    _LAN_BIND_IP = None
+    if not _env("HOST"):
+        BOUND_LAN = False
+    def _closer():
+        try:
+            httpd.shutdown()          # exits serve_forever (its own thread)
+        except Exception:
+            pass
+        try:
+            httpd.server_close()      # release the port
+        except Exception:
+            pass
+        log("[LAN] listener stopped - this PC only (127.0.0.1) again")
+    threading.Thread(target=_closer, daemon=True,
+                     name="advprint-lan-stop").start()
+    try:
+        build_health_snapshot()
+    except Exception:
+        pass
+
+def lan_listen_ensure():
+    """Health-refresher hook (runs every 3 s): follow config changes
+    AND DHCP IP changes without any user action."""
+    if _env("HOST"):
+        return
+    want = bool(CFG.get("share_lan"))
+    if want and _LAN_HTTPD is None:
+        err = lan_listen_start()
+        if err:
+            log("[LAN] auto-start: %s" % err)
+    elif want and _LAN_BIND_IP and _LAN_BIND_IP != lan_ip():
+        # DHCP handed this PC a new address - follow it automatically.
+        log("[LAN] LAN IP changed %s -> %s - rebinding the LAN listener"
+            % (_LAN_BIND_IP, lan_ip()))
+        lan_listen_stop()
+        lan_listen_start()
+    elif not want and _LAN_HTTPD is not None:
+        lan_listen_stop()
+
+# ------------------------------------------------------------
+# v2.8.2 WINDOWS FIREWALL - the OTHER classic reason "the other PC
+# cannot connect even with the listener up": Windows Defender drops
+# inbound TCP 9235 silently. The installer adds the rule, but a port
+# change or a cleanup tool can remove it. Detect the rule (cheap,
+# cached 30 s) and allow adding it back with ONE click from the
+# dashboard / tray (a single UAC prompt, standard netsh rule).
+# ------------------------------------------------------------
+_FW_CACHE = {"t": 0.0, "ok": None}
+
+def firewall_rule_ok():
+    """True/False = inbound rule present/absent (Windows); None =
+    non-Windows or the netsh query failed. Cached for 30 s."""
+    if not IS_WIN:
+        return None
+    now = time.time()
+    if now - _FW_CACHE["t"] < 30:
+        return _FW_CACHE["ok"]
+    ok = None
+    try:
+        p = subprocess.run(
+            ["netsh", "advfirewall", "firewall", "show", "rule",
+             "name=" + FIREWALL_RULE_NAME],
+            capture_output=True, timeout=8, creationflags=HIDE)
+        ok = (p.returncode == 0)
+    except Exception:
+        ok = None
+    _FW_CACHE["t"] = now
+    _FW_CACHE["ok"] = ok
+    return ok
+
+def firewall_allow():
+    """Add the inbound allow rule via one UAC prompt. Returns
+    (ok, error_string). Safe to call from any thread."""
+    if not IS_WIN:
+        return True, None                      # nothing to do off Windows
+    port = int(CFG.get("port", 9235))
+    ps = ("Start-Process netsh -Verb RunAs -Wait -ArgumentList "
+          "'advfirewall firewall add rule name=\"%s\" dir=in action=allow "
+          "protocol=TCP localport=%d'" % (FIREWALL_RULE_NAME, port))
+    try:
+        subprocess.run(
+            ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
+             "-Command", ps],
+            capture_output=True, timeout=120, creationflags=HIDE)
+    except Exception as e:
+        return False, "firewall command failed: %s" % e
+    _FW_CACHE["t"] = 0.0
+    if firewall_rule_ok():
+        db_audit("firewall.allowed", actor="ui",
+                 details="inbound TCP %d allowed (rule '%s')"
+                         % (port, FIREWALL_RULE_NAME))
+        log("[FIREWALL] inbound TCP %d allowed - LAN PCs can reach the "
+            "hub (rule '%s')" % (port, FIREWALL_RULE_NAME))
+        return True, None
+    return False, ("the rule is still missing - the Windows UAC prompt "
+                   "was probably canceled. Start the hub once as admin, "
+                   "or add the rule manually with netsh.")
 
 # ------------------------------------------------------------
 # v2.8 - DROP ZONE: print from ANY PC/app without the extension.
@@ -7368,14 +7654,19 @@ def cmd_serve():
         log(traceback.format_exc())
         raise
     host = CFG["host"]
-    if CFG.get("share_lan") and not _env("HOST"):
-        host = "0.0.0.0"
-        log("[LAN] printer sharing ENABLED - other PCs can print through"
-            " http://%s:%d (token required; allow TCP %d through the"
-            " firewall if needed)" % (lan_ip(), CFG["port"], CFG["port"]))
-    addr = (host, CFG["port"])
+    # v2.8.2: the main listener ALWAYS stays on its normal bind
+    # (127.0.0.1 unless ADVPRINT_HOST pins it). LAN sharing no longer
+    # rebinds THIS socket - a second listener on the specific LAN IP
+    # starts right after the loopback one is up (lan_listen_start), so
+    # "Enable LAN sharing" works instantly and a LAN bind failure can
+    # never take local printing down.
     global BOUND_LAN
-    BOUND_LAN = (host == "0.0.0.0")
+    BOUND_LAN = (host in ("0.0.0.0", "::"))
+    if CFG.get("share_lan") and not _env("HOST"):
+        log("[LAN] printer sharing ON at boot - the LAN listener starts"
+            " right after the loopback one (http://%s:%d, token"
+            " required)" % (lan_ip(), CFG["port"]))
+    addr = (host, CFG["port"])
     # v2.8 RESTART support: the replacement process (ADVPRINT_RESTART=1,
     # set by _relaunch_process) SKIPS the single-instance pre-check - the
     # old hub is still answering during its last second - and instead
@@ -7424,6 +7715,13 @@ def cmd_serve():
         build_health_snapshot()
     except Exception:
         pass
+    # v2.8.2: bring the LAN listener up when the saved config says LAN
+    # sharing was ON last time. A bind failure is LOGGED, never fatal -
+    # local printing (127.0.0.1) is already up at this point.
+    if CFG.get("share_lan") and not _env("HOST"):
+        err = lan_listen_start()
+        if err:
+            log("[LAN] %s" % err)
     print(BANNER)
     log("%s" % BRANDING)
     log("AdvPrint Pro v%s listening on http://%s:%d" % (VERSION, CFG["host"], CFG["port"]))
@@ -7488,6 +7786,14 @@ def _start_tray(httpd):
         log("[RESTART] restart requested from the tray menu")
         threading.Timer(0.4, _restart_and_exit).start()
 
+    def _fw_allow():
+        # v2.8.2: one-click Windows firewall fix from the tray. Runs in
+        # a helper thread - the UAC prompt can stay open for a while
+        # and the tray menu must never freeze behind it.
+        log("[FIREWALL] 'Allow LAN in firewall' requested from the tray")
+        threading.Thread(target=firewall_allow, daemon=True,
+                         name="advprint-fw").start()
+
     def _exit():
         log("AdvPrint Pro stopped from the tray icon menu")
         threading.Timer(0.5, os._exit, args=(0,)).start()
@@ -7508,12 +7814,13 @@ def _start_tray(httpd):
             "is_autostart": autostart_enabled,
             "on_autostart_toggle": _auto_toggle,
             "on_restart": _restart,
+            "on_firewall": _fw_allow,
             "on_exit": _exit,
         },
         logf=log)
     log("[TRAY] icon active next to the clock - right-click it for the"
         " control menu (Open dashboard / test page / pause / auto-run"
-        " / restart / exit).")
+        " / restart / allow LAN in firewall / exit).")
 
 def cmd_testprint(kind):
     db_init(); start_worker()
