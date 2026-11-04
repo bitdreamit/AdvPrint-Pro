@@ -1,6 +1,26 @@
-AdvPrint Pro (Advanced Printer) v2.8.2 - START HERE
+AdvPrint Pro (Advanced Printer) v2.9.0 - START HERE
 ====================================================
 by Bit Dream IT - Innovative Healthcare Solutions
+
+WHAT'S NEW IN 2.9.0 (NETWORK PRINTER MODE + PHONE AUTH FIX + SMOOTH TRAY)
+----------------------------------------------------------------------------
+1) NETWORK PRINTER MODE - add this PC like a real IP printer:
+   - IPP printer URL  http://<this-PC-IP>:9235/ipp/print
+     Windows 10/11: Add printer > "Select a shared printer by name" >
+     paste the URL (built-in IPP Class Driver, no driver download).
+   - Classic TCP/IP printer port (JetDirect RAW) on 9100:
+     Windows: Add printer > "Add a printer using TCP/IP address" >
+     this PC's IP, port 9100, device type "Generic Network Card" >
+     pick your real printer's driver. Windows renders ANY file and
+     streams it here - the hub prints it.
+   - PDF, JPEG, PostScript, PCL, ESC/POS and ZPL payloads are all
+     routed automatically. Both rows live on the dashboard LAN card
+     (URL + copy + QR / port + status + "How to add").
+2) PHONE "AUTH FAIL" ON THE SEND-PORTAL QR - FIXED. The portal upload
+   now accepts the token from the QR link in every token mode; a wrong
+   token answers with a clear "re-scan the fresh QR" message.
+3) ONE VERSION EVERYWHERE in the extension (read from the manifest).
+4) SMOOTH TRAY - every menu action runs in its own thread.
 
 WHAT'S NEW IN 2.8.2 (LAN SHARING APPLIES LIVE + FIREWALL ONE-CLICK)
 ===================================================================
@@ -34,8 +54,8 @@ WHAT'S NEW IN 2.8.2 (LAN SHARING APPLIES LIVE + FIREWALL ONE-CLICK)
      reports PASS/FAIL in the message bar: PASS + other PC still
      failing = firewall (click the button); FAIL = listener problem
      (hub.log says exactly why).
-  FILES IN THIS RELEASE: AdvPrint-Pro-Setup-2.8.2.exe (Windows),
-  advprint-pro_2.8.2_all.deb (Linux), AdvPrint-Pro-v2.8.2-FULL.zip.
+  FILES IN THIS RELEASE: AdvPrint-Pro-Setup-2.9.0.exe (Windows),
+  advprint-pro_2.9.0_all.deb (Linux), AdvPrint-Pro-2.9.0-source.zip.
 
 WHAT'S NEW IN 2.8.1 (SEND-PORTAL QR + ONE-CLICK LAN INVITE)
 ===========================================================
@@ -56,8 +76,8 @@ WHAT'S NEW IN 2.8.1 (SEND-PORTAL QR + ONE-CLICK LAN INVITE)
      - Safe by design: loopback-only, private-LAN URLs only, explicit
        click required, every accept is audited (peer.connected).
   3. NOTHING REMOVED - everything from 2.8.0 below is unchanged.
-  FILES IN THIS RELEASE: AdvPrint-Pro-Setup-2.8.2.exe (Windows),
-  advprint-pro_2.8.2_all.deb (Linux), AdvPrint-Pro-v2.8.2-FULL.zip.
+  FILES IN THIS RELEASE: AdvPrint-Pro-Setup-2.9.0.exe (Windows),
+  advprint-pro_2.9.0_all.deb (Linux), AdvPrint-Pro-2.9.0-source.zip.
 
 WHAT'S NEW IN 2.8.0 (TWO HUB PROFILES + DROPZONE + BULLET-PROOF UNINSTALL)
 ==========================================================================
@@ -85,13 +105,13 @@ WHAT'S NEW IN 2.8.0 (TWO HUB PROFILES + DROPZONE + BULLET-PROOF UNINSTALL)
      service before touching files, wipes old program folders and
      frees port 9235 - "some file abort install" is fixed. The
      service is reinstalled automatically on upgrade.
-  9. SILENT INSTALL: AdvPrint-Pro-Setup-2.8.2.exe /S - the exe
+  9. SILENT INSTALL: AdvPrint-Pro-Setup-2.9.0.exe /S - the exe
      requests admin by itself (UAC once), the hub auto-starts and
      the firewall rule for LAN sharing is added automatically.
  10. NEW LOGO: the letter A drawn as a printer - the crossbar is the
      output slot and a printed page slides out of it.
-  FILES IN THIS RELEASE: AdvPrint-Pro-Setup-2.8.2.exe (Windows),
-  advprint-pro_2.8.2_all.deb (Linux), AdvPrint-Pro-v2.8.2-FULL.zip.
+  FILES IN THIS RELEASE: AdvPrint-Pro-Setup-2.9.0.exe (Windows),
+  advprint-pro_2.9.0_all.deb (Linux), AdvPrint-Pro-2.9.0-source.zip.
 
 WHAT'S NEW IN 2.7.0 (HISTORY MANAGER + SHARE MODES + CLEAN LAYOUT)
   0. JOB HISTORY IS NOW A REAL MANAGER (hub dashboard "Job history"
@@ -380,7 +400,7 @@ WHY DID MY OLD VERSION SAY "cannot access" ON THE SETUP EXE?
   No manual Security-tab work is needed anywhere.
 
 UPDATE IN 3 STEPS
-  1. Run AdvPrint-Pro-Setup-2.8.2.exe (installs over the old
+  1. Run AdvPrint-Pro-Setup-2.9.0.exe (installs over the old
      version; history + settings migrate to .advprint automatically).
      Portable users: extract the new zip over the old folder, then
      AdvPrint-Tool.bat > [13] once (unblocks), then [1] Start.
@@ -414,12 +434,12 @@ FILES IN THIS PACKAGE
                    AdvPrint-Pro-Full-Guide.html + .pdf, release notes
   tests\           pytest suite + pytest.ini
   installer\       setup.nsi - NSIS 3 source that builds
-                   AdvPrint-Pro-Setup-2.8.2.exe (per-machine, UAC)
+                   AdvPrint-Pro-Setup-2.9.0.exe (per-machine, UAC)
   prebuilt\        READY installers, no build needed:
-                   AdvPrint-Pro-Setup-2.8.2.exe (Windows setup,
+                   AdvPrint-Pro-Setup-2.9.0.exe (Windows setup,
                    ~9.5 MB - run it, UAC appears, done)
-                   advprint-pro_2.8.2_all.deb (Linux deb -
-                   sudo dpkg -i advprint-pro_2.8.2_all.deb)
+                   advprint-pro_2.9.0_all.deb (Linux deb -
+                   sudo dpkg -i advprint-pro_2.9.0_all.deb)
   README.md / CHANGELOG.md / LICENSE / pytest.ini / .gitignore
   SHA256SUMS.txt
 

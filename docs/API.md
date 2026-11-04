@@ -6,6 +6,45 @@ All responses are JSON with an `"ok"` field. The API is CORS-open with `Access-C
 
 ---
 
+## POST /ipp/print — IPP network printer endpoint *(v2.9.0, no token)*
+
+The hub is a real IPP printer. Binary IPP/1.1 bodies only (this is what
+Windows / phone print services send - do not call it by hand unless you
+speak IPP):
+
+- `Get-Printer-Attributes (0x000B)` → printer-state, make-and-model
+  `AdvPrint Pro <version> (virtual)`, document formats
+  `application/pdf`, `image/jpeg`, `application/octet-stream`.
+- `Print-Job (0x0002)` → routes the document by content:
+  `%PDF` → the normal PDF pipeline (queue, History, audit, reprint);
+  JPEG → single-page PDF (DCTDecode); PostScript / PCL / ESC/POS / ZPL
+  → RAW passthrough to the selected printer. Answers `successful-ok`
+  with `job-id` / `job-state`, or
+  `client-error-document-format-not-supported`.
+- `Validate-Job (0x0004)` → `successful-ok`.
+- Anything else → `server-error-operation-not-supported (0x040F)`;
+  unparseable body → `client-error-bad-request (0x0400)`.
+
+The printer URL for the "Add a printer" dialogs is
+`http://<lan-ip>:9235/ipp/print` (shown on the dashboard LAN card with
+a QR: `GET /qr?kind=ipp`). IPP needs no token - it is a printer
+protocol - but it only accepts print data, is bounded by the same size
+limit as uploads, every job is audited with the source IP, and it can
+be turned off with `"ipp_printer": false` (config.json or
+`POST /config`). Browsers opening the URL with GET get a how-to page.
+
+### RAW JetDirect printer port - TCP 9100 *(v2.9.0, no token)*
+
+While LAN sharing is ON, the hub also listens on TCP 9100 (config
+`raw_printer_port`, 0 = off) and speaks plain JetDirect: open a socket,
+stream the bytes, close. Windows "Add a printer using TCP/IP address"
+(device type *Generic Network Card*) and label/receipt apps use this.
+Payload routing is the same as IPP. The listener binds the PC's LAN IP
+(never 0.0.0.0), follows `share_lan`, rebinds on DHCP changes and stops
+when LAN sharing is turned off.
+
+---
+
 ## GET /health *(no token)*
 
 ```json
@@ -132,7 +171,7 @@ The queue is **DB-driven** (SQLite): pending jobs survive hub restarts, and jobs
 | `POST /dropzone/open` | **v2.8.0** Open the DropZone folder on the hub PC (loopback only) |
 | `GET /send` | **v2.8.0** The send portal page (upload a PDF from any device; token required) |
 | `POST /send` | **v2.8.0** Upload + print a PDF (`multipart -F file=@x.pdf`, `application/pdf` body, or JSON `pdf_base64`) |
-| `GET /qr` | **v2.8.1** QR code as SVG (`kind=send` = phone upload URL, `kind=invite` = PC invite link; token required) |
+| `GET /qr` | **v2.8.1** QR code as SVG (`kind=send` = phone upload URL, `kind=invite` = PC invite link, `kind=ipp` = v2.9 printer URL; token required) |
 | `GET /connect` | **v2.8.1** One-click invite landing page (`?t=<hub-token>&n=<PC-name>`; validates its own token) |
 | `POST /peer-connect` | **v2.8.1** Auto-add a LAN peer from an invite (loopback + Origin-validated form POST; no token by design) |
 | `GET /lan/selftest` | **v2.8.2** Server-side LAN check: the hub connects to its own LAN URL and reports PASS/FAIL with the reason (token required) |
@@ -176,6 +215,8 @@ button all use this endpoint.
 curl -H "X-AdvPrint-Token: $TOKEN" \
      "http://127.0.0.1:9235/qr?kind=send" -o send-qr.svg
 ```
+`kind=ipp` (v2.9.0) encodes the IPP printer URL
+`http://<lan-ip>:9235/ipp/print` for the other PC's "Add a printer" dialog.
 `kind=send` (default) encodes `http://<lan-ip>:9235/send?token=...` so any
 phone on the Wi-Fi can scan it and upload a PDF through the Send portal;
 `kind=invite` encodes `http://<lan-ip>:9235/connect?t=...&n=<hostname>` for

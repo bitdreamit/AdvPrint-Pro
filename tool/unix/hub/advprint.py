@@ -45,6 +45,7 @@ import glob
 import hashlib
 import hmac
 import html
+from html import escape as _html_escape
 import io
 import ipaddress
 import json
@@ -91,13 +92,18 @@ if _HUB_DIR not in sys.path:
     sys.path.insert(0, _HUB_DIR)
 
 
-VERSION = "2.8.2"
-VERSION_NAME = ("v2.8.2 (LAN sharing now applies LIVE: the LAN listener"
-                " starts/stops the moment the dashboard switch is toggled -"
-                " no hub restart, loopback never blinks; Windows firewall"
-                " detect + one-click 'Allow in firewall' on the dashboard"
-                " and in the tray menu, plus a Test LAN self-check that"
-                " answers 'why can the other PC not connect?' in one click)")
+VERSION = "2.9.0"
+VERSION_NAME = ("v2.9.0 (NETWORK PRINTER MODE: add this PC like a real"
+                " IP printer - IPP at /ipp/print for Windows 10/11 'add a"
+                " printer by URL' and phone print services, plus a"
+                " JetDirect RAW listener on TCP 9100 for the classic"
+                " 'Add a printer using TCP/IP address' flow; PDF, JPEG,"
+                " PostScript, PCL, ESC/POS and ZPL payloads all routed to"
+                " the real printer. Phone 'Auth fail' on the Send portal"
+                " QR is FIXED (token now accepted from the portal link in"
+                " token_header_only mode too), the extension shows ONE"
+                " version everywhere read from the manifest, and the tray"
+                " menu is smooth - every action runs in its own thread)")
 FULL_BRAND = ("AdvPrint Pro (Advanced Printer) by "
               "Bit Dream IT - Innovative Healthcare Solutions")
 BRANDING = ("AdvPrint Pro (Advanced Printer) - Version %s - by "
@@ -199,6 +205,14 @@ CFG = {
     "share_lan": False,               # v2.1: listen on 0.0.0.0 so OTHER PCs
                                       #  on the LAN can print through this
                                       #  PC's printers (token always required)
+    "ipp_printer": True,              # v2.9: expose this hub as an IPP
+                                      #  network printer at /ipp/print so
+                                      #  Windows 10/11 ("add a printer by
+                                      #  URL") and phone print services can
+                                      #  add it like a normal IP printer
+    "raw_printer_port": 9100,         # v2.9: JetDirect RAW listener port for
+                                      #  Windows "Standard TCP/IP port"
+                                      #  printers (0 = off)
     "escpos_codepage": "cp437",       # v2.1: raw ESC/POS text codepage
                                       #  (cp437/cp850/cp866/... - Bangla is
                                       #  NOT in any codepage: the hub auto-
@@ -260,7 +274,8 @@ CONFIG_TYPES = {"token_header_only": bool, "allowed_origins": list,
                 "profiles": dict, "max_retries": int,
                 "retry_base_seconds": int, "dedupe_minutes": int,
                 "hold_offline": bool, "audit_enabled": bool,
-                "share_lan": bool,
+                "share_lan": bool, "ipp_printer": bool,
+                "raw_printer_port": int,
                 "reprint_watermark": bool, "reprint_reason_required": bool,
                 "peer_hubs": list, "peer_forwarding": bool,
                 "log_max_mb": int, "log_backups": int,
@@ -1214,6 +1229,11 @@ def build_health_snapshot():
         "instant_auto_queue": bool(
             CFG.get("instant_auto_queue", True)),
         "share_lan": bool(CFG.get("share_lan")),
+        "ipp_printer": bool(CFG.get("ipp_printer", True)),
+        "ipp_url": ("http://%s:%d/ipp/print" % (lan_ip(), CFG["port"]))
+                   if CFG.get("share_lan") else None,
+        "raw_printer_port": int(CFG.get("raw_printer_port") or 0),
+        "raw_active": bool(_RAW_TCP is not None),
         "lan_active": bool(BOUND_LAN),
         "lan_url": ("http://%s:%d" % (lan_ip(), CFG["port"]))
                    if CFG.get("share_lan") else None,
@@ -1264,6 +1284,11 @@ def start_health_refresher():
             # with DHCP IP changes - no user action, no restart ever.
             try:
                 lan_listen_ensure()
+            except Exception:
+                pass
+            # v2.9.0: same for the RAW JetDirect printer port (9100).
+            try:
+                raw_listen_ensure()
             except Exception:
                 pass
             time.sleep(3.0)
@@ -3827,6 +3852,41 @@ class Handler(BaseHTTPRequestHandler):
         err = self._origin_error()
         if err:
             return self._send(err[0], {"ok": False, "error": err[1]})
+        # v2.9.0: the IPP printer info page answers WITHOUT the token -
+        # it is the landing page of the network-printer URL (phones and
+        # Windows probe it anonymously; IPP itself is token-free too).
+        if route in ("/ipp/print", "/ipp", "/ipp/") and \
+                not ipp_printer_enabled():
+            return self._send(404, {"ok": False,
+                                    "error": "IPP printer is off"})
+        if route in ("/ipp/print", "/ipp", "/ipp/"):
+            # v2.9.0: humans who open the IPP printer URL in a browser
+            # get a short how-to (IPP clients POST binary IPP instead).
+            host = socket.gethostname()
+            return self._send_html(200, """<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport"
+ content="width=device-width,initial-scale=1"><title>AdvPrint Pro - IPP printer</title>
+<style>body{font:15px/1.55 "Segoe UI",system-ui,sans-serif;background:#f5f8fc;
+ color:#0f172a;margin:0;padding:24px}.b{max-width:560px;margin:4vh auto;background:#fff;
+ border:1px solid #e2e8f0;border-radius:14px;padding:22px}
+ code{background:#f1f5f9;border:1px solid #e2e8f0;border-radius:4px;padding:1px 6px;
+ font-size:12.5px;word-break:break-all}</style></head><body><div class="b">
+ <h1 style="font-size:19px">AdvPrint Pro - IPP network printer</h1>
+ <p>This URL is the <b>IPP print endpoint of <span>%s</span></b>.
+ Add it as a printer - do not open it in a browser:</p>
+ <p><b>Windows 10/11:</b> Settings &rarr; Bluetooth &amp; devices &rarr;
+ Printers &amp; scanners &rarr; Add device &rarr; Add manually &rarr;
+ \u201cSelect a shared printer by name\u201d &rarr; paste
+ <code>%s</code></p>
+ <p><b>Phones:</b> a print service that supports manual IPP addresses
+ (e.g. Samsung Print Service) can add <code>%s</code>. Or simply use
+ the Send portal QR from the dashboard.</p>
+ <p style="color:#64748b">100%% local - the hub prints on this PC's
+ printer. Powered by AdvPrint Pro %s.</p>
+ </div></body></html>""" % (_html_escape(host),
+                             _html_escape(lan_share_url("ipp"), quote=True),
+                             _html_escape(lan_share_url("ipp"), quote=True),
+                             VERSION))
         err = self._auth_error(qt, allow_query=True)   # v2.0.2: every GET
         if err:
             if self._loopback_token_redirect(route, q):
@@ -3870,10 +3930,11 @@ class Handler(BaseHTTPRequestHandler):
                               "/livetest (POST)", "/peers",
                               "/dropzone (GET) + /dropzone/open (POST),"
                               " /send (GET portal, POST upload),"
-                              " /qr (GET QR SVG, kind=send|invite),"
+                              " /qr (GET QR SVG, kind=send|invite|ipp),"
                               " /connect (GET invite page),"
                               " /peer-connect (POST auto-add peer),"
-                              " /restart (POST) - v2.8/v2.8.1"],
+                              " /ipp/print (v2.9 IPP network printer),"
+                              " /restart (POST) - v2.8/v2.8.1/v2.9"],
             })
         if route == "/printers":
             dp = default_printer_cached()
@@ -3987,11 +4048,13 @@ class Handler(BaseHTTPRequestHandler):
         if route == "/qr":                          # v2.8.1 QR code SVG
             # kind=send (default) -> the LAN Send-portal URL with token;
             # kind=invite          -> the one-click /connect invite link.
+            # kind=ipp (v2.9)      -> the IPP printer URL (no token).
             # Auth like every GET (?token= works), answer is an SVG image
             # that the dashboard <img> tag (and any phone camera) reads.
             kind = (q.get("kind") or ["send"])[0]
-            url = self._lan_share_url(kind if kind in ("send", "invite")
-                                      else "send")
+            if kind not in ("send", "invite", "ipp"):
+                kind = "send"
+            url = self._lan_share_url(kind)
             svg = qr_svg(url.encode("utf-8")).encode("utf-8")
             self.send_response(200)
             self._cors()
@@ -4101,6 +4164,30 @@ class Handler(BaseHTTPRequestHandler):
         # a plain urlencoded form POST from the confirmation page.
         if route == "/peer-connect":
             return self._peer_connect()
+        # POST /ipp/print - v2.9.0 NETWORK PRINTER (IPP everywhere).
+        # Handled BEFORE body/auth parsing: the body is binary IPP,
+        # not JSON. IPP is its own protocol (like a physical network
+        # printer - no token), guarded by ipp_printer + size limits +
+        # audit; see the v2.9.0 NETWORK PRINTER MODE comment block.
+        if route in ("/ipp/print", "/ipp", "/ipp/"):
+            if not ipp_printer_enabled():
+                return self._send(404, {"ok": False,
+                                        "error": "IPP printer is off"})
+            data = read_raw_body(self)
+            if len(data) > MAX_PDF:
+                return self._send(413, {"ok": False,
+                                        "error": "IPP request too large"})
+            resp = ipp_handle(data, self._client_ip())
+            self.send_response(200)
+            self._cors()
+            self.send_header("Content-Type", IPP_MIME)
+            self.send_header("Content-Length", str(len(resp)))
+            self.end_headers()
+            try:
+                self.wfile.write(resp)
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+            return
         try:
             if route in ("/print", "/send") and (
                     "application/pdf" in ctype or
@@ -4129,8 +4216,27 @@ class Handler(BaseHTTPRequestHandler):
         err = self._origin_error()
         if err:
             return self._send(err[0], {"ok": False, "error": err[1]})
-        err = self._auth_error((q.get("token") or [""])[0], body)
+        # v2.9.0 PHONE AUTH FIX: the /send portal is a plain BROWSER page
+        # (phones scanning the QR code). In token_header_only mode the
+        # old code accepted the token ONLY from the X-AdvPrint-Token
+        # header on POST - which no phone browser can send - so every
+        # phone got "invalid or missing token" (the reported "Auth
+        # fail") right after picking a PDF, while PCs (extension, which
+        # sends the header) kept working. /send is exactly like the GET
+        # pages: the token rides the same shared QR link, so allow the
+        # query/body token here too. The token is still REQUIRED and
+        # still compared with hmac.compare_digest - only the transport
+        # is relaxed, and ONLY for this one endpoint.
+        err = self._auth_error((q.get("token") or [""])[0], body,
+                               allow_query=(route == "/send"))
         if err:
+            if route == "/send":
+                # phone-friendly message instead of the long CLI hint
+                return self._send(err[0], {
+                    "ok": False, "error":
+                    "Auth failed - the link you scanned carries an old or"
+                    " wrong token. Open the hub dashboard, press 'QR code'"
+                    " and scan the fresh one." if err[0] == 401 else err[1]})
             return self._send(err[0], {"ok": False, "error": err[1]})
         ip = self._client_ip()
         site = self._request_site()
@@ -6143,10 +6249,11 @@ async function clearHistory(){
   SELECTED.clear();loadHistory();refresh();
 }
 /* ---- v2.2: LAN sharing card + queue shift ---- */
-let PEERS=[];
+let PEERS=[],HEALTH=null;
 async function loadLan(){
   try{
     const hl=await jget("/health");
+    HEALTH=hl;
     const b=document.getElementById("lanBody");
     if(!b)return;
     const on=!!hl.share_lan;
@@ -6172,6 +6279,24 @@ async function loadLan(){
       rows+="<tr><td><b>Connect another PC: </b><span class='st queued'>1-click</span></td>"+
         "<td class='mono'>"+esc(INVITE_URL)+"</td>"+
         "<td><button onclick='copyInvite()'>Copy invite link</button> <button onclick='showQr(\"invite\")'>QR</button></td></tr>";
+      /* v2.9.0: NETWORK PRINTER rows - add this PC like a physical IP
+         printer from Windows ("add a printer") or phone print services. */
+      IPP_URL=url+"/ipp/print";
+      if(hl.ipp_printer!==false){
+        rows+="<tr><td><b>Network printer (IPP): </b><span class='st queued'>READY</span></td>"+
+          "<td class='mono' id='ippUrlCell'>"+esc(IPP_URL)+"</td>"+
+          "<td><button onclick='copyIpp()'>Copy printer URL</button> <button onclick='showQr(\"ipp\")'>QR</button></td></tr>";
+      } else {
+        rows+="<tr><td><b>Network printer (IPP): </b><span class='st held'>OFF</span></td>"+
+          "<td class='mono'>set \"ipp_printer\": true in config.json to enable</td><td></td></tr>";
+      }
+      const rawPort=hl.raw_printer_port||0;
+      if(rawPort>0){
+        rows+="<tr><td><b>RAW printer port: </b>"+(hl.raw_active?"<span class='st queued'>LISTENING</span>":"<span class='st held'>starting...</span>")+"</td>"+
+          "<td class='mono'>"+esc(hl.lan_ip||"this-PC-ip")+":"+rawPort+" (JetDirect)</td>"+
+          "<td><button onclick='rawHow()'>How to add</button></td></tr>";
+        rows+="<tr><td colspan='3'><small><b>Add this PC as a printer (like Windows adds a network device):</b> on the other PC - Settings &rarr; Printers &rarr; Add device &rarr; Add manually &rarr; <b>Add a printer using TCP/IP address</b> &rarr; IP <b>"+esc(hl.lan_ip||"this-PC-ip")+"</b>, port <b>"+rawPort+"</b>, device type <b>Generic Network Card</b> (RAW). Or add by URL: <b>"+esc(IPP_URL)+"</b> (Windows 10/11 installs it with the built-in IPP Class Driver). Phones: use the Send portal QR above, or a print service that accepts a manual IPP address.</small></td></tr>";
+      }
       /* v2.8.2: firewall status + one-click allow + server-side LAN
          self-test - answers 'why can the other PC not connect?' */
       if(hl.os==="windows"){
@@ -6197,19 +6322,22 @@ async function loadLan(){
   }catch(e){}
 }
 /* ---- v2.8.1: send-portal QR + one-click invite helpers ---- */
-let SEND_URL="",INVITE_URL="",QR_OPEN=null;
+let SEND_URL="",INVITE_URL="",IPP_URL="",QR_OPEN=null;
 function renderQr(){
   const tr=document.getElementById("qrRow"); if(!tr)return;
   if(!QR_OPEN){tr.style.display="none";return;}
-  const kind=(QR_OPEN==="invite")?"invite":"send";
+  const kind=(QR_OPEN==="invite")?"invite":(QR_OPEN==="ipp")?"ipp":"send";
   const cap=(kind==="invite")
     ?"Scan on the OTHER PC (or send it the link below) - opening it offers a one-click \u201cAdd as LAN print peer\u201d button:"
+    :(kind==="ipp")
+    ?"Scan on the OTHER PC to add this PC as a NETWORK PRINTER (IPP): Windows 10/11 accepts this URL under 'Select a shared printer by name'. For phones, the Send portal QR is easier:"
     :"Scan with ANY phone on this Wi-Fi - it opens the Send portal: pick a PDF, it prints here. No app, no extension:";
+  const u=(kind==="invite")?INVITE_URL:(kind==="ipp")?IPP_URL:SEND_URL;
   tr.style.display="";
   tr.innerHTML="<td colspan='3'><div style='display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap'>"+
     "<img src='"+withQ("/qr?kind="+kind)+"' alt='QR code' width='160' height='160' style='border:1px solid #e2e8f0;border-radius:8px;background:#fff'>"+
     "<div style='flex:1;min-width:220px'><b>"+cap+"</b>"+
-    "<div class='mono' style='margin:6px 0;word-break:break-all'>"+esc(kind==="invite"?INVITE_URL:SEND_URL)+"</div>"+
+    "<div class='mono' style='margin:6px 0;word-break:break-all'>"+esc(u)+"</div>"+
     "<button onclick='copyQr()'>Copy this URL</button> <button onclick='showQr(null)'>Close</button></div></div></td>";
 }
 function showQr(kind){ QR_OPEN=(kind&&QR_OPEN!==kind)?kind:null; renderQr(); }
@@ -6221,8 +6349,17 @@ function copyInvite(){
   if(INVITE_URL&&navigator.clipboard)navigator.clipboard.writeText(INVITE_URL)
     .then(()=>msg("Invite link copied - open it in a browser on the other PC and click Add as LAN print peer"));
 }
+function copyIpp(){
+  if(IPP_URL&&navigator.clipboard)navigator.clipboard.writeText(IPP_URL)
+    .then(()=>msg("Printer URL copied - on another PC: Add printer > 'Select a shared printer by name' > paste it"));
+}
+function rawHow(){
+  const ip=(HEALTH&&HEALTH.lan_ip)||"this-PC-ip";
+  const port=(HEALTH&&HEALTH.raw_printer_port)||9100;
+  msg("On the other PC: Add printer > 'Add a printer using TCP/IP address' > IP "+ip+", port "+port+", device type 'Generic Network Card' - then pick the driver of your real printer. Windows renders the file there; this hub prints it here.");
+}
 function copyQr(){
-  const u=(QR_OPEN==="invite")?INVITE_URL:SEND_URL;
+  const u=(QR_OPEN==="invite")?INVITE_URL:(QR_OPEN==="ipp")?IPP_URL:SEND_URL;
   if(u&&navigator.clipboard)navigator.clipboard.writeText(u).then(()=>msg("URL copied"));
 }
 let HOLD_OFF=true,HELD_N=0;
@@ -6664,13 +6801,18 @@ def lan_ip():
 
 def lan_share_url(kind="send"):
     """v2.8.1: URL another device uses to reach this hub (see
-    Handler._lan_share_url for the security rationale)."""
+    Handler._lan_share_url for the security rationale).
+    v2.9.0: kind="ipp" -> the IPP printer URL for Windows "add a
+    printer by URL" / phone print services (no token - IPP is its own
+    protocol, like any physical network printer)."""
     ip = lan_ip() if CFG.get("share_lan") else "127.0.0.1"
     base = "http://%s:%d" % (ip, CFG["port"])
     if kind == "invite":
         return "%s/connect?t=%s&n=%s" % (
             base, quote(str(CFG["token"] or "")),
             quote(socket.gethostname()))
+    if kind == "ipp":
+        return "%s/ipp/print" % base
     return "%s/send?token=%s" % (base, quote(str(CFG["token"] or "")))
 
 # ------------------------------------------------------------
@@ -6783,6 +6925,359 @@ def lan_listen_ensure():
         lan_listen_stop()
 
 # ------------------------------------------------------------
+# v2.9.0 - NETWORK PRINTER MODE. The hub can now be added on OTHER
+# devices like a real IP printer - the same way Windows "Add a
+# printer" adds a network device by IP + port:
+#
+#   1. RAW JetDirect listener (default TCP 9100). On any Windows PC:
+#      Add printer -> "The printer that I want isn't listed" ->
+#      "Add a printer using TCP/IP address" -> this PC's IP, device
+#      type Generic Network Card, port 9100 (RAW). Windows renders
+#      ANY file (Word, Excel, photos, web pages) with the driver the
+#      user picked and streams the print-ready bytes here; the hub
+#      routes them to the real printer. Phones with ESC/POS/ZPL
+#      printing apps can open a raw socket the same way.
+#   2. IPP endpoint on the hub's own HTTP port: http://<ip>:9235/
+#      ipp/print. Windows 10/11 "Select a shared printer by name"
+#      and most phone print services accept this URL directly (the
+#      Microsoft IPP Class Driver handles the rest). IPP rides the
+#      SAME port as the dashboard, so no extra firewall rule is
+#      needed for it.
+#
+# Payload routing (both paths share route_print_payload):
+#   %PDF            -> normal PDF pipeline (SumatraPDF/Edge,
+#                      keep_files, audit, History - a first-class job)
+#   JPEG (FFD8FF)   -> wrapped into a single-page PDF (DCTDecode)
+#   %!PS / PCL/ESC  -> winspool RAW passthrough to the target queue
+#   ^XA (ZPL)       -> winspool RAW passthrough (label printers)
+#   ESC @ (ESC/POS) -> thermal/raw route
+# No authentication on these two printer endpoints BY DESIGN (a
+# physical network printer has none either) - they ONLY accept print
+# data, they are bounded by size limits, every job is audited with
+# the source IP, and they listen only while LAN sharing is on (the
+# RAW listener binds the LAN IP, never 0.0.0.0). Turn either off
+# with config.json: "ipp_printer": false / "raw_printer_port": 0.
+# ------------------------------------------------------------
+
+_RAW_TCP = None                   # the RAW JetDirect listener, or None
+_RAW_THREAD = None
+_RAW_BIND_IP = None
+
+IPP_VERSION_STR = "1.1"
+IPP_MIME = "application/ipp"
+
+def _ipp_attr(tag, name, value):
+    """Encode one IPP attribute (value-tag, name, value)."""
+    nb = name.encode("utf-8") if isinstance(name, str) else name
+    vb = value if isinstance(value, bytes) else str(value).encode("utf-8")
+    return (bytes([tag]) + len(nb).to_bytes(2, "big") + nb +
+            len(vb).to_bytes(2, "big") + vb)
+
+def _ipp_additional_attr(tag, value):
+    """Additional-value entry: empty name (per RFC 8010)."""
+    return _ipp_attr(tag, "", value)
+
+def _ipp_group(tag, attrs):
+    return bytes([tag]) + b"".join(attrs)
+
+def _ipp_parse(data):
+    """Parse an IPP request far enough to route it. Returns
+    (ver_tuple, operation_id, request_id, op_attrs, document_bytes).
+    op_attrs is a dict of the operation-attribute names (first value
+    wins)."""
+    if len(data) < 8:
+        raise ValueError("IPP request too short")
+    ver = (data[0], data[1])
+    op = int.from_bytes(data[2:4], "big")
+    rid = int.from_bytes(data[4:8], "big")
+    i = 8
+    op_attrs = {}
+    doc = b""
+    group = None
+    name = b""
+    value_tag = 0
+    while i < len(data):
+        b = data[i]
+        if b == 0x03:                       # end-of-attributes tag
+            doc = data[i + 1:]
+            break
+        if b in (0x00, 0x01, 0x02, 0x04, 0x05):
+            group = b                       # begOf attribute group
+            i += 1
+            continue
+        # value-tag + name + value triple
+        value_tag = b
+        nl = int.from_bytes(data[i + 1:i + 3], "big")
+        i += 3
+        name = data[i:i + nl]
+        i += nl
+        vl = int.from_bytes(data[i:i + 2], "big")
+        i += 2
+        value = data[i:i + vl]
+        i += vl
+        if group == 0x01 and nl and value_tag not in (0x35, 0x36):
+            # operation attributes (skip charset/language entries)
+            key = name.decode("utf-8", "replace")
+            if key not in op_attrs:
+                op_attrs[key] = value.decode("utf-8", "replace")
+    return ver, op, rid, op_attrs, doc
+
+def _ipp_header(ver, status, rid):
+    if isinstance(ver, (tuple, list)):
+        maj, mnr = int(ver[0]), int(ver[1])
+    else:
+        maj, mnr = 1, 1
+    return (bytes([maj, mnr]) + int(status).to_bytes(2, "big") +
+            int(rid).to_bytes(4, "big"))
+
+def _ipp_response(ver, status, rid, groups):
+    head = _ipp_header(ver, status, rid)
+    opg = _ipp_group(0x01, [
+        _ipp_attr(0x47, "attributes-charset", "utf-8"),
+        _ipp_attr(0x48, "attributes-natural-language", "en"),
+    ])
+    return head + opg + b"".join(groups) + b"\x03"
+
+def _ipp_printer_group():
+    """Printer-attributes group for Get-Printer-Attributes - enough for
+    the Microsoft IPP Class Driver and common phone print services."""
+    host = socket.gethostname()
+    try:
+        pending = int(db_count_pending())
+    except Exception:
+        pending = 0
+    attrs = [
+        _ipp_attr(0x45, "printer-state", "3"),              # enum: idle
+        _ipp_attr(0x44, "printer-state-reasons", "none"),   # keyword
+        _ipp_attr(0x41, "printer-name", host),              # name w/o lang
+        _ipp_attr(0x41, "printer-make-and-model",
+                  "AdvPrint Pro %s (virtual)" % VERSION),
+        _ipp_attr(0x44, "ipp-versions-supported", IPP_VERSION_STR),
+        _ipp_attr(0x23, "printer-is-accepting-jobs", b"\x01"),  # true
+        _ipp_attr(0x22, "queued-job-count",
+                  int(pending).to_bytes(4, "big", signed=True)),
+        _ipp_attr(0x22, "copies-supported",
+                  (1).to_bytes(4, "big", signed=True) +
+                  (99).to_bytes(4, "big", signed=True)),    # range 1-99
+    ]
+    # document formats: PDF first (phones + Windows both send PDF)
+    fmts = [_ipp_attr(0x49, "document-format-supported", "application/pdf"),
+            _ipp_additional_attr(0x44, "image/jpeg"),
+            _ipp_additional_attr(0x44, "application/octet-stream")]
+    return _ipp_group(0x04, attrs + fmts)
+
+def _ipp_job_group(job_id, state=3):
+    return _ipp_group(0x02, [
+        _ipp_attr(0x21, "job-id", int(job_id).to_bytes(4, "big", signed=True)),
+        _ipp_attr(0x45, "job-state", str(state)),           # enum
+        _ipp_attr(0x44, "job-state-reasons", "job-queued" if state == 3
+                  else "job-completed-successfully"),
+    ])
+
+def ipp_handle(data, ip):
+    """Top-level IPP request entry. Returns the IPP response bytes.
+    Audit + logging included; every accepted job goes through the
+    same pipeline as the Send portal."""
+    try:
+        ver, op, rid, op_attrs, doc = _ipp_parse(data)
+    except Exception as e:
+        return _ipp_response((1, 1), 0x0400, 0, [])         # bad-request
+    if op == 0x000B:                                        # Get-Printer-Attributes
+        return _ipp_response(ver, 0x0000, rid, [_ipp_printer_group()])
+    if op in (0x0002, 0x0004):                              # Print-Job / Validate-Job
+        if op == 0x0004:
+            return _ipp_response(ver, 0x0000, rid, [_ipp_job_group(0)])
+        if not doc:
+            return _ipp_response(ver, 0x0400, rid, [])
+        title = (op_attrs.get("job-name") or
+                 op_attrs.get("requesting-user-name") or "IPP job")
+        try:
+            job_id, kind = route_print_payload(doc, str(title)[:90], ip,
+                                               source="ipp")
+        except ValueError as e:
+            log("[IPP] rejected from %s: %s" % (ip, e))
+            return _ipp_response(ver, 0x040B, rid, [])      # format not supported
+        except Exception as e:
+            log("[IPP] print failed from %s: %s" % (ip, e))
+            return _ipp_response(ver, 0x0500, rid, [])      # server error
+        log("[IPP] job from %s (%d KB, %s) -> #%d" %
+            (ip, len(doc) // 1024, kind, job_id))
+        return _ipp_response(ver, 0x0000, rid, [_ipp_job_group(job_id)])
+    # every other operation: not implemented
+    return _ipp_response(ver, 0x040F, rid, [])              # operation-not-supported
+
+def route_print_payload(data, title, ip, source="raw9100"):
+    """Shared routing for IPP Print-Job and the RAW 9100 listener.
+    Returns (job_id, kind). Raises ValueError for unsupported data."""
+    if not data:
+        raise ValueError("empty print payload")
+    if len(data) > MAX_PDF:
+        raise ValueError("payload too large - the limit is %d MB"
+                         % (MAX_PDF // (1024 * 1024)))
+    if data.startswith(b"%PDF"):
+        job, dup = enqueue_print("a4", title[:90], data, source=source,
+                                 dedupe=False, origin_ip=ip)
+        db_audit("print", job_id=job, ip=ip, site="lan",
+                 printer=CFG.get("printer") or "(default)",
+                 details="%s PDF payload (%d KB)%s"
+                         % (source, len(data) // 1024,
+                            " (duplicate held)" if dup else ""))
+        return job, "pdf"
+    if data[:3] == b"\xff\xd8\xff":
+        try:
+            pdf, _name = image_pdf_bytes(data, title=title)
+        except Exception as e:
+            raise ValueError("bad JPEG: %s" % e)
+        job, dup = enqueue_print("a4", title[:90], pdf, source=source,
+                                 dedupe=False, origin_ip=ip)
+        db_audit("print", job_id=job, ip=ip, site="lan",
+                 printer=CFG.get("printer") or "(default)",
+                 details="%s JPEG payload (%d KB)" % (source,
+                                                      len(data) // 1024))
+        return job, "jpeg"
+    # everything below is printer-language passthrough (winspool RAW /
+    # lp -o raw): PCL, PostScript, ZPL, ESC/POS...
+    try:
+        print_raw(data, job_id=None, title=title[:60])
+    except Exception as e:
+        db_audit("print.failed", ip=ip, site="lan",
+                 details="%s raw passthrough failed: %s" % (source, e))
+        raise ValueError("raw passthrough failed: %s" % e)
+    db_audit("print", job_id=0, ip=ip, site="lan",
+             printer=CFG.get("printer") or "(default)",
+             details="%s raw passthrough %s (%d KB)"
+                     % (source, _sniff_lang(data), len(data) // 1024))
+    log("[RAW9100] %s payload from %s (%d KB) -> %s"
+        % (_sniff_lang(data), ip, len(data) // 1024,
+           CFG.get("printer") or "(default)"))
+    return 0, _sniff_lang(data)
+
+def _sniff_lang(data):
+    """Human name for a raw printer-language payload."""
+    if data.startswith(b"%!PS"):
+        return "postscript"
+    if data.startswith(b"\x1b%-12345X") or data.startswith(b"\x1bE"):
+        return "pcl"
+    if data.startswith(b"^XA") or b"^XA" in data[:64]:
+        return "zpl"
+    if data.startswith(b"\x1b@"):
+        return "escpos"
+    return "raw"
+
+def _raw_conn_handler(conn, addr):
+    """One JetDirect connection: read until the client closes or an
+    idle timeout hits, then route the payload."""
+    ip = addr[0] if isinstance(addr, tuple) else "unknown"
+    try:
+        conn.settimeout(15)
+        chunks = []
+        total = 0
+        while total <= MAX_PDF:
+            try:
+                b = conn.recv(65536)
+            except socket.timeout:
+                break
+            if not b:
+                break
+            chunks.append(b)
+            total += len(b)
+        data = b"".join(chunks)
+        if not data:
+            return
+        try:
+            route_print_payload(data, "RAW print", ip, source="raw9100")
+        except Exception as e:
+            log("[RAW9100] rejected %s: %s" % (ip, e))
+    finally:
+        try:
+            conn.close()
+        except OSError:
+            pass
+
+def raw_listen_active():
+    return _RAW_TCP is not None
+
+def raw_listen_start():
+    """Bind the RAW JetDirect listener to this PC's LAN IP (never
+    0.0.0.0). Returns an error string or None."""
+    global _RAW_TCP, _RAW_THREAD, _RAW_BIND_IP
+    port = int(CFG.get("raw_printer_port") or 0)
+    if port <= 0 or not CFG.get("share_lan"):
+        return None
+    if _RAW_TCP is not None:
+        return None
+    ip = lan_ip()
+    if ip in ("127.0.0.1", "::1", ""):
+        return None                                  # no LAN - stay off
+    try:
+        srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        srv.bind((ip, port))
+        srv.listen(4)
+    except OSError as e:
+        try:
+            srv.close()
+        except Exception:
+            pass
+        return "cannot bind RAW %s:%d (%s)" % (ip, port, e)
+    _RAW_TCP = srv
+    _RAW_BIND_IP = ip
+
+    def _accept_loop():
+        while _RAW_TCP is srv:
+            try:
+                conn, addr = srv.accept()
+            except OSError:
+                break
+            threading.Thread(target=_raw_conn_handler, args=(conn, addr),
+                             daemon=True,
+                             name="advprint-raw9100").start()
+        try:
+            srv.close()
+        except OSError:
+            pass
+
+    _RAW_THREAD = threading.Thread(target=_accept_loop, daemon=True,
+                                   name="advprint-raw-accept")
+    _RAW_THREAD.start()
+    log("[RAW9100] JetDirect printer port UP on %s:%d - other PCs can add"
+        " this PC as a Standard TCP/IP port printer" % (ip, port))
+    return None
+
+def raw_listen_stop():
+    global _RAW_TCP, _RAW_THREAD, _RAW_BIND_IP
+    srv = _RAW_TCP
+    if srv is None:
+        return
+    _RAW_TCP = None
+    _RAW_THREAD = None
+    _RAW_BIND_IP = None
+    try:
+        srv.close()          # accept loop exits on the OSError
+    except OSError:
+        pass
+    log("[RAW9100] printer port stopped")
+
+def raw_listen_ensure():
+    """Health-refresher hook (runs every 3 s): start/stop/rebind the
+    RAW listener following share_lan + raw_printer_port + DHCP."""
+    want = bool(CFG.get("share_lan")) and \
+        int(CFG.get("raw_printer_port") or 0) > 0
+    if want and _RAW_TCP is None:
+        err = raw_listen_start()
+        if err:
+            log("[RAW9100] auto-start: %s" % err)
+    elif not want and _RAW_TCP is not None:
+        raw_listen_stop()
+    elif want and _RAW_BIND_IP and _RAW_BIND_IP != lan_ip():
+        raw_listen_stop()
+        raw_listen_start()
+
+def ipp_printer_enabled():
+    return bool(CFG.get("ipp_printer", True))
+
+
+# ------------------------------------------------------------
 # v2.8.2 WINDOWS FIREWALL - the OTHER classic reason "the other PC
 # cannot connect even with the listener up": Windows Defender drops
 # inbound TCP 9235 silently. The installer adds the rule, but a port
@@ -6814,14 +7309,22 @@ def firewall_rule_ok():
     return ok
 
 def firewall_allow():
-    """Add the inbound allow rule via one UAC prompt. Returns
+    """Add the inbound allow rules via ONE UAC prompt: the hub HTTP
+    port (dashboard / extension / Send portal / IPP printer) and the
+    RAW JetDirect port (Standard TCP/IP port printers). Returns
     (ok, error_string). Safe to call from any thread."""
     if not IS_WIN:
         return True, None                      # nothing to do off Windows
     port = int(CFG.get("port", 9235))
-    ps = ("Start-Process netsh -Verb RunAs -Wait -ArgumentList "
-          "'advfirewall firewall add rule name=\"%s\" dir=in action=allow "
-          "protocol=TCP localport=%d'" % (FIREWALL_RULE_NAME, port))
+    raw = int(CFG.get("raw_printer_port") or 0)
+    adds = ["advfirewall firewall add rule name=\"%s\" dir=in action=allow "
+            "protocol=TCP localport=%d" % (FIREWALL_RULE_NAME, port)]
+    if raw > 0:
+        adds.append("advfirewall firewall add rule name=\"%s RAW %d\" "
+                    "dir=in action=allow protocol=TCP localport=%d"
+                    % (FIREWALL_RULE_NAME, raw, raw))
+    ps = ("Start-Process netsh -Verb RunAs -Wait -ArgumentList '%s'"
+          % "; ".join(adds))
     try:
         subprocess.run(
             ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
@@ -6831,11 +7334,12 @@ def firewall_allow():
         return False, "firewall command failed: %s" % e
     _FW_CACHE["t"] = 0.0
     if firewall_rule_ok():
+        ports = str(port) if raw <= 0 else "%d + RAW %d" % (port, raw)
         db_audit("firewall.allowed", actor="ui",
-                 details="inbound TCP %d allowed (rule '%s')"
-                         % (port, FIREWALL_RULE_NAME))
-        log("[FIREWALL] inbound TCP %d allowed - LAN PCs can reach the "
-            "hub (rule '%s')" % (port, FIREWALL_RULE_NAME))
+                 details="inbound TCP %s allowed (rule '%s')"
+                         % (ports, FIREWALL_RULE_NAME))
+        log("[FIREWALL] inbound TCP %s allowed - LAN PCs and phones can "
+            "reach the hub (rule '%s')" % (ports, FIREWALL_RULE_NAME))
         return True, None
     return False, ("the rule is still missing - the Windows UAC prompt "
                    "was probably canceled. Start the hub once as admin, "
@@ -7433,6 +7937,10 @@ async function up(){
   try {
     const fd = new FormData();
     fd.append("file", file, file.name);
+    /* v2.9.0: token ALSO as a form field - survives QR apps and phone
+       browsers that mangle the query string. The query token above
+       stays as the primary transport. */
+    if (TOK) fd.append("token", TOK);
     const r = await fetch("/send@@Q@@", { method: "POST", body: fd });
     const d = await r.json();
     if (d.ok) { out.textContent = "Sent! Printing as job #" + d.job_id +

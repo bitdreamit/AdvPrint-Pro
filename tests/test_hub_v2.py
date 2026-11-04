@@ -29,7 +29,7 @@ from conftest import wait_until  # noqa: E402
 def test_health_open_no_token(hub):
     code, d = hub.get("/health", token=None)
     assert code == 200 and d["ok"] is True
-    assert d["version"] == "2.8.2"
+    assert d["version"] == "2.9.0"
     assert d["v2"] is True
     assert "100% local" in d["branding"]
 
@@ -539,13 +539,13 @@ def test_v1_database_migration(tmp_path):
 
 
 def test_version_anchors():
-    assert advprint.VERSION == "2.8.2"
+    assert advprint.VERSION == "2.9.0"
     # repo/package layout: tool/windows/portable/hub -> root/extension
     root = os.path.dirname(os.path.dirname(os.path.dirname(
         os.path.dirname(os.path.dirname(advprint.__file__)))))
     ext = os.path.join(root, "extension", "manifest.json")
     with open(ext) as f:
-        assert json.load(f)["version"] == "2.8.2"
+        assert json.load(f)["version"] == "2.9.0"
 
 
 def test_log_rotation(tmp_path):
@@ -1052,7 +1052,7 @@ def test_v26_token_current_loopback_only(hub):
     code, d = hub.get("/token/current")
     assert code == 200 and d["ok"] is True
     assert d["token"] == hub.token
-    assert d["app"] == "AdvPrint Pro" and d["version"] == "2.8.2"
+    assert d["app"] == "AdvPrint Pro" and d["version"] == "2.9.0"
 
 
 def test_v26_token_current_rejects_remote(hub):
@@ -1126,8 +1126,8 @@ def test_v261_tray_module_ships_and_parses():
 
 
 def test_v261_version_single_source():
-    assert advprint.VERSION == "2.8.2"
-    assert advprint.VERSION_NAME.startswith("v2.8.2")
+    assert advprint.VERSION == "2.9.0"
+    assert advprint.VERSION_NAME.startswith("v2.9.0")
 
 
 def test_v261_cli_cmd_full_path():
@@ -1293,7 +1293,7 @@ def test_v264_setup_exe_kills_zombie_hubs():
     assert "Stop-Process -Name AdvPrintPro" in stopps
     assert "Stop-Process -Name PrintHubPro" in stopps
     assert "sc.exe delete AdvPrint" in stopps
-    assert 'VIProductVersion "2.8.2.0"' in src
+    assert 'VIProductVersion "2.9.0.0"' in src
 
 
 # ---------------- v2.6.8: printer-name self-heal + menu guard ----------
@@ -1576,7 +1576,7 @@ def _v280_pdf(tmp_path, name="z.pdf", big="AdvPrint Pro v2.8 test"):
 
 
 def test_v280_version_and_config_keys():
-    assert advprint.VERSION == "2.8.2"
+    assert advprint.VERSION == "2.9.0"
     for k in ("drop_enabled", "drop_dir", "drop_delete"):
         assert k in advprint.CFG and k in advprint.CONFIG_KEYS
         assert k in advprint.CONFIG_TYPES
@@ -1792,7 +1792,7 @@ def test_v280_source_wiring_restart_tray_tool_installer():
     nsi = open(os.path.join(root, "installer", "setup.nsi"),
                encoding="utf-8").read()
     assert "hub-stop.ps1" in nsi
-    assert "2.8.2" in nsi and "${IfNot} ${Silent}" in nsi
+    assert "2.9.0" in nsi and "${IfNot} ${Silent}" in nsi
     # extension dual profile
     ext = os.path.join(root, "extension")
     bg = open(os.path.join(ext, "background.js"), encoding="utf-8").read()
@@ -1804,7 +1804,7 @@ def test_v280_source_wiring_restart_tray_tool_installer():
     opt = open(os.path.join(ext, "options.html"), encoding="utf-8").read()
     assert "hubUrlLan" in opt and "bDashboardLan" in opt
     man = json.load(open(os.path.join(ext, "manifest.json")))
-    assert man["version"] == "2.8.2"
+    assert man["version"] == "2.9.0"
 
 
 def test_v280_lan_profile_never_auto_heals():
@@ -2057,8 +2057,8 @@ def test_v281_setup_nsi_version():
         root = os.path.dirname(root)
     nsi = open(os.path.join(root, "installer", "setup.nsi"),
                encoding="utf-8", errors="replace").read()
-    assert 'VIProductVersion "2.8.2.0"' in nsi
-    assert 'OutFile' in nsi and "AdvPrint-Pro-Setup-2.8.2.exe" in nsi
+    assert 'VIProductVersion "2.9.0.0"' in nsi
+    assert "AdvPrint-Pro-Setup-2.9.0.exe" in nsi
 
 
 # ============================================================
@@ -2132,3 +2132,274 @@ def test_v282_dashboard_has_live_rebind_ui():
                    "lan_listen_start", "lan_listen_ensure",
                    "RIGHT NOW (no restart needed)"):
         assert marker in src, marker
+
+
+# ============================================================
+# v2.9.0 - PHONE AUTH FIX + NETWORK PRINTER MODE (IPP + RAW 9100)
+# ============================================================
+
+def _multipart(field, fname, data, extra=None):
+    bnd = "----advprinttest"
+    out = []
+    for k, v in (extra or {}).items():
+        out.append("--%s\r\nContent-Disposition: form-data; name=\"%s\"\r\n\r\n%s\r\n"
+                   % (bnd, k, v))
+    out.append("--%s\r\nContent-Disposition: form-data; name=\"%s\"; "
+               "filename=\"%s\"\r\nContent-Type: application/pdf\r\n\r\n"
+               % (bnd, field, fname))
+    body = "".join(out).encode() + data + ("\r\n--%s--\r\n" % bnd).encode()
+    return body, "multipart/form-data; boundary=%s" % bnd
+
+
+MINI_PDF = (b"%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
+            b"2 0 obj<</Type/Pages/Kids[]/Count 0>>endobj\n"
+            b"trailer<</Root 1 0 R>>\n%%EOF\n")
+
+# 1x1 JPEG skeleton: SOI + SOF0 (1x1) + EOI - enough for jpeg_size()
+MINI_JPEG = (b"\xff\xd8\xff\xc0\x00\x0b\x08\x00\x01\x00\x01\x01\x00"
+             b"\x11\x00\x02\x11\x01\x03\x11\x01\xff\xd9")
+
+
+def test_v290_phone_post_send_query_token_in_header_only_mode(hub, cfg_reset):
+    """THE reported phone bug: with token_header_only=true the Send
+    portal GET opened but the browser POST could never authenticate
+    (phones cannot send the X-AdvPrint-Token header) -> 'Auth fail'
+    for every phone while PCs kept working. v2.9.0 accepts the token
+    from the query/body for /send POST - the token is still required."""
+    code, d = hub.post("/config", {"token_header_only": True})
+    assert code == 200 and d["ok"]
+    try:
+        body, ct = _multipart("file", "phone.pdf", MINI_PDF)
+        code, d = hub.req("POST", "/send?token=" + hub.token, raw=body,
+                          headers={"Content-Type": ct}, token=None)
+        assert code == 200, d
+        assert d["ok"] is True and d["job_id"] > 0
+    finally:
+        hub.post("/config", {"token_header_only": False})
+
+
+def test_v290_phone_post_send_form_field_token(hub, cfg_reset):
+    """v2.9.0: the portal also appends the token as a form field, so
+    the upload survives QR apps that mangle the query string."""
+    code, d = hub.post("/config", {"token_header_only": True})
+    assert code == 200 and d["ok"]
+    try:
+        body, ct = _multipart("file", "phone.pdf", MINI_PDF,
+                              extra={"token": hub.token})
+        code, d = hub.req("POST", "/send", raw=body,
+                          headers={"Content-Type": ct}, token=None)
+        assert code == 200, d
+        assert d["ok"] is True
+    finally:
+        hub.post("/config", {"token_header_only": False})
+
+
+def test_v290_send_wrong_token_still_rejected(hub, cfg_reset):
+    """Relaxing the transport must NOT relax the check: a wrong token
+    on /send POST still gets 401 with the phone-friendly message."""
+    body, ct = _multipart("file", "phone.pdf", MINI_PDF)
+    code, d = hub.req("POST", "/send?token=WRONG", raw=body,
+                      headers={"Content-Type": ct}, token=None)
+    assert code == 401
+    assert d["ok"] is False and "Auth failed" in d["error"]
+
+
+def _ipp_request(op, doc=b"", job_name="pytest job"):
+    """Build a minimal IPP/1.1 request (operation-attributes + doc)."""
+    out = bytearray()
+    out += bytes([1, 1]) + op.to_bytes(2, "big") + (7).to_bytes(4, "big")
+    out += b"\x01"                                     # operation-attributes
+    out += bytes([0x47]) + b"attributes-charset".__len__().to_bytes(2, "big") \
+        + b"attributes-charset" + len(b"utf-8").to_bytes(2, "big") + b"utf-8"
+    out += bytes([0x48]) + len(b"attributes-natural-language").to_bytes(2, "big") \
+        + b"attributes-natural-language" + len(b"en").to_bytes(2, "big") + b"en"
+    if job_name:
+        out += bytes([0x45]) + len(b"job-name").to_bytes(2, "big") + b"job-name" \
+            + len(job_name.encode()).to_bytes(2, "big") + job_name.encode()
+    out += b"\x03"                                     # end-of-attributes
+    out += doc
+    return bytes(out)
+
+
+def _ipp_read(resp):
+    ver = (resp[0], resp[1])
+    status = int.from_bytes(resp[2:4], "big")
+    rid = int.from_bytes(resp[4:8], "big")
+    return ver, status, rid, resp[8:]
+
+
+def test_v290_ipp_get_printer_attributes(hub):
+    body = _ipp_request(0x000B)                      # Get-Printer-Attributes
+    code, raw = hub.req("POST", "/ipp/print", raw=body, token=None,
+                        headers={"Content-Type": "application/ipp"})
+    assert code == 200
+    ver, status, rid, rest = _ipp_read(raw)
+    assert status == 0x0000                          # successful-ok
+    assert b"printer-name" in rest
+    assert b"application/pdf" in rest
+    assert b"AdvPrint Pro" in rest
+
+
+def test_v290_ipp_print_job_pdf(hub, clean_queue):
+    body = _ipp_request(0x0002, doc=MINI_PDF, job_name="ipp pdf")
+    code, raw = hub.req("POST", "/ipp/print", raw=body, token=None,
+                        headers={"Content-Type": "application/ipp"})
+    assert code == 200
+    ver, status, rid, rest = _ipp_read(raw)
+    assert status == 0x0000
+    assert b"job-id" in rest and b"job-state" in rest
+    j = wait_until(lambda: [x for x in advprint.db_list(limit=5)
+                            if x["source"] == "ipp"])
+    assert j, "IPP PDF job did not reach the queue"
+
+
+def test_v290_ipp_print_job_jpeg(hub, clean_queue):
+    body = _ipp_request(0x0002, doc=MINI_JPEG, job_name="ipp photo")
+    code, raw = hub.req("POST", "/ipp/print", raw=body, token=None,
+                        headers={"Content-Type": "application/ipp"})
+    assert code == 200
+    ver, status, rid, rest = _ipp_read(raw)
+    assert status == 0x0000, "JPEG IPP job rejected: %s" % status
+    j = wait_until(lambda: [x for x in advprint.db_list(limit=8)
+                            if x["source"] == "ipp"])
+    assert j, "IPP JPEG job did not reach the queue"
+
+
+def test_v290_ipp_print_job_zpl_goes_raw(hub, clean_queue):
+    zpl = b"^XA^FO50,50^ADN,36,20^FDAdvPrint IPP^FS^XZ"
+    before = len(hub.raw_printed)
+    body = _ipp_request(0x0002, doc=zpl, job_name="ipp label")
+    code, raw = hub.req("POST", "/ipp/print", raw=body, token=None,
+                        headers={"Content-Type": "application/ipp"})
+    assert code == 200
+    ver, status, rid, rest = _ipp_read(raw)
+    assert status == 0x0000
+    assert len(hub.raw_printed) == before + 1
+    assert hub.raw_printed[-1][0].startswith(b"^XA")
+
+
+def test_v290_ipp_validate_job(hub):
+    body = _ipp_request(0x0004, doc=MINI_PDF)
+    code, raw = hub.req("POST", "/ipp/print", raw=body, token=None,
+                        headers={"Content-Type": "application/ipp"})
+    ver, status, rid, rest = _ipp_read(raw)
+    assert status == 0x0000
+
+
+def test_v290_ipp_unknown_operation(hub):
+    body = _ipp_request(0x0008)                      # Cancel-Job w/o job
+    code, raw = hub.req("POST", "/ipp/print", raw=body, token=None,
+                        headers={"Content-Type": "application/ipp"})
+    ver, status, rid, rest = _ipp_read(raw)
+    assert status == 0x040F                          # not-supported
+
+
+def test_v290_ipp_disabled(hub, cfg_reset):
+    advprint.CFG["ipp_printer"] = False
+    try:
+        body = _ipp_request(0x000B)
+        code, d = hub.req("POST", "/ipp/print", raw=body, token=None,
+                          headers={"Content-Type": "application/ipp"})
+        assert code == 404
+    finally:
+        advprint.CFG["ipp_printer"] = True
+
+
+def test_v900_ipp_garbage_body(hub):
+    code, raw = hub.req("POST", "/ipp/print", raw=b"not-ipp", token=None,
+                        headers={"Content-Type": "application/ipp"})
+    ver, status, rid, rest = _ipp_read(raw)
+    assert status == 0x0400                          # bad-request
+
+
+def test_v290_route_print_payload_sniffs_languages(hub, clean_queue):
+    before = len(hub.raw_printed)
+    job, kind = advprint.route_print_payload(MINI_PDF, "t", "10.0.0.9")
+    assert kind == "pdf"
+    job, kind = advprint.route_print_payload(b"%!PS-Adobe-3.0\n", "t",
+                                             "10.0.0.9")
+    assert kind == "postscript"
+    job, kind = advprint.route_print_payload(b"\x1bE\x1b%-12345X", "t",
+                                             "10.0.0.9")
+    assert kind == "pcl"
+    job, kind = advprint.route_print_payload(b"^XA^XZ", "t", "10.0.0.9")
+    assert kind == "zpl"
+    job, kind = advprint.route_print_payload(b"\x1b@text", "t", "10.0.0.9")
+    assert kind == "escpos"
+    assert len(hub.raw_printed) == before + 4
+
+
+def test_v290_route_print_payload_rejects_oversize(hub, cfg_reset, monkeypatch):
+    monkeypatch.setattr(advprint, "MAX_PDF", 10, raising=False)
+    with pytest.raises(ValueError):
+        advprint.route_print_payload(MINI_PDF, "t", "10.0.0.9")
+
+
+def test_v290_health_has_printer_mode_fields(hub):
+    code, h = hub.get("/health")
+    assert code == 200
+    assert h["ipp_printer"] is True
+    assert h["raw_printer_port"] == 9100
+    assert "raw_active" in h
+    assert "ipp_url" in h
+
+
+def test_v290_qr_svg_supports_ipp_kind(hub):
+    code, raw = hub.req("GET", "/qr?kind=ipp", token="use-default")
+    assert code == 200 and b"<svg" in raw
+    code, raw = hub.req("GET", "/qr?kind=bogus", token="use-default")
+    assert code == 200 and b"<svg" in raw            # falls back to send
+
+
+def test_v290_raw_listener_disabled_without_lan_sharing():
+    """The RAW 9100 listener must never start while LAN sharing is off
+    and must never bind 0.0.0.0 - it follows share_lan + its config."""
+    assert advprint._RAW_TCP is None                 # never started here
+    err = advprint.raw_listen_start()                # share_lan False -> no-op
+    assert err is None
+    assert advprint._RAW_TCP is None
+
+
+def test_v290_extension_version_single_source():
+    """v2.9.0: ONE version everywhere in the extension - the manifest.
+    popup.html / options.html carry only a same-value fallback and the
+    JS chips are set from chrome.runtime.getManifest().version."""
+    ext = os.path.normpath(os.path.join(os.path.dirname(advprint.__file__),
+                                        "extension"))
+    if not os.path.isdir(ext):
+        pytest.skip("extension not staged next to the hub")
+    import json as _json
+    man = _json.load(open(os.path.join(ext, "manifest.json")))
+    v = man["version"]
+    popup = open(os.path.join(ext, "popup.html")).read()
+    options = open(os.path.join(ext, "options.html")).read()
+    ojs = open(os.path.join(ext, "options.js")).read()
+    assert ('id="ver">v%s<' % v) in popup, "popup fallback drifts"
+    assert ('id="verChip">v%s<' % v) in options, "options chip drifts"
+    assert ('id="aboutVer">%s<' % v) in options, "about drifts"
+    assert 'getManifest().version' in ojs
+    assert '"verChip"' in ojs, "verChip not synced from the manifest"
+    for f in ("popup.js", "background.js", "options.js"):
+        src = open(os.path.join(ext, f)).read()
+        assert "v2.8.0" not in src and "2.8.0<" not in src, \
+            "%s still hardcodes an old version" % f
+
+
+def test_v290_tray_actions_are_threaded():
+    """v2.9.0 SMOOTH TRAY: every menu action dispatches through
+    _cb_async (its own thread) - only Exit stays on the icon thread."""
+    src = open(os.path.join(os.path.dirname(advprint.__file__),
+                            "tray_windows.py"), encoding="utf-8").read()
+    assert "_cb_async(\"on_open\")" in src
+    assert "_cb_async(\"on_test\"" in src
+    assert "_cb_async(\"on_pause_toggle\"" in src
+    assert "_cb_async(\"on_autostart_toggle\"" in src
+    assert "_cb_async(\"on_restart\")" in src
+    assert "_cb_async(\"on_firewall\")" in src
+    assert "_font_cache" in src
+
+
+def test_v290_firewall_allow_covers_raw_port():
+    src = open(os.path.join(os.path.dirname(advprint.__file__),
+                            "advprint.py"), encoding="utf-8").read()
+    assert 'RAW %d' in src and "raw_printer_port" in src

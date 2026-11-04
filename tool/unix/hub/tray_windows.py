@@ -88,8 +88,8 @@ DWMWA_WINDOW_CORNER_PREFERENCE = 33     # Win11 rounded corners (fail-safe)
 DWMWCP_ROUND       = 2
 
 # menu item ids (high word safety: keep < 0x8000)
-M_OPEN, M_TEST, M_PAUSE, M_AUTO, M_EXIT, M_RESTART = (
-    1001, 1002, 1003, 1004, 1005, 1006)
+M_OPEN, M_TEST, M_PAUSE, M_AUTO, M_EXIT, M_RESTART, M_FIREWALL = (
+    1001, 1002, 1003, 1004, 1005, 1006, 1007)
 
 # menu colors (COLORREF = 0x00BBGGRR)
 COL_BG     = 0x301B0D              # dark navy  RGB(13, 27, 48)
@@ -334,6 +334,9 @@ class _MenuWindow(object):
 
     CLASSNAME = "AdvPrintProMenuWnd"
     _registered = False
+    _font_cache = {}          # v2.9.0: scale -> HFONT, reused across shows
+                              # (creating a ClearType font on every
+                              # right-click made the first paint sluggish)
 
     def __init__(self, items, logf=None):
         self.items = items            # list of ("sep",) / (text, cmd, check)
@@ -393,10 +396,15 @@ class _MenuWindow(object):
         self._height = int(rows * self.row_h) + 2 * self.pad
 
     def _make_font(self):
-        return gdi32.CreateFontW(
+        f = _MenuWindow._font_cache.get(self.scale)
+        if f:
+            return f
+        f = gdi32.CreateFontW(
             ctypes.c_int(-int(15 * self.scale)), 0, 0, 0, FW_NORMAL,
             0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0,
             "Segoe UI")
+        _MenuWindow._font_cache[self.scale] = f
+        return f
 
     def _place(self):
         pt = POINT()
@@ -454,9 +462,10 @@ class _MenuWindow(object):
             if self.hwnd:
                 user32.DestroyWindow(self.hwnd)
                 self.hwnd = None
-            if self.font:
-                gdi32.DeleteObject(self.font)
-                self.font = None
+            # v2.9.0: the font is shared (cached per scale) and must NOT
+            # be deleted here - deleting it forced the NEXT right-click
+            # to recreate it (and could paint garbage text once the
+            # cached HFONT was freed).
         return self.result
 
     def _close(self, result=0):
@@ -733,6 +742,24 @@ class Tray(object):
                 self._log("callback %s failed: %r" % (name, e))
         return None
 
+    def _cb_async(self, name, done=None):
+        """v2.9.0 SMOOTH TRAY: run a menu action on its own thread.
+        Before, every action ran on the tray message-loop thread, so a
+        slow one (browser launch, test page -> printer status WMI,
+        firewall UAC) froze the icon: the next right-click 'lagged' and
+        the menu stuttered while the action ran. Now the icon thread
+        returns to GetMessage instantly and every action runs in the
+        background."""
+        def runner():
+            try:
+                r = self._cb(name)
+                if done:
+                    done(r)
+            except Exception as e:
+                self._log("async callback %s failed: %r" % (name, e))
+        threading.Thread(target=runner, daemon=True,
+                         name="advprint-tray-%s" % name).start()
+
     # ---- menu (v2.6.2 self-drawn, native fallback) --------------------
     def _menu_items(self):
         paused = bool(self._cb("is_paused"))
@@ -744,6 +771,7 @@ class Tray(object):
             ("Pause queue", M_PAUSE, paused),
             ("Start at Windows logon", M_AUTO, auto),
             ("Restart hub", M_RESTART, False),
+            ("Allow LAN in firewall", M_FIREWALL, False),
             ("sep",),
             ("Exit", M_EXIT, False),
         ]
@@ -793,20 +821,25 @@ class Tray(object):
 
     def _dispatch_menu_cmd(self, cmd):
         if cmd == M_OPEN:
-            self._cb("on_open")
+            self._cb_async("on_open")
         elif cmd == M_TEST:
-            self._cb("on_test")
+            self._cb_async("on_test", done=lambda r: self._log(
+                "test page queued from the tray menu"))
         elif cmd == M_PAUSE:
-            new_paused = bool(self._cb("on_pause_toggle"))
-            self._log("queue %s (tray)" % ("paused" if new_paused else "resumed"))
+            self._cb_async("on_pause_toggle", done=lambda p: self._log(
+                "queue %s (tray)" % ("paused" if p else "resumed")))
         elif cmd == M_AUTO:
-            new_auto = bool(self._cb("on_autostart_toggle"))
-            self._log("autostart %s (tray)" % ("ON" if new_auto else "OFF"))
+            self._cb_async("on_autostart_toggle", done=lambda a: self._log(
+                "autostart %s (tray)" % ("ON" if a else "OFF")))
         elif cmd == M_RESTART:
             # v2.8: the callback launches the new hub and schedules the
             # exit - the tray icon of THIS process disappears with it.
             self._log("restart requested from the tray menu")
-            self._cb("on_restart")
+            self._cb_async("on_restart")
+        elif cmd == M_FIREWALL:
+            # v2.8.2: one-click Windows firewall rule (single UAC prompt).
+            self._log("firewall allow requested from the tray menu")
+            self._cb_async("on_firewall")
         elif cmd == M_EXIT:
             self._log("exit requested from tray")
             self.stop()

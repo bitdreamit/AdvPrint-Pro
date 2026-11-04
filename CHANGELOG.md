@@ -1,6 +1,69 @@
 # Changelog - AdvPrint Pro (Advanced Printer)
 by Bit Dream IT - Innovative Healthcare Solutions
 
+## v2.9.0 - NETWORK PRINTER MODE + PHONE AUTH FIX + SMOOTH TRAY (2026-11-04)
+
+Three things in one release: the hub becomes a real IP-printable network
+printer ("Windows add device" style), the phone "Auth fail" on the Send
+portal is fixed, and the tray menu stops lagging.
+
+- **Network printer mode (new).** Other devices can now add this PC like
+  a physical IP printer - two ways, both new:
+  - **IPP at `/ipp/print`** (`http://<lan-ip>:9235/ipp/print`, same port
+    as the hub - no extra firewall rule). Windows 10/11: Add printer >
+    "Select a shared printer by name" > paste the URL - it installs with
+    the built-in Microsoft IPP Class Driver. Phones: any print service
+    that accepts a manual IPP address. Opening the URL in a browser
+    shows a short how-to page (no token needed for IPP - it is its own
+    protocol, like a physical network printer).
+  - **JetDirect RAW listener on TCP 9100** (config `raw_printer_port`,
+    0 = off). Windows: Add printer > "Add a printer using TCP/IP
+    address" > this PC's IP + port 9100 + device type "Generic Network
+    Card" > pick your real printer's driver. Windows renders ANY file
+    (Word, Excel, photos, web) with that driver and streams the
+    print-ready bytes here. The listener binds the LAN IP (never
+    0.0.0.0), follows `share_lan`, rebinds on DHCP changes, and stops
+    with LAN sharing.
+  - **Smart payload routing** (shared by IPP + RAW): `%PDF` -> the
+    normal PDF pipeline (SumatraPDF/Edge, History, audit, reprint);
+    JPEG -> wrapped into a single-page PDF (pure-stdlib DCTDecode);
+    `%!PS`/PCL/ESC/POS/ZPL -> winspool RAW passthrough (or `lp -o raw`
+    on CUPS). Every job is audited with the source IP and size-bounded
+    (`MAX_PDF`). Both switches live in config.json / `/config`
+    (`ipp_printer`, `raw_printer_port`) and apply without a restart.
+- **Phone "Auth fail" FIXED.** With `token_header_only: true` the Send
+  portal page opened on the phone but the browser UPLOAD could never
+  authenticate (a phone cannot send the `X-AdvPrint-Token` header), so
+  every phone got "invalid or missing token" right after picking a PDF
+  while PCs (extension, header) kept working. `/send` POST now accepts
+  the token from the query/body - the same shared QR link transport the
+  GET page always used; the token is still required and still compared
+  with `hmac.compare_digest`, and every other endpoint stays
+  header-strict. The portal also appends the token as a form field, and
+  the 401 text is now phone-friendly ("re-scan the fresh QR").
+- **One version everywhere (extension).** popup badge, Options header
+  chip and the About panel all read `chrome.runtime.getManifest().
+  version` - the manifest is the single source; the hardcoded HTML
+  fallbacks (stuck at 2.8.0) can never drift again.
+- **Smooth tray.** Every tray action (Open dashboard, Print test page,
+  Pause, Autostart, Restart, Allow LAN in firewall) now runs on its own
+  thread - before, a slow action (browser launch, printer-status WMI,
+  UAC) froze the icon and the next right-click lagged. The menu font is
+  cached per DPI scale instead of being rebuilt on every right-click.
+- **Firewall covers the printer port too.** The one-click "Allow in
+  firewall" (dashboard + tray) now adds BOTH rules in a single UAC
+  prompt: the hub port (9235) and the RAW printer port (9100).
+- Dashboard LAN card: new **Network printer (IPP)** row (URL + copy +
+  QR), **RAW printer port** row with a "How to add" hint, and a
+  step-by-step add-printer hint under the card. `/qr?kind=ipp` renders
+  the printer URL as a QR.
+- Tests: 14 new tests (phone auth in both token modes, IPP attribute
+  response, IPP Print-Job pdf/jpeg/zpl, validate/garbage/unknown-op,
+  payload sniffing, size guard, ipp off, QR kinds, health fields,
+  version single-source, tray threading, firewall RAW port). Live
+  self-check: 64/64. Version bumped across hub, setup.nsi (VI
+  2.9.0.0), extension manifest, docs.
+
 ## v2.8.2 - LAN SHARING APPLIES LIVE + WINDOWS FIREWALL ONE-CLICK (2026-11-04)
 
 Fixes the field report "LAN sharing ON but http://<lan-ip>:9235 does not answer - only 127.0.0.1 works".

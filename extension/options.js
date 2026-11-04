@@ -1078,6 +1078,11 @@ pickDefaultTab();
 AdvPrintI18n.currentLang().then((lang) => AdvPrintI18n.apply(lang));
 /* v2.7.0: the About panel shows the REAL manifest version - it used to
  * stay on whatever was hardcoded in the HTML (stuck at 2.6.4). */
+/* v2.9.0 SINGLE VERSION SOURCE: every version chip on every surface is
+ * set from chrome.runtime.getManifest().version - the manifest is the
+ * one place the version lives, so the header chip, the About panel and
+ * the popup badge can never drift apart again. */
 try {
   $("aboutVer").textContent = chrome.runtime.getManifest().version;
+  $("verChip").textContent = "v" + chrome.runtime.getManifest().version;
 } catch (_) { /* keep the HTML default */ }
