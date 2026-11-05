@@ -95,8 +95,8 @@ if _HUB_DIR not in sys.path:
     sys.path.insert(0, _HUB_DIR)
 
 
-VERSION = "3.0.1"
-VERSION_NAME = ("v3.0.1 (NETWORK PRINTER MODE: add this PC like a real"
+VERSION = "3.0.2"
+VERSION_NAME = ("v3.0.2 (NETWORK PRINTER MODE: add this PC like a real"
                 " IP printer - IPP at /ipp/print for Windows 10/11 'add a"
                 " printer by URL' and phone print services, plus a"
                 " JetDirect RAW listener on TCP 9100 for the classic"
@@ -111,14 +111,16 @@ VERSION_NAME = ("v3.0.1 (NETWORK PRINTER MODE: add this PC like a real"
                 " any installed printer, or an upstream IP printer (raw"
                 " JetDirect or IPP): PCs and phones that add this hub as"
                 " THEIR network printer print through exactly that"
-                " destination. NEW IN 3.0.1: the TRAY MENU CLICK BUG is fixed - every"
-                " menu item now triggers its own action (before, items"
-                " after the first separator ran the wrong command - the"
-                " text you clicked and the action were not the same),"
-                " and the Intercept window.print() switch moved into"
-                " Options > Power switches. Also ships: responsive"
-                " dashboard tables - every column, button and option"
-                " visible on load, nothing hidden in an inner scroll)")
+                " destination. NEW IN 3.0.2: the popup's window.print() hook switch"
+                " was REMOVED - that switch now lives ONLY in Options"
+                " > Power switches (one switch, one place), and the new"
+                " docs/MULTI-PRINTER.md explains multi-printer routing"
+                " on one PC (the lab case: A4/A5 PDF reports on the"
+                " laser + ZPL labels on the Zebra at the same time -"
+                " the per-job printer name always wins, the payload"
+                " type decides the pipeline, printer groups fail"
+                " over). Earlier: responsive dashboard tables + the"
+                " tray menu click fix)")
 FULL_BRAND = ("AdvPrint Pro (Advanced Printer) by "
               "Bit Dream IT - Innovative Healthcare Solutions")
 BRANDING = ("AdvPrint Pro (Advanced Printer) - Version %s - by "

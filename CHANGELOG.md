@@ -1,6 +1,31 @@
 # Changelog - AdvPrint Pro (Advanced Printer)
 by Bit Dream IT - Innovative Healthcare Solutions
 
+## v3.0.2 - POPUP HOOK SWITCH REMOVED + MULTI-PRINTER LAB GUIDE (2026-11-05)
+
+Two changes on top of v3.0.1 - no settings migration, no removed
+functionality.
+
+- **Popup window.print() hook switch removed.** Options > Power
+  switches > Intercept window.print() is now the ONE switch in ONE
+  place (the popup duplicate is gone; the hookPrint setting and the
+  Options switch are unchanged). The popup Power section keeps the
+  master switch + Queue mode; i18n popHook* keys removed.
+- **Multi-printer handling documented end to end**
+  (docs/MULTI-PRINTER.md, new; Full Guide section 6.6): one PC,
+  A4/A5 PDF reports on the laser AND ZPL labels on the Zebra at the
+  same time. Grounded in the real routing code: per-job printer
+  name wins (rule / dropdown / page API / API field / profile);
+  payload sniffing picks the pipeline (PDF engine, image wrap, ZPL
+  + ESC/POS + PostScript + PCL raw passthrough); printer_groups
+  fail over to the first healthy member; dest_mode covers unnamed
+  jobs; hold/probe behaviour when the target is unreachable.
+- Version strings bumped to 3.0.2 everywhere (hub, dashboard
+  badge, extension manifest/popup/Options/About, Setup exe
+  VIProductVersion 3.0.2.0, deb control, docs). New tests: the
+  popup must NOT contain the hook switch; MULTI-PRINTER.md must
+  ship. 215 tests pass.
+
 ## v3.0.1 - TRAY MENU CLICK FIX + HOOK SWITCH INTO POWER (2026-11-05)
 
 Two fixes on top of v3.0.0 - nothing removed, no settings migration.

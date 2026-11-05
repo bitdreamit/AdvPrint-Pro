@@ -13,6 +13,13 @@ Web page ──► Chrome extension ──► AdvPrint Pro hub (localhost:9235) 
 
 ---
 
+## What's new in v3.0.2 (popup hook switch removed + the multi-printer lab guide)
+
+Two changes on top of v3.0.1 - nothing removed except a duplicated switch:
+
+- **The popup's window.print() hook switch is gone.** The switch now lives ONLY in Options > Power switches > *Intercept window.print()* - right next to the master switch and Queue mode (v3.0.1 moved it there; v3.0.2 removes the popup duplicate so there is exactly ONE switch in ONE place). Same `hookPrint` setting, same behaviour, no migration.
+- **New: `docs/MULTI-PRINTER.md` - how ONE PC handles multiple printers at the same time.** The lab case, answered end to end: receipt/PDF printing on A4 or A5 on one printer while a Zebra (or any other) printer prints ZPL labels simultaneously. The rules that make it work: the **per-job printer name always wins** (extension auto-print rule, Options default-printer dropdown, page API `printer` option, or `POST /print` `"printer"` field); the **payload type decides the pipeline** (`%PDF` -> PDF engine with paper a4/a5/tray/duplex/copies/profiles; JPEG -> wrapped PDF; **ZPL `^XA` / ESC-POS / PostScript / PCL -> raw passthrough**, byte-for-byte to the named printer); **printer groups** fail over to the first healthy member; the Print destination card covers jobs that carry no printer name. Includes a step-by-step lab setup (LIS portal -> HP LaserJet A4/A5 + label page -> Zebra ZD421) and curl snippets (`lang:"zpl"` labels included). The Full Guide gained section 6.6 with the same story.
+
 ## What's new in v3.0.1 (tray menu click fix + window.print() hook into Power switches)
 
 Two fixes on top of v3.0.0 - nothing removed:
@@ -71,7 +78,7 @@ The ten most-requested features, all in one release:
 - **DropZone + Send portal — printing WITHOUT the extension.** The hub watches a folder: in Word/Excel/ANY app choose *Microsoft Print to PDF* and save into the DropZone — the page prints seconds later (dashboard → DropZone card; `POST /dropzone/open` opens the folder). Phones/tablets/other PCs print through the built-in **Send portal** (`/send`, token-protected, same as every endpoint).
 - **Restart hub** — in the tray menu, AdvPrint Tool [14] and the dashboard button: the hub relaunches itself cleanly (new process waits for the port; queued jobs, settings and history are kept).
 - **Bullet-proof upgrade & uninstall.** The setup now runs `hub-stop.ps1` BEFORE touching files: stops the optional *AdvPrint* service (wait + PID kill), **deletes the service registration** (reinstalled fresh when ticked — upgrades keep it automatically), kills every process under the install folder and frees TCP 9235. Old program folders are wiped, so no stale file can abort an install any more; the uninstaller retries the folder sweep and reports leftovers honestly.
-- **Silent install** `AdvPrint-Pro-Setup-3.0.1.exe /S` — elevation is requested by the exe manifest itself ("auto permission" on any PC), the hub auto-starts after a silent install, and the firewall rule for LAN sharing (TCP 9235) is added automatically (removed on uninstall).
+- **Silent install** `AdvPrint-Pro-Setup-3.0.2.exe /S` — elevation is requested by the exe manifest itself ("auto permission" on any PC), the hub auto-starts after a silent install, and the firewall rule for LAN sharing (TCP 9235) is added automatically (removed on uninstall).
 - **New A + printer logo** — the letter A drawn as a printer: the crossbar is the output slot and a printed page slides out of it. Same mark in the extension, popup, dashboard, tray icon, installer and docs.
 
 Nothing removed: every v2.7.0 feature (history manager, share toggles, live test tool) is unchanged.

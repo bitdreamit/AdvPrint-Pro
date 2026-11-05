@@ -84,10 +84,10 @@ async function loadSwitches() {
   const off = cfg.cfg.enabled === false;
   $("swEnabled").checked = !off;
   $("swQueue").checked = cfg.cfg.queueMode !== false;
-  // v2.8: window.print() hook on/off - the SAME switch as Options >
-  // Behavior, right here so it can be flipped in one click.
-  $("swHook").checked = !!cfg.cfg.hookPrint;
-  renderHookState(!!cfg.cfg.hookPrint);
+  // v3.0.2: the window.print() hook switch lives ONLY in Options >
+  // Power switches now (setting key: hookPrint) - the popup row was
+  // removed to keep the popup lean; the hookPrint setting itself and
+  // its behaviour are unchanged.
   // v2.8: Share SEND Mode = the print ROUTE (LAN PC vs this PC).
   // Share RECEIVE state comes from the hub in refresh() (self share_lan).
   $("swShareTx").checked = cfg.cfg.lanSend === true;
@@ -107,12 +107,6 @@ async function renderShareTxState(on, cfg) {
   }
   $("swShareTxSub").textContent = sub;
   $("swShareTxRow").classList.toggle("off", !on);
-}
-
-function renderHookState(on) {
-  $("swHookSub").textContent = on ? AdvPrintI18n.t("popHookOn")
-                                  : AdvPrintI18n.t("popHookOff");
-  $("swHookRow").classList.toggle("off", !on);
 }
 
 function renderShareRxState(on, reachable) {
@@ -158,15 +152,8 @@ $("swShareRx").addEventListener("change", async () => {
   }
 });
 
-/* v2.8: window.print() on/off - one click in the popup (the same
- * switch also lives in Options > Behavior > Intercept window.print()). */
-$("swHook").addEventListener("change", async () => {
-  const on = $("swHook").checked;
-  await send({ type: "saveCfg", patch: { hookPrint: on } });
-  renderHookState(on);
-  msg(on ? AdvPrintI18n.t("popHookOnMsg")
-         : AdvPrintI18n.t("popHookOffMsg"), "info");
-});
+/* v3.0.2: the popup window.print() hook toggle was removed - the switch
+ * lives in Options > Power switches > Intercept window.print(). */
 
 /* v2.8: Share Send Mode = the print ROUTE. ON sends every print job to
  * the LAN PC hub (Options > LAN PC profile), OFF prints on this PC.
@@ -423,10 +410,9 @@ AdvPrintI18n.currentLang().then((lang) => {
   const off = document.body.classList.contains("off");
   $("swEnabledSub").textContent = off ? AdvPrintI18n.t("popEnabledOff")
                                       : AdvPrintI18n.t("popEnabledOn");
-  // v2.8: re-render the share + hook switch sub-labels in the language
+  // re-render the share switch sub-labels in the active language
   renderShareTxState($("swShareTx").checked);
   renderShareRxState($("swShareRx").checked, !$("swShareRx").disabled);
-  renderHookState($("swHook").checked);
 });
 
 /* v2.7.0: the version badge always matches the real manifest version */

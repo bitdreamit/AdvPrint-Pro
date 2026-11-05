@@ -29,7 +29,7 @@ from conftest import wait_until  # noqa: E402
 def test_health_open_no_token(hub):
     code, d = hub.get("/health", token=None)
     assert code == 200 and d["ok"] is True
-    assert d["version"] == "3.0.1"
+    assert d["version"] == "3.0.2"
     assert d["v2"] is True
     assert "100% local" in d["branding"]
 
@@ -539,13 +539,13 @@ def test_v1_database_migration(tmp_path):
 
 
 def test_version_anchors():
-    assert advprint.VERSION == "3.0.1"
+    assert advprint.VERSION == "3.0.2"
     # repo/package layout: tool/windows/portable/hub -> root/extension
     root = os.path.dirname(os.path.dirname(os.path.dirname(
         os.path.dirname(os.path.dirname(advprint.__file__)))))
     ext = os.path.join(root, "extension", "manifest.json")
     with open(ext) as f:
-        assert json.load(f)["version"] == "3.0.1"
+        assert json.load(f)["version"] == "3.0.2"
 
 
 def test_log_rotation(tmp_path):
@@ -1062,7 +1062,7 @@ def test_v26_token_current_loopback_only(hub):
     code, d = hub.get("/token/current")
     assert code == 200 and d["ok"] is True
     assert d["token"] == hub.token
-    assert d["app"] == "AdvPrint Pro" and d["version"] == "3.0.1"
+    assert d["app"] == "AdvPrint Pro" and d["version"] == "3.0.2"
 
 
 def test_v26_token_current_rejects_remote(hub):
@@ -1136,8 +1136,8 @@ def test_v261_tray_module_ships_and_parses():
 
 
 def test_v261_version_single_source():
-    assert advprint.VERSION == "3.0.1"
-    assert advprint.VERSION_NAME.startswith("v3.0.1")
+    assert advprint.VERSION == "3.0.2"
+    assert advprint.VERSION_NAME.startswith("v3.0.2")
 
 
 def test_v261_cli_cmd_full_path():
@@ -1303,7 +1303,7 @@ def test_v264_setup_exe_kills_zombie_hubs():
     assert "Stop-Process -Name AdvPrintPro" in stopps
     assert "Stop-Process -Name PrintHubPro" in stopps
     assert "sc.exe delete AdvPrint" in stopps
-    assert 'VIProductVersion "3.0.1.0"' in src
+    assert 'VIProductVersion "3.0.2.0"' in src
 
 
 # ---------------- v2.6.8: printer-name self-heal + menu guard ----------
@@ -1586,7 +1586,7 @@ def _v280_pdf(tmp_path, name="z.pdf", big="AdvPrint Pro v2.8 test"):
 
 
 def test_v280_version_and_config_keys():
-    assert advprint.VERSION == "3.0.1"
+    assert advprint.VERSION == "3.0.2"
     for k in ("drop_enabled", "drop_dir", "drop_delete"):
         assert k in advprint.CFG and k in advprint.CONFIG_KEYS
         assert k in advprint.CONFIG_TYPES
@@ -1811,7 +1811,7 @@ def test_v280_source_wiring_restart_tray_tool_installer():
     nsi = open(os.path.join(root, "installer", "setup.nsi"),
                encoding="utf-8").read()
     assert "hub-stop.ps1" in nsi
-    assert "3.0.1" in nsi and "${IfNot} ${Silent}" in nsi
+    assert "3.0.2" in nsi and "${IfNot} ${Silent}" in nsi
     # extension dual profile
     ext = os.path.join(root, "extension")
     bg = open(os.path.join(ext, "background.js"), encoding="utf-8").read()
@@ -1819,11 +1819,11 @@ def test_v280_source_wiring_restart_tray_tool_installer():
     assert 'closeAfterPrint: false' in bg
     assert "resolveTarget" in bg
     pop = open(os.path.join(ext, "popup.html"), encoding="utf-8").read()
-    assert "swHook" in pop
+    assert "swHook" not in pop          # v3.0.2: popup switch removed
     opt = open(os.path.join(ext, "options.html"), encoding="utf-8").read()
     assert "hubUrlLan" in opt and "bDashboardLan" in opt
     man = json.load(open(os.path.join(ext, "manifest.json")))
-    assert man["version"] == "3.0.1"
+    assert man["version"] == "3.0.2"
 
 
 def test_v280_lan_profile_never_auto_heals():
@@ -2076,8 +2076,8 @@ def test_v281_setup_nsi_version():
         root = os.path.dirname(root)
     nsi = open(os.path.join(root, "installer", "setup.nsi"),
                encoding="utf-8", errors="replace").read()
-    assert 'VIProductVersion "3.0.1.0"' in nsi
-    assert "AdvPrint-Pro-Setup-3.0.1.exe" in nsi
+    assert 'VIProductVersion "3.0.2.0"' in nsi
+    assert "AdvPrint-Pro-Setup-3.0.2.exe" in nsi
 
 
 # ============================================================
@@ -2537,3 +2537,45 @@ def test_v301_hook_switch_in_power_block():
         < seg.index('id="hookPrint"') < seg.index('id="debugMode"'), \
         "hookPrint must sit between Queue mode and Debug mode"
     assert "moved here into <b>Power switches</b>" in seg
+
+
+def test_v302_popup_has_no_hook_switch():
+    """v3.0.2: the popup's window.print() hook switch was REMOVED -
+    Options > Power switches > Intercept window.print() is the ONE
+    switch in ONE place. The popup must not carry any trace of it
+    (row, sub-label renderer or i18n keys), and the Options switch
+    must still sit in the Power switches block."""
+    ext = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.dirname(os.path.dirname(advprint.__file__))))), "extension")
+    pop = open(os.path.join(ext, "popup.html"), encoding="utf-8").read()
+    assert "swHook" not in pop, "popup still has the hook switch row"
+    pjs = open(os.path.join(ext, "popup.js"), encoding="utf-8").read()
+    assert "swHook" not in pjs and "renderHookState" not in pjs, \
+        "popup.js still wires the removed switch"
+    i18n = open(os.path.join(ext, "i18n.js"), encoding="utf-8").read()
+    assert "popHook" not in i18n, "i18n still carries popHook* keys"
+    # the ONE switch survives in Options > Power switches
+    html = open(os.path.join(ext, "options.html"), encoding="utf-8").read()
+    assert html.count('id="hookPrint"') == 1
+    power = html.index('<div class="power">')
+    behavior = html.index('<h2>Behavior</h2>')
+    assert power < html.index('id="hookPrint"') < behavior
+
+
+def test_v302_multi_printer_doc_ships():
+    """v3.0.2: the multi-printer lab guide (docs/MULTI-PRINTER.md) must
+    ship with the tree and document the real routing facts - the
+    per-job-printer-wins rule, the payload sniffing table (ZPL/ESC-POS/
+    PostScript/PCL raw passthrough) and the lab scenario with the hub
+    API raw mode field names (lang=zpl + text / raw_base64)."""
+    docs = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.dirname(os.path.dirname(advprint.__file__))))), "docs")
+    md = open(os.path.join(docs, "MULTI-PRINTER.md"), encoding="utf-8").read()
+    assert "per-job printer" in md.lower() or "printer name always wins" in md
+    for marker in ("^XA", "ESC/POS", "Multiple printers", "raw_base64", "lang"):
+        assert marker in md, "missing %r in MULTI-PRINTER.md" % marker
+    assert "Zebra" in md
+    guide = open(os.path.join(docs, "AdvPrint-Pro-Full-Guide.html"),
+                 encoding="utf-8").read()
+    assert "6.6 Multiple printers on one PC" in guide
+    assert "MULTI-PRINTER.md" in guide
