@@ -29,7 +29,7 @@ from conftest import wait_until  # noqa: E402
 def test_health_open_no_token(hub):
     code, d = hub.get("/health", token=None)
     assert code == 200 and d["ok"] is True
-    assert d["version"] == "3.0.4"
+    assert d["version"] == "3.0.5"
     assert d["v2"] is True
     assert "100% local" in d["branding"]
 
@@ -539,13 +539,13 @@ def test_v1_database_migration(tmp_path):
 
 
 def test_version_anchors():
-    assert advprint.VERSION == "3.0.4"
+    assert advprint.VERSION == "3.0.5"
     # repo/package layout: tool/windows/portable/hub -> root/extension
     root = os.path.dirname(os.path.dirname(os.path.dirname(
         os.path.dirname(os.path.dirname(advprint.__file__)))))
     ext = os.path.join(root, "extension", "manifest.json")
     with open(ext) as f:
-        assert json.load(f)["version"] == "3.0.4"
+        assert json.load(f)["version"] == "3.0.5"
 
 
 def test_log_rotation(tmp_path):
@@ -1062,7 +1062,7 @@ def test_v26_token_current_loopback_only(hub):
     code, d = hub.get("/token/current")
     assert code == 200 and d["ok"] is True
     assert d["token"] == hub.token
-    assert d["app"] == "AdvPrint Pro" and d["version"] == "3.0.4"
+    assert d["app"] == "AdvPrint Pro" and d["version"] == "3.0.5"
 
 
 def test_v26_token_current_rejects_remote(hub):
@@ -1136,8 +1136,8 @@ def test_v261_tray_module_ships_and_parses():
 
 
 def test_v261_version_single_source():
-    assert advprint.VERSION == "3.0.4"
-    assert advprint.VERSION_NAME.startswith("v3.0.4")
+    assert advprint.VERSION == "3.0.5"
+    assert advprint.VERSION_NAME.startswith("v3.0.5")
 
 
 def test_v261_cli_cmd_full_path():
@@ -1303,7 +1303,7 @@ def test_v264_setup_exe_kills_zombie_hubs():
     assert "Stop-Process -Name AdvPrintPro" in stopps
     assert "Stop-Process -Name PrintHubPro" in stopps
     assert "sc.exe delete AdvPrint" in stopps
-    assert 'VIProductVersion "3.0.4.0"' in src
+    assert 'VIProductVersion "3.0.5.0"' in src
 
 
 # ---------------- v2.6.8: printer-name self-heal + menu guard ----------
@@ -1586,7 +1586,7 @@ def _v280_pdf(tmp_path, name="z.pdf", big="AdvPrint Pro v2.8 test"):
 
 
 def test_v280_version_and_config_keys():
-    assert advprint.VERSION == "3.0.4"
+    assert advprint.VERSION == "3.0.5"
     for k in ("drop_enabled", "drop_dir", "drop_delete"):
         assert k in advprint.CFG and k in advprint.CONFIG_KEYS
         assert k in advprint.CONFIG_TYPES
@@ -1811,7 +1811,7 @@ def test_v280_source_wiring_restart_tray_tool_installer():
     nsi = open(os.path.join(root, "installer", "setup.nsi"),
                encoding="utf-8").read()
     assert "hub-stop.ps1" in nsi
-    assert "3.0.4" in nsi and "${IfNot} ${Silent}" in nsi
+    assert "3.0.5" in nsi and "${IfNot} ${Silent}" in nsi
     # extension dual profile
     ext = os.path.join(root, "extension")
     bg = open(os.path.join(ext, "background.js"), encoding="utf-8").read()
@@ -1823,7 +1823,7 @@ def test_v280_source_wiring_restart_tray_tool_installer():
     opt = open(os.path.join(ext, "options.html"), encoding="utf-8").read()
     assert "hubUrlLan" in opt and "bDashboardLan" in opt
     man = json.load(open(os.path.join(ext, "manifest.json")))
-    assert man["version"] == "3.0.4"
+    assert man["version"] == "3.0.5"
 
 
 def test_v280_lan_profile_never_auto_heals():
@@ -2076,8 +2076,8 @@ def test_v281_setup_nsi_version():
         root = os.path.dirname(root)
     nsi = open(os.path.join(root, "installer", "setup.nsi"),
                encoding="utf-8", errors="replace").read()
-    assert 'VIProductVersion "3.0.4.0"' in nsi
-    assert "AdvPrint-Pro-Setup-3.0.4.exe" in nsi
+    assert 'VIProductVersion "3.0.5.0"' in nsi
+    assert "AdvPrint-Pro-Setup-3.0.5.exe" in nsi
 
 
 # ============================================================
@@ -2710,3 +2710,104 @@ def test_v304_multi_printer_rules_made_easy():
     assert "DIFFERENT printer per rule" in ojs
     # the rules sub text points at chips/Copy/Contains
     assert "<b>+ rule</b> per" in html and "<b>Copy</b> button" in html
+
+
+def test_v305_rule_manager_tab():
+    """v3.0.5: the HIDDEN multi-printer lab rules are managed and
+    controlled from the extension settings - a dedicated Rules tab
+    (the Rule Manager) hosts the rule table plus a manager status bar
+    (pause ALL rules, save rules), a URL simulator that matches
+    WITHOUT printing, per-rule run counters and a rule activity log;
+    the Settings tab keeps only a pointer card."""
+    ext = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.dirname(os.path.dirname(advprint.__file__))))), "extension")
+    html = open(os.path.join(ext, "options.html"), encoding="utf-8").read()
+    # the tab + panel exist
+    assert 'data-tab="rules"' in html and 'id="panel-rules"' in html
+    # the whole rule workplace moved INTO the Rules panel
+    seg = html[html.index('id="panel-rules"'):html.index('id="panel-settings"')]
+    for marker in ('id="rulesTable"', 'id="rulesBody"', 'id="printerChips"',
+                   'id="labRulesCard"', 'id="bAddRule"', 'id="pdfUrl"',
+                   'id="saveMsg"'):
+        assert marker in seg, "%s must live in the Rules tab" % marker
+    # manager controls ship in the markup
+    for marker in ('id="rmDot"', 'id="rmState"', 'id="rmInfo"',
+                   'id="bRulesPause"', 'id="bSaveRules"', 'id="testUrl"',
+                   'id="bRuleTest"', 'id="ruleTestOut"', 'id="ruleLogBody"',
+                   'id="bRuleLogRefresh"', 'id="bRuleLogClear"',
+                   'id="bRuleStatsReset"'):
+        assert marker in html, "missing %s" % marker
+    # the Settings tab keeps only the pointer card - no second rule table
+    s_seg = html[html.index('id="panel-settings"'):html.index('id="panel-debug"')]
+    assert 'id="bGoRules"' in s_seg, "Settings must point to the Rule Manager"
+    assert 'id="rulesTable"' not in s_seg, "rule table must exist ONCE"
+    ojs = open(os.path.join(ext, "options.js"), encoding="utf-8").read()
+    # stable rule ids: rows carry dataset.rid, collect() stores it
+    assert "tr.dataset.rid = rule.id ||" in ojs
+    assert "id: tr.dataset.rid" in ojs
+    # manager logic: state pull, render, save, log, simulator
+    for marker in ("async function refreshRuleManager",
+                   "function renderRuleManager", "async function saveRules",
+                   "function renderRuleLog", 'type: "ruleState"',
+                   'patch: { rulesPaused: paused }',
+                   'type: "testRuleUrl"', 'type: "clearRuleLog"'):
+        assert marker in ojs, "missing %r in options.js" % marker
+    # the Rules tab pulls fresh data on every open
+    assert 'if (valid === "rules")' in ojs
+    bg = open(os.path.join(ext, "background.js"), encoding="utf-8").read()
+    for marker in ('case "ruleState"', 'case "clearRuleLog"',
+                   'case "testRuleUrl"', "rT ? cfgT.rules.indexOf(rT) + 1 : 0"):
+        assert marker in bg, "missing %r in background.js" % marker
+    # the simulator only MATCHES - it never prints
+    seg_t = bg[bg.index('case "testRuleUrl"'):bg.index('default:')]
+    assert "matchRule" in seg_t and "hubPrint" not in seg_t
+
+
+def test_v305_pause_counters_and_log():
+    """v3.0.5: pausing is a power switch - rulesPaused stops ONLY the
+    hidden auto work (manual prints unaffected); every rule-triggered
+    job (auto AND manual) bumps a per-rule run counter and lands in a
+    100-entry activity log; the popup carries the same pause switch."""
+    ext = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.dirname(os.path.dirname(advprint.__file__))))), "extension")
+    bg = open(os.path.join(ext, "background.js"), encoding="utf-8").read()
+    # the setting ships with a safe default
+    assert "rulesPaused: false" in bg
+    # the gate sits in shouldAutoPrint, AFTER the auto check - paused
+    # stops auto only, matchRule/manual paths stay untouched
+    i_fn = bg.index("async function shouldAutoPrint")
+    i_auto = bg.index("if (!rule || !rule.auto) return null;", i_fn)
+    i_pause = bg.index("if (cfg.rulesPaused) return null;", i_auto)
+    assert i_auto < i_pause
+    # run counters + activity log: storage keys, id-first stable key,
+    # 100-entry cap, auto AND manual modes, failure recorded too
+    assert "ruleStats: {}" in bg and "ruleLog: []" in bg
+    seg_k = bg[bg.index("function ruleKey"):]
+    assert "rule.id" in seg_k and "rule.pattern" in seg_k
+    assert "log.slice(0, 100)" in bg
+    assert 'mode: info.mode || "auto"' in bg
+    assert 'status: "failed"' in bg, "failures must show in the manager"
+    # auto hits and manual (Print page) hits both feed the manager
+    assert bg.count("bumpRuleStats(rule") >= 4
+    assert '"manual"' in bg
+    popup = open(os.path.join(ext, "popup.html"), encoding="utf-8").read()
+    pjs = open(os.path.join(ext, "popup.js"), encoding="utf-8").read()
+    # the popup switch: same rulesPaused setting, inverted UI checkbox
+    assert 'id="swRules"' in popup and 'id="swRulesSub"' in popup
+    assert "rulesPaused: !on" in pjs
+    assert "rulesPaused !== true" in pjs
+    i18n = open(os.path.join(ext, "i18n.js"), encoding="utf-8").read()
+    for key in ("popSwitchRules", "popRulesOn", "popRulesPaused",
+                "popRulesNone", "popRulesOnMsg", "popRulesOffMsg"):
+        assert key in i18n, "missing i18n key %s" % key
+    # both languages ship the keys
+    assert i18n.count("popRulesPaused") >= 2
+    # docs tell the same story
+    docs = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.dirname(os.path.dirname(advprint.__file__))))), "docs")
+    md = open(os.path.join(docs, "MULTI-PRINTER.md"), encoding="utf-8").read()
+    assert "RULE MANAGER" in md and "Pause all rules" in md
+    assert "rule activity log" in md
+    notes = open(os.path.join(docs, "RELEASE-NOTES-v3.0.5.md"),
+                 encoding="utf-8").read()
+    assert "managed and controlled" in notes and "URL simulator" in notes

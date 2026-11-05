@@ -13,6 +13,17 @@ Web page ──► Chrome extension ──► AdvPrint Pro hub (localhost:9235) 
 
 ---
 
+## What's new in v3.0.5 (Rule Manager - the hidden lab, now controlled)
+
+The multi-printer lab rules printed hiddenly (silent auto-print, no dialog). v3.0.5 gives them a dedicated **Rules** tab in the extension Options - the Rule Manager - so everything hidden is now managed and controlled:
+
+- **One dedicated place**: the whole rule table (pattern, printer, Action Auto/PDF/Page/**ZPL label**/**ESC-POS receipt**, copies, paper, Copy button, printer chips) lives in Options > Rules, together with its controls.
+- **Pause all rules - one switch**: stops every hidden auto-print at once; the popup has the same switch (Power section). Manual prints keep working while paused.
+- **URL simulator (prints nothing)**: paste a URL, press *Which rule fires?* - the manager shows the winning rule, its printer, action, copies/paper, and warns when the rule is OFF or all rules are PAUSED.
+- **Per-rule run counters**: every rule shows its runs and the last job time ("12 runs - last 14:02"), keyed by stable rule ids.
+- **Rule activity log**: the last 100 hidden hits (time, pattern, action auto/manual, printer, result incl. FAILED + why) with Clear log / Reset counters buttons.
+- The **Settings** tab keeps a pointer card ("Open the Rule Manager"). Nothing about the rules themselves changed - the lab recipe (PDF reports to the A4/A5 laser + ZPL labels to the Zebra + ESC-POS receipts to the thermal printer) works exactly as before, just managed. See docs/MULTI-PRINTER.md.
+
 ## What's new in v3.0.4 (multi-printer rules made easy)
 
 One PC, several printers, managed entirely in Options > Auto-print & routing rules - now with the full printer list in sight:
@@ -95,7 +106,7 @@ The ten most-requested features, all in one release:
 - **DropZone + Send portal — printing WITHOUT the extension.** The hub watches a folder: in Word/Excel/ANY app choose *Microsoft Print to PDF* and save into the DropZone — the page prints seconds later (dashboard → DropZone card; `POST /dropzone/open` opens the folder). Phones/tablets/other PCs print through the built-in **Send portal** (`/send`, token-protected, same as every endpoint).
 - **Restart hub** — in the tray menu, AdvPrint Tool [14] and the dashboard button: the hub relaunches itself cleanly (new process waits for the port; queued jobs, settings and history are kept).
 - **Bullet-proof upgrade & uninstall.** The setup now runs `hub-stop.ps1` BEFORE touching files: stops the optional *AdvPrint* service (wait + PID kill), **deletes the service registration** (reinstalled fresh when ticked — upgrades keep it automatically), kills every process under the install folder and frees TCP 9235. Old program folders are wiped, so no stale file can abort an install any more; the uninstaller retries the folder sweep and reports leftovers honestly.
-- **Silent install** `AdvPrint-Pro-Setup-3.0.4.exe /S` — elevation is requested by the exe manifest itself ("auto permission" on any PC), the hub auto-starts after a silent install, and the firewall rule for LAN sharing (TCP 9235) is added automatically (removed on uninstall).
+- **Silent install** `AdvPrint-Pro-Setup-3.0.5.exe /S` — elevation is requested by the exe manifest itself ("auto permission" on any PC), the hub auto-starts after a silent install, and the firewall rule for LAN sharing (TCP 9235) is added automatically (removed on uninstall).
 - **New A + printer logo** — the letter A drawn as a printer: the crossbar is the output slot and a printed page slides out of it. Same mark in the extension, popup, dashboard, tray icon, installer and docs.
 
 Nothing removed: every v2.7.0 feature (history manager, share toggles, live test tool) is unchanged.

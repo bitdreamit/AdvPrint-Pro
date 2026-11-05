@@ -88,6 +88,10 @@
         font:12px/1.6 Consolas,monospace; overflow-x:auto; margin-top:10px; }
   pre b { color:#93c5fd; font-weight:600; }
   .mono { font-family:Consolas,monospace; font-size:12px; }
+  /* v3.0.5 Rule Manager: per-rule run counter line under the buttons */
+  .rstat { font-size:10px; color:var(--mut); margin-top:4px;
+           white-space:nowrap; }
+  .rstat .fail { color:var(--bad); font-weight:700; }
   /* queue tab */
   .qstate { display:flex; align-items:center; gap:10px; flex-wrap:wrap;
             background:#f8fafc; border:1px solid var(--line); border-radius:10px;
@@ -118,13 +122,14 @@
     <h1>AdvPrint Pro</h1>
     <p>Print from any web page to any printer &middot; silent &middot; 100% local &middot; MIT open source</p>
   </div>
-  <span class="verchip" id="verChip">v3.0.4</span>
+  <span class="verchip" id="verChip">v3.0.5</span>
   <span class="pill" id="hubPill" title="Live hub status (checked automatically)"><i class="pdot" id="pillDot"></i><span id="pillTxt">checking…</span></span>
 </header>
 
 <nav id="tabs">
   <button data-tab="queue" id="tabBtnQueue">Queue<span class="tbadge" id="tabQBadge"></span></button>
   <button data-tab="history">History</button>
+  <button data-tab="rules" id="tabBtnRules">Rules</button>
   <button data-tab="settings">Settings</button>
   <button data-tab="debug" id="tabBtnDebug">Debug<span class="tbadge" id="tabDbgBadge"></span></button>
   <button data-tab="lan" id="tabBtnLan">LAN / PCs</button>
@@ -197,6 +202,87 @@
       <thead><tr><th style="width:26px;padding-right:0"><input type="checkbox" id="histAll" title="check / uncheck all"></th><th>#</th><th>Time</th><th>Title</th><th>Printer</th>
         <th>Kind</th><th>Status</th><th style="width:130px"></th></tr></thead>
       <tbody id="jobsBody"></tbody>
+    </table>
+  </section>
+
+  <!-- ================= RULES (v3.0.5 RULE MANAGER) ================= -->
+  <!-- The rules print HIDDENLY (silent auto-print). This tab is the ONE
+       place that manages and controls the hidden multi-printer lab:
+       edit rules, pause them all, simulate a URL without printing, per-
+       rule run counters, and an activity log of the last 100 hits. -->
+  <section class="panel" id="panel-rules">
+    <h2>Rule Manager <span class="sub" style="display:inline">- the multi-printer control center (v3.0.5)</span></h2>
+    <p class="sub">Everything the rules print happens hiddenly - silent,
+      no dialog, each job on its rule's printer (PDF reports on the A4/A5
+      laser, ZPL labels on the Zebra, ESC-POS receipts on the thermal
+      printer). This tab makes that hidden work <b>managed and
+      controlled</b>: edit every rule here, pause them ALL with one
+      switch, test which rule would fire WITHOUT printing, watch the
+      per-rule run counters and the activity log of every hidden hit.</p>
+    <div class="qstate">
+      <span class="dot" id="rmDot"></span>
+      <b id="rmState">checking rules...</b>
+      <span id="rmInfo" class="mono" style="color:var(--mut)"></span>
+      <span style="flex:1"></span>
+      <button class="mini" id="bRulesPause" title="ONE switch for every rule: paused = no rule auto-prints (manual prints from the popup keep working)">Pause all rules</button>
+      <button class="mini primary" id="bSaveRules" title="Save every rule row now (the Save settings button in Settings saves these too)">Save rules</button>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <label style="min-width:auto">Test a URL <span class="sub" style="display:inline">(prints nothing)</span></label>
+      <input type="text" id="testUrl" placeholder="https://www.htncr.org/lab/medical_reports/pdf/4711">
+      <button id="bRuleTest" title="Show WHICH rule would fire, on which printer, with which action - nothing is printed">Which rule fires?</button>
+    </div>
+    <div class="note" id="ruleTestOut" style="display:none"></div>
+    <table id="rulesTable" style="margin-top:12px">
+      <thead><tr>
+        <th style="width:27%" data-i18n="optRulesRegex">URL pattern</th>
+        <th style="width:7%" data-i18n="optRulesType">Type</th>
+        <th style="width:11%" data-i18n="optRulesTitle">Title</th>
+        <th style="width:15%">Printer</th>
+        <th style="width:14%">Action</th>
+        <th style="width:6%">Copies</th>
+        <th style="width:9%">Paper</th>
+        <th style="width:4%" data-i18n="optRulesEnabled">On</th>
+        <th style="width:4%">Auto</th><th></th>
+      </tr></thead>
+      <tbody id="rulesBody"></tbody>
+    </table>
+    <div class="note" id="printerChips" style="margin-top:10px">Connect to the hub (Settings tab) to list every printer installed on this PC - then one click <b>+ rule</b> starts a rule for that printer.</div>
+    <div class="row" style="margin-top:12px">
+      <button id="bAddRule">+ Add rule</button>
+      <span id="saveMsg"></span>
+    </div>
+    <div class="row" style="margin-top:6px">
+      <label>Reprint a PDF link</label>
+      <input type="text" id="pdfUrl" placeholder="https://www.htncr.org/lab/medical_reports/pdf/...">
+      <button id="bPrintPdf">Print it</button>
+    </div>
+    <div class="note" id="labRulesCard" style="margin-top:10px">
+      <b>Multi-printer lab (v3.0.3) - no JavaScript needed.</b> One hub, many printers on this
+      PC: rule 1 prints PDF reports on the A4/A5 printer (<i>Action: Auto or PDF</i>,
+      <i>Paper: A5</i> for receipts), rule 2 sends ZPL label pages straight to the Zebra
+      (<i>Action: ZPL label</i> - the <span class="mono">^XA...^XZ</span> text on the page is streamed
+      byte-for-byte), rule 3 prints receipt text on the thermal printer (<i>Action: ESC-POS</i>).
+      Every job carries its rule's printer, copies and paper - the per-job printer name always
+      wins over the Print destination card, so both printers run at the same time and the card
+      is never flipped. <b>v3.0.5:</b> all of this is managed and controlled HERE - pause all
+      rules, simulate a URL, run counters, activity log. More recipes:
+      <span class="mono">docs/MULTI-PRINTER.md</span>.
+    </div>
+
+    <h2 style="margin-top:18px">Rule activity log <span class="sub" style="display:inline">- the hidden work, now visible</span></h2>
+    <p class="sub">Every rule-triggered job - auto AND manual - with its
+      action, printer and result (sent / FAILED + why). The extension
+      keeps the last 100 hits; the table shows the 30 newest.</p>
+    <div class="row" style="gap:8px">
+      <button class="mini" id="bRuleLogRefresh">Refresh</button>
+      <button class="mini danger" id="bRuleLogClear" title="Wipe the activity log (rules themselves are NOT touched)">Clear log</button>
+      <button class="mini" id="bRuleStatsReset" title="Also reset the per-rule run counters (the 12 runs / last 14:02 lines under each rule)">Reset run counters</button>
+    </div>
+    <table style="margin-top:8px">
+      <thead><tr><th style="width:135px">Time</th><th style="width:26%">Rule pattern</th>
+        <th style="width:110px">Action</th><th style="width:22%">Printer</th><th>Page / result</th></tr></thead>
+      <tbody id="ruleLogBody"><tr><td colspan="5">No rule activity yet.</td></tr></tbody>
     </table>
   </section>
 
@@ -372,50 +458,16 @@
 
     <section style="border:none;padding:0;margin-top:18px">
       <h2>Auto-print &amp; routing rules</h2>
-      <p class="sub">First matching rule wins. <b>Type</b>: glob (<span class="mono">*://www.htncr.org/lab/*</span>)
-        or <b>regex</b> (v2.0). <b>Title</b>: only match when the page title contains the text.
-        <b>On</b>: per-site on/off. <b>Auto</b> = print automatically when the URL is opened.
-        <b>v3.0.3</b>: <b>Action</b> now prints LABELS too - <b>ZPL label</b> / <b>ESC-POS receipt</b>
-        take the text shown on the page (your selection first, then <span class="mono">&lt;pre&gt;</span>/textarea,
-        then the visible text) and stream it to the rule's printer in its own language -
-        <b>no page JavaScript needed</b>. <b>Copies</b> and <b>Paper</b> (A4/A5/...) ride along
-        with every job the rule prints. <b>v3.0.4</b>: every rule picks ANY installed printer
-        from the full list (see the printer chips under the table, one click <b>+ rule</b> per
-        printer), every rule has a <b>Copy</b> button, and <b>Contains</b> is the easiest
-        pattern type (the URL just contains the text).</p>
-      <table id="rulesTable">
-        <thead><tr>
-          <th style="width:27%" data-i18n="optRulesRegex">URL pattern</th>
-          <th style="width:7%" data-i18n="optRulesType">Type</th>
-          <th style="width:11%" data-i18n="optRulesTitle">Title</th>
-          <th style="width:15%">Printer</th>
-          <th style="width:14%">Action</th>
-          <th style="width:6%">Copies</th>
-          <th style="width:9%">Paper</th>
-          <th style="width:4%" data-i18n="optRulesEnabled">On</th>
-          <th style="width:4%">Auto</th><th></th>
-        </tr></thead>
-        <tbody id="rulesBody"></tbody>
-      </table>
-      <div class="note" id="printerChips" style="margin-top:10px">Connect to the hub (top of this page) to list every printer installed on this PC - then one click <b>+ rule</b> starts a rule for that printer.</div>
-      <div class="row" style="margin-top:12px">
-        <button id="bAddRule">+ Add rule</button>
-        <span id="saveMsg"></span>
-      </div>
-      <div class="row" style="margin-top:6px">
-        <label>Reprint a PDF link</label>
-        <input type="text" id="pdfUrl" placeholder="https://www.htncr.org/lab/medical_reports/pdf/...">
-        <button id="bPrintPdf">Print it</button>
-      </div>
-      <div class="note" id="labRulesCard" style="margin-top:10px">
-        <b>Multi-printer lab (v3.0.3) - no JavaScript needed.</b> One hub, many printers on this
-        PC: rule 1 prints PDF reports on the A4/A5 printer (<i>Action: Auto or PDF</i>,
-        <i>Paper: A5</i> for receipts), rule 2 sends ZPL label pages straight to the Zebra
-        (<i>Action: ZPL label</i> - the <span class="mono">^XA...^XZ</span> text on the page is streamed
-        byte-for-byte), rule 3 prints receipt text on the thermal printer (<i>Action: ESC-POS</i>).
-        Every job carries its rule's printer, copies and paper - the per-job printer name always
-        wins over the Print destination card, so both printers run at the same time and the card
-        is never flipped. More recipes: <span class="mono">docs/MULTI-PRINTER.md</span>.
+      <p class="sub">v3.0.5: the rules live in their own <b>Rules</b> tab
+        now - the <b>Rule Manager</b>. One place manages and controls the
+        hidden multi-printer lab: edit every rule (pattern, printer,
+        Action Auto/PDF/Page/<b>ZPL label</b>/<b>ESC-POS receipt</b>,
+        copies, paper), <b>Pause all rules</b> with one switch (the popup
+        has the same switch), test which rule fires with the URL
+        <b>simulator</b> (prints nothing), per-rule <b>run counters</b>,
+        and a <b>rule activity log</b> of the last 100 hidden hits.</p>
+      <div class="row">
+        <button class="primary" id="bGoRules">Open the Rule Manager</button>
       </div>
     </section>
 
@@ -668,8 +720,8 @@
   <section class="panel" id="panel-about">
     <div id="api" style="margin-top:-70px;padding-top:70px"></div>
     <h2>About AdvPrint Pro</h2>
-    <p class="sub">Version <b id="aboutVer">3.0.4</b> &middot; AdvPrint (Advanced Printer) by Bit Dream IT - Innovative Healthcare Solutions &middot; MIT license &middot; 100% local - no cloud, no tracking.</p>
-    <p class="sub">v3.0.4 highlights: <b>network printer mode</b> - add this PC like a real IP printer: IPP URL <span class="mono">http://ip:9235/ipp/print</span> (Windows 10/11 "Select a shared printer by name") or the classic <b>TCP/IP port 9100</b> (JetDirect RAW) - Windows, phones and label apps print straight into the hub; <b>print destination</b>: jobs print on ANY printer - the OS default, any installed printer, or an upstream IP printer (RAW/IPP); PDF, JPEG, PostScript, PCL, ESC/POS and ZPL are routed automatically &middot; <b>responsive dashboard tables</b> - every column, button and option is visible on load, nothing hides inside an inner scroll &middot; phone <b>"Auth fail" on the Send portal QR is fixed</b> (works with every token setting) &middot; <b>one version everywhere</b>: popup, Options and About all read the manifest version &middot; <b>smooth tray menu</b>: every tray action now runs in its own thread &middot; <b>tray menu click fix (3.0.1)</b>: every menu item now runs its OWN action - the old build ran the wrong command for items after the first separator &middot; <b>window.print() hook switch</b> lives in Options &gt; Power switches, next to the master switch (v3.0.2: the popup copy was removed - one switch, one place) &middot; <b>multi-printer guide (3.0.2)</b>: docs/MULTI-PRINTER.md - one PC, A4/A5 PDF reports on the laser + ZPL labels on the Zebra at the same time &middot; <b>rules print labels (3.0.3)</b>: rule Action <b>ZPL label</b> / <b>ESC-POS receipt</b> streams the page text (selection &rarr; &lt;pre&gt;/textarea &rarr; body) to the rule's printer in its own language - no page JavaScript, no curl; per-rule <b>Copies</b> and <b>Paper</b> (A4/A5/Letter/...) ride along, and the Reprint-a-PDF-link box honours the matching rule &middot; <b>multi-printer rules made easy (3.0.4)</b>: "Printers on this PC" chip strip under the rules table (one click <b>+ rule</b> per printer preselects it), a <b>Copy</b> button on every rule (duplicate, change pattern + printer), and the new <b>Contains</b> pattern type - the URL just contains the text.</p>
+    <p class="sub">Version <b id="aboutVer">3.0.5</b> &middot; AdvPrint (Advanced Printer) by Bit Dream IT - Innovative Healthcare Solutions &middot; MIT license &middot; 100% local - no cloud, no tracking.</p>
+    <p class="sub">v3.0.5 highlights: <b>Rule Manager</b> - the hidden multi-printer lab rules get their own <b>Rules</b> tab in Options: manage and control everything in one place (edit rules, <b>Pause all rules</b> - the popup has the same switch, a <b>URL simulator</b> that shows which rule would fire WITHOUT printing, per-rule <b>run counters</b>, and a <b>rule activity log</b> of the last 100 hidden hits) &middot; <b>v3.0.4:</b> <b>network printer mode</b> - add this PC like a real IP printer: IPP URL <span class="mono">http://ip:9235/ipp/print</span> (Windows 10/11 "Select a shared printer by name") or the classic <b>TCP/IP port 9100</b> (JetDirect RAW) - Windows, phones and label apps print straight into the hub; <b>print destination</b>: jobs print on ANY printer - the OS default, any installed printer, or an upstream IP printer (RAW/IPP); PDF, JPEG, PostScript, PCL, ESC/POS and ZPL are routed automatically &middot; <b>responsive dashboard tables</b> - every column, button and option is visible on load, nothing hides inside an inner scroll &middot; phone <b>"Auth fail" on the Send portal QR is fixed</b> (works with every token setting) &middot; <b>one version everywhere</b>: popup, Options and About all read the manifest version &middot; <b>smooth tray menu</b>: every tray action now runs in its own thread &middot; <b>tray menu click fix (3.0.1)</b>: every menu item now runs its OWN action - the old build ran the wrong command for items after the first separator &middot; <b>window.print() hook switch</b> lives in Options &gt; Power switches, next to the master switch (v3.0.2: the popup copy was removed - one switch, one place) &middot; <b>multi-printer guide (3.0.2)</b>: docs/MULTI-PRINTER.md - one PC, A4/A5 PDF reports on the laser + ZPL labels on the Zebra at the same time &middot; <b>rules print labels (3.0.3)</b>: rule Action <b>ZPL label</b> / <b>ESC-POS receipt</b> streams the page text (selection &rarr; &lt;pre&gt;/textarea &rarr; body) to the rule's printer in its own language - no page JavaScript, no curl; per-rule <b>Copies</b> and <b>Paper</b> (A4/A5/Letter/...) ride along, and the Reprint-a-PDF-link box honours the matching rule &middot; <b>multi-printer rules made easy (3.0.4)</b>: "Printers on this PC" chip strip under the rules table (one click <b>+ rule</b> per printer preselects it), a <b>Copy</b> button on every rule (duplicate, change pattern + printer), and the new <b>Contains</b> pattern type - the URL just contains the text.</p>
     <p class="sub">v2.7.0 highlights: <b>History manager</b> - filter, search, tick rows, <b>Reprint selected</b>, <b>Reprint all non-printed</b>, <b>Clear ALL history</b> (waiting jobs are never touched) &middot; <b>Share Receive / Send Mode</b> toggles right in the popup &middot; the dashboard's <b>Live debug &amp; test tool</b> now sits properly inside the page &middot; new API: <span class="mono">POST /jobs/bulk-reprint</span>, <span class="mono">POST /history/clear</span>.</p>
     <p class="sub">v2.3 highlights: <b>Debug tab</b> - see WHEN / WHY / WHERE printing fails (hub problems + browser error reports, one Copy button) &middot; <b>instant print</b> (Queue mode OFF) with auto-queue fallback when no printer is active &middot; v2.2: <b>Default print options</b> (copies, odd/even/custom pages, per-sheet n-up, <b>quality draft/normal/high AND DPI</b>, scale, margins, duplex, paper, layout) &middot; <b>LAN / PCs tab</b>: LAN sharing, peers, shift single jobs or the whole queue to another PC &middot; the hub serves the full user guide at <b>/docs</b>.</p>
     <div class="gh">

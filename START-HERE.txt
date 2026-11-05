@@ -1,9 +1,33 @@
-AdvPrint Pro (Advanced Printer) v3.0.4 - START HERE
+AdvPrint Pro (Advanced Printer) v3.0.5 - START HERE
 ====================================================
 by Bit Dream IT - Innovative Healthcare Solutions
 
-WHAT'S NEW IN 3.0.4 (MULTI-PRINTER RULES MADE EASY)
+WHAT'S NEW IN 3.0.5 (RULE MANAGER - THE HIDDEN LAB, NOW CONTROLLED)
 ----------------------------------------------------------------------
+1) A DEDICATED RULES TAB. The rules printed hiddenly (silent, no
+   dialog) - now they have their own control center: Options >
+   RULES. The whole rule table lives there (pattern, printer,
+   Action Auto/PDF/Page/ZPL/ESC-POS, copies, paper, Copy, chips),
+   next to everything that manages and controls it.
+2) PAUSE ALL RULES - ONE SWITCH. 'Pause all rules' stops EVERY
+   hidden auto-print at once (the popup has the same switch in
+   Power). Manual prints keep working while paused - exactly like
+   the queue Pause, but for rules.
+3) URL SIMULATOR - TEST WITHOUT PRINTING. Paste a URL, press
+   'Which rule fires?': the manager shows which rule matches, on
+   which printer, with which action/copies/paper - and warns when
+   the rule is OFF or all rules are PAUSED. Nothing is printed.
+4) RUN COUNTERS + ACTIVITY LOG. Every rule shows how often it
+   fired and when last ('12 runs - last 14:02'). The Rule activity
+   log lists the last 100 hidden hits (time, pattern, action,
+   printer, result incl. FAILED + why) - auto AND manual prints.
+   Clear log / reset counters with one click.
+5) THE SETTINGS TAB POINTS THERE. Options > Settings keeps a card
+   with an 'Open the Rule Manager' button, so the section is easy
+   to find. Nothing about the rules themselves changed - the lab
+   from 3.0.3/3.0.4 works exactly as before, just MANAGED.
+0) NEW IN 3.0.4 (also in this build): printers-on-this-PC chips,
+   per-rule Copy button, 'Contains' pattern type.
 1) ALL PRINTERS VISIBLE IN THE RULES. Options > Auto-print & routing
    rules now shows a 'Printers on this PC' strip under the table -
    every installed printer (+ groups) as a chip with its live status
@@ -178,8 +202,8 @@ WHAT'S NEW IN 2.8.2 (LAN SHARING APPLIES LIVE + FIREWALL ONE-CLICK)
      reports PASS/FAIL in the message bar: PASS + other PC still
      failing = firewall (click the button); FAIL = listener problem
      (hub.log says exactly why).
-  FILES IN THIS RELEASE: AdvPrint-Pro-Setup-3.0.4.exe (Windows),
-  advprint-pro_3.0.4_all.deb (Linux), AdvPrint-Pro-3.0.4-source.zip.
+  FILES IN THIS RELEASE: AdvPrint-Pro-Setup-3.0.5.exe (Windows),
+  advprint-pro_3.0.5_all.deb (Linux), AdvPrint-Pro-3.0.5-source.zip.
 
 WHAT'S NEW IN 2.8.1 (SEND-PORTAL QR + ONE-CLICK LAN INVITE)
 ===========================================================
@@ -200,8 +224,8 @@ WHAT'S NEW IN 2.8.1 (SEND-PORTAL QR + ONE-CLICK LAN INVITE)
      - Safe by design: loopback-only, private-LAN URLs only, explicit
        click required, every accept is audited (peer.connected).
   3. NOTHING REMOVED - everything from 2.8.0 below is unchanged.
-  FILES IN THIS RELEASE: AdvPrint-Pro-Setup-3.0.4.exe (Windows),
-  advprint-pro_3.0.4_all.deb (Linux), AdvPrint-Pro-3.0.4-source.zip.
+  FILES IN THIS RELEASE: AdvPrint-Pro-Setup-3.0.5.exe (Windows),
+  advprint-pro_3.0.5_all.deb (Linux), AdvPrint-Pro-3.0.5-source.zip.
 
 WHAT'S NEW IN 2.8.0 (TWO HUB PROFILES + DROPZONE + BULLET-PROOF UNINSTALL)
 ==========================================================================
@@ -229,13 +253,13 @@ WHAT'S NEW IN 2.8.0 (TWO HUB PROFILES + DROPZONE + BULLET-PROOF UNINSTALL)
      service before touching files, wipes old program folders and
      frees port 9235 - "some file abort install" is fixed. The
      service is reinstalled automatically on upgrade.
-  9. SILENT INSTALL: AdvPrint-Pro-Setup-3.0.4.exe /S - the exe
+  9. SILENT INSTALL: AdvPrint-Pro-Setup-3.0.5.exe /S - the exe
      requests admin by itself (UAC once), the hub auto-starts and
      the firewall rule for LAN sharing is added automatically.
  10. NEW LOGO: the letter A drawn as a printer - the crossbar is the
      output slot and a printed page slides out of it.
-  FILES IN THIS RELEASE: AdvPrint-Pro-Setup-3.0.4.exe (Windows),
-  advprint-pro_3.0.4_all.deb (Linux), AdvPrint-Pro-3.0.4-source.zip.
+  FILES IN THIS RELEASE: AdvPrint-Pro-Setup-3.0.5.exe (Windows),
+  advprint-pro_3.0.5_all.deb (Linux), AdvPrint-Pro-3.0.5-source.zip.
 
 WHAT'S NEW IN 2.7.0 (HISTORY MANAGER + SHARE MODES + CLEAN LAYOUT)
   0. JOB HISTORY IS NOW A REAL MANAGER (hub dashboard "Job history"
@@ -524,7 +548,7 @@ WHY DID MY OLD VERSION SAY "cannot access" ON THE SETUP EXE?
   No manual Security-tab work is needed anywhere.
 
 UPDATE IN 3 STEPS
-  1. Run AdvPrint-Pro-Setup-3.0.4.exe (installs over the old
+  1. Run AdvPrint-Pro-Setup-3.0.5.exe (installs over the old
      version; history + settings migrate to .advprint automatically).
      Portable users: extract the new zip over the old folder, then
      AdvPrint-Tool.bat > [13] once (unblocks), then [1] Start.
@@ -558,12 +582,12 @@ FILES IN THIS PACKAGE
                    AdvPrint-Pro-Full-Guide.html + .pdf, release notes
   tests\           pytest suite + pytest.ini
   installer\       setup.nsi - NSIS 3 source that builds
-                   AdvPrint-Pro-Setup-3.0.4.exe (per-machine, UAC)
+                   AdvPrint-Pro-Setup-3.0.5.exe (per-machine, UAC)
   prebuilt\        READY installers, no build needed:
-                   AdvPrint-Pro-Setup-3.0.4.exe (Windows setup,
+                   AdvPrint-Pro-Setup-3.0.5.exe (Windows setup,
                    ~9.5 MB - run it, UAC appears, done)
-                   advprint-pro_3.0.4_all.deb (Linux deb -
-                   sudo dpkg -i advprint-pro_3.0.4_all.deb)
+                   advprint-pro_3.0.5_all.deb (Linux deb -
+                   sudo dpkg -i advprint-pro_3.0.5_all.deb)
   README.md / CHANGELOG.md / LICENSE / pytest.ini / .gitignore
   SHA256SUMS.txt
 

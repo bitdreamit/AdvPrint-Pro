@@ -84,6 +84,13 @@ async function loadSwitches() {
   const off = cfg.cfg.enabled === false;
   $("swEnabled").checked = !off;
   $("swQueue").checked = cfg.cfg.queueMode !== false;
+  // v3.0.5 RULE MANAGER: the popup carries the SAME pause switch as the
+  // Options > Rules tab (one setting: rulesPaused). ON = armed rules
+  // auto-print hiddenly; OFF = paused - no rule auto-prints, manual
+  // prints from this popup keep working.
+  const rulesOn = cfg.cfg.rulesPaused !== true;
+  $("swRules").checked = rulesOn;
+  renderRulesState(rulesOn, cfg.cfg);
   // v3.0.2: the window.print() hook switch lives ONLY in Options >
   // Power switches now (setting key: hookPrint) - the popup row was
   // removed to keep the popup lean; the hookPrint setting itself and
@@ -93,6 +100,20 @@ async function loadSwitches() {
   $("swShareTx").checked = cfg.cfg.lanSend === true;
   await renderShareTxState(cfg.cfg.lanSend === true, cfg.cfg);
   renderEnabledState(off);
+}
+
+/* v3.0.5: the rules switch sub-line - how many rules are armed, or the
+ * paused state, straight from the saved config. */
+function renderRulesState(on, cfg) {
+  const c = cfg || {};
+  const rules = Array.isArray(c.rules) ? c.rules : [];
+  const armed = rules.filter((r) => r && r.enabled !== false && r.auto).length;
+  $("swRulesSub").textContent = !on
+    ? AdvPrintI18n.t("popRulesPaused")
+    : (armed ? armed + " rule" + (armed === 1 ? "" : "s") + " " +
+                AdvPrintI18n.t("popRulesOn")
+             : AdvPrintI18n.t("popRulesNone"));
+  $("swRulesRow").classList.toggle("off", !on);
 }
 
 async function renderShareTxState(on, cfg) {
@@ -134,6 +155,19 @@ $("swQueue").addEventListener("change", async () => {
     : AdvPrintI18n.t("popQueueOff");
   msg(on ? AdvPrintI18n.t("popQueueOnMsg")
          : AdvPrintI18n.t("popQueueOffMsg"), "info");
+});
+
+/* v3.0.5 RULE MANAGER: the popup's pause switch for ALL auto-print
+ * rules - the same rulesPaused setting the Options > Rules tab drives.
+ * Pausing stops only the HIDDEN auto work; every manual print (this
+ * popup's buttons, right-click menu) keeps working. */
+$("swRules").addEventListener("change", async () => {
+  const on = $("swRules").checked;
+  await send({ type: "saveCfg", patch: { rulesPaused: !on } });
+  const cfg = await send({ type: "getCfg" });
+  renderRulesState(on, cfg.cfg);
+  msg(on ? AdvPrintI18n.t("popRulesOnMsg")
+         : AdvPrintI18n.t("popRulesOffMsg"), "info");
 });
 
 /* v2.7.0: Share Receive Mode - hub-side share_lan (accept jobs from

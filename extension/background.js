@@ -57,6 +57,11 @@ const DEFAULTS = {
                             //   *://www.htncr.org/*
                             //   https://reports.example.com/*
                             // The extension's own pages are always allowed.
+  rulesPaused: false,       // v3.0.5 RULE MANAGER: pause ALL auto-print
+                            // rules with ONE switch (Options > Rules tab,
+                            // popup switch). Only the HIDDEN auto work is
+                            // paused - manual prints (popup button, right-
+                            // click menu) keep working, like queue Pause.
   rules: [
     {
       pattern: "*://www.htncr.org/lab/medical_reports/pdf/*",
@@ -459,6 +464,61 @@ function matchRule(url, rules, title) {
   return null;
 }
 
+/* ------------- v3.0.5: RULE MANAGER - stats + activity log ----------
+ * The lab rules work HIDDENLY (silent auto-print, no dialog). The new
+ * Options > Rules tab makes that hidden work VISIBLE and CONTROLLABLE:
+ * every rule keeps a run counter, the last 100 rule-triggered jobs are
+ * listed in the activity log, and ONE rulesPaused switch pauses every
+ * auto rule at once. Bookkeeping can never break printing. */
+function ruleKey(rule) {
+  return (rule && rule.id) ? String(rule.id)
+    : ((rule && rule.pattern ? rule.pattern : "?") + "|" +
+       (rule && rule.printer ? rule.printer : ""));
+}
+
+async function bumpRuleStats(rule, info = {}) {
+  try {
+    const key = ruleKey(rule);
+    const st = await chrome.storage.local.get({ ruleStats: {}, ruleLog: [] });
+    const stats = st.ruleStats || {};
+    const s = stats[key] || { runs: 0 };
+    s.runs += 1;
+    s.lastRun = new Date().toISOString();
+    s.lastStatus = info.status || "sent";
+    s.lastError = String(info.error || "").slice(0, 160);
+    stats[key] = s;
+    const log = st.ruleLog || [];
+    log.unshift({
+      at: s.lastRun, key: key,
+      pattern: (rule && rule.pattern) || "",
+      printer: (rule && rule.printer) || "",
+      action: (rule && rule.action) || "auto",
+      mode: info.mode || "auto",          // auto | manual
+      title: String(info.title || "").slice(0, 80),
+      url: String(info.url || "").slice(0, 200),
+      status: s.lastStatus,
+      error: s.lastError
+    });
+    await chrome.storage.local.set({ ruleStats: stats,
+                                     ruleLog: log.slice(0, 100) });
+  } catch (_) { /* bookkeeping must never break a print job */ }
+}
+
+async function getRuleState() {
+  const cfg = await loadCfg();
+  const st = await chrome.storage.local.get({ ruleStats: {}, ruleLog: [] });
+  const rules = cfg.rules || [];
+  return {
+    ok: true,
+    paused: cfg.rulesPaused === true,
+    total: rules.length,
+    enabled: rules.filter((r) => r && r.enabled !== false).length,
+    auto: rules.filter((r) => r && r.enabled !== false && r.auto).length,
+    stats: st.ruleStats || {},
+    log: st.ruleLog || []
+  };
+}
+
 /* ---------------- badge + history ---------------- */
 /* Master switch state on the toolbar icon: gray OFF badge while
  * disabled, cleared when enabled. Applied on install/startup and
@@ -815,15 +875,28 @@ async function printTab(tab, force, printerOverride) {
   const url = tab.url || "";
   const cfg = await loadCfg();
   const rule = matchRule(url, cfg.rules, tab.title);
+  // v3.0.5: a rule-matched MANUAL print (Print page button, reprint box)
+  // also lands in the Rule Manager run counters + activity log - the
+  // manager shows the hidden work, whichever way it was triggered.
+  const bumpManual = async (status, error) => {
+    if (rule) await bumpRuleStats(rule, { status, mode: "manual",
+                                          title: tab.title, url, error });
+  };
   // v3.0.3: a rule with Action "ZPL label" / "ESC-POS receipt" turns the
   // manual "Print page" button into a label/receipt print too - the page
   // text (or the selection) goes to the hub in the printer's own
   // language for the rule's printer. No page JavaScript, ever.
   if (force !== "pdf" && printerOverride !== "__file__" &&
       rule && (rule.action === "zpl" || rule.action === "raw")) {
-    const out = await printTabRawLang(tab, rule, printerOverride || "");
-    await flashBadge(true, "OK");
-    return out;
+    try {
+      const outL = await printTabRawLang(tab, rule, printerOverride || "");
+      await bumpManual("sent");
+      await flashBadge(true, "OK");
+      return outL;
+    } catch (eRaw) {
+      await bumpManual("failed", String(eRaw.message || eRaw));
+      throw eRaw;
+    }
   }
   const printer = printerOverride ||
     (rule && rule.printer) || cfg.defaultPrinter || "";
@@ -831,13 +904,15 @@ async function printTab(tab, force, printerOverride) {
   const looksPdf = /\.pdf(\?|#|$)/i.test(url);
   if (!looksPdf && force !== "pdf") {
     // render the live DOM -> hub prints via headless Chrome
-    const out = await printPageDom(tab, tab.title, printer, rex);
+    const outD = await printPageDom(tab, tab.title, printer, rex);
+    await bumpManual("sent");
     await flashBadge(true, "OK");
-    return out;
+    return outD;
   }
-  const out = await printPdfUrl(url, tab.title, printer, rex);
+  const outP = await printPdfUrl(url, tab.title, printer, rex);
+  await bumpManual("sent");
   await flashBadge(true, "OK");
-  return out;
+  return outP;
 }
 
 async function printTabAuto(tab, extra = {}) {
@@ -1018,6 +1093,7 @@ async function shouldAutoPrint(url, title) {
   const cfg = await loadCfg();
   const rule = matchRule(url, cfg.rules, title);
   if (!rule || !rule.auto) return null;
+  if (cfg.rulesPaused) return null;   // v3.0.5: ALL auto rules paused
   const { seen, now, fresh } = await printedRecently(url);
   if (fresh) return null;
   seen[url] = now;
@@ -1034,16 +1110,27 @@ chrome.tabs.onUpdated.addListener(async (tabId, info, tab) => {
     if (rule) {
       const printer = rule.printer || (await loadCfg()).defaultPrinter || "";
       const rex = rulePrintExtras(rule);       // v3.0.3 copies/paper
-      if (rule.action === "page") {
-        await printPageDom(tab, tab.title, printer, rex);
-      } else if (rule.action === "pdf") {
-        await printPdfUrl(tab.url, tab.title, printer, rex);
-      } else if (rule.action === "zpl" || rule.action === "raw") {
-        // v3.0.3: label/receipt rule - page text goes to the hub in the
-        // printer's own language (ZPL verbatim / ESC-POS built)
-        await printTabRawLang(tab, rule, printer);
-      } else {
-        await printTabAuto(tab, rex);
+      try {
+        if (rule.action === "page") {
+          await printPageDom(tab, tab.title, printer, rex);
+        } else if (rule.action === "pdf") {
+          await printPdfUrl(tab.url, tab.title, printer, rex);
+        } else if (rule.action === "zpl" || rule.action === "raw") {
+          // v3.0.3: label/receipt rule - page text goes to the hub in the
+          // printer's own language (ZPL verbatim / ESC-POS built)
+          await printTabRawLang(tab, rule, printer);
+        } else {
+          await printTabAuto(tab, rex);
+        }
+        // v3.0.5: the Rule Manager shows this hidden hit (run counter
+        // + activity log) - success and failure both, never silently
+        await bumpRuleStats(rule, { status: "sent", mode: "auto",
+                                    title: tab.title, url: tab.url });
+      } catch (eRule) {
+        await bumpRuleStats(rule, { status: "failed", mode: "auto",
+                                    title: tab.title, url: tab.url,
+                                    error: String(eRule.message || eRule) });
+        throw eRule;
       }
       await flashBadge(true, "OK");
       await maybeCloseTab(tabId);
@@ -1522,6 +1609,35 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
         case "getCfg":
           reply({ ok: true, cfg: await loadCfg() });
           break;
+        case "ruleState": {
+          // v3.0.5 RULE MANAGER: pause state, run counters, activity log
+          reply(await getRuleState());
+          break;
+        }
+        case "clearRuleLog": {
+          // v3.0.5: wipe the activity log (msg.stats also resets the
+          // per-rule run counters)
+          const clr = { ruleLog: [] };
+          if (msg.stats) clr.ruleStats = {};
+          await chrome.storage.local.set(clr);
+          reply({ ok: true });
+          break;
+        }
+        case "testRuleUrl": {
+          // v3.0.5: the Rules-tab simulator - WHICH rule would fire, on
+          // which printer, with which action? It only MATCHES; nothing
+          // is printed, no tab is touched, the dedupe is not fed.
+          const cfgT = await loadCfg();
+          const rT = matchRule(String(msg.url || ""), cfgT.rules,
+                               String(msg.title || ""));
+          reply({ ok: true, matched: !!rT, rule: rT || null,
+                  index: rT ? cfgT.rules.indexOf(rT) + 1 : 0,
+                  printer: rT ? (rT.printer || cfgT.defaultPrinter || "")
+                              : (cfgT.defaultPrinter || ""),
+                  simplePdf: cfgT.autoPrintAllPdfs !== false,
+                  paused: cfgT.rulesPaused === true });
+          break;
+        }
         default:
           reply({ ok: false, error: "unknown message" });
       }

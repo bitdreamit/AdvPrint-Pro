@@ -22,6 +22,17 @@ rule with that printer selected; every rule row has a **Copy** button;
 and the new **Contains** pattern type matches a URL by plain text
 (no wildcards/regex to learn).
 
+**New in v3.0.5: the RULE MANAGER - the hidden lab, now managed and
+controlled.** The rules print hiddenly (silent, no dialogs), so they
+get their own **Rules** tab in the extension Options: the whole rule
+table lives there next to a manager status bar ("N of M armed"),
+a **Pause all rules** switch (the popup has the same switch - pausing
+stops only the hidden auto work, manual prints keep working), a **URL
+simulator** that shows which rule would fire on which printer WITHOUT
+printing, per-rule **run counters** ("12 runs · last 14:02") and a
+**rule activity log** of the last 100 hidden hits (time, pattern,
+action, printer, result incl. FAILED + why).
+
 ---
 
 ## 1. The one rule: the per-job printer name always wins

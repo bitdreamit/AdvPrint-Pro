@@ -16,9 +16,9 @@ function saved(text) {
   setTimeout(() => { $("saveMsg").textContent = ""; }, 2500);
 }
 
-/* ---------- tabs (Queue | History | Settings | Debug | LAN | About) ---------- */
+/* ---------- tabs (Queue | History | Rules | Settings | Debug | LAN | About) ---------- */
 function showTab(name) {
-  const valid = ["queue", "history", "settings", "debug", "lan", "about"].includes(name)
+  const valid = ["queue", "history", "rules", "settings", "debug", "lan", "about"].includes(name)
     ? name : "settings";
   document.querySelectorAll("#tabs button").forEach((b) =>
     b.classList.toggle("active", b.dataset.tab === valid));
@@ -28,6 +28,11 @@ function showTab(name) {
   if (valid === "lan") startLanLoop(); else stopLanLoop();
   if (valid === "history") startJobsLoop(); else stopJobsLoop();
   if (valid === "debug") startDebugLoop(); else stopDebugLoop();
+  // v3.0.5: opening the Rule Manager pulls FRESH pause state, run
+  // counters and activity log every time - never a stale view
+  if (valid === "rules") {
+    refreshRuleManager().then(() => { renderRuleManager(); renderRuleLog(); });
+  }
 }
 
 /* v2.2.1: history auto-refreshes every 8 s while the tab is open, so a
@@ -190,6 +195,12 @@ async function updateCheck() {
 /* ---------- rules table (v2.0: type glob/regex, title filter, on/off) -- */
 function ruleRow(rule) {
   const tr = document.createElement("tr");
+  // v3.0.5: every rule row carries a stable id so the Rule Manager can
+  // keep per-rule run counters across saves. A NEW id is minted when the
+  // rule has none yet (add / Copy / chips '+ rule') - duplicates never
+  // share counters with their original.
+  tr.dataset.rid = rule.id ||
+    ("r" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6));
 
   const tdP = document.createElement("td");
   const inP = document.createElement("input");
@@ -308,6 +319,12 @@ function ruleRow(rule) {
   bx.className = "mini danger"; bx.textContent = "Delete";
   bx.addEventListener("click", () => { tr.remove(); collect(); });
   tdX.appendChild(bx);
+  // v3.0.5: per-rule run counter (filled by renderRuleManager) - the
+  // manager shows how often this hidden rule fired and when last
+  const rstat = document.createElement("div");
+  rstat.className = "rstat";
+  rstat.textContent = "\u00a0";
+  tdX.appendChild(rstat);
 
   tr.append(tdP, tdT, tdTi, tdPr, tdA, tdC, tdPa, tdOn, tdAuto, tdX);
   return tr;
@@ -328,7 +345,8 @@ function collect() {
       tr.querySelectorAll("input, select");
     if (p.value.trim()) {
       const cv = parseInt(co.value, 10);
-      rules.push({ pattern: p.value.trim(), type: ty.value,
+      rules.push({ id: tr.dataset.rid || "",
+                   pattern: p.value.trim(), type: ty.value,
                    title: ti.value.trim(), printer: pr.value,
                    action: a.value,
                    copies: (co.value && cv >= 1) ? String(cv) : "",
@@ -336,7 +354,108 @@ function collect() {
                    enabled: on.checked, auto: auto.checked });
     }
   });
+  renderRuleManager();     // v3.0.5: counts / armed / pause chip follow edits
   return rules;
+}
+
+/* ---------- v3.0.5: RULE MANAGER - pause, simulator, counters, log --
+ * The lab rules work hiddenly (silent auto-print). This block is the
+ * control center: ONE pause switch for all rules, a URL simulator that
+ * matches without printing, per-rule run counters and an activity log
+ * of the last 100 rule-triggered jobs. */
+let RULE_STATE = { paused: false, stats: {}, log: [], total: 0 };
+
+function ruleActionLabel(a) {
+  return ({ auto: "Auto", pdf: "PDF", page: "Page render",
+            zpl: "ZPL label", raw: "ESC-POS" })[a] || (a || "Auto");
+}
+
+async function refreshRuleManager() {
+  const st = await send({ type: "ruleState" });
+  if (st && st.ok) RULE_STATE = st;
+  return RULE_STATE;
+}
+
+function renderRuleManager() {
+  const dot = $("rmDot"), state = $("rmState"), info = $("rmInfo");
+  if (!dot || !state || !info) return;      // older markup - ignore
+  const st = RULE_STATE || {};
+  const rows = $("rulesBody").querySelectorAll("tr").length;
+  const total = st.total != null ? Math.max(st.total, rows) : rows;
+  const paused = !!st.paused;
+  let armed = 0;
+  $("rulesBody").querySelectorAll("tr").forEach((tr) => {
+    const cbs = tr.querySelectorAll('input[type="checkbox"]');
+    if (cbs.length >= 2 && cbs[0].checked && cbs[1].checked) armed += 1;
+  });
+  dot.className = "dot" + (paused ? " paused" : "");
+  state.textContent = paused
+    ? "PAUSED - no rule auto-prints (manual prints still work)"
+    : "ACTIVE - armed rules auto-print hiddenly";
+  info.textContent =
+    armed + " of " + total + " armed (On + Auto) \u00b7 " +
+    ((st.log || []).length) + " log entries";
+  $("bRulesPause").textContent = paused ? "Resume all rules" : "Pause all rules";
+  // per-rule run counters (stats are keyed by the row's stable rule id)
+  $("rulesBody").querySelectorAll("tr").forEach((tr) => {
+    const el = tr.querySelector(".rstat");
+    if (!el) return;
+    const s = (st.stats || {})[tr.dataset.rid];
+    if (!s || !s.runs) { el.textContent = "\u00a0"; return; }
+    const d = new Date(s.lastRun);
+    const when = isNaN(d) ? ""
+      : " \u00b7 last " + d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    el.innerHTML = s.runs + " run" + (s.runs === 1 ? "" : "s") + when +
+      (s.lastStatus === "failed" ? ' <span class="fail">(FAILED)</span>' : "");
+  });
+}
+
+async function saveRules() {
+  const rules = collect();
+  const r = await send({ type: "saveCfg", patch: { rules } });
+  saved(r.ok ? ("Rules saved - " + rules.length + " rule" +
+                (rules.length === 1 ? "" : "s"))
+             : "Save failed: " + r.error);
+  renderRuleManager();
+}
+
+function renderRuleLog() {
+  const body = $("ruleLogBody");
+  if (!body) return;
+  const log = (RULE_STATE && RULE_STATE.log) || [];
+  if (!log.length) {
+    body.innerHTML = '<tr><td colspan="5">No rule activity yet - when a rule fires (hiddenly), it shows up here.</td></tr>';
+    return;
+  }
+  body.innerHTML = "";
+  log.slice(0, 30).forEach((e) => {
+    const tr = document.createElement("tr");
+    const d = new Date(e.at);
+    const tdT = document.createElement("td");
+    tdT.className = "mono";
+    tdT.textContent = isNaN(d) ? String(e.at || "") : d.toLocaleString();
+    const tdP = document.createElement("td");
+    tdP.className = "mono";
+    tdP.textContent = e.pattern || "";
+    tdP.title = e.pattern || "";
+    const tdA = document.createElement("td");
+    const badge = document.createElement("span");
+    badge.className = "st " + (e.status === "failed" ? "failed" : "printed");
+    badge.textContent = ruleActionLabel(e.action) +
+      (e.mode === "manual" ? " \u00b7 manual" : " \u00b7 auto");
+    tdA.appendChild(badge);
+    const tdPr = document.createElement("td");
+    tdPr.textContent = e.printer || "(default)";
+    const tdR = document.createElement("td");
+    if (e.status === "failed") {
+      tdR.innerHTML = '<span class="jerr" style="max-width:340px;white-space:normal">FAILED: ' +
+        dbgEsc(e.error || "error") + "</span>";
+    } else {
+      tdR.textContent = "sent" + (e.title ? " - " + e.title : "");
+    }
+    tr.append(tdT, tdP, tdA, tdPr, tdR);
+    body.appendChild(tr);
+  });
 }
 
 /* ---------- v2.2: default print options (stored as cfg.printDefaults) */
@@ -530,6 +649,7 @@ async function loadPrinters() {
   // refresh printer dropdowns in rules
   const cfg = await send({ type: "getCfg" });
   if (cfg.ok) renderRules(cfg.cfg.rules);
+  renderRuleManager();       // v3.0.5: counters for the freshly built rows
 }
 
 async function loadAll() {
@@ -565,6 +685,11 @@ async function loadAll() {
   refreshCaps();
   testHub(false);
   loadHubCfg();
+  // v3.0.5: the Rule Manager starts informed - pause state, counters,
+  // activity log (the Rules tab re-pulls fresh data on every open)
+  await refreshRuleManager();
+  renderRuleManager();
+  renderRuleLog();
 }
 
 async function saveAll() {
@@ -985,8 +1110,86 @@ $("bClearLan").addEventListener("click", async () => {
 $("bReloadPrinters").addEventListener("click", loadPrinters);
 $("bAddRule").addEventListener("click", () => {
   $("rulesBody").appendChild(ruleRow({ pattern: "", printer: "", action: "auto", auto: false }));
+  collect();
 });
 $("bSave").addEventListener("click", saveAll);
+
+/* ---------- v3.0.5 Rule Manager controls ---------- */
+$("bSaveRules").addEventListener("click", saveRules);
+
+$("bRulesPause").addEventListener("click", async () => {
+  const paused = !(RULE_STATE && RULE_STATE.paused);
+  const r = await send({ type: "saveCfg", patch: { rulesPaused: paused } });
+  if (r && r.ok) {
+    RULE_STATE.paused = paused;
+    renderRuleManager();
+    saved(paused ? "ALL rules PAUSED - nothing auto-prints (manual prints work)"
+                 : "Rules resumed - armed rules auto-print again");
+  } else {
+    saved("Save failed: " + ((r && r.error) || "?"));
+  }
+});
+
+$("bGoRules").addEventListener("click", () => showTab("rules"));
+
+$("bRuleTest").addEventListener("click", async () => {
+  const out = $("ruleTestOut");
+  out.style.display = "";
+  const url = ($("testUrl").value || "").trim();
+  if (!url) {
+    out.innerHTML = "Type a URL first - the simulator only MATCHES, it never prints.";
+    return;
+  }
+  const r = await send({ type: "testRuleUrl", url });
+  if (!r || !r.ok) {
+    out.innerHTML = "Could not test - " + dbgEsc((r && r.error) || "extension error");
+    return;
+  }
+  if (r.matched && r.rule) {
+    const ru = r.rule;
+    const bits = [];
+    bits.push("<b>Rule #" + (r.index || "?") + " fires:</b> " +
+              '<span class="mono">' + dbgEsc(ru.pattern || "") + "</span>" +
+              (ru.type === "regex" ? " (regex)" : ru.type === "contains" ? " (contains)" : " (glob)"));
+    bits.push("<b>Printer:</b> " + dbgEsc(r.printer || "(OS default printer)"));
+    bits.push("<b>Action:</b> " + dbgEsc(ruleActionLabel(ru.action)));
+    const ex = [];
+    if (parseInt(ru.copies, 10) >= 1) ex.push(ru.copies + " copies");
+    if (ru.paper) ex.push("paper " + ru.paper);
+    if (ru.title) ex.push('title contains "' + dbgEsc(ru.title) + '"');
+    if (ex.length) bits.push("<b>Extras:</b> " + dbgEsc(ex.join(" \u00b7 ")));
+    if (ru.enabled === false) bits.push('<b style="color:var(--bad)">BUT this rule is switched OFF (On) - nothing prints.</b>');
+    if (ru.auto === false) bits.push("<b>Note:</b> Auto is off - it prints only when you press Print page (manual).");
+    if (r.paused) bits.push('<b style="color:#b45309">BUT all rules are PAUSED right now - resume them (popup or the button above) or nothing auto-prints.</b>');
+    out.innerHTML = bits.join("<br>");
+  } else {
+    out.innerHTML = "<b>No rule matches this URL.</b>" +
+      (r.simplePdf ? " Simple mode would still print it silent if it is a PDF (Settings &gt; Behavior)."
+                   : " Simple mode is OFF - nothing would auto-print.");
+  }
+});
+
+$("bRuleLogRefresh").addEventListener("click", async () => {
+  await refreshRuleManager();
+  renderRuleManager();
+  renderRuleLog();
+});
+
+$("bRuleLogClear").addEventListener("click", async () => {
+  await send({ type: "clearRuleLog" });
+  await refreshRuleManager();
+  renderRuleManager();
+  renderRuleLog();
+  saved("Activity log cleared");
+});
+
+$("bRuleStatsReset").addEventListener("click", async () => {
+  await send({ type: "clearRuleLog", stats: true });
+  await refreshRuleManager();
+  renderRuleManager();
+  renderRuleLog();
+  saved("Activity log + run counters reset");
+});
 
 /* v2.9.1 (audit H3 fix): Website API allowlist editor */
 async function saveApiSites() {

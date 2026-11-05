@@ -1,6 +1,42 @@
 # Changelog - AdvPrint Pro (Advanced Printer)
 by Bit Dream IT - Innovative Healthcare Solutions
 
+## v3.0.5 - RULE MANAGER: THE HIDDEN LAB, NOW MANAGED & CONTROLLED (2026-11-06)
+
+User request: "this work hiddenly. so this option or rule need
+section to managed also controlled - update this feature - the
+hidden Multi-printer lab rule also be controlled/managed through
+extension setting section so that this tool be more useful."
+Extension-only change; the hub is untouched. Nothing removed, no
+settings migration (new settings: rulesPaused, ruleStats, ruleLog,
+plus stable rule ids).
+
+- **Dedicated Rules tab** (#panel-rules + a Rules tab button): the
+  whole rules table moved out of Settings into its own control
+  center, next to a manager status bar (state dot, 'N of M armed',
+  log count), Save rules, Pause all rules, the URL simulator, the
+  printer chips, the reprint box, the lab card and the NEW activity
+  log table. Settings keeps a pointer card with 'Open the Rule
+  Manager'.
+- **Pause all rules** (cfg.rulesPaused): one switch stops every
+  hidden auto-print; shouldAutoPrint() returns null while paused.
+  Manual prints are NOT affected. The popup Power section carries
+  the same switch with a live 'N rules armed / PAUSED' sub-line.
+- **URL simulator**: testRuleUrl matches the URL against the saved
+  rules (first-match-wins) and reports rule #, pattern, type,
+  printer, action, copies/paper - plus warnings for OFF rules,
+  Auto off, and the paused state. Nothing is printed, the dedupe
+  is not fed.
+- **Per-rule run counters + activity log** (cfg rule ids, storage
+  ruleStats/ruleLog): auto AND manual rule prints are recorded
+  (runs, last time, status; log capped at 100, newest first),
+  shown under each rule row ('12 runs - last 14:02') and in the
+  log table (badge shows action + auto/manual, FAILED rows show
+  the error). Bookkeeping can never break a print job.
+- Version strings bumped to 3.0.5 everywhere (hub, dashboard
+  badge, extension manifest/popup/Options/About, Setup exe
+  VIProductVersion 3.0.5.0, deb control, docs).
+
 ## v3.0.4 - MULTI-PRINTER RULES MADE EASY (2026-11-06)
 
 User request: "the printer dropdown should also show all set up
