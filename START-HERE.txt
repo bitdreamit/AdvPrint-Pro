@@ -1,10 +1,22 @@
-AdvPrint Pro (Advanced Printer) v3.0.0 - START HERE
+AdvPrint Pro (Advanced Printer) v3.0.1 - START HERE
 ====================================================
 by Bit Dream IT - Innovative Healthcare Solutions
 
-WHAT'S NEW IN 3.0.0 (SAME FEATURE SET AS 2.9.1, RENUMBERED)
+WHAT'S NEW IN 3.0.1 (TRAY MENU CLICK FIX + HOOK SWITCH INTO POWER)
 ----------------------------------------------------------------------
-WHY 3.0.0? The 2.9.1 packages were already distributed; new packages
+1) TRAY MENU CLICK FIX - the reported bug 'menu text and the click
+   are not the same' is fixed at the root: the click handler used a
+   selectable-row number as a raw item index, so every item AFTER
+   the first separator ran the WRONG command (Pause queue did
+   nothing, Start at Windows logon paused the queue, Restart hub
+   toggled autostart, Allow LAN in firewall RESTARTED the hub, Exit
+   opened the firewall prompt). Now every item triggers its own
+   action; a regression test simulates the full click->command path.
+2) Intercept window.print() MOVED INTO Options > Power switches -
+   it sits right next to the master switch and Queue mode (same
+   hookPrint setting as the popup's window.print() hook toggle -
+   the two always agree).
+0) WHY 3.0.1 (history): 3.0.0 = the 2.9.1 feature set renumbered The 2.9.1 packages were already distributed; new packages
 with the same number would collide with them (same version, different
 bytes). This release ships the IDENTICAL 2.9.1 feature set under the
 clean new number 3.0.0 - hub, dashboard badge, extension, Setup exe,
@@ -107,8 +119,8 @@ WHAT'S NEW IN 2.8.2 (LAN SHARING APPLIES LIVE + FIREWALL ONE-CLICK)
      reports PASS/FAIL in the message bar: PASS + other PC still
      failing = firewall (click the button); FAIL = listener problem
      (hub.log says exactly why).
-  FILES IN THIS RELEASE: AdvPrint-Pro-Setup-3.0.0.exe (Windows),
-  advprint-pro_3.0.0_all.deb (Linux), AdvPrint-Pro-3.0.0-source.zip.
+  FILES IN THIS RELEASE: AdvPrint-Pro-Setup-3.0.1.exe (Windows),
+  advprint-pro_3.0.1_all.deb (Linux), AdvPrint-Pro-3.0.1-source.zip.
 
 WHAT'S NEW IN 2.8.1 (SEND-PORTAL QR + ONE-CLICK LAN INVITE)
 ===========================================================
@@ -129,8 +141,8 @@ WHAT'S NEW IN 2.8.1 (SEND-PORTAL QR + ONE-CLICK LAN INVITE)
      - Safe by design: loopback-only, private-LAN URLs only, explicit
        click required, every accept is audited (peer.connected).
   3. NOTHING REMOVED - everything from 2.8.0 below is unchanged.
-  FILES IN THIS RELEASE: AdvPrint-Pro-Setup-3.0.0.exe (Windows),
-  advprint-pro_3.0.0_all.deb (Linux), AdvPrint-Pro-3.0.0-source.zip.
+  FILES IN THIS RELEASE: AdvPrint-Pro-Setup-3.0.1.exe (Windows),
+  advprint-pro_3.0.1_all.deb (Linux), AdvPrint-Pro-3.0.1-source.zip.
 
 WHAT'S NEW IN 2.8.0 (TWO HUB PROFILES + DROPZONE + BULLET-PROOF UNINSTALL)
 ==========================================================================
@@ -158,13 +170,13 @@ WHAT'S NEW IN 2.8.0 (TWO HUB PROFILES + DROPZONE + BULLET-PROOF UNINSTALL)
      service before touching files, wipes old program folders and
      frees port 9235 - "some file abort install" is fixed. The
      service is reinstalled automatically on upgrade.
-  9. SILENT INSTALL: AdvPrint-Pro-Setup-3.0.0.exe /S - the exe
+  9. SILENT INSTALL: AdvPrint-Pro-Setup-3.0.1.exe /S - the exe
      requests admin by itself (UAC once), the hub auto-starts and
      the firewall rule for LAN sharing is added automatically.
  10. NEW LOGO: the letter A drawn as a printer - the crossbar is the
      output slot and a printed page slides out of it.
-  FILES IN THIS RELEASE: AdvPrint-Pro-Setup-3.0.0.exe (Windows),
-  advprint-pro_3.0.0_all.deb (Linux), AdvPrint-Pro-3.0.0-source.zip.
+  FILES IN THIS RELEASE: AdvPrint-Pro-Setup-3.0.1.exe (Windows),
+  advprint-pro_3.0.1_all.deb (Linux), AdvPrint-Pro-3.0.1-source.zip.
 
 WHAT'S NEW IN 2.7.0 (HISTORY MANAGER + SHARE MODES + CLEAN LAYOUT)
   0. JOB HISTORY IS NOW A REAL MANAGER (hub dashboard "Job history"
@@ -453,7 +465,7 @@ WHY DID MY OLD VERSION SAY "cannot access" ON THE SETUP EXE?
   No manual Security-tab work is needed anywhere.
 
 UPDATE IN 3 STEPS
-  1. Run AdvPrint-Pro-Setup-3.0.0.exe (installs over the old
+  1. Run AdvPrint-Pro-Setup-3.0.1.exe (installs over the old
      version; history + settings migrate to .advprint automatically).
      Portable users: extract the new zip over the old folder, then
      AdvPrint-Tool.bat > [13] once (unblocks), then [1] Start.
@@ -487,12 +499,12 @@ FILES IN THIS PACKAGE
                    AdvPrint-Pro-Full-Guide.html + .pdf, release notes
   tests\           pytest suite + pytest.ini
   installer\       setup.nsi - NSIS 3 source that builds
-                   AdvPrint-Pro-Setup-3.0.0.exe (per-machine, UAC)
+                   AdvPrint-Pro-Setup-3.0.1.exe (per-machine, UAC)
   prebuilt\        READY installers, no build needed:
-                   AdvPrint-Pro-Setup-3.0.0.exe (Windows setup,
+                   AdvPrint-Pro-Setup-3.0.1.exe (Windows setup,
                    ~9.5 MB - run it, UAC appears, done)
-                   advprint-pro_3.0.0_all.deb (Linux deb -
-                   sudo dpkg -i advprint-pro_3.0.0_all.deb)
+                   advprint-pro_3.0.1_all.deb (Linux deb -
+                   sudo dpkg -i advprint-pro_3.0.1_all.deb)
   README.md / CHANGELOG.md / LICENSE / pytest.ini / .gitignore
   SHA256SUMS.txt
 

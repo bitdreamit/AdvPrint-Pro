@@ -1,6 +1,28 @@
 # Changelog - AdvPrint Pro (Advanced Printer)
 by Bit Dream IT - Innovative Healthcare Solutions
 
+## v3.0.1 - TRAY MENU CLICK FIX + HOOK SWITCH INTO POWER (2026-11-05)
+
+Two fixes on top of v3.0.0 - nothing removed, no settings migration.
+
+- **Tray menu click->action fix (the 'text and click not the same'
+  bug, root cause found).** The self-drawn menu's WM_LBUTTONUP did
+  `self.items[idx]` with the selectable-row ORDINAL from `_hit()`,
+  but `self.items` also holds ("sep",) entries - so every item after
+  the first separator was shifted by one: 'Pause queue' did nothing
+  (it hit the separator), 'Start at Windows logon' paused the queue,
+  'Restart hub' toggled autostart, 'Allow LAN in firewall'
+  RESTARTED the hub, 'Exit' opened the firewall UAC prompt. Fixed
+  with `_pos_of()` (ordinal -> real items position); regression
+  test simulates click bands over the real menu layout and checks
+  the command of every row.
+- **Intercept window.print() moved into Options > Power switches**
+  (was mid-page in Behavior). Same `hookPrint` key as the popup
+  toggle - both switches stay in sync automatically.
+- Version strings bumped to 3.0.1 everywhere (hub, dashboard badge,
+  extension manifest/popup/Options/About, Setup exe
+  VIProductVersion 3.0.1.0, deb control, docs). 213 tests pass.
+
 ## v3.0.0 - RENUMBERED RELEASE (2026-11-05)
 
 The v2.9.1 packages were already distributed; shipping different

@@ -95,8 +95,8 @@ if _HUB_DIR not in sys.path:
     sys.path.insert(0, _HUB_DIR)
 
 
-VERSION = "3.0.0"
-VERSION_NAME = ("v3.0.0 (NETWORK PRINTER MODE: add this PC like a real"
+VERSION = "3.0.1"
+VERSION_NAME = ("v3.0.1 (NETWORK PRINTER MODE: add this PC like a real"
                 " IP printer - IPP at /ipp/print for Windows 10/11 'add a"
                 " printer by URL' and phone print services, plus a"
                 " JetDirect RAW listener on TCP 9100 for the classic"
@@ -111,9 +111,14 @@ VERSION_NAME = ("v3.0.0 (NETWORK PRINTER MODE: add this PC like a real"
                 " any installed printer, or an upstream IP printer (raw"
                 " JetDirect or IPP): PCs and phones that add this hub as"
                 " THEIR network printer print through exactly that"
-                " destination. v3.0.0 ships the full 2.9.1 feature set under the new number: responsive dashboard tables"
-                " - every column, button and option is visible on load,"
-                " no more content hidden inside an inner scroll)")
+                " destination. NEW IN 3.0.1: the TRAY MENU CLICK BUG is fixed - every"
+                " menu item now triggers its own action (before, items"
+                " after the first separator ran the wrong command - the"
+                " text you clicked and the action were not the same),"
+                " and the Intercept window.print() switch moved into"
+                " Options > Power switches. Also ships: responsive"
+                " dashboard tables - every column, button and option"
+                " visible on load, nothing hidden in an inner scroll)")
 FULL_BRAND = ("AdvPrint Pro (Advanced Printer) by "
               "Bit Dream IT - Innovative Healthcare Solutions")
 BRANDING = ("AdvPrint Pro (Advanced Printer) - Version %s - by "

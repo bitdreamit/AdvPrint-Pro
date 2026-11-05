@@ -29,7 +29,7 @@ from conftest import wait_until  # noqa: E402
 def test_health_open_no_token(hub):
     code, d = hub.get("/health", token=None)
     assert code == 200 and d["ok"] is True
-    assert d["version"] == "3.0.0"
+    assert d["version"] == "3.0.1"
     assert d["v2"] is True
     assert "100% local" in d["branding"]
 
@@ -539,13 +539,13 @@ def test_v1_database_migration(tmp_path):
 
 
 def test_version_anchors():
-    assert advprint.VERSION == "3.0.0"
+    assert advprint.VERSION == "3.0.1"
     # repo/package layout: tool/windows/portable/hub -> root/extension
     root = os.path.dirname(os.path.dirname(os.path.dirname(
         os.path.dirname(os.path.dirname(advprint.__file__)))))
     ext = os.path.join(root, "extension", "manifest.json")
     with open(ext) as f:
-        assert json.load(f)["version"] == "3.0.0"
+        assert json.load(f)["version"] == "3.0.1"
 
 
 def test_log_rotation(tmp_path):
@@ -1062,7 +1062,7 @@ def test_v26_token_current_loopback_only(hub):
     code, d = hub.get("/token/current")
     assert code == 200 and d["ok"] is True
     assert d["token"] == hub.token
-    assert d["app"] == "AdvPrint Pro" and d["version"] == "3.0.0"
+    assert d["app"] == "AdvPrint Pro" and d["version"] == "3.0.1"
 
 
 def test_v26_token_current_rejects_remote(hub):
@@ -1136,8 +1136,8 @@ def test_v261_tray_module_ships_and_parses():
 
 
 def test_v261_version_single_source():
-    assert advprint.VERSION == "3.0.0"
-    assert advprint.VERSION_NAME.startswith("v3.0.0")
+    assert advprint.VERSION == "3.0.1"
+    assert advprint.VERSION_NAME.startswith("v3.0.1")
 
 
 def test_v261_cli_cmd_full_path():
@@ -1303,7 +1303,7 @@ def test_v264_setup_exe_kills_zombie_hubs():
     assert "Stop-Process -Name AdvPrintPro" in stopps
     assert "Stop-Process -Name PrintHubPro" in stopps
     assert "sc.exe delete AdvPrint" in stopps
-    assert 'VIProductVersion "3.0.0.0"' in src
+    assert 'VIProductVersion "3.0.1.0"' in src
 
 
 # ---------------- v2.6.8: printer-name self-heal + menu guard ----------
@@ -1586,7 +1586,7 @@ def _v280_pdf(tmp_path, name="z.pdf", big="AdvPrint Pro v2.8 test"):
 
 
 def test_v280_version_and_config_keys():
-    assert advprint.VERSION == "3.0.0"
+    assert advprint.VERSION == "3.0.1"
     for k in ("drop_enabled", "drop_dir", "drop_delete"):
         assert k in advprint.CFG and k in advprint.CONFIG_KEYS
         assert k in advprint.CONFIG_TYPES
@@ -1811,7 +1811,7 @@ def test_v280_source_wiring_restart_tray_tool_installer():
     nsi = open(os.path.join(root, "installer", "setup.nsi"),
                encoding="utf-8").read()
     assert "hub-stop.ps1" in nsi
-    assert "3.0.0" in nsi and "${IfNot} ${Silent}" in nsi
+    assert "3.0.1" in nsi and "${IfNot} ${Silent}" in nsi
     # extension dual profile
     ext = os.path.join(root, "extension")
     bg = open(os.path.join(ext, "background.js"), encoding="utf-8").read()
@@ -1823,7 +1823,7 @@ def test_v280_source_wiring_restart_tray_tool_installer():
     opt = open(os.path.join(ext, "options.html"), encoding="utf-8").read()
     assert "hubUrlLan" in opt and "bDashboardLan" in opt
     man = json.load(open(os.path.join(ext, "manifest.json")))
-    assert man["version"] == "3.0.0"
+    assert man["version"] == "3.0.1"
 
 
 def test_v280_lan_profile_never_auto_heals():
@@ -2076,8 +2076,8 @@ def test_v281_setup_nsi_version():
         root = os.path.dirname(root)
     nsi = open(os.path.join(root, "installer", "setup.nsi"),
                encoding="utf-8", errors="replace").read()
-    assert 'VIProductVersion "3.0.0.0"' in nsi
-    assert "AdvPrint-Pro-Setup-3.0.0.exe" in nsi
+    assert 'VIProductVersion "3.0.1.0"' in nsi
+    assert "AdvPrint-Pro-Setup-3.0.1.exe" in nsi
 
 
 # ============================================================
@@ -2433,3 +2433,107 @@ def test_v290_firewall_allow_covers_raw_port():
     src = open(os.path.join(os.path.dirname(advprint.__file__),
                             "advprint.py"), encoding="utf-8").read()
     assert 'RAW %d' in src and "raw_printer_port" in src
+
+
+# ==================== v3.0.1 ====================
+
+def test_v301_tray_menu_click_targets():
+    """v3.0.1 regression - 'menu text and click are not the same': the old
+    WM_LBUTTONUP did self.items[idx] with the selectable-row ORDINAL from
+    _hit(), but self.items also holds ("sep",) entries - so every item
+    after the first separator ran the WRONG command (Pause queue did
+    nothing, Start at logon paused the queue, Restart hub toggled
+    autostart, Allow LAN in firewall RESTARTED the hub, Exit opened the
+    firewall prompt). We exec the REAL _hit() + _pos_of() code shipped in
+    tray_windows.py (both are pure Python - no win32 calls inside) and
+    simulate a click on every row of the real menu layout."""
+    import ast
+    import ctypes
+    import textwrap
+    p = os.path.join(os.path.dirname(advprint.__file__), "tray_windows.py")
+    src = open(p, encoding="utf-8").read()
+    tree = ast.parse(src)
+    funcs = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef) and node.name in ("_hit", "_pos_of"):
+            funcs[node.name] = ast.get_source_segment(src, node)
+    assert set(funcs) == {"_hit", "_pos_of"}, \
+        "_hit/_pos_of missing - the tray click fix is not in this build"
+    ns = {"ctypes": ctypes}
+    code = ["class Shim(object):",
+            "    pad = 8",
+            "    row_h = 30",
+            "    _width = 400",
+            "    _height = 400"]
+    for name in ("_hit", "_pos_of"):
+        code.append(textwrap.indent(funcs[name], "    "))
+    exec("\n".join(code), ns)
+    shim = ns["Shim"]()
+
+    # the REAL menu layout (Tray._menu_items order + separator entries)
+    items = [
+        ("Open dashboard", 1001, False),
+        ("Print test page", 1002, False),
+        ("sep",),
+        ("Pause queue", 1003, False),
+        ("Start at Windows logon", 1004, True),
+        ("Restart hub", 1006, False),
+        ("Allow LAN in firewall", 1007, False),
+        ("sep",),
+        ("Exit", 1005, False),
+    ]
+    shim.items = items
+
+    def lp(x, y):
+        return (y << 16) | (x & 0xFFFF)
+
+    # client-y band top of every row (pad + cumulative row heights)
+    tops = []
+    y = 8
+    for it in items:
+        tops.append(y)
+        y += 15 if it[0] == "sep" else 30      # sep = half row
+
+    # click the vertical CENTER of each selectable row, on the text area;
+    # the ordinal from _hit must map back to the REAL items position
+    for pos, it in enumerate(items):
+        if it[0] == "sep":
+            continue
+        ordinal = shim._hit(lp(60, tops[pos] + 15))
+        assert ordinal >= 0, "row %r did not register a hit" % it[0]
+        real = shim._pos_of(ordinal)
+        assert real == pos, \
+            ("text/action mismatch: clicked %r -> ordinal %d -> items[%d]"
+             " = %r" % (it[0], ordinal, real, items[real][0]))
+        assert items[real][1] == it[1], \
+            "clicked %r but the command would be %r" % (it[0], items[real][1])
+
+    # the two reported symptoms, spelled out:
+    assert items[shim._pos_of(shim._hit(lp(60, tops[8] + 15)))][1] == 1005, \
+        "clicking 'Exit' must run Exit (was: firewall prompt)"
+    assert items[shim._pos_of(shim._hit(lp(60, tops[6] + 15)))][1] == 1007, \
+        "clicking 'Allow LAN in firewall' must run the firewall fix" \
+        " (was: hub restart)"
+    # clicks below the last row and on separators hit nothing
+    assert shim._hit(lp(60, y + 5)) == -1
+
+
+def test_v301_hook_switch_in_power_block():
+    """v3.0.1: the Intercept window.print() switch (hookPrint) moved out
+    of the Behavior section into the 'Power switches' block - it must sit
+    between Queue mode and Debug mode, next to the master switch, and be
+    the ONLY hookPrint checkbox on the page."""
+    root = os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.dirname(os.path.dirname(advprint.__file__)))))
+    html = open(os.path.join(root, "extension", "options.html"),
+                encoding="utf-8").read()
+    assert html.count('id="hookPrint"') == 1
+    power = html.index('<div class="power">')
+    behavior = html.index('<h2>Behavior</h2>')
+    hook = html.index('id="hookPrint"')
+    assert power < hook < behavior, "hookPrint is not inside Power switches"
+    seg = html[power:behavior]
+    assert seg.index('id="enabled"') < seg.index('id="queueMode"') \
+        < seg.index('id="hookPrint"') < seg.index('id="debugMode"'), \
+        "hookPrint must sit between Queue mode and Debug mode"
+    assert "moved here into <b>Power switches</b>" in seg

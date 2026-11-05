@@ -1,13 +1,13 @@
 ; ============================================================
 ;  AdvPrint Pro (Advanced Printer) - Windows one-time installer
 ;  by Bit Dream IT - Innovative Healthcare Solutions
-;  v3.0.0 - built with NSIS 3.11 on Linux
+;  v3.0.1 - built with NSIS 3.11 on Linux
 ; ------------------------------------------------------------
 ;  - PER-MACHINE install to %ProgramFiles%\AdvPrintPro with
 ;    REAL administrator rights: the exe requests admin via its
 ;    manifest, so Windows shows the UAC prompt by itself
 ;    ("auto permission to install" - nothing is half-installed).
-;    Silent install:  AdvPrint-Pro-Setup-3.0.0.exe /S
+;    Silent install:  AdvPrint-Pro-Setup-3.0.1.exe /S
 ;    (elevation still applies - Windows shows UAC once.)
 ;  - v2.8 UPGRADE / UNINSTALL FIX (the v2.7.x pain "service not
 ;    uninstalled, some files abort install"): BEFORE any file is
@@ -32,7 +32,7 @@
 
 Unicode true
 Name "AdvPrint Pro (Advanced Printer)"
-OutFile "/home/z/my-project/build/AdvPrint-300-installer/AdvPrint-Pro-Setup-3.0.0.exe"
+OutFile "/home/z/my-project/build/AdvPrint-301-installer/AdvPrint-Pro-Setup-3.0.1.exe"
 InstallDir "$PROGRAMFILES64\AdvPrintPro"
 InstallDirRegKey HKLM "Software\AdvPrintPro" "InstallDir"
 ; full admin rights - the Windows UAC prompt appears by itself when
@@ -46,10 +46,10 @@ ShowInstDetails show
 ShowUnInstDetails show
 ManifestDPIAware true
 
-VIProductVersion "3.0.0.0"
+VIProductVersion "3.0.1.0"
 VIAddVersionKey ProductName "AdvPrint Pro (Advanced Printer)"
-VIAddVersionKey FileVersion "3.0.0"
-VIAddVersionKey ProductVersion "3.0.0"
+VIAddVersionKey FileVersion "3.0.1"
+VIAddVersionKey ProductVersion "3.0.1"
 VIAddVersionKey CompanyName "Bit Dream IT - Innovative Healthcare Solutions"
 VIAddVersionKey LegalCopyright "MIT License"
 VIAddVersionKey FileDescription "AdvPrint Pro - silent printing for any web page, PDF or application (setup)"
@@ -59,11 +59,11 @@ VIAddVersionKey FileDescription "AdvPrint Pro - silent printing for any web page
 !include "LogicLib.nsh"
 !include "Sections.nsh"      ; ${SF_SELECTED} for the service pre-tick
 
-!define MUI_ICON   "/home/z/my-project/build/AdvPrint-300-installer/installer.ico"
-!define MUI_UNICON "/home/z/my-project/build/AdvPrint-300-installer/installer.ico"
+!define MUI_ICON   "/home/z/my-project/build/AdvPrint-301-installer/installer.ico"
+!define MUI_UNICON "/home/z/my-project/build/AdvPrint-301-installer/installer.ico"
 !define MUI_ABORTWARNING
 !insertmacro MUI_PAGE_WELCOME
-!insertmacro MUI_PAGE_LICENSE "/home/z/my-project/build/AdvPrint-300-installer/LICENSE"
+!insertmacro MUI_PAGE_LICENSE "/home/z/my-project/build/AdvPrint-301-installer/LICENSE"
 !insertmacro MUI_PAGE_COMPONENTS
 !insertmacro MUI_PAGE_INSTFILES
 !define MUI_FINISHPAGE_RUN
@@ -191,7 +191,7 @@ Section "AdvPrint Pro hub (required)" SEC_MAIN
   ; frees TCP 9235 - so no locked file can abort the upgrade.
   DetailPrint "Stopping the service and every hub process (v2.8 bullet-proof stop)..."
   SetOutPath "$PLUGINSDIR"
-  File "/oname=hub-stop.ps1" "/home/z/my-project/build/AdvPrint-300-installer/stage/install/hub-stop.ps1"
+  File "/oname=hub-stop.ps1" "/home/z/my-project/build/AdvPrint-301-installer/stage/install/hub-stop.ps1"
   nsExec::Exec 'powershell -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\hub-stop.ps1" "$INSTDIR"'
   Pop $R8
   Sleep 700
@@ -206,33 +206,33 @@ Section "AdvPrint Pro hub (required)" SEC_MAIN
 
   DetailPrint "Copying program files..."
   SetOutPath "$INSTDIR\hub"
-  File "/home/z/my-project/build/AdvPrint-300-installer/stage/hub/advprint.py"
-  File "/home/z/my-project/build/AdvPrint-300-installer/stage/hub/tool.py"
-  File "/home/z/my-project/build/AdvPrint-300-installer/stage/hub/tray_windows.py"
-  File "/home/z/my-project/build/AdvPrint-300-installer/stage/hub/service_main.py"
-  File "/oname=advprint.ico" "/home/z/my-project/build/AdvPrint-300-installer/stage/hub/advprint.ico"
+  File "/home/z/my-project/build/AdvPrint-301-installer/stage/hub/advprint.py"
+  File "/home/z/my-project/build/AdvPrint-301-installer/stage/hub/tool.py"
+  File "/home/z/my-project/build/AdvPrint-301-installer/stage/hub/tray_windows.py"
+  File "/home/z/my-project/build/AdvPrint-301-installer/stage/hub/service_main.py"
+  File "/oname=advprint.ico" "/home/z/my-project/build/AdvPrint-301-installer/stage/hub/advprint.ico"
   SetOutPath "$INSTDIR\hub\service"
-  File "/home/z/my-project/build/AdvPrint-300-installer/stage/hub/service/AdvPrintProService.cs"
+  File "/home/z/my-project/build/AdvPrint-301-installer/stage/hub/service/AdvPrintProService.cs"
   SetOutPath "$INSTDIR\install"
-  File "/home/z/my-project/build/AdvPrint-300-installer/stage/install/install-windows.bat"
-  File "/home/z/my-project/build/AdvPrint-300-installer/stage/install/UNINSTALL-WINDOWS.bat"
-  File "/home/z/my-project/build/AdvPrint-300-installer/stage/install/START-ADVPRINT.vbs"
-  File "/home/z/my-project/build/AdvPrint-300-installer/stage/install/INSTALL-WINDOWS-SERVICE.bat"
-  File "/home/z/my-project/build/AdvPrint-300-installer/stage/install/REMOVE-WINDOWS-SERVICE.bat"
-  File "/home/z/my-project/build/AdvPrint-300-installer/stage/install/service-install.ps1"
-  File "/home/z/my-project/build/AdvPrint-300-installer/stage/install/service-remove.ps1"
-  File "/home/z/my-project/build/AdvPrint-300-installer/stage/install/hub-stop.ps1"
+  File "/home/z/my-project/build/AdvPrint-301-installer/stage/install/install-windows.bat"
+  File "/home/z/my-project/build/AdvPrint-301-installer/stage/install/UNINSTALL-WINDOWS.bat"
+  File "/home/z/my-project/build/AdvPrint-301-installer/stage/install/START-ADVPRINT.vbs"
+  File "/home/z/my-project/build/AdvPrint-301-installer/stage/install/INSTALL-WINDOWS-SERVICE.bat"
+  File "/home/z/my-project/build/AdvPrint-301-installer/stage/install/REMOVE-WINDOWS-SERVICE.bat"
+  File "/home/z/my-project/build/AdvPrint-301-installer/stage/install/service-install.ps1"
+  File "/home/z/my-project/build/AdvPrint-301-installer/stage/install/service-remove.ps1"
+  File "/home/z/my-project/build/AdvPrint-301-installer/stage/install/hub-stop.ps1"
   SetOutPath "$INSTDIR\docs"
-  File "/home/z/my-project/build/AdvPrint-300-installer/stage/docs/AdvPrint-Pro-Full-Guide.html"
+  File "/home/z/my-project/build/AdvPrint-301-installer/stage/docs/AdvPrint-Pro-Full-Guide.html"
   SetOutPath "$INSTDIR"
-  File "/oname=README.md" "/home/z/my-project/build/AdvPrint-300-installer/stage/README.md"
-  File "/oname=LICENSE" "/home/z/my-project/build/AdvPrint-300-installer/LICENSE"
-  File "/oname=advprint.ico" "/home/z/my-project/build/AdvPrint-300-installer/installer.ico"
+  File "/oname=README.md" "/home/z/my-project/build/AdvPrint-301-installer/stage/README.md"
+  File "/oname=LICENSE" "/home/z/my-project/build/AdvPrint-301-installer/LICENSE"
+  File "/oname=advprint.ico" "/home/z/my-project/build/AdvPrint-301-installer/installer.ico"
   DetailPrint "SumatraPDF: not bundled - the installer auto-installs it via winget when missing (needs internet once)."
 
   DetailPrint "Installing the bundled Python 3.11.9 runtime (standalone - no system Python needed)..."
   SetOutPath "$INSTDIR\runtime"
-  File /r "/home/z/my-project/build/AdvPrint-300-installer/runtime\*.*"
+  File /r "/home/z/my-project/build/AdvPrint-301-installer/runtime\*.*"
 
   DetailPrint "Resolving the bundled launcher..."
   Call FindPythonW
@@ -281,7 +281,7 @@ Section "AdvPrint Pro hub (required)" SEC_MAIN
     DetailPrint "No usable pythonw.exe (bundled runtime missing + no system Python)."
     ${IfNot} ${Silent}
       MessageBox MB_ICONEXCLAMATION|MB_OK \
-        "Setup could not prepare the bundled Python runtime and found no system Python.$\n$\nPlease re-download AdvPrint-Pro-Setup-3.0.0.exe (the file may be damaged in transit) and run it again."
+        "Setup could not prepare the bundled Python runtime and found no system Python.$\n$\nPlease re-download AdvPrint-Pro-Setup-3.0.1.exe (the file may be damaged in transit) and run it again."
     ${EndIf}
   ${EndIf}
 
@@ -301,7 +301,7 @@ Section "AdvPrint Pro hub (required)" SEC_MAIN
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\AdvPrintPro" \
     "DisplayName" "AdvPrint Pro (Advanced Printer) by Bit Dream IT"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\AdvPrintPro" \
-    "DisplayVersion" "3.0.0"
+    "DisplayVersion" "3.0.1"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\AdvPrintPro" \
     "Publisher" "Bit Dream IT - Innovative Healthcare Solutions"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\AdvPrintPro" \
@@ -332,23 +332,23 @@ SectionEnd
 Section "Install browser extension files" SEC_EXT
   DetailPrint "Installing extension files to $INSTDIR\extension..."
   SetOutPath "$INSTDIR\extension"
-  File "/home/z/my-project/build/AdvPrint-300-installer/stage/extension/manifest.json"
-  File "/home/z/my-project/build/AdvPrint-300-installer/stage/extension/background.js"
-  File "/home/z/my-project/build/AdvPrint-300-installer/stage/extension/i18n.js"
-  File "/home/z/my-project/build/AdvPrint-300-installer/stage/extension/managed.json"
-  File "/home/z/my-project/build/AdvPrint-300-installer/stage/extension/options.html"
-  File "/home/z/my-project/build/AdvPrint-300-installer/stage/extension/options.js"
-  File "/home/z/my-project/build/AdvPrint-300-installer/stage/extension/popup.html"
-  File "/home/z/my-project/build/AdvPrint-300-installer/stage/extension/popup.js"
+  File "/home/z/my-project/build/AdvPrint-301-installer/stage/extension/manifest.json"
+  File "/home/z/my-project/build/AdvPrint-301-installer/stage/extension/background.js"
+  File "/home/z/my-project/build/AdvPrint-301-installer/stage/extension/i18n.js"
+  File "/home/z/my-project/build/AdvPrint-301-installer/stage/extension/managed.json"
+  File "/home/z/my-project/build/AdvPrint-301-installer/stage/extension/options.html"
+  File "/home/z/my-project/build/AdvPrint-301-installer/stage/extension/options.js"
+  File "/home/z/my-project/build/AdvPrint-301-installer/stage/extension/popup.html"
+  File "/home/z/my-project/build/AdvPrint-301-installer/stage/extension/popup.js"
   SetOutPath "$INSTDIR\extension\content"
-  File "/home/z/my-project/build/AdvPrint-300-installer/stage/extension/content/api.js"
-  File "/home/z/my-project/build/AdvPrint-300-installer/stage/extension/content/hook.js"
-  File "/home/z/my-project/build/AdvPrint-300-installer/stage/extension/content/relay.js"
+  File "/home/z/my-project/build/AdvPrint-301-installer/stage/extension/content/api.js"
+  File "/home/z/my-project/build/AdvPrint-301-installer/stage/extension/content/hook.js"
+  File "/home/z/my-project/build/AdvPrint-301-installer/stage/extension/content/relay.js"
   SetOutPath "$INSTDIR\extension\icons"
-  File "/home/z/my-project/build/AdvPrint-300-installer/stage/extension/icons/icon16.png"
-  File "/home/z/my-project/build/AdvPrint-300-installer/stage/extension/icons/icon32.png"
-  File "/home/z/my-project/build/AdvPrint-300-installer/stage/extension/icons/icon48.png"
-  File "/home/z/my-project/build/AdvPrint-300-installer/stage/extension/icons/icon128.png"
+  File "/home/z/my-project/build/AdvPrint-301-installer/stage/extension/icons/icon16.png"
+  File "/home/z/my-project/build/AdvPrint-301-installer/stage/extension/icons/icon32.png"
+  File "/home/z/my-project/build/AdvPrint-301-installer/stage/extension/icons/icon48.png"
+  File "/home/z/my-project/build/AdvPrint-301-installer/stage/extension/icons/icon128.png"
   DetailPrint "Extension ready: chrome://extensions > Developer mode > Load unpacked > $INSTDIR\extension"
 SectionEnd
 

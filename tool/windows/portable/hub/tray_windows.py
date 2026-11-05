@@ -495,6 +495,27 @@ class _MenuWindow(object):
                 idx += 1
         return -1
 
+    def _pos_of(self, ordinal):
+        """v3.0.1 FIX - map a selectable-row ORDINAL to its real position
+        in self.items. _hit() counts only selectable rows, but self.items
+        also holds ("sep",) entries; the old WM_LBUTTONUP code did
+        self.items[idx] with the RAW ordinal, so every item AFTER the
+        first separator executed the WRONG action: clicking 'Pause queue'
+        did nothing, 'Start at Windows logon' paused the queue,
+        'Restart hub' toggled autostart, 'Allow LAN in firewall'
+        RESTARTED the hub and 'Exit' opened the firewall prompt - exactly
+        the 'menu text and click not the same area' bug report. The
+        highlight and the hit bands were always consistent (the same
+        ordinal math everywhere) - only this final text->action lookup
+        was shifted by one per separator."""
+        n = 0
+        for pos, it in enumerate(self.items):
+            if it[0] != "sep":
+                if n == ordinal:
+                    return pos
+                n += 1
+        return -1
+
     def _row_rect(self, hdc, index):
         """RECT of the i-th selectable row (separators take half rows)."""
         rect = RECT()
@@ -601,8 +622,14 @@ class _MenuWindow(object):
             if msg == WM_LBUTTONUP:
                 idx = self._hit(lparam)
                 if idx >= 0 and idx == self.pressed:
-                    cmd = self.items[idx][1] if self.items[idx][0] != "sep" else 0
-                    self._close(cmd)
+                    # v3.0.1 fix: idx is a selectable-row ordinal - map it
+                    # to the real self.items position first (the old
+                    # self.items[idx] lookup was shifted by every
+                    # separator: 'Exit' ran the firewall prompt, 'Allow
+                    # LAN in firewall' restarted the hub, ...).
+                    pos = self._pos_of(idx)
+                    if pos >= 0:
+                        self._close(self.items[pos][1])
                 self.pressed = -1
                 return 0
             if msg == WM_KEYDOWN and wparam == VK_ESCAPE:

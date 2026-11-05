@@ -13,6 +13,13 @@ Web page ──► Chrome extension ──► AdvPrint Pro hub (localhost:9235) 
 
 ---
 
+## What's new in v3.0.1 (tray menu click fix + window.print() hook into Power switches)
+
+Two fixes on top of v3.0.0 - nothing removed:
+
+- **Tray menu click fix - 'the text and the click are not the same' is solved.** The self-drawn tray menu's click handler used a selectable-row number as a raw item index, and the menu has separators - so every item AFTER the first separator executed the WRONG command: **Pause queue did nothing, Start at Windows logon paused the queue, Restart hub toggled autostart, Allow LAN in firewall RESTARTED the hub, and Exit opened the firewall prompt**. The highlight and the hit band always agreed - only the final text->action lookup was shifted. Now every item triggers its own action, and a regression test simulates the full click->command path over the real menu layout.
+- **Intercept window.print() moved into Options > Power switches.** The switch now sits next to the master switch and Queue mode (it used to be buried mid-page in Behavior). Same `hookPrint` setting as the popup's "window.print() hook" toggle - the two always agree; no migration needed.
+
 ## What's new in v3.0.0 (renumbered release - the full v2.9.1 feature set under a clean new number)
 
 The v2.9.1 packages were already distributed; shipping different content under the same 2.9.1 number would collide with installed copies (same version, different bytes). **v3.0.0 ships the identical v2.9.1 feature set under the new number** - network printer mode, print-destination routing, the responsive dashboard tables, the 27-finding security hardening and the full documentation, unchanged. Every surface (hub `VERSION`/`VERSION_NAME`, dashboard badge, extension manifest/popup/Options/About, Setup exe, deb, docs) says 3.0.0. Installs straight over 2.8.2 / 2.9.0 / 2.9.1 - settings and history are kept. 212 tests pass.
@@ -64,7 +71,7 @@ The ten most-requested features, all in one release:
 - **DropZone + Send portal — printing WITHOUT the extension.** The hub watches a folder: in Word/Excel/ANY app choose *Microsoft Print to PDF* and save into the DropZone — the page prints seconds later (dashboard → DropZone card; `POST /dropzone/open` opens the folder). Phones/tablets/other PCs print through the built-in **Send portal** (`/send`, token-protected, same as every endpoint).
 - **Restart hub** — in the tray menu, AdvPrint Tool [14] and the dashboard button: the hub relaunches itself cleanly (new process waits for the port; queued jobs, settings and history are kept).
 - **Bullet-proof upgrade & uninstall.** The setup now runs `hub-stop.ps1` BEFORE touching files: stops the optional *AdvPrint* service (wait + PID kill), **deletes the service registration** (reinstalled fresh when ticked — upgrades keep it automatically), kills every process under the install folder and frees TCP 9235. Old program folders are wiped, so no stale file can abort an install any more; the uninstaller retries the folder sweep and reports leftovers honestly.
-- **Silent install** `AdvPrint-Pro-Setup-3.0.0.exe /S` — elevation is requested by the exe manifest itself ("auto permission" on any PC), the hub auto-starts after a silent install, and the firewall rule for LAN sharing (TCP 9235) is added automatically (removed on uninstall).
+- **Silent install** `AdvPrint-Pro-Setup-3.0.1.exe /S` — elevation is requested by the exe manifest itself ("auto permission" on any PC), the hub auto-starts after a silent install, and the firewall rule for LAN sharing (TCP 9235) is added automatically (removed on uninstall).
 - **New A + printer logo** — the letter A drawn as a printer: the crossbar is the output slot and a printed page slides out of it. Same mark in the extension, popup, dashboard, tray icon, installer and docs.
 
 Nothing removed: every v2.7.0 feature (history manager, share toggles, live test tool) is unchanged.
