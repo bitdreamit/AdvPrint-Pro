@@ -202,8 +202,11 @@ function ruleRow(rule) {
   const selT = document.createElement("select");
   selT.appendChild(new Option("Glob", "glob"));
   selT.appendChild(new Option("Regex", "regex"));
+  selT.appendChild(new Option("Contains", "contains"));
   selT.value = rule.type || "glob";
-  selT.title = "Glob = 1.x style wildcards; Regex = v2.0 regular expression";
+  selT.title = "Glob = 1.x style wildcards; Regex = v2.0 regular expression; " +
+               "Contains (3.0.4) = the URL just contains this text - the " +
+               "easiest way, e.g. medical_reports/pdf";
   selT.addEventListener("change", collect);
   tdT.appendChild(selT);
 
@@ -221,16 +224,50 @@ function ruleRow(rule) {
   sel.appendChild(new Option("File (save as PDF)", "__file__"));
   PRINTERS.forEach((p) => sel.appendChild(new Option(p.name, p.name)));
   sel.value = rule.printer || "";
+  sel.title = "ALL printers installed on the hub PC (+ groups) - pick a " +
+              "DIFFERENT printer per rule and several printers run side " +
+              "by side; the full list with status is under the table";
   sel.addEventListener("change", collect);
   tdPr.appendChild(sel);
 
   const tdA = document.createElement("td");
   const selA = document.createElement("select");
-  [["auto", "Auto (PDF or page)"], ["pdf", "PDF only"], ["page", "Page render"]]
+  // v3.0.3: label & receipt actions - the page text (or the selection)
+  // goes to the hub in the printer's own language, rule printer only
+  [["auto", "Auto (PDF or page)"], ["pdf", "PDF only"], ["page", "Page render"],
+   ["zpl", "ZPL label (text on page)"],
+   ["raw", "ESC-POS receipt (text on page)"]]
     .forEach(([v, t]) => selA.appendChild(new Option(t, v)));
   selA.value = rule.action || "auto";
+  selA.title = "ZPL label / ESC-POS receipt (v3.0.3): the text shown on the " +
+               "page (selection first, then <pre>/textarea, then body text) " +
+               "is printed in the printer's own language on the rule " +
+               "printer - no page JavaScript needed";
   selA.addEventListener("change", collect);
   tdA.appendChild(selA);
+
+  // v3.0.3: per-rule copies - label runs often need 2-3 labels
+  const tdC = document.createElement("td");
+  const inC = document.createElement("input");
+  inC.type = "number"; inC.min = "1"; inC.max = "999";
+  inC.value = rule.copies || "";
+  inC.placeholder = "1";
+  inC.title = "Copies for every job this rule prints (blank = hub default)";
+  inC.style.width = "54px";
+  inC.addEventListener("change", collect);
+  tdC.appendChild(inC);
+
+  // v3.0.3: per-rule paper - A5 lab receipts vs A4 reports on the same hub
+  const tdPa = document.createElement("td");
+  const selPa = document.createElement("select");
+  [["", "(auto)"], ["A4", "A4"], ["A5", "A5"], ["A3", "A3"],
+   ["Letter", "Letter"], ["Legal", "Legal"], ["Tabloid", "Tabloid"]]
+    .forEach(([v, t]) => selPa.appendChild(new Option(t, v)));
+  selPa.value = rule.paper || "";
+  selPa.title = "Paper for PDF/page jobs (v3.0.3); blank = print defaults " +
+                "(ignored by ZPL/ESC-POS - labels carry their own media)";
+  selPa.addEventListener("change", collect);
+  tdPa.appendChild(selPa);
 
   const tdOn = document.createElement("td");
   const onChk = document.createElement("input");
@@ -247,12 +284,32 @@ function ruleRow(rule) {
   tdAuto.appendChild(chk);
 
   const tdX = document.createElement("td");
+  // v3.0.4: Copy - duplicate this rule, then only change the URL pattern
+  // and the printer. The fastest way to one rule per printer.
+  const bc = document.createElement("button");
+  bc.className = "mini"; bc.textContent = "Copy";
+  bc.title = "Duplicate this rule - change the URL pattern and the printer " +
+             "for the next printer";
+  bc.addEventListener("click", () => {
+    const [p, ty, ti, pr, a, co, pa, on, auto] =
+      tr.querySelectorAll("input, select");
+    const nr = ruleRow({ pattern: p.value, type: ty.value, title: ti.value,
+                         printer: pr.value, action: a.value,
+                         copies: co.value, paper: pa.value,
+                         enabled: on.checked, auto: auto.checked });
+    tr.after(nr);
+    collect();
+  });
+  tdX.appendChild(bc);
+  const sp = document.createElement("span");
+  sp.textContent = " ";
+  tdX.appendChild(sp);
   const bx = document.createElement("button");
   bx.className = "mini danger"; bx.textContent = "Delete";
   bx.addEventListener("click", () => { tr.remove(); collect(); });
   tdX.appendChild(bx);
 
-  tr.append(tdP, tdT, tdTi, tdPr, tdA, tdOn, tdAuto, tdX);
+  tr.append(tdP, tdT, tdTi, tdPr, tdA, tdC, tdPa, tdOn, tdAuto, tdX);
   return tr;
 }
 
@@ -265,13 +322,18 @@ function renderRules(rules) {
 function collect() {
   const rules = [];
   $("rulesBody").querySelectorAll("tr").forEach((tr) => {
-    const [p, ty, ti, pr, a, on, auto] =
-      tr.querySelectorAll("input, select, select, select, select, input, input");
+    // v3.0.3 row order: pattern, type, title, printer, action,
+    // copies, paper, on, auto (delete button is not an input)
+    const [p, ty, ti, pr, a, co, pa, on, auto] =
+      tr.querySelectorAll("input, select");
     if (p.value.trim()) {
+      const cv = parseInt(co.value, 10);
       rules.push({ pattern: p.value.trim(), type: ty.value,
                    title: ti.value.trim(), printer: pr.value,
-                   action: a.value, enabled: on.checked,
-                   auto: auto.checked });
+                   action: a.value,
+                   copies: (co.value && cv >= 1) ? String(cv) : "",
+                   paper: pa.value,
+                   enabled: on.checked, auto: auto.checked });
     }
   });
   return rules;
@@ -422,6 +484,49 @@ async function loadPrinters() {
               : (p.status && p.status !== "unknown"
                  ? "  [" + p.status + "]" : "") +
               (p.is_default ? "  (OS default)" : ""), p.name))));
+  // v3.0.4: the rules section shows EVERY printer on this PC as a chip -
+  // one click on '+ rule' starts a new rule with that printer selected,
+  // so one rule per printer is two clicks away
+  const chips = $("printerChips");
+  if (chips) {
+    chips.innerHTML = "";
+    const lbl = document.createElement("b");
+    lbl.textContent = "Printers on this PC: ";
+    chips.appendChild(lbl);
+    if (!PRINTERS.length) {
+      chips.appendChild(document.createTextNode(
+        "connect to the hub (top of this page) to list every printer " +
+        "installed here"));
+    }
+    PRINTERS.forEach((p) => {
+      const chip = document.createElement("span");
+      chip.style.cssText =
+        "display:inline-block;margin:2px 8px 2px 0;padding:2px 4px 2px 8px;" +
+        "border:1px solid #cbd5e1;border-radius:12px;font-size:12px;" +
+        "white-space:nowrap";
+      const st = p.is_group ? "group"
+        : (p.status && p.status !== "unknown" ? p.status : "");
+      chip.textContent = p.name +
+        (p.is_default ? " (OS default)" : "") +
+        (st ? " [" + st + "]" : "");
+      chip.title = "Every rule can pick this printer - different rules can " +
+                   "print to different printers on this PC at the same time";
+      const b = document.createElement("button");
+      b.className = "mini"; b.textContent = "+ rule";
+      b.style.marginLeft = "6px";
+      b.addEventListener("click", () => {
+        const nr = ruleRow({ pattern: "", type: "glob", title: "",
+                             printer: p.name, action: "auto",
+                             copies: "", paper: "", enabled: true,
+                             auto: false });
+        $("rulesBody").appendChild(nr);
+        collect();
+        nr.scrollIntoView({ block: "nearest" });
+      });
+      chip.appendChild(b);
+      chips.appendChild(chip);
+    });
+  }
   // refresh printer dropdowns in rules
   const cfg = await send({ type: "getCfg" });
   if (cfg.ok) renderRules(cfg.cfg.rules);

@@ -6,7 +6,21 @@ This is the lab guide: one PC, several printers at the same time - the
 A4/A5 **PDF report printer** AND the **Zebra (or any other) label
 printer** running side by side, each job landing on the right machine,
 in the right format. Everything below is what the hub actually does
-(v3.0.2 code) - no theory.
+(v3.0.4 code) - no theory.
+
+**New in v3.0.3: the ROUTING RULES do the lab work.** A rule's Action
+box can now print labels and receipts straight from the page -
+**ZPL label (text on page)** and **ESC-POS receipt (text on page)** -
+plus per-rule **Copies** and **Paper** (A4/A5/Letter/...). No page
+JavaScript, no curl, no destination-card flipping: see section 3,
+steps 2-3.
+
+**New in v3.0.4: the full printer list is IN the rules section.** The
+"Printers on this PC" strip shows every installed printer (+ groups,
+live status, OS default marked) - one click on **+ rule** starts a
+rule with that printer selected; every rule row has a **Copy** button;
+and the new **Contains** pattern type matches a URL by plain text
+(no wildcards/regex to learn).
 
 ---
 
@@ -68,16 +82,28 @@ PDF job.
 2. **Reports (PDF, A4 or A5)** - Options > Auto-print rules > Add rule:
    - pattern `*://lis.hospital.local/*` (your LIS/portal URL)
    - printer: `HP LaserJet M404`
-   - paper: `A4` (or `A5` - the option is passed straight to the print
-     engine as media size; A5 halves the sheet for short reports)
+   - **Paper: `A4` or `A5`** (new v3.0.3 per-rule Paper column - passed
+     straight to the print engine as media size; A5 halves the sheet
+     for short reports) and **Copies** if the lab wants duplicates
    - every PDF opened on that portal now prints silently on the HP -
      other tabs keep the OS default printer.
-3. **Labels (ZPL)** - pick whichever flow matches your label software:
-   - **Browser label page**: call the page API with the printer name -
-     `window.advprint.printPage({printer:"Zebra ZD421"})` for page
-     print-outs, and for ZPL push the label bytes to the hub API with
-     `lang:"zpl"` + the label text (curl example in section 5) - the
-     hub streams the ZPL to the Zebra untouched.
+3. **Labels (ZPL) - v3.0.3 makes this a RULE too (the easy way):**
+   - **Browser label page -> add a second rule:**
+     - pattern `*://lis.hospital.local/labels/*` (the page that shows
+       the label), printer: `Zebra ZD421`
+     - **Action: `ZPL label (text on page)`**, tick **Auto**
+     - when the URL opens, the extension takes the TEXT from the page -
+       the user's selection first, then a `<pre>`/`<textarea>` block
+       (what ZPL viewers and label web tools show), then the visible
+       body text - and sends it to the hub with `lang:"zpl"`. The hub
+       streams the ZPL **byte-for-byte** to the Zebra. A safety guard
+       refuses text with no `^` commands, so a mis-matched page can
+       never waste labels. **Copies: 2** prints two labels per visit.
+     - no Auto tick? Then the popup's **Print page** button does the
+       same thing on demand (the rule turns it into a label print).
+   - **Receipt text -> thermal printer rule**: Action
+     `ESC-POS receipt (text on page)` - the hub builds the ESC/POS
+     bytes (auto cut) for the receipt printer.
    - **Desktop label software** (NiceLabel, BarTender, ZebraDesigner...):
      install the hub as a NETWORK PRINTER for it - add
      `http://<this-PC-IP>:9235/ipp/print` (IPP) or a RawTCP 9100 port
@@ -86,6 +112,9 @@ PDF job.
      the destination card to the Zebra (`dest_mode:"selected"`) for this
      flow - or address the job explicitly (API/`printer` name) so both
      printers keep working from the same hub without flipping the card.
+   - **Page API still there when YOU want it**:
+     `window.advprint.printPage({printer:"Zebra ZD421"})` per call -
+     but the rules above need zero code.
 4. **Paper sizes per job**: `/print` accepts `paper=a4|a5|letter|...`
    (media size), `paper_size`, `tray`, `duplex`, `copies` (1-50),
    `pages` (e.g. `1-2`), `quality`/`dpi`, `per_sheet` (n-up),

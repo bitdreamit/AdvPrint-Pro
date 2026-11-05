@@ -29,7 +29,7 @@ from conftest import wait_until  # noqa: E402
 def test_health_open_no_token(hub):
     code, d = hub.get("/health", token=None)
     assert code == 200 and d["ok"] is True
-    assert d["version"] == "3.0.2"
+    assert d["version"] == "3.0.4"
     assert d["v2"] is True
     assert "100% local" in d["branding"]
 
@@ -539,13 +539,13 @@ def test_v1_database_migration(tmp_path):
 
 
 def test_version_anchors():
-    assert advprint.VERSION == "3.0.2"
+    assert advprint.VERSION == "3.0.4"
     # repo/package layout: tool/windows/portable/hub -> root/extension
     root = os.path.dirname(os.path.dirname(os.path.dirname(
         os.path.dirname(os.path.dirname(advprint.__file__)))))
     ext = os.path.join(root, "extension", "manifest.json")
     with open(ext) as f:
-        assert json.load(f)["version"] == "3.0.2"
+        assert json.load(f)["version"] == "3.0.4"
 
 
 def test_log_rotation(tmp_path):
@@ -1062,7 +1062,7 @@ def test_v26_token_current_loopback_only(hub):
     code, d = hub.get("/token/current")
     assert code == 200 and d["ok"] is True
     assert d["token"] == hub.token
-    assert d["app"] == "AdvPrint Pro" and d["version"] == "3.0.2"
+    assert d["app"] == "AdvPrint Pro" and d["version"] == "3.0.4"
 
 
 def test_v26_token_current_rejects_remote(hub):
@@ -1136,8 +1136,8 @@ def test_v261_tray_module_ships_and_parses():
 
 
 def test_v261_version_single_source():
-    assert advprint.VERSION == "3.0.2"
-    assert advprint.VERSION_NAME.startswith("v3.0.2")
+    assert advprint.VERSION == "3.0.4"
+    assert advprint.VERSION_NAME.startswith("v3.0.4")
 
 
 def test_v261_cli_cmd_full_path():
@@ -1303,7 +1303,7 @@ def test_v264_setup_exe_kills_zombie_hubs():
     assert "Stop-Process -Name AdvPrintPro" in stopps
     assert "Stop-Process -Name PrintHubPro" in stopps
     assert "sc.exe delete AdvPrint" in stopps
-    assert 'VIProductVersion "3.0.2.0"' in src
+    assert 'VIProductVersion "3.0.4.0"' in src
 
 
 # ---------------- v2.6.8: printer-name self-heal + menu guard ----------
@@ -1586,7 +1586,7 @@ def _v280_pdf(tmp_path, name="z.pdf", big="AdvPrint Pro v2.8 test"):
 
 
 def test_v280_version_and_config_keys():
-    assert advprint.VERSION == "3.0.2"
+    assert advprint.VERSION == "3.0.4"
     for k in ("drop_enabled", "drop_dir", "drop_delete"):
         assert k in advprint.CFG and k in advprint.CONFIG_KEYS
         assert k in advprint.CONFIG_TYPES
@@ -1811,7 +1811,7 @@ def test_v280_source_wiring_restart_tray_tool_installer():
     nsi = open(os.path.join(root, "installer", "setup.nsi"),
                encoding="utf-8").read()
     assert "hub-stop.ps1" in nsi
-    assert "3.0.2" in nsi and "${IfNot} ${Silent}" in nsi
+    assert "3.0.4" in nsi and "${IfNot} ${Silent}" in nsi
     # extension dual profile
     ext = os.path.join(root, "extension")
     bg = open(os.path.join(ext, "background.js"), encoding="utf-8").read()
@@ -1823,7 +1823,7 @@ def test_v280_source_wiring_restart_tray_tool_installer():
     opt = open(os.path.join(ext, "options.html"), encoding="utf-8").read()
     assert "hubUrlLan" in opt and "bDashboardLan" in opt
     man = json.load(open(os.path.join(ext, "manifest.json")))
-    assert man["version"] == "3.0.2"
+    assert man["version"] == "3.0.4"
 
 
 def test_v280_lan_profile_never_auto_heals():
@@ -2076,8 +2076,8 @@ def test_v281_setup_nsi_version():
         root = os.path.dirname(root)
     nsi = open(os.path.join(root, "installer", "setup.nsi"),
                encoding="utf-8", errors="replace").read()
-    assert 'VIProductVersion "3.0.2.0"' in nsi
-    assert "AdvPrint-Pro-Setup-3.0.2.exe" in nsi
+    assert 'VIProductVersion "3.0.4.0"' in nsi
+    assert "AdvPrint-Pro-Setup-3.0.4.exe" in nsi
 
 
 # ============================================================
@@ -2579,3 +2579,134 @@ def test_v302_multi_printer_doc_ships():
                  encoding="utf-8").read()
     assert "6.6 Multiple printers on one PC" in guide
     assert "MULTI-PRINTER.md" in guide
+
+
+def test_v303_rules_print_labels_actions():
+    """v3.0.3: the rules table can print LABELS/RECEIPTS without page
+    JavaScript - the Action select gains 'ZPL label (text on page)' and
+    'ESC-POS receipt (text on page)', the background engine extracts the
+    page text (selection -> <pre>/textarea -> body) and posts it with an
+    explicit lang, and a guard refuses text without ^ commands so a
+    wrong page can never waste labels."""
+    ext = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.dirname(os.path.dirname(advprint.__file__))))), "extension")
+    ojs = open(os.path.join(ext, "options.js"), encoding="utf-8").read()
+    # Action options ship in the rules UI
+    assert '"zpl", "ZPL label (text on page)"' in ojs
+    assert '"raw", "ESC-POS receipt (text on page)"' in ojs
+    bg = open(os.path.join(ext, "background.js"), encoding="utf-8").read()
+    # the label pipeline exists and is wired into auto + manual paths
+    for marker in ("function rulePrintExtras", "async function printTabRawLang",
+                   "async function printRawText",
+                   'rule.action === "zpl" || rule.action === "raw"'):
+        assert marker in bg, "missing %r in background.js" % marker
+    # extraction order: selection first, then pre/textarea, then body
+    i_sel = bg.index("window.getSelection")
+    i_pre = bg.index('document.querySelector("pre, textarea")')
+    i_body = bg.index("document.body.innerText")
+    assert i_sel < i_pre < i_body, "text extraction order changed"
+    # explicit language + the ZPL ^ guard (before hubPrint)
+    assert 'lang = rule.action === "zpl" ? "zpl" : "escpos"' in bg
+    guard = bg.index('!text.includes("^")')
+    hub_call = bg.index("await hubPrint(payload);", guard)
+    assert guard < hub_call, "the ZPL ^ guard must run before hubPrint"
+    # dispatch sites: auto rules AND the manual Print page button
+    assert bg.count("printTabRawLang(tab, rule") >= 2
+
+
+def test_v303_rules_copies_paper_columns():
+    """v3.0.3: per-rule Copies + Paper columns - the UI renders both,
+    collect() stores them (copies sanitised to 1-999), rulePrintExtras
+    turns them into job fields (copies / paper_size) and the rule wins
+    over the global print defaults (extras merge before hubPrint)."""
+    ext = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.dirname(os.path.dirname(advprint.__file__))))), "extension")
+    html = open(os.path.join(ext, "options.html"), encoding="utf-8").read()
+    assert "<th style=\"width:6%\">Copies</th>" in html
+    assert "<th style=\"width:9%\">Paper</th>" in html
+    ojs = open(os.path.join(ext, "options.js"), encoding="utf-8").read()
+    # copies input + paper select render, collect stores both
+    assert 'inC.type = "number"' in ojs and 'rule.copies' in ojs
+    for paper in ('"A4"', '"A5"', '"Letter"', '"Tabloid"'):
+        assert paper in ojs, "paper option %s missing" % paper
+    assert "copies: (co.value && cv >= 1) ? String(cv) : \"\"" in ojs
+    assert "paper: pa.value" in ojs
+    bg = open(os.path.join(ext, "background.js"), encoding="utf-8").read()
+    assert "if (c >= 1) ex.copies = c;" in bg
+    assert "if (rule.paper) ex.paper_size = rule.paper;" in bg
+    # extras are threaded into BOTH pdf and page pipelines
+    assert "async function printPageDom(tab, title, printer, extra = {})" in bg
+    assert "async function printTabAuto(tab, extra = {})" in bg
+    assert "Object.assign({" in bg.split("async function printPageDom")[1]
+    # rule wins over globals: applyPrintDefaults only FILLS BLANKS, so
+    # extras merged into the payload before hubPrint always win
+    assert "applyPrintDefaults(payload, cfg)" in bg
+    assert "if (payload.copies == null && num(pd.copies) > 1) " \
+        "payload.copies = num(pd.copies);" in bg
+    # the reprint box honours the matching rule
+    assert bg.index("rulePrintExtras(\n            matchRule(msg.url") > 0
+
+
+def test_v303_lab_card_and_docs():
+    """v3.0.3: the extension explains the multi-printer lab itself (the
+    lab card under the rules table) and MULTI-PRINTER.md shows the
+    RULES as the primary label flow (v3.0.2 sent users to JS/curl)."""
+    ext = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.dirname(os.path.dirname(advprint.__file__))))), "extension")
+    docs = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.dirname(os.path.dirname(advprint.__file__))))), "docs")
+    html = open(os.path.join(ext, "options.html"), encoding="utf-8").read()
+    assert 'id="labRulesCard"' in html
+    card = html[html.index('id="labRulesCard"'):]
+    assert "no JavaScript needed" in card and "ZPL" in card
+    assert "docs/MULTI-PRINTER.md" in card
+    md = open(os.path.join(docs, "MULTI-PRINTER.md"), encoding="utf-8").read()
+    assert "ROUTING RULES do the lab work" in md
+    assert 'ZPL label (text on page)' in md
+    assert "ESC-POS receipt (text on page)" in md
+    # the rules flow comes BEFORE the page-API fallback in the label step
+    assert md.index("v3.0.3 makes this a RULE") < md.index("Page API still there")
+    notes = open(os.path.join(docs, "RELEASE-NOTES-v3.0.3.md"),
+                 encoding="utf-8").read()
+    assert "no page JavaScript" in notes and "byte-for-byte" in notes
+
+
+def test_v304_multi_printer_rules_made_easy():
+    """v3.0.4: the rules section manages several printers easily -
+    (1) patternToRegex supports the 'contains' type (escaped, anchored
+    nowhere, case-insensitive); (2) every rule row has a Copy button
+    that duplicates the row below itself; (3) the rules section shows a
+    'Printers on this PC' chip strip loaded from the hub printer list,
+    each chip with a '+ rule' button that preselects that printer."""
+    ext = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.dirname(os.path.dirname(advprint.__file__))))), "extension")
+    bg = open(os.path.join(ext, "background.js"), encoding="utf-8").read()
+    # (1) contains matching in the engine - escaped text, case-insensitive
+    assert 'if (type === "contains")' in bg
+    seg = bg[bg.index('if (type === "contains"'):]
+    seg = seg[:seg.index('if (type === "regex"')]
+    assert '.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&")' in seg
+    assert '"i"' in seg and '"^"' not in seg.split("new RegExp")[1][:20], \
+        "contains must NOT be anchored to the URL start"
+    ojs = open(os.path.join(ext, "options.js"), encoding="utf-8").read()
+    # Type dropdown offers Contains
+    assert 'new Option("Contains", "contains")' in ojs
+    # (2) Copy button duplicates the row (inserted AFTER itself)
+    assert 'bc.textContent = "Copy"' in ojs
+    assert "tr.after(nr);" in ojs
+    copy_vals = ojs[ojs.index('bc.addEventListener("click"'):]
+    for f in ("pattern: p.value", "printer: pr.value", "copies: co.value",
+              "paper: pa.value"):
+        assert f in copy_vals, "Copy must carry %s" % f
+    # (3) chip strip: container ships in the HTML, renderer in loadPrinters
+    html = open(os.path.join(ext, "options.html"), encoding="utf-8").read()
+    assert 'id="printerChips"' in html
+    chips = ojs[ojs.index('const chips = $("printerChips"'):]
+    assert '"Printers on this PC: "' in chips
+    assert 'b.textContent = "+ rule"' in chips
+    assert "printer: p.name" in chips, "+ rule must preselect that printer"
+    assert "p.is_default" in chips and "p.is_group" in chips
+    # the rule printer dropdown explains the multi-printer idea
+    assert "DIFFERENT printer per rule" in ojs
+    # the rules sub text points at chips/Copy/Contains
+    assert "<b>+ rule</b> per" in html and "<b>Copy</b> button" in html

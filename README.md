@@ -13,6 +13,23 @@ Web page ──► Chrome extension ──► AdvPrint Pro hub (localhost:9235) 
 
 ---
 
+## What's new in v3.0.4 (multi-printer rules made easy)
+
+One PC, several printers, managed entirely in Options > Auto-print & routing rules - now with the full printer list in sight:
+
+- **"Printers on this PC" chip strip** under the rules table: every installed printer (+ groups) as a chip with live status and the OS default marked. One click on **+ rule** starts a new rule with that printer already selected - a rule per printer is two clicks away.
+- **Copy button on every rule row**: duplicate the rule, change the URL pattern (and printer if needed) - the fastest way to build the lab rule set.
+- **New "Contains" pattern type**: the URL just has to CONTAIN the text (e.g. `medical_reports/pdf`) - no wildcards, no regex to learn. Glob and Regex unchanged.
+- The lab recipe: HP chip + rule -> `*://www.htncr.org/lab/medical_reports/pdf/*`, Auto, Paper A5 - Zebra chip + rule -> `.../labels/*`, Action "ZPL label (text on page)", Copies 2. Every job carries its rule printer (the hub gives the per-job name priority over the destination card), so both printers run at the same time. See docs/MULTI-PRINTER.md.
+
+## What's new in v3.0.3 (rules print labels - ZPL / ESC-POS + per-rule copies & paper)
+
+The multi-printer lab is now managed ENTIRELY in Options > Auto-print & routing rules - no page JavaScript, no curl, no destination-card flipping:
+
+- **Rule Action "ZPL label (text on page)" and "ESC-POS receipt (text on page)".** When the rule's URL opens (Auto) or you press Print page, the extension grabs the page TEXT - the user's selection first, then a `<pre>`/`<textarea>` block (what ZPL viewers and label web tools show), then the visible body text - and sends it to the hub with an explicit language. The hub streams ZPL **byte-for-byte** to the rule's printer (the Zebra) or builds an ESC/POS receipt (auto cut) for the thermal printer. A safety guard refuses text without `^` commands so a mis-matched page can never waste labels.
+- **Per-rule Copies and Paper.** New rule columns: Copies (1-999, e.g. 2 labels per visit) and Paper (A4/A5/A3/Letter/Legal/Tabloid - Paper A5 for lab receipts while reports stay A4). Rule values override the global Default print options, and the **Reprint a PDF link** box honours the matching rule as well.
+- **One hub, many printers, zero JS:** rule 1 `*://www.htncr.org/lab/medical_reports/pdf/*` -> laser, Action Auto/PDF, Paper A5; rule 2 `*://www.htncr.org/lab/labels/*` -> Zebra ZD421, Action ZPL label; rule 3 receipt text -> thermal, Action ESC-POS. The per-job printer name always wins over the Print destination card, so both printers run at the same time. New lab card under the rules table; recipes in docs/MULTI-PRINTER.md.
+
 ## What's new in v3.0.2 (popup hook switch removed + the multi-printer lab guide)
 
 Two changes on top of v3.0.1 - nothing removed except a duplicated switch:
@@ -78,7 +95,7 @@ The ten most-requested features, all in one release:
 - **DropZone + Send portal — printing WITHOUT the extension.** The hub watches a folder: in Word/Excel/ANY app choose *Microsoft Print to PDF* and save into the DropZone — the page prints seconds later (dashboard → DropZone card; `POST /dropzone/open` opens the folder). Phones/tablets/other PCs print through the built-in **Send portal** (`/send`, token-protected, same as every endpoint).
 - **Restart hub** — in the tray menu, AdvPrint Tool [14] and the dashboard button: the hub relaunches itself cleanly (new process waits for the port; queued jobs, settings and history are kept).
 - **Bullet-proof upgrade & uninstall.** The setup now runs `hub-stop.ps1` BEFORE touching files: stops the optional *AdvPrint* service (wait + PID kill), **deletes the service registration** (reinstalled fresh when ticked — upgrades keep it automatically), kills every process under the install folder and frees TCP 9235. Old program folders are wiped, so no stale file can abort an install any more; the uninstaller retries the folder sweep and reports leftovers honestly.
-- **Silent install** `AdvPrint-Pro-Setup-3.0.2.exe /S` — elevation is requested by the exe manifest itself ("auto permission" on any PC), the hub auto-starts after a silent install, and the firewall rule for LAN sharing (TCP 9235) is added automatically (removed on uninstall).
+- **Silent install** `AdvPrint-Pro-Setup-3.0.4.exe /S` — elevation is requested by the exe manifest itself ("auto permission" on any PC), the hub auto-starts after a silent install, and the firewall rule for LAN sharing (TCP 9235) is added automatically (removed on uninstall).
 - **New A + printer logo** — the letter A drawn as a printer: the crossbar is the output slot and a printed page slides out of it. Same mark in the extension, popup, dashboard, tray icon, installer and docs.
 
 Nothing removed: every v2.7.0 feature (history manager, share toggles, live test tool) is unchanged.

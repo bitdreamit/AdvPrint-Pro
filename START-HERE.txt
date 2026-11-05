@@ -1,8 +1,52 @@
-AdvPrint Pro (Advanced Printer) v3.0.2 - START HERE
+AdvPrint Pro (Advanced Printer) v3.0.4 - START HERE
 ====================================================
 by Bit Dream IT - Innovative Healthcare Solutions
 
-WHAT'S NEW IN 3.0.2 (POPUP HOOK SWITCH REMOVED + MULTI-PRINTER GUIDE)
+WHAT'S NEW IN 3.0.4 (MULTI-PRINTER RULES MADE EASY)
+----------------------------------------------------------------------
+1) ALL PRINTERS VISIBLE IN THE RULES. Options > Auto-print & routing
+   rules now shows a 'Printers on this PC' strip under the table -
+   every installed printer (+ groups) as a chip with its live status
+   and the OS default marked. One click on '+ rule' starts a new rule
+   with THAT printer already selected. The Printer dropdown of every
+   rule lists the same full set (title hint explains it).
+2) COPY BUTTON ON EVERY RULE. The fastest way to one rule per
+   printer: Copy, change the URL pattern (and the printer if you
+   started from '+ Add rule'), done.
+3) 'CONTAINS' PATTERN TYPE. The easiest match there is: the URL just
+   has to CONTAIN the text (e.g. medical_reports/pdf) - no wildcards,
+   no regex to learn. Glob and Regex stay unchanged.
+4) THE LAB RECIPE, NOW TWO CLICKS PER RULE: chip '+ rule' on the HP
+   -> pattern *://www.htncr.org/lab/medical_reports/pdf/*, Auto, Paper
+   A5. Chip '+ rule' on the Zebra -> pattern .../labels/*, Action 'ZPL
+   label (text on page)', Copies 2. Both printers run at the same
+   time - every job carries its rule printer and the hub gives the
+   per-job name priority over the destination card.
+0) NEW IN 3.0.3 (also in this build): rules print LABELS - rule
+----------------------------------------------------------------------
+1) ROUTING RULES PRINT LABELS AND RECEIPTS. Options > Auto-print &
+   routing rules - the Action column now has 'ZPL label (text on
+   page)' and 'ESC-POS receipt (text on page)'. When the URL opens
+   (Auto ticked) or you press Print page, the extension takes the
+   TEXT from the page - your selection first, then a <pre>/textarea
+   block (what ZPL viewers and label web tools show), then the
+   visible body text - and sends it to the hub with an explicit
+   language: ZPL streams byte-for-byte to the rule's Zebra, ESC/POS
+   (auto cut) is built for the thermal printer. NO page JavaScript,
+   no curl, no destination-card flipping. A guard refuses text with
+   no ^ commands so a wrong page can never waste labels.
+2) PER-RULE COPIES AND PAPER. Two new rule columns: Copies (label
+   runs) and Paper (A4/A5/A3/Letter/Legal/Tabloid - e.g. Paper A5
+   for lab receipts while reports stay A4). Rule values win over
+   the global Default print options; the Reprint a PDF link box
+   honours the matching rule too.
+3) MULTI-PRINTER LAB, ONE PC - all in the rules table now: rule 1
+   PDF reports -> laser (Auto/PDF + Paper), rule 2 ZPL label pages
+   -> Zebra, rule 3 receipt text -> thermal. Every job carries its
+   rule printer and the hub gives the per-job name priority over
+   the destination card, so both printers run at the same time.
+   See docs/MULTI-PRINTER.md and the new lab card under the rules.
+0) WHY 3.0.3: v3.0.2 removed the popup's window.print() hook
 ----------------------------------------------------------------------
 1) THE POPUP'S window.print() HOOK SWITCH IS GONE - the switch now
    lives ONLY in Options > Power switches > 'Intercept
@@ -134,8 +178,8 @@ WHAT'S NEW IN 2.8.2 (LAN SHARING APPLIES LIVE + FIREWALL ONE-CLICK)
      reports PASS/FAIL in the message bar: PASS + other PC still
      failing = firewall (click the button); FAIL = listener problem
      (hub.log says exactly why).
-  FILES IN THIS RELEASE: AdvPrint-Pro-Setup-3.0.2.exe (Windows),
-  advprint-pro_3.0.2_all.deb (Linux), AdvPrint-Pro-3.0.2-source.zip.
+  FILES IN THIS RELEASE: AdvPrint-Pro-Setup-3.0.4.exe (Windows),
+  advprint-pro_3.0.4_all.deb (Linux), AdvPrint-Pro-3.0.4-source.zip.
 
 WHAT'S NEW IN 2.8.1 (SEND-PORTAL QR + ONE-CLICK LAN INVITE)
 ===========================================================
@@ -156,8 +200,8 @@ WHAT'S NEW IN 2.8.1 (SEND-PORTAL QR + ONE-CLICK LAN INVITE)
      - Safe by design: loopback-only, private-LAN URLs only, explicit
        click required, every accept is audited (peer.connected).
   3. NOTHING REMOVED - everything from 2.8.0 below is unchanged.
-  FILES IN THIS RELEASE: AdvPrint-Pro-Setup-3.0.2.exe (Windows),
-  advprint-pro_3.0.2_all.deb (Linux), AdvPrint-Pro-3.0.2-source.zip.
+  FILES IN THIS RELEASE: AdvPrint-Pro-Setup-3.0.4.exe (Windows),
+  advprint-pro_3.0.4_all.deb (Linux), AdvPrint-Pro-3.0.4-source.zip.
 
 WHAT'S NEW IN 2.8.0 (TWO HUB PROFILES + DROPZONE + BULLET-PROOF UNINSTALL)
 ==========================================================================
@@ -185,13 +229,13 @@ WHAT'S NEW IN 2.8.0 (TWO HUB PROFILES + DROPZONE + BULLET-PROOF UNINSTALL)
      service before touching files, wipes old program folders and
      frees port 9235 - "some file abort install" is fixed. The
      service is reinstalled automatically on upgrade.
-  9. SILENT INSTALL: AdvPrint-Pro-Setup-3.0.2.exe /S - the exe
+  9. SILENT INSTALL: AdvPrint-Pro-Setup-3.0.4.exe /S - the exe
      requests admin by itself (UAC once), the hub auto-starts and
      the firewall rule for LAN sharing is added automatically.
  10. NEW LOGO: the letter A drawn as a printer - the crossbar is the
      output slot and a printed page slides out of it.
-  FILES IN THIS RELEASE: AdvPrint-Pro-Setup-3.0.2.exe (Windows),
-  advprint-pro_3.0.2_all.deb (Linux), AdvPrint-Pro-3.0.2-source.zip.
+  FILES IN THIS RELEASE: AdvPrint-Pro-Setup-3.0.4.exe (Windows),
+  advprint-pro_3.0.4_all.deb (Linux), AdvPrint-Pro-3.0.4-source.zip.
 
 WHAT'S NEW IN 2.7.0 (HISTORY MANAGER + SHARE MODES + CLEAN LAYOUT)
   0. JOB HISTORY IS NOW A REAL MANAGER (hub dashboard "Job history"
@@ -480,7 +524,7 @@ WHY DID MY OLD VERSION SAY "cannot access" ON THE SETUP EXE?
   No manual Security-tab work is needed anywhere.
 
 UPDATE IN 3 STEPS
-  1. Run AdvPrint-Pro-Setup-3.0.2.exe (installs over the old
+  1. Run AdvPrint-Pro-Setup-3.0.4.exe (installs over the old
      version; history + settings migrate to .advprint automatically).
      Portable users: extract the new zip over the old folder, then
      AdvPrint-Tool.bat > [13] once (unblocks), then [1] Start.
@@ -514,12 +558,12 @@ FILES IN THIS PACKAGE
                    AdvPrint-Pro-Full-Guide.html + .pdf, release notes
   tests\           pytest suite + pytest.ini
   installer\       setup.nsi - NSIS 3 source that builds
-                   AdvPrint-Pro-Setup-3.0.2.exe (per-machine, UAC)
+                   AdvPrint-Pro-Setup-3.0.4.exe (per-machine, UAC)
   prebuilt\        READY installers, no build needed:
-                   AdvPrint-Pro-Setup-3.0.2.exe (Windows setup,
+                   AdvPrint-Pro-Setup-3.0.4.exe (Windows setup,
                    ~9.5 MB - run it, UAC appears, done)
-                   advprint-pro_3.0.2_all.deb (Linux deb -
-                   sudo dpkg -i advprint-pro_3.0.2_all.deb)
+                   advprint-pro_3.0.4_all.deb (Linux deb -
+                   sudo dpkg -i advprint-pro_3.0.4_all.deb)
   README.md / CHANGELOG.md / LICENSE / pytest.ini / .gitignore
   SHA256SUMS.txt
 

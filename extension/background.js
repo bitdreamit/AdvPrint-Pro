@@ -424,8 +424,13 @@ async function scheduleRetryAlarm() {
   } catch (_) {}
 }
 
-/* ---------------- URL pattern matching (glob + regex + title) -------- */
+/* ---------------- URL pattern matching (glob + regex + contains) ----- */
 function patternToRegex(pattern, type) {
+  // v3.0.4: "contains" - the easiest pattern for lab staff: the URL only
+  // has to CONTAIN the text (case-insensitive), nothing to learn.
+  if (type === "contains") {
+    return new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+  }
   if (type === "regex") return new RegExp(pattern, "i");
   let rx = "";
   for (const ch of pattern) {
@@ -435,8 +440,9 @@ function patternToRegex(pattern, type) {
   return new RegExp("^" + rx + "$", "i");
 }
 
-/* v2.0 rules: type glob|regex, optional page-title filter, and a
- * per-rule on/off switch (per-site settings). First matching wins. */
+/* v2.0 rules: type glob|regex|contains (contains since 3.0.4), optional
+ * page-title filter, and a per-rule on/off switch (per-site settings).
+ * First matching wins. */
 function matchRule(url, rules, title) {
   for (const r of rules || []) {
     if (!r || !r.pattern) continue;
@@ -762,7 +768,7 @@ async function printPdfResponse(res, url, title, printer, extra = {}) {
   return data;
 }
 
-async function printPageDom(tab, title, printer) {
+async function printPageDom(tab, title, printer, extra = {}) {
   // v2.9.1 (audit M8 fix): the page is CLONED and CLEANED before it is
   // sent to the hub - scripts are stripped (they re-executed inside the
   // headless renderer and could mutate/wreck the printout), <noscript>
@@ -787,12 +793,14 @@ async function printPageDom(tab, title, printer) {
   });
   const html = result && result.result;
   if (!html) throw new HubError("could not read page content");
-  const data = await hubPrint({
+  // v3.0.3: extra = per-rule copies/paper (rulePrintExtras) - set BEFORE
+  // hubPrint applies the global print defaults, so the RULE wins.
+  const data = await hubPrint(Object.assign({
     html: html,
     title: title || (tab.title || "page"),
     printer: printer || "",
     source: "extension"
-  });
+  }, extra || {}));
   await markPrinted(tab.url || "");
   await rememberJob({ id: data.job_id, title: title || tab.title, url: tab.url,
                       printer: printerLabel(printer),
@@ -805,24 +813,38 @@ async function printTab(tab, force, printerOverride) {
   // letting the injection fail with a permission error
   if (!printableTab(tab)) { notifyNotPrintable(); return null; }
   const url = tab.url || "";
-  const printer = printerOverride || (await resolvePrinter(url, tab.title));
-  const looksPdf = /\.pdf(\?|#|$)/i.test(url);
-  if (!looksPdf && force !== "pdf") {
-    // render the live DOM -> hub prints via headless Chrome
-    const out = await printPageDom(tab, tab.title, printer);
+  const cfg = await loadCfg();
+  const rule = matchRule(url, cfg.rules, tab.title);
+  // v3.0.3: a rule with Action "ZPL label" / "ESC-POS receipt" turns the
+  // manual "Print page" button into a label/receipt print too - the page
+  // text (or the selection) goes to the hub in the printer's own
+  // language for the rule's printer. No page JavaScript, ever.
+  if (force !== "pdf" && printerOverride !== "__file__" &&
+      rule && (rule.action === "zpl" || rule.action === "raw")) {
+    const out = await printTabRawLang(tab, rule, printerOverride || "");
     await flashBadge(true, "OK");
     return out;
   }
-  const out = await printPdfUrl(url, tab.title, printer);
+  const printer = printerOverride ||
+    (rule && rule.printer) || cfg.defaultPrinter || "";
+  const rex = rulePrintExtras(rule);   // v3.0.3 per-rule copies/paper
+  const looksPdf = /\.pdf(\?|#|$)/i.test(url);
+  if (!looksPdf && force !== "pdf") {
+    // render the live DOM -> hub prints via headless Chrome
+    const out = await printPageDom(tab, tab.title, printer, rex);
+    await flashBadge(true, "OK");
+    return out;
+  }
+  const out = await printPdfUrl(url, tab.title, printer, rex);
   await flashBadge(true, "OK");
   return out;
 }
 
-async function printTabAuto(tab) {
+async function printTabAuto(tab, extra = {}) {
   const url = tab.url || "";
   const printer = await resolvePrinter(url, tab.title);
   const looksPdf = /\.pdf(\?|#|$)/i.test(url);
-  if (looksPdf) return printPdfUrl(url, tab.title, printer);
+  if (looksPdf) return printPdfUrl(url, tab.title, printer, extra);
   // v2.9.1 (audit P2 fix): ask the ALREADY-LOADED tab what its content
   // type is (document.contentType - zero network requests). The old
   // code fetched the whole URL once just to read the header, and then
@@ -835,12 +857,12 @@ async function printTabAuto(tab) {
     });
     if (probe && probe.result &&
         String(probe.result).toLowerCase().includes("application/pdf")) {
-      const out = await printPdfUrl(url, tab.title, printer);
+      const out = await printPdfUrl(url, tab.title, printer, extra);
       await flashBadge(true, "OK");
       return out;
     }
   } catch (_) { /* fall through to DOM render */ }
-  const out = await printPageDom(tab, tab.title, printer);
+  const out = await printPageDom(tab, tab.title, printer, extra);
   await flashBadge(true, "OK");
   return out;
 }
@@ -858,6 +880,78 @@ async function printSelection(text, title) {
                       printer: printerLabel(cfg.defaultPrinter),
                       status: data.status || "queued" });
   await flashBadge(true, "OK");
+  return data;
+}
+
+/* --------- v3.0.3: label & receipt RULE actions (no page JS) --------- */
+/* A rule with Action "ZPL label" or "ESC-POS receipt" needs NO page
+ * JavaScript: when the URL opens (or you press Print page), the text is
+ * taken from the page - the user's text selection first, then a
+ * <pre>/<textarea> block (what ZPL viewers and label web tools show),
+ * then the visible body text - and pushed to the hub with an explicit
+ * printer language. The hub streams ZPL byte-for-byte to the rule's
+ * printer (the Zebra) or builds an ESC/POS receipt (auto cut) for the
+ * thermal printer. The per-rule printer ALWAYS wins over the Print
+ * destination card (the hub gives the per-job printer name priority),
+ * so the lab's A4/A5 report printer and the Zebra keep printing side by
+ * side without flipping any card. */
+function rulePrintExtras(rule) {
+  const ex = {};
+  if (rule) {
+    const c = parseInt(rule.copies, 10);
+    if (c >= 1) ex.copies = c;                  // per-rule copies
+    if (rule.paper) ex.paper_size = rule.paper; // A4/A5/... (PDF/page jobs)
+  }
+  return ex;
+}
+
+async function printTabRawLang(tab, rule, printerOverride) {
+  const [res] = await chrome.scripting.executeScript({
+    target: { tabId: tab.id },
+    func: () => {
+      try {
+        const sel = String((window.getSelection &&
+                            window.getSelection()) || "").trim();
+        if (sel) return sel;                     // 1) user selection
+        const el = document.querySelector("pre, textarea");
+        const t = el ? (el.value !== undefined ? el.value
+                                               : el.textContent) : "";
+        if (t && t.trim()) return t.trim();      // 2) raw text block
+        return ((document.body && document.body.innerText) ||
+                "").trim();                      // 3) visible text
+      } catch (_) { return ""; }
+    }
+  });
+  const text = String((res && res.result) || "").trim();
+  if (!text) {
+    throw new HubError("label rule found no text on the page");
+  }
+  return printRawText(text, rule, tab, printerOverride);
+}
+
+async function printRawText(text, rule, tab, printerOverride) {
+  const lang = rule.action === "zpl" ? "zpl" : "escpos";
+  // safety net: text without a single ^ command would make the Zebra
+  // print garbage - say so instead of wasting labels
+  if (lang === "zpl" && !text.includes("^")) {
+    throw new HubError("this page does not look like ZPL - no ^ commands " +
+                       "found (ZPL labels start with ^XA)");
+  }
+  const payload = {
+    text: text,
+    lang: lang,
+    title: (tab && (tab.title || "label")) || "label",
+    printer: printerOverride || rule.printer || "",
+    source: "extension"
+  };
+  const copies = parseInt(rule.copies, 10);
+  if (copies >= 1) payload.copies = copies;
+  const data = await hubPrint(payload);
+  await markPrinted(tab ? tab.url || "" : "");
+  await rememberJob({ id: data.job_id, title: payload.title,
+                      url: tab ? tab.url : "",
+                      printer: printerLabel(payload.printer),
+                      status: data.status || "queued", lang: lang });
   return data;
 }
 
@@ -939,12 +1033,17 @@ chrome.tabs.onUpdated.addListener(async (tabId, info, tab) => {
     const rule = await shouldAutoPrint(tab.url, tab.title);
     if (rule) {
       const printer = rule.printer || (await loadCfg()).defaultPrinter || "";
+      const rex = rulePrintExtras(rule);       // v3.0.3 copies/paper
       if (rule.action === "page") {
-        await printPageDom(tab, tab.title, printer);
+        await printPageDom(tab, tab.title, printer, rex);
       } else if (rule.action === "pdf") {
-        await printPdfUrl(tab.url, tab.title, printer);
+        await printPdfUrl(tab.url, tab.title, printer, rex);
+      } else if (rule.action === "zpl" || rule.action === "raw") {
+        // v3.0.3: label/receipt rule - page text goes to the hub in the
+        // printer's own language (ZPL verbatim / ESC-POS built)
+        await printTabRawLang(tab, rule, printer);
       } else {
-        await printTabAuto(tab);
+        await printTabAuto(tab, rex);
       }
       await flashBadge(true, "OK");
       await maybeCloseTab(tabId);
@@ -1157,7 +1256,12 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
             break;
           }
           const printer = await resolvePrinter(msg.url, msg.title);
-          const out = await printPdfUrl(msg.url, msg.title, printer);
+          // v3.0.3: a matching rule's copies/paper ride along with the
+          // reprint, so the "Reprint a PDF link" box prints on the SAME
+          // printer/paper as the auto rule would
+          const rex = rulePrintExtras(
+            matchRule(msg.url, (await loadCfg()).rules, msg.title));
+          const out = await printPdfUrl(msg.url, msg.title, printer, rex);
           reply({ ok: true, ...out });
           break;
         }

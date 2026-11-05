@@ -1,6 +1,63 @@
 # Changelog - AdvPrint Pro (Advanced Printer)
 by Bit Dream IT - Innovative Healthcare Solutions
 
+## v3.0.4 - MULTI-PRINTER RULES MADE EASY (2026-11-06)
+
+User request: "the printer dropdown should also show all set up
+printers so I can select different ones - then the existing rules
+manage multiple printers easily." Extension-only change; the hub is
+untouched. Nothing removed, no settings migration.
+
+- **'Printers on this PC' chip strip** in the rules section
+  (#printerChips under the table): loaded from GET /printers like
+  the dropdowns - every printer (+ groups) with live status, the OS
+  default marked; each chip has a '+ rule' button that appends a
+  rule row with that printer preselected. Shows a connect hint when
+  the hub is not reachable.
+- **Copy button on every rule row** (next to Delete): duplicates the
+  row with all current values (pattern, type, title, printer,
+  action, copies, paper, On, Auto) right below it.
+- **'Contains' pattern type**: patternToRegex escapes the text and
+  matches case-insensitively ANYWHERE in the URL - the no-syntax
+  option for lab staff (Glob/Regex unchanged, first-match-wins
+  order unchanged).
+- Printer dropdown + chips carry hint titles ('pick a DIFFERENT
+  printer per rule...').
+- Version strings bumped to 3.0.4 everywhere (hub, dashboard badge,
+  extension manifest/popup/Options/About, Setup exe
+  VIProductVersion 3.0.4.0, deb control, docs).
+
+## v3.0.3 - RULES PRINT LABELS (ZPL / ESC-POS) + PER-RULE COPIES & PAPER (2026-11-05)
+
+Extension-only feature release - the hub API was already ready
+(text + lang=zpl/escpos, copies, paper_size, per-job printer).
+Nothing removed, no settings migration; old rules keep working
+unchanged (new fields default to blank).
+
+- **Rule Action 'ZPL label (text on page)' and 'ESC-POS receipt
+  (text on page)'.** On auto-open (Auto ticked) or manual Print
+  page, the extension extracts the page text (selection ->
+  <pre>/textarea -> body innerText) and posts {text, lang, printer}
+  to /print. ZPL streams byte-for-byte to the rule printer; ESC/POS
+  is built by the hub (auto cut). Guard: ZPL rules refuse text with
+  no ^ commands (clear error instead of wasted labels). Works for
+  the auto path, the popup/dashboard Print page button, and the
+  Reprint a PDF link box (printer from resolvePrinter, extras from
+  the matching rule).
+- **Per-rule Copies + Paper columns.** Copies 1-999 (default hub
+  behaviour when blank); Paper A4/A5/A3/Letter/Legal/Tabloid sent
+  as paper_size for PDF/page jobs (labels carry their own media -
+  ignored for ZPL/ESC-POS). Rule values beat the global Default
+  print options (they are set before applyPrintDefaults fills
+  blanks).
+- **Multi-printer lab card** under the rules table + expanded
+  docs/MULTI-PRINTER.md recipes (PDF reports -> laser A4/A5,
+  ZPL label pages -> Zebra, receipt text -> thermal - same hub,
+  same PC, same time).
+- Version strings bumped to 3.0.3 everywhere (hub, dashboard
+  badge, extension manifest/popup/Options/About, Setup exe
+  VIProductVersion 3.0.3.0, deb control, docs).
+
 ## v3.0.2 - POPUP HOOK SWITCH REMOVED + MULTI-PRINTER LAB GUIDE (2026-11-05)
 
 Two changes on top of v3.0.1 - no settings migration, no removed
