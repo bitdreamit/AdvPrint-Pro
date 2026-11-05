@@ -1,13 +1,71 @@
 # Changelog - AdvPrint Pro (Advanced Printer)
 by Bit Dream IT - Innovative Healthcare Solutions
 
-## v2.9.1 - RESPONSIVE DASHBOARD TABLES + FULL DOCS (2026-11-04)
+## v3.0.0 - RENUMBERED RELEASE (2026-11-05)
 
-One focused fix on top of the 2.9.0 network-printer release - the
-dashboard no longer hides anything behind an inner scrollbar - plus a
-full documentation refresh and clean version numbering (one version
-everywhere: hub, extension, setup, deb, docs).
+The v2.9.1 packages were already distributed; shipping different
+content under the same 2.9.1 number would collide with installed
+copies (same version, different bytes). This release therefore ships
+the IDENTICAL v2.9.1 feature set - network printer mode, print
+destination routing, responsive dashboard tables, the 27-finding
+security hardening and the full documentation - under the clean new
+number 3.0.0. No feature was added or removed; every surface (hub
+VERSION/VERSION_NAME, dashboard badge, extension manifest/popup/
+Options/About, Setup exe VIProductVersion, deb control, docs) says
+3.0.0. Installs straight over 2.8.2 / 2.9.0 / 2.9.1; settings and
+history are kept. 212 tests pass.
 
+## v2.9.1 - RESPONSIVE TABLES + SECURITY HARDENING (audit pass) + FULL DOCS (2026-11-05)
+
+The responsive-table fix plus a complete security/reliability hardening
+pass - all 27 confirmed findings of an independent code audit are fixed
+(HIGH job-collision / temp-file / rebinding / CORS-IPP / SSRF issues,
+MEDIUM print-integrity and network issues, the LOW batch and the
+performance items) - plus a full documentation refresh and clean
+version numbering (one version everywhere: hub, extension, setup, deb,
+docs). 23 regression tests added; 212 tests pass.
+
+- **Job payload collisions (audit H1, fix).** Job files get a random
+  suffix + exclusive create; the duplicate check runs BEFORE the file
+  is saved and is lock-serialized - a same-second double submission
+  can no longer overwrite the original job's payload or print twice.
+- **Headless render isolation (audit H2/P4, fix).** Every page render
+  gets its own temp dir + correct file: URLs; renders are capped at 2
+  concurrent and a timeout kills the whole browser process tree.
+- **Host-header allowlist (audit H5, fix).** Foreign Host headers
+  (DNS rebinding) get 421; the hub only answers to its own names.
+- **IPP browser-Origin block + scoped ACAPN (audit H6, fix).** The raw
+  IPP endpoint refuses web-page requests; the Private-Network CORS
+  answer is only sent to allowed origins.
+- **SSRF guards everywhere (audit H4/H7, fix).** page_url runs the
+  pdf_url guard (file:// + internal hosts -> 400); pdf_url re-checks
+  every redirect hop.
+- **Slowloris + big-body defence (audit M1, fix).** 30 s socket
+  timeout; >1 MB unauthenticated bodies are refused before reading.
+- **Token out of the logs (audit M2/L8, fix).** Startup URL masked,
+  no plain token on first start, /diagnostics log tail redacted.
+- **Print-integrity fixes (audit M3/M4/M5/M7, fix).** Cancel stops the
+  group fallback (and is no longer overwritten by a finished print);
+  instant jobs resolve printer groups; peer forwarding only on real
+  offline/error; RAW 9100 rejects oversized payloads, caps
+  connections at 8 and ENQUEUES printer-language passthrough (history
+  row + cancel/reprint + destination routing); RAW jobs and printer
+  timeouts no longer auto-retry into duplicate prints.
+- **Atomic /config apply (audit M6, fix).** Validate-then-apply in one
+  shot; peer_hubs entries stay real objects; printer_groups validated.
+- **Extension Website API allowlist (audit H3, fix).** Options >
+  Website API - empty list = page API OFF; upgraded installs are
+  migrated from their auto-print rules (htncr.org keeps working).
+- **Page-print quality (audit M8, fix).** Scripts stripped + <base
+  href> injected for "Print this page" - styles/images resolve again.
+- **Performance (audit P1/P2/P3, fix).** Worker wake-event + SQLite
+  WAL/synchronous=NORMAL; PDFs upload raw (no base64 detour); the
+  auto-print path reads document.contentType instead of double-
+  downloading; /jobs + /audit limits clamped.
+- **LOW batch (audit L1-L7, fix).** Bengali filenames keep combining
+  marks; Sumatra paper= fallback + print-to-default; Content-
+  Disposition sanitized (RFC 5987 for Unicode); auth-state lock; the
+  stale 2.6.2 extension version fallback updated.
 - **Responsive dashboard tables (fix).** Every dashboard card table
   (LAN sharing, Debug, Printers, Queue, Job history, Audit trail and
   the new **Print destination** card) used `overflow-x:auto` with

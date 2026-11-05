@@ -49,6 +49,14 @@ const DEFAULTS = {
                             // "Default print options" (copies, pages mode,
                             // quality draft/normal/high/DPI, per_sheet,
                             // duplex, scale, margins, paper, orientation)
+  apiSites: [],             // v2.9.1 (audit H3 fix): WEBSITE API allowlist.
+                            // Only these sites may call window.advprint /
+                            // printPdfLink. Empty = the page API is OFF
+                            // (any website could otherwise drive the
+                            // user's printers). One pattern per line, e.g.
+                            //   *://www.htncr.org/*
+                            //   https://reports.example.com/*
+                            // The extension's own pages are always allowed.
   rules: [
     {
       pattern: "*://www.htncr.org/lab/medical_reports/pdf/*",
@@ -280,13 +288,27 @@ function autoHealToken() {
 async function hubFetch(path, opts = {}, target = "self") {
   const cfg = await loadCfg();
   const base = hubBase(cfg, target);
-  const res = await fetch(base + path, {
+  let url = base + path;
+  const headers = Object.assign(
+    { "X-AdvPrint-Token": hubToken(cfg, target) },
+    opts.body ? { "Content-Type": "application/json" } : {}
+  );
+  let body = opts.body ? JSON.stringify(opts.body) : undefined;
+  if (opts.raw) {
+    // v2.9.1 (audit P3 fix): raw binary upload - params ride the query
+    // string, bytes go up as-is (no base64 inflation).
+    const qs = new URLSearchParams();
+    Object.entries(opts.rawQuery || {}).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== "") qs.set(k, String(v));
+    });
+    url += (url.includes("?") ? "&" : "?") + qs.toString();
+    headers["Content-Type"] = opts.contentType || "application/octet-stream";
+    body = opts.raw;
+  }
+  const res = await fetch(url, {
     method: opts.method || "GET",
-    headers: Object.assign(
-      { "X-AdvPrint-Token": hubToken(cfg, target) },
-      opts.body ? { "Content-Type": "application/json" } : {}
-    ),
-    body: opts.body ? JSON.stringify(opts.body) : undefined
+    headers: headers,
+    body: body
   });
   let data = {};
   try { data = await res.json(); } catch (_) {}
@@ -631,7 +653,7 @@ function applyPrintDefaults(payload, cfg) {
   return payload;
 }
 
-function hubPrint(payload) {
+function hubPrint(payload, rawBytes = null) {
   if (payload.printer === "__file__") {
     payload.destination = "file";
     payload.printer = "";
@@ -648,7 +670,16 @@ function hubPrint(payload) {
     // v2.8: the Share Send toggle decides WHERE this job prints -
     // the LAN PC hub (ON) or this PC's own hub (OFF).
     const target = await resolveTarget();
-    return hubFetch("/print", { method: "POST", body: payload }, target)
+    // v2.9.1 (audit P3 fix): when rawBytes are given the document goes
+    // up as a RAW application/pdf body with the params in the query
+    // string - the hub accepts that natively, so the old base64 detour
+    // (three full copies of every PDF inside the MV3 worker, +33%) is
+    // gone. Same retry/parking/auth handling as the JSON path.
+    const sendOpts = rawBytes
+      ? { method: "POST", raw: rawBytes, rawQuery: payload,
+          contentType: "application/pdf" }
+      : { method: "POST", body: payload };
+    return hubFetch("/print", sendOpts, target)
       .catch(async (e) => {
         // v2.2.0: 401 = the token is wrong. Flag it (KEY badge + popup
         // banner) and say so plainly; do NOT park the job - printing
@@ -713,17 +744,15 @@ async function printPdfResponse(res, url, title, printer, extra = {}) {
   if (buf.length < 5 || String.fromCharCode(...buf.slice(0, 5)) !== "%PDF-") {
     throw new HubError("URL did not return a PDF - got HTML? login expired?");
   }
-  let bin = "";
-  const CH = 32768;
-  for (let i = 0; i < buf.length; i += CH) {
-    bin += String.fromCharCode.apply(null, buf.subarray(i, i + CH));
-  }
-  const data = await hubPrint(Object.assign({
-    pdf_base64: btoa(bin),
+  // v2.9.1 (audit P3 fix): RAW upload instead of base64. The params ride
+  // the query string (title/printer/copies/pages/...), the PDF bytes go
+  // up once, as application/pdf. extra print options still apply.
+  const params = Object.assign({
     title: title || "document",
     printer: printer || "",
     source: "extension"
-  }, extra));
+  }, extra);
+  const data = await hubPrint(params, buf);
   // record in the shared 60 s dedupe so an auto rule will not print the
   // same URL again when a fallback tab (or the user) opens it right after
   await markPrinted(url);
@@ -734,9 +763,27 @@ async function printPdfResponse(res, url, title, printer, extra = {}) {
 }
 
 async function printPageDom(tab, title, printer) {
+  // v2.9.1 (audit M8 fix): the page is CLONED and CLEANED before it is
+  // sent to the hub - scripts are stripped (they re-executed inside the
+  // headless renderer and could mutate/wreck the printout), <noscript>
+  // junk is dropped, and a <base href> pins every relative image/CSS
+  // link to the live page's URL (without it the render was a no-CSS,
+  // no-image skeleton unless the site happened to use absolute URLs).
   const [result] = await chrome.scripting.executeScript({
     target: { tabId: tab.id },
-    func: () => document.documentElement.outerHTML
+    func: () => {
+      try {
+        const clone = document.documentElement.cloneNode(true);
+        clone.querySelectorAll("script, noscript").forEach((n) => n.remove());
+        const head = clone.querySelector("head") || clone;
+        const base = document.createElement("base");
+        base.href = document.location.href;
+        head.prepend(base);
+        return "<!DOCTYPE html>" + clone.outerHTML;
+      } catch (_) {
+        return document.documentElement.outerHTML;   // old behaviour
+      }
+    }
   });
   const html = result && result.result;
   if (!html) throw new HubError("could not read page content");
@@ -776,11 +823,18 @@ async function printTabAuto(tab) {
   const printer = await resolvePrinter(url, tab.title);
   const looksPdf = /\.pdf(\?|#|$)/i.test(url);
   if (looksPdf) return printPdfUrl(url, tab.title, printer);
-  // ask the server what it is: PDF content-type -> pdf path, else DOM path
+  // v2.9.1 (audit P2 fix): ask the ALREADY-LOADED tab what its content
+  // type is (document.contentType - zero network requests). The old
+  // code fetched the whole URL once just to read the header, and then
+  // fetched it AGAIN in printPdfUrl: two full downloads of every
+  // non-.pdf PDF the auto-print path handled.
   try {
-    const res = await fetch(url, { credentials: "include" });
-    const ct = (res.headers.get("content-type") || "").toLowerCase();
-    if (ct.includes("application/pdf")) {
+    const [probe] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: () => document.contentType || ""
+    });
+    if (probe && probe.result &&
+        String(probe.result).toLowerCase().includes("application/pdf")) {
       const out = await printPdfUrl(url, tab.title, printer);
       await flashBadge(true, "OK");
       return out;
@@ -1081,7 +1135,9 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
         }
         case "api": {
           // window.advprint developer API (see content/api.js)
-          reply(await handleApi(msg));
+          // v2.9.1 (audit H3 fix): the sender page is now checked against
+          // the Website API allowlist inside handleApi
+          reply(await handleApi(msg, sender));
           break;
         }
         case "printTab": {
@@ -1372,9 +1428,61 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   return true; // async reply
 });
 
-async function handleApi(msg) {
+/* ---------------- v2.9.1 (audit H3 fix): Website API allowlist ----
+ * window.advprint / printPdfLink used to be injectable into <all_urls>
+ * and callable by EVERY http(s) page - any tab you had open could print
+ * documents, read the job history and pass raw PDFs to the hub. The API
+ * is now restricted to cfg.apiSites (Options > Website API): the page's
+ * origin must match one entry. Patterns are like the auto-print rules:
+ *   *://www.htncr.org/*      scheme wildcard + host + path
+ *   https://reports.example.com/*
+ *   reports.example.com      bare host = any scheme
+ *   *.example.org            subdomain wildcard
+ */
+function apiSiteAllowed(origin, sites) {
+  if (!sites || !sites.length) return false;
+  let host = "", scheme = "";
+  try {
+    const u = new URL(origin || "");
+    host = u.hostname.toLowerCase();
+    scheme = (u.protocol || "").replace(":", "");
+  } catch (_) { return false; }
+  if (!host) return false;
+  for (const raw of sites) {
+    const pat = String(raw || "").trim().toLowerCase();
+    if (!pat) continue;
+    let pScheme = null, rest = pat;
+    const m = pat.match(/^([a-z*]+):\/\/(.*)$/);
+    if (m) { pScheme = m[1]; rest = m[2]; }
+    const pHost = rest.split("/")[0];
+    const schemeOk = !pScheme || pScheme === "*" || pScheme === scheme;
+    const hostOk = pHost === "*" || pHost === host ||
+      (pHost.startsWith("*.") &&
+       (host === pHost.slice(2) ||
+        host.endsWith("." + pHost.slice(2))));
+    if (schemeOk && hostOk) return true;
+  }
+  return false;
+}
+
+async function handleApi(msg, sender) {
   const cfg = await loadCfg();
   const req = msg.payload || {};
+  // v2.9.1 (audit H3 fix): the caller page must be on the Website API
+  // allowlist. The extension's own pages (options/popup) are always
+  // trusted. With an EMPTY list the page API is simply OFF everywhere.
+  const sOrigin = String((sender && (sender.origin || sender.url)) || "");
+  const ownExt = sOrigin.startsWith("chrome-extension://") ||
+                 sOrigin.startsWith("moz-extension://") ||
+                 sOrigin.startsWith("safari-web-extension://");
+  if (!ownExt) {
+    if (!apiSiteAllowed(sOrigin, cfg.apiSites)) {
+      throw new HubError(
+        "AdvPrint page API is not allowed for " +
+        (sOrigin || "this page") +
+        " - add the site in AdvPrint Pro Options > Website API");
+    }
+  }
   // read-only calls stay available even while disabled; printing calls
   // are refused so a disabled AdvPrint never prints from a page
   const PRINT_FNS = ["printPage", "printPdf", "print"];
@@ -1387,7 +1495,9 @@ async function handleApi(msg) {
     case "printers":
       return await hubFetch("/printers");
     case "history":
-      return await hubFetch("/jobs?limit=" + (req.limit || 20));
+      // v2.9.1 (audit L5 fix): clamp + integer the caller-provided limit
+      return await hubFetch("/jobs?limit=" +
+        Math.min(Math.max(parseInt(req.limit, 10) || 20, 1), 100));
     case "printPage": {
       const tab = (await chrome.tabs.query({ active: true, currentWindow: true }))[0];
       const printer = req.destination === "file" ? "__file__"
@@ -1546,6 +1656,25 @@ chrome.runtime.onInstalled.addListener(async () => {
   if (!st.initialized) {
     // seed defaults once so Options shows the htncr.org example rule
     await chrome.storage.local.set(Object.assign({}, DEFAULTS, { initialized: true }));
+  } else {
+    // v2.9.1 (audit H3 fix): ONE-TIME migration for installs that
+    // predate the Website API allowlist. Their existing auto-print rules
+    // (including the htncr.org lab integration) decide which sites keep
+    // window.advprint access, so the lab's printPdfLink calls keep
+    // working after the update. Fresh installs (empty apiSites) start
+    // with the API OFF until a site is added in Options.
+    const cur = await chrome.storage.local.get({ apiSites: null });
+    if (cur.apiSites === null) {
+      const hosts = new Set();
+      const rs = await chrome.storage.local.get({ rules: [] });
+      (rs.rules || []).forEach((r) => {
+        const p = String((r && r.pattern) || "");
+        const m = p.match(/^[a-z*]+:\/\/([^/]+)\//);
+        if (m && !m[1].startsWith("*")) hosts.add("*://" + m[1] + "/*");
+      });
+      hosts.add("*://www.htncr.org/*");      // the shipped example rule
+      await chrome.storage.local.set({ apiSites: [...hosts] });
+    }
   }
   await applyEnabledBadge();
   await updateRetryBadge();

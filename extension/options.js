@@ -448,6 +448,12 @@ async function loadAll() {
   $("failFallback").value = c.failFallback === "none" ? "none" : "tab";
   $("contextMenu").checked = !!c.contextMenu;
   $("badge").checked = !!c.badge;
+  // v2.9.1 (audit H3 fix): Website API allowlist editor
+  const sites = Array.isArray(c.apiSites) ? c.apiSites : [];
+  $("apiSites").value = sites.join("\n");
+  $("apiSitesCount").textContent =
+    sites.length ? sites.length + " site(s) allowed" :
+    "API currently OFF for all websites";
   applyPrintDefaults(c.printDefaults);
   await loadPrinters();
   $("defaultPrinter").value = c.defaultPrinter || "";
@@ -876,6 +882,18 @@ $("bAddRule").addEventListener("click", () => {
   $("rulesBody").appendChild(ruleRow({ pattern: "", printer: "", action: "auto", auto: false }));
 });
 $("bSave").addEventListener("click", saveAll);
+
+/* v2.9.1 (audit H3 fix): Website API allowlist editor */
+async function saveApiSites() {
+  const sites = $("apiSites").value.split(/\r?\n/)
+    .map((s) => s.trim()).filter(Boolean);
+  const r = await send({ type: "saveCfg", patch: { apiSites: sites } });
+  $("apiSitesCount").textContent =
+    sites.length ? sites.length + " site(s) allowed" :
+    "API currently OFF for all websites";
+  saved(r.ok ? "Website API list saved" : "Save failed: " + r.error);
+}
+$("bSaveApiSites").addEventListener("click", saveApiSites);
 $("bTestPage").addEventListener("click", async () => {
   const cfg = await send({ type: "getCfg" });
   if (!cfg.ok) return;

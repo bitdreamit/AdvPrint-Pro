@@ -118,7 +118,7 @@
     <h1>AdvPrint Pro</h1>
     <p>Print from any web page to any printer &middot; silent &middot; 100% local &middot; MIT open source</p>
   </div>
-  <span class="verchip" id="verChip">v2.9.1</span>
+  <span class="verchip" id="verChip">v3.0.0</span>
   <span class="pill" id="hubPill" title="Live hub status (checked automatically)"><i class="pdot" id="pillDot"></i><span id="pillTxt">checking…</span></span>
 </header>
 
@@ -394,6 +394,21 @@
     </section>
 
     <section style="border:none;padding:0;margin-top:18px">
+      <h2>Website API <span class="sub" style="display:inline">(security allowlist - added in v2.9.1)</span></h2>
+      <p class="sub">Sites allowed to call <b>window.advprint</b> / <b>printPdfLink</b> (the page developer API).
+        One pattern per line - e.g. <span class="mono">*://www.htncr.org/*</span> or
+        <span class="mono">https://reports.example.com/*</span> (<span class="mono">*.example.org</span> matches subdomains).
+        <b>Empty list = the page API is OFF for every website</b> - pages can no longer drive your printers
+        just because you have them open. The extension's own pages are always allowed.</p>
+      <textarea id="apiSites" rows="4" spellcheck="false" style="width:100%;max-width:640px;
+        font:12.5px/1.5 Consolas,monospace;border:1px solid var(--line);border-radius:7px;padding:8px"></textarea>
+      <div class="row" style="margin-top:8px">
+        <button id="bSaveApiSites">Save site list</button>
+        <span class="sub" id="apiSitesCount"></span>
+      </div>
+    </section>
+
+    <section style="border:none;padding:0;margin-top:18px">
       <h2>Behavior</h2>
       <div class="toggle">
         <input type="checkbox" id="autoPrintAllPdfs">
@@ -632,8 +647,8 @@
   <section class="panel" id="panel-about">
     <div id="api" style="margin-top:-70px;padding-top:70px"></div>
     <h2>About AdvPrint Pro</h2>
-    <p class="sub">Version <b id="aboutVer">2.9.1</b> &middot; AdvPrint (Advanced Printer) by Bit Dream IT - Innovative Healthcare Solutions &middot; MIT license &middot; 100% local - no cloud, no tracking.</p>
-    <p class="sub">v2.9.1 highlights: <b>network printer mode</b> - add this PC like a real IP printer: IPP URL <span class="mono">http://ip:9235/ipp/print</span> (Windows 10/11 "Select a shared printer by name") or the classic <b>TCP/IP port 9100</b> (JetDirect RAW) - Windows, phones and label apps print straight into the hub; <b>print destination</b>: jobs print on ANY printer - the OS default, any installed printer, or an upstream IP printer (RAW/IPP); PDF, JPEG, PostScript, PCL, ESC/POS and ZPL are routed automatically &middot; <b>responsive dashboard tables</b> - every column, button and option is visible on load, nothing hides inside an inner scroll &middot; phone <b>"Auth fail" on the Send portal QR is fixed</b> (works with every token setting) &middot; <b>one version everywhere</b>: popup, Options and About all read the manifest version &middot; <b>smooth tray menu</b>: every tray action now runs in its own thread.</p>
+    <p class="sub">Version <b id="aboutVer">3.0.0</b> &middot; AdvPrint (Advanced Printer) by Bit Dream IT - Innovative Healthcare Solutions &middot; MIT license &middot; 100% local - no cloud, no tracking.</p>
+    <p class="sub">v3.0.0 highlights: <b>network printer mode</b> - add this PC like a real IP printer: IPP URL <span class="mono">http://ip:9235/ipp/print</span> (Windows 10/11 "Select a shared printer by name") or the classic <b>TCP/IP port 9100</b> (JetDirect RAW) - Windows, phones and label apps print straight into the hub; <b>print destination</b>: jobs print on ANY printer - the OS default, any installed printer, or an upstream IP printer (RAW/IPP); PDF, JPEG, PostScript, PCL, ESC/POS and ZPL are routed automatically &middot; <b>responsive dashboard tables</b> - every column, button and option is visible on load, nothing hides inside an inner scroll &middot; phone <b>"Auth fail" on the Send portal QR is fixed</b> (works with every token setting) &middot; <b>one version everywhere</b>: popup, Options and About all read the manifest version &middot; <b>smooth tray menu</b>: every tray action now runs in its own thread.</p>
     <p class="sub">v2.7.0 highlights: <b>History manager</b> - filter, search, tick rows, <b>Reprint selected</b>, <b>Reprint all non-printed</b>, <b>Clear ALL history</b> (waiting jobs are never touched) &middot; <b>Share Receive / Send Mode</b> toggles right in the popup &middot; the dashboard's <b>Live debug &amp; test tool</b> now sits properly inside the page &middot; new API: <span class="mono">POST /jobs/bulk-reprint</span>, <span class="mono">POST /history/clear</span>.</p>
     <p class="sub">v2.3 highlights: <b>Debug tab</b> - see WHEN / WHY / WHERE printing fails (hub problems + browser error reports, one Copy button) &middot; <b>instant print</b> (Queue mode OFF) with auto-queue fallback when no printer is active &middot; v2.2: <b>Default print options</b> (copies, odd/even/custom pages, per-sheet n-up, <b>quality draft/normal/high AND DPI</b>, scale, margins, duplex, paper, layout) &middot; <b>LAN / PCs tab</b>: LAN sharing, peers, shift single jobs or the whole queue to another PC &middot; the hub serves the full user guide at <b>/docs</b>.</p>
     <div class="gh">

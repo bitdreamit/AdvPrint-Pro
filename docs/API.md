@@ -2,7 +2,14 @@
 
 Base URL: `http://127.0.0.1:9235` (default)
 Auth: header `X-AdvPrint-Token: <token>` (fresh installs: a private random token - read it with `python advprint.py token`; legacy `X-PrintHub-Token` header accepted), or `?token=` query on GET navigation, or `"token"` JSON field.
-All responses are JSON with an `"ok"` field. The API is CORS-open with `Access-Control-Allow-Private-Network: true`, so browser JS from any site can call it.
+All responses are JSON with an `"ok"` field. The API is CORS-open; `Access-Control-Allow-Private-Network` is answered only to origins on the `allowed_origins` list (v2.9.1).
+
+**v3.0.0 security rules** (independent-audit hardening, introduced in v2.9.1):
+- Requests whose `Host` header is not this hub's own name/loopback/LAN IP get `421`.
+- `POST /ipp/print` refuses browser `Origin` requests (`403`) - native IPP clients only.
+- POST bodies larger than 1 MB are refused (`401`) before reading unless the request carries the token (header or `?token=`). Keep sending the QR-link token on `/send` uploads - that still works.
+- `page_url` and every `pdf_url` redirect hop run the private-address guard (`400` on file:// / internal hosts).
+- `?limit=` on `/jobs` and `/audit` is clamped (1-200 / 1-1000).
 
 ---
 

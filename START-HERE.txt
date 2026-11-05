@@ -1,9 +1,15 @@
-AdvPrint Pro (Advanced Printer) v2.9.1 - START HERE
+AdvPrint Pro (Advanced Printer) v3.0.0 - START HERE
 ====================================================
 by Bit Dream IT - Innovative Healthcare Solutions
 
-WHAT'S NEW IN 2.9.1 (RESPONSIVE DASHBOARD + FULL DOCS + CLEAN VERSION)
+WHAT'S NEW IN 3.0.0 (SAME FEATURE SET AS 2.9.1, RENUMBERED)
 ----------------------------------------------------------------------
+WHY 3.0.0? The 2.9.1 packages were already distributed; new packages
+with the same number would collide with them (same version, different
+bytes). This release ships the IDENTICAL 2.9.1 feature set under the
+clean new number 3.0.0 - hub, dashboard badge, extension, Setup exe,
+deb and docs all say 3.0.0, and installs run straight over
+2.8.2 / 2.9.0 / 2.9.1.
 1) RESPONSIVE DASHBOARD TABLES - the reported annoyance is fixed: wide
    table rows used to disappear into a horizontal scroll INSIDE the
    card (you had to scroll to see the buttons / columns). Now every
@@ -12,15 +18,34 @@ WHAT'S NEW IN 2.9.1 (RESPONSIVE DASHBOARD + FULL DOCS + CLEAN VERSION)
    chips stay on one line, action buttons flow to the next line. On
    phones the cards go 2-up and the Print destination IP / Port /
    Proto fields stack. After updating, press Ctrl+F5 on the dashboard.
-2) FULL DOCUMENTATION refresh - the Full Guide (HTML + PDF, 14
+2) SECURITY HARDENING (independent audit - all 27 confirmed findings
+   fixed, 23 new regression tests, 212 tests pass):
+   - Job files can no longer collide (double-click = no more lost or
+     duplicated payloads); duplicate check runs before the file save.
+   - DNS-rebinding Host headers get 421; IPP refuses browser pages;
+     SSRF guards on page_url and every pdf_url redirect hop.
+   - 30 s socket timeout + >1 MB unauthenticated bodies refused
+     before reading; tokens never appear in hub.log or /diagnostics.
+   - Cancel actually stops printer-group fallback; RAW jobs and
+     printer timeouts no longer auto-retry into duplicate prints;
+     RAW 9100 passthrough gets a history row and can be canceled.
+   - Extension: Options > "Website API" allowlist - only listed sites
+     may call window.advprint / printPdfLink (upgraded installs keep
+     their existing sites; empty list = page API off). "Print this
+     page" keeps styles/images (scripts stripped, <base> injected).
+   - Faster: worker wake-event + SQLite WAL; PDFs upload raw instead
+     of base64.
+3) FULL DOCUMENTATION refresh - the Full Guide (HTML + PDF, 14
    chapters) now covers the whole 2.9.x feature set end to end:
    network printer mode (IPP /ipp/print + RAW 9100), the Print
    destination card, POST /ip-printer/test, the /health destination
    fields, all new config keys, and new troubleshooting rows.
-3) CLEAN VERSION NUMBERING - this tree was briefly labelled 2.9.0
-   twice; the follow-up now ships as 2.9.1 (hub, dashboard badge,
-   extension manifest/popup/Options/About, Setup exe, deb, docs - all
-   say 2.9.1). 2.9.1 = the 2.9.0 features below + this fix + docs.
+4) CLEAN VERSION NUMBERING - this tree was briefly labelled 2.9.0
+   twice, then shipped as 2.9.1; because 2.9.1 was already
+   distributed, THIS release renumbers the same feature set as 3.0.0
+   (hub, dashboard badge, extension manifest/popup/Options/About,
+   Setup exe, deb, docs - all say 3.0.0). 3.0.0 = the 2.9.1 features
+   below + these fixes + docs, under a conflict-free number.
 
 WHAT'S NEW IN 2.9.0 (NETWORK PRINTER MODE + PHONE AUTH FIX + SMOOTH TRAY)
 ----------------------------------------------------------------------------
@@ -82,8 +107,8 @@ WHAT'S NEW IN 2.8.2 (LAN SHARING APPLIES LIVE + FIREWALL ONE-CLICK)
      reports PASS/FAIL in the message bar: PASS + other PC still
      failing = firewall (click the button); FAIL = listener problem
      (hub.log says exactly why).
-  FILES IN THIS RELEASE: AdvPrint-Pro-Setup-2.9.1.exe (Windows),
-  advprint-pro_2.9.1_all.deb (Linux), AdvPrint-Pro-2.9.1-source.zip.
+  FILES IN THIS RELEASE: AdvPrint-Pro-Setup-3.0.0.exe (Windows),
+  advprint-pro_3.0.0_all.deb (Linux), AdvPrint-Pro-3.0.0-source.zip.
 
 WHAT'S NEW IN 2.8.1 (SEND-PORTAL QR + ONE-CLICK LAN INVITE)
 ===========================================================
@@ -104,8 +129,8 @@ WHAT'S NEW IN 2.8.1 (SEND-PORTAL QR + ONE-CLICK LAN INVITE)
      - Safe by design: loopback-only, private-LAN URLs only, explicit
        click required, every accept is audited (peer.connected).
   3. NOTHING REMOVED - everything from 2.8.0 below is unchanged.
-  FILES IN THIS RELEASE: AdvPrint-Pro-Setup-2.9.1.exe (Windows),
-  advprint-pro_2.9.1_all.deb (Linux), AdvPrint-Pro-2.9.1-source.zip.
+  FILES IN THIS RELEASE: AdvPrint-Pro-Setup-3.0.0.exe (Windows),
+  advprint-pro_3.0.0_all.deb (Linux), AdvPrint-Pro-3.0.0-source.zip.
 
 WHAT'S NEW IN 2.8.0 (TWO HUB PROFILES + DROPZONE + BULLET-PROOF UNINSTALL)
 ==========================================================================
@@ -133,13 +158,13 @@ WHAT'S NEW IN 2.8.0 (TWO HUB PROFILES + DROPZONE + BULLET-PROOF UNINSTALL)
      service before touching files, wipes old program folders and
      frees port 9235 - "some file abort install" is fixed. The
      service is reinstalled automatically on upgrade.
-  9. SILENT INSTALL: AdvPrint-Pro-Setup-2.9.1.exe /S - the exe
+  9. SILENT INSTALL: AdvPrint-Pro-Setup-3.0.0.exe /S - the exe
      requests admin by itself (UAC once), the hub auto-starts and
      the firewall rule for LAN sharing is added automatically.
  10. NEW LOGO: the letter A drawn as a printer - the crossbar is the
      output slot and a printed page slides out of it.
-  FILES IN THIS RELEASE: AdvPrint-Pro-Setup-2.9.1.exe (Windows),
-  advprint-pro_2.9.1_all.deb (Linux), AdvPrint-Pro-2.9.1-source.zip.
+  FILES IN THIS RELEASE: AdvPrint-Pro-Setup-3.0.0.exe (Windows),
+  advprint-pro_3.0.0_all.deb (Linux), AdvPrint-Pro-3.0.0-source.zip.
 
 WHAT'S NEW IN 2.7.0 (HISTORY MANAGER + SHARE MODES + CLEAN LAYOUT)
   0. JOB HISTORY IS NOW A REAL MANAGER (hub dashboard "Job history"
@@ -428,7 +453,7 @@ WHY DID MY OLD VERSION SAY "cannot access" ON THE SETUP EXE?
   No manual Security-tab work is needed anywhere.
 
 UPDATE IN 3 STEPS
-  1. Run AdvPrint-Pro-Setup-2.9.1.exe (installs over the old
+  1. Run AdvPrint-Pro-Setup-3.0.0.exe (installs over the old
      version; history + settings migrate to .advprint automatically).
      Portable users: extract the new zip over the old folder, then
      AdvPrint-Tool.bat > [13] once (unblocks), then [1] Start.
@@ -462,12 +487,12 @@ FILES IN THIS PACKAGE
                    AdvPrint-Pro-Full-Guide.html + .pdf, release notes
   tests\           pytest suite + pytest.ini
   installer\       setup.nsi - NSIS 3 source that builds
-                   AdvPrint-Pro-Setup-2.9.1.exe (per-machine, UAC)
+                   AdvPrint-Pro-Setup-3.0.0.exe (per-machine, UAC)
   prebuilt\        READY installers, no build needed:
-                   AdvPrint-Pro-Setup-2.9.1.exe (Windows setup,
+                   AdvPrint-Pro-Setup-3.0.0.exe (Windows setup,
                    ~9.5 MB - run it, UAC appears, done)
-                   advprint-pro_2.9.1_all.deb (Linux deb -
-                   sudo dpkg -i advprint-pro_2.9.1_all.deb)
+                   advprint-pro_3.0.0_all.deb (Linux deb -
+                   sudo dpkg -i advprint-pro_3.0.0_all.deb)
   README.md / CHANGELOG.md / LICENSE / pytest.ini / .gitignore
   SHA256SUMS.txt
 

@@ -131,13 +131,28 @@ def hub(tmp_path_factory):
 
 @pytest.fixture()
 def clean_queue(hub):
-    """Fresh queue state + printed-log per test."""
-    advprint.RESUME_EVENT.set()
-    hub.printed.clear()
-    hub.raw_printed.clear()
+    """Fresh queue state + printed-log per test.
+    v2.9.1: the worker wakes INSTANTLY now (no 0.35 s poll), so a job
+    left queued by a previous test can be picked up while this fixture
+    runs. The fixture FREEZES the worker first, cancels leftovers, waits
+    for the in-flight print to finish, and only then clears the logs -
+    no stale print can pollute the next test."""
+    advprint.RESUME_EVENT.clear()          # freeze: worker picks nothing new
     for j in advprint.db_list(limit=500):
         if j["status"] in ("queued", "printing", "held", "scheduled"):
             advprint.db_update(j["id"], status="canceled", error="test reset")
+
+    def _drained():
+        return (not advprint._WORKER_BUSY[0]
+                and not [j for j in advprint.db_list(limit=500)
+                         if j["status"] in ("queued", "printing")])
+    assert wait_until(_drained, timeout=10), \
+        "worker kept printing a canceled job - queue never drained"
+    # grace window: let the just-finished print's log append settle
+    time.sleep(0.1)
+    hub.printed.clear()
+    hub.raw_printed.clear()
+    advprint.RESUME_EVENT.set()            # thaw: nothing left to pick
     yield hub
 
 

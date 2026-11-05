@@ -29,7 +29,7 @@ from conftest import wait_until  # noqa: E402
 def test_health_open_no_token(hub):
     code, d = hub.get("/health", token=None)
     assert code == 200 and d["ok"] is True
-    assert d["version"] == "2.9.1"
+    assert d["version"] == "3.0.0"
     assert d["v2"] is True
     assert "100% local" in d["branding"]
 
@@ -539,13 +539,13 @@ def test_v1_database_migration(tmp_path):
 
 
 def test_version_anchors():
-    assert advprint.VERSION == "2.9.1"
+    assert advprint.VERSION == "3.0.0"
     # repo/package layout: tool/windows/portable/hub -> root/extension
     root = os.path.dirname(os.path.dirname(os.path.dirname(
         os.path.dirname(os.path.dirname(advprint.__file__)))))
     ext = os.path.join(root, "extension", "manifest.json")
     with open(ext) as f:
-        assert json.load(f)["version"] == "2.9.1"
+        assert json.load(f)["version"] == "3.0.0"
 
 
 def test_log_rotation(tmp_path):
@@ -646,6 +646,10 @@ def test_v21_queue_shift_to_fake_peer(hub, clean_queue, cfg_reset):
     pport = psrv.server_address[1]
     th.Thread(target=psrv.serve_forever, daemon=True).start()
     try:
+        # v2.9.1: the worker now claims jobs in ~1 ms (wake event), so the
+        # job must be posted while the queue is PAUSED - otherwise it is
+        # printed before the shift arrives and there is nothing to shift.
+        hub.post("/queue/pause", {})
         code, d = hub.post("/print", {"text": "shift me", "title": "sh",
                                       "kind": "thermal", "printer": "P1"})
         jid = d["job_id"]
@@ -664,6 +668,7 @@ def test_v21_queue_shift_to_fake_peer(hub, clean_queue, cfg_reset):
             "ids": [424242]})
         assert code == 200 and d["shifted_count"] == 0
     finally:
+        hub.post("/queue/resume", {})
         psrv.shutdown()
 
 
@@ -786,7 +791,9 @@ def test_v221_print_response_has_status(hub, clean_queue):
     assert d["status"] == "queued"
     code, d = hub.post("/print", {"text": "direct", "title": "st2",
                                   "queue": False})
-    assert code == 200 and d["status"] == "printing"
+    assert code == 200 and d["status"] in ("printing", "printed")
+    # v2.9.1: with the instant worker the direct job can FINISH before the
+    # response is built - "printed" is the truthful answer then
 
 
 def test_v221_get_single_job(hub, clean_queue):
@@ -818,10 +825,13 @@ def test_v221_print_now_bypasses_hold(hub, clean_queue, cfg_reset, monkeypatch):
 
 
 def test_v221_print_now_bypasses_pause(hub, clean_queue):
-    code, d = hub.post("/print", {"text": "paused job", "title": "p1"})
-    jid = d["job_id"]
+    # v2.9.1: pause FIRST - the worker now wakes instantly (no 0.35 s
+    # poll), so a job posted while the queue is running can print before
+    # the pause arrives; pausing first makes the scenario deterministic.
     hub.post("/queue/pause", {})
     try:
+        code, d = hub.post("/print", {"text": "paused job", "title": "p1"})
+        jid = d["job_id"]
         assert wait_until(lambda: (advprint.db_get(jid) or {})
                           .get("status") == "queued")
         code, d = hub.post("/jobs/%d/print-now" % jid, {})
@@ -1052,7 +1062,7 @@ def test_v26_token_current_loopback_only(hub):
     code, d = hub.get("/token/current")
     assert code == 200 and d["ok"] is True
     assert d["token"] == hub.token
-    assert d["app"] == "AdvPrint Pro" and d["version"] == "2.9.1"
+    assert d["app"] == "AdvPrint Pro" and d["version"] == "3.0.0"
 
 
 def test_v26_token_current_rejects_remote(hub):
@@ -1126,8 +1136,8 @@ def test_v261_tray_module_ships_and_parses():
 
 
 def test_v261_version_single_source():
-    assert advprint.VERSION == "2.9.1"
-    assert advprint.VERSION_NAME.startswith("v2.9.1")
+    assert advprint.VERSION == "3.0.0"
+    assert advprint.VERSION_NAME.startswith("v3.0.0")
 
 
 def test_v261_cli_cmd_full_path():
@@ -1293,7 +1303,7 @@ def test_v264_setup_exe_kills_zombie_hubs():
     assert "Stop-Process -Name AdvPrintPro" in stopps
     assert "Stop-Process -Name PrintHubPro" in stopps
     assert "sc.exe delete AdvPrint" in stopps
-    assert 'VIProductVersion "2.9.1.0"' in src
+    assert 'VIProductVersion "3.0.0.0"' in src
 
 
 # ---------------- v2.6.8: printer-name self-heal + menu guard ----------
@@ -1576,7 +1586,7 @@ def _v280_pdf(tmp_path, name="z.pdf", big="AdvPrint Pro v2.8 test"):
 
 
 def test_v280_version_and_config_keys():
-    assert advprint.VERSION == "2.9.1"
+    assert advprint.VERSION == "3.0.0"
     for k in ("drop_enabled", "drop_dir", "drop_delete"):
         assert k in advprint.CFG and k in advprint.CONFIG_KEYS
         assert k in advprint.CONFIG_TYPES
@@ -1610,8 +1620,17 @@ def test_v280_dropzone_watcher_prints_and_moves(hub, clean_queue, cfg_reset,
     advprint._drop_scan()          # second poll: stable -> picks it up
     assert not os.path.exists(dst), "PDF must move out of the zone"
     assert os.path.exists(os.path.join(zone, "done", "dropped.pdf"))
-    assert wait_until(lambda: len(hub.printed) == before + 1), \
+
+    # v2.9.1: assert on THIS job's DB row (immune to prints from other
+    # tests' leftover threads landing in hub.printed mid-test)
+    def _dz_printed():
+        rows = [j for j in advprint.db_list(limit=30)
+                if j["source"] == "dropzone"
+                and j["title"] == "DropZone: dropped"]
+        return rows and rows[0]["status"] == "printed"
+    assert wait_until(_dz_printed, timeout=10), \
         "the dropzone job must actually print (worker is async)"
+    assert len(hub.printed) >= before + 1
     rows = [j for j in advprint.db_list(limit=20)
             if j["source"] == "dropzone" and j["title"] == "DropZone: dropped"]
     assert rows, "a dropzone job must be in the history"
@@ -1792,7 +1811,7 @@ def test_v280_source_wiring_restart_tray_tool_installer():
     nsi = open(os.path.join(root, "installer", "setup.nsi"),
                encoding="utf-8").read()
     assert "hub-stop.ps1" in nsi
-    assert "2.9.1" in nsi and "${IfNot} ${Silent}" in nsi
+    assert "3.0.0" in nsi and "${IfNot} ${Silent}" in nsi
     # extension dual profile
     ext = os.path.join(root, "extension")
     bg = open(os.path.join(ext, "background.js"), encoding="utf-8").read()
@@ -1804,7 +1823,7 @@ def test_v280_source_wiring_restart_tray_tool_installer():
     opt = open(os.path.join(ext, "options.html"), encoding="utf-8").read()
     assert "hubUrlLan" in opt and "bDashboardLan" in opt
     man = json.load(open(os.path.join(ext, "manifest.json")))
-    assert man["version"] == "2.9.1"
+    assert man["version"] == "3.0.0"
 
 
 def test_v280_lan_profile_never_auto_heals():
@@ -2057,8 +2076,8 @@ def test_v281_setup_nsi_version():
         root = os.path.dirname(root)
     nsi = open(os.path.join(root, "installer", "setup.nsi"),
                encoding="utf-8", errors="replace").read()
-    assert 'VIProductVersion "2.9.1.0"' in nsi
-    assert "AdvPrint-Pro-Setup-2.9.1.exe" in nsi
+    assert 'VIProductVersion "3.0.0.0"' in nsi
+    assert "AdvPrint-Pro-Setup-3.0.0.exe" in nsi
 
 
 # ============================================================
@@ -2274,7 +2293,11 @@ def test_v290_ipp_print_job_zpl_goes_raw(hub, clean_queue):
     assert code == 200
     ver, status, rid, rest = _ipp_read(raw)
     assert status == 0x0000
-    assert len(hub.raw_printed) == before + 1
+    # v2.9.1 (M5 fix): the payload is ENQUEUED with a history row and
+    # printed by the FIFO worker (pause/cancel/reprint now apply) - so
+    # the printout arrives a beat after the 200 answer.
+    assert wait_until(lambda: len(hub.raw_printed) >= before + 1), \
+        "the IPP ZPL job must print through the queue"
     assert hub.raw_printed[-1][0].startswith(b"^XA")
 
 
@@ -2313,6 +2336,10 @@ def test_v900_ipp_garbage_body(hub):
 
 
 def test_v290_route_print_payload_sniffs_languages(hub, clean_queue):
+    # v2.9.1 (M5 fix): printer-language passthrough now ENQUEUES (history
+    # row, pause/cancel/reprint, dest_mode routing) instead of printing
+    # synchronously inside the socket thread - so the printouts arrive
+    # through the FIFO worker a moment later.
     before = len(hub.raw_printed)
     job, kind = advprint.route_print_payload(MINI_PDF, "t", "10.0.0.9")
     assert kind == "pdf"
@@ -2326,7 +2353,10 @@ def test_v290_route_print_payload_sniffs_languages(hub, clean_queue):
     assert kind == "zpl"
     job, kind = advprint.route_print_payload(b"\x1b@text", "t", "10.0.0.9")
     assert kind == "escpos"
-    assert len(hub.raw_printed) == before + 4
+    assert wait_until(lambda: len(hub.raw_printed) >= before + 4), \
+        "the raw passthrough jobs must print through the queue"
+    # every passthrough job got a real history row (was job_id=0)
+    assert job > 0
 
 
 def test_v290_route_print_payload_rejects_oversize(hub, cfg_reset, monkeypatch):

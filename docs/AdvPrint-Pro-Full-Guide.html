@@ -61,7 +61,7 @@
   <div class="sub">Advanced Printer — silent printing for every web page, PDF, application and receipt printer</div>
   <div class="org">by Bit Dream IT — Innovative Healthcare Solutions</div>
   <div class="meta">
-    Version 2.9.1 — Enterprise Edition<br>
+    Version 3.0.0 — Enterprise Edition<br>
     Full Setup Guide — A to Z<br><br>
     100% local · no cloud · no tracking · MIT licensed<br>
     Windows 7/8/10/11 · Windows Server · Debian/Ubuntu/Mint · macOS
@@ -124,8 +124,8 @@ Your printer — or ~/.advprint/files if the destination is "save as PDF"</pre>
 <h2>2. Install in 3 minutes</h2>
 <h3>2.1 Windows — the one-time installer (recommended)</h3>
 <ol>
-<li>Download <span class="mono">AdvPrint-Pro-2.9.1-source.zip</span> and unzip it.</li>
-<li>Run <span class="mono">AdvPrint-Pro-Setup-2.9.1.exe</span>. Windows asks for admin once (UAC — the exe requests it itself), no Python needed —
+<li>Download <span class="mono">AdvPrint-Pro-3.0.0-source.zip</span> and unzip it.</li>
+<li>Run <span class="mono">AdvPrint-Pro-Setup-3.0.0.exe</span>. Windows asks for admin once (UAC — the exe requests it itself), no Python needed —
     the setup carries a <b>complete Python 3.11.9 runtime</b> (this is exactly what the broken 2.5.3 download missed:
     if an installer is smaller than ~9&nbsp;MB it is incomplete — re-download).</li>
 <li>Setup registers the <b>Startup app "AdvPrint Pro"</b> (Task Manager → Startup apps), creates Start Menu
@@ -146,7 +146,7 @@ the hub is a plain stdlib Python script, signed-off and open source (MIT).</div>
 </ol>
 
 <h3>2.3 Linux / Debian / Ubuntu / Mint — the .deb</h3>
-<pre>sudo apt install ./advprint-pro_2.9.1_all.deb
+<pre>sudo apt install ./advprint-pro_3.0.0_all.deb
 advprint-start            # start now
 advprint token            # show the current token
 advprint livetest         # full A-to-Z self-test</pre>
@@ -319,7 +319,7 @@ Files land in <span class="mono">~/Downloads/AdvPrint</span> or the folder set i
 <!-- ============ 7 ============ -->
 <h2>7. LAN / IP — share one printer with every PC</h2>
 <div class="note" style="border:1px solid #a7f3d0;background:#ecfdf5;border-radius:10px;padding:12px 14px;margin:10px 0 14px">
-<b>v2.9.1 — RESPONSIVE DASHBOARD + POLISH.</b> The dashboard tables (LAN card, Debug, Printers, Queue, Job history, Audit, <b>Print destination</b>) no longer push wide rows into an inner horizontal scrollbar: cells wrap, long titles break, action buttons flow onto the next line - <b>every column and option is visible the moment the page loads</b>, on any window width (and on phones the cards go 2-up, controls shrink). The IP / Port / Proto fields of the Print destination card stack cleanly when they appear. Pure CSS/JS change - no settings, no data migration, install over 2.9.0 (or 2.8.2) and refresh.<br><br>
+<b>v3.0.0 — RENUMBERED RELEASE.</b> The v2.9.1 packages were already distributed, so this release ships the identical v2.9.1 feature set under the clean new number 3.0.0 - no feature added or removed; every surface (hub, dashboard badge, extension, Setup exe, deb, docs) says 3.0.0 and the new packages can never collide with installed 2.9.1 copies. Installs straight over 2.8.2 / 2.9.0 / 2.9.1.<br><br><b>v2.9.1 — RESPONSIVE DASHBOARD + POLISH.</b> The dashboard tables (LAN card, Debug, Printers, Queue, Job history, Audit, <b>Print destination</b>) no longer push wide rows into an inner horizontal scrollbar: cells wrap, long titles break, action buttons flow onto the next line - <b>every column and option is visible the moment the page loads</b>, on any window width (and on phones the cards go 2-up, controls shrink). The IP / Port / Proto fields of the Print destination card stack cleanly when they appear. Pure CSS/JS change - no settings, no data migration, install over 2.9.0 (or 2.8.2) and refresh.<br><br>
 <b>v2.9.0 — NETWORK PRINTER MODE + PHONE AUTH FIX + SMOOTH TRAY.</b> The hub is now a real IP-printable network printer: add it from another PC with “Select a shared printer by name” → <span class="mono">http://&lt;this-PC-IP&gt;:9235/ipp/print</span> (Windows installs it with the built-in Microsoft IPP Class Driver) or the classic <b>“Add a printer using TCP/IP address”</b> flow — the hub listens on <b>TCP 9100</b> (JetDirect RAW) while LAN sharing is ON. PDF, JPEG, PostScript, PCL, ESC/POS and ZPL payloads are all routed to the real printer and every job lands in History + Audit. <b>Print destination — ANY printer:</b> the new dashboard card picks where every job prints — the OS <b>default printer</b>, <b>any installed printer</b>, or an upstream <b>IP printer</b> (a real network printer at IP:port, RAW JetDirect or IPP; the <b>Test</b> button pings it, and with <span class="mono">dest_mode:"ip"</span> the queue holds jobs while that printer is unreachable). Phones and PCs that added this hub as their IP printer print through exactly that destination; the LAN card <b>“IP Printer mode”</b> row shows the whole chain with a one-click <b>Turn on</b>. The phone <b>“Auth fail” on the Send portal QR is fixed</b> (the portal upload now accepts the token from the QR link in every token mode). The extension shows <b>one version everywhere</b> (read from the manifest), and every tray action runs in its own thread so the menu never lags.<br><br><b>v2.8.2 — LAN SHARING APPLIES LIVE + FIREWALL ONE-CLICK.</b> The reported problem “LAN sharing ON but the LAN IP does not answer” is fixed at the root: no restart needed any more, the firewall state is visible, one click adds the rule, and Test LAN pinpoints the failing side.<br><br>
 <b>v2.8.1 — QR CODE FOR PHONES + ONE-CLICK INVITE (both 100% local).</b><br>
 <b>Send portal (phones)</b> row on the dashboard LAN card: <b>Copy send URL</b> copies
@@ -567,7 +567,7 @@ Linux: <span class="mono">sudo apt remove advprint-pro</span> + <span class="mon
 the tray always opens the dashboard with the right token, and the error page itself offers the one-click fix.
 That is the v2.6 promise: <b>auto security, zero manual Security-tab surgery</b>.</div>
 
-<p style="margin-top:18px;color:#64748b;font-size:9.5px">AdvPrint Pro (Advanced Printer) v2.9.1 —
+<p style="margin-top:18px;color:#64748b;font-size:9.5px">AdvPrint Pro (Advanced Printer) v3.0.0 —
 by Bit Dream IT — Innovative Healthcare Solutions — MIT license — 100% local, no cloud, no tracking.
 Repository: github.com/bitdreamit/AdvPrint-Pro</p>
 

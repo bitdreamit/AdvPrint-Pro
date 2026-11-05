@@ -50,6 +50,7 @@ import io
 import ipaddress
 import json
 import os
+import pathlib
 import re
 import secrets
 import shutil
@@ -60,6 +61,7 @@ import sys
 import tempfile
 import threading
 import time
+import unicodedata
 import urllib.error
 import urllib.request
 import webbrowser
@@ -93,8 +95,8 @@ if _HUB_DIR not in sys.path:
     sys.path.insert(0, _HUB_DIR)
 
 
-VERSION = "2.9.1"
-VERSION_NAME = ("v2.9.1 (NETWORK PRINTER MODE: add this PC like a real"
+VERSION = "3.0.0"
+VERSION_NAME = ("v3.0.0 (NETWORK PRINTER MODE: add this PC like a real"
                 " IP printer - IPP at /ipp/print for Windows 10/11 'add a"
                 " printer by URL' and phone print services, plus a"
                 " JetDirect RAW listener on TCP 9100 for the classic"
@@ -109,7 +111,7 @@ VERSION_NAME = ("v2.9.1 (NETWORK PRINTER MODE: add this PC like a real"
                 " any installed printer, or an upstream IP printer (raw"
                 " JetDirect or IPP): PCs and phones that add this hub as"
                 " THEIR network printer print through exactly that"
-                " destination. NEW IN 2.9.1: responsive dashboard tables"
+                " destination. v3.0.0 ships the full 2.9.1 feature set under the new number: responsive dashboard tables"
                 " - every column, button and option is visible on load,"
                 " no more content hidden inside an inner scroll)")
 FULL_BRAND = ("AdvPrint Pro (Advanced Printer) by "
@@ -404,9 +406,13 @@ def init_config():
             disk["token_header_only"] = True   # strict mode for new installs
             CFG["token_header_only"] = True
             write_config_file(disk)
+            # v2.9.1 (audit M2 fix): the PLAIN token no longer goes into
+            # hub.log (anyone who can read the log could read the token).
+            # The token lives in config.json; print WHERE it is instead.
             log("[TOKEN] new install - generated a private random token and"
                 " saved it to %s" % config_path())
-            log("[TOKEN] token: %s" % CFG["token"])
+            log("[TOKEN] read it from the tray menu (Open dashboard), from"
+                " %s, or run: %s" % (config_path(), cli_cmd("token")))
             log("[TOKEN] enter this token once in the extension Options page.")
         else:
             # OLD INSTALL (1.x): keep the legacy default so nothing breaks
@@ -588,10 +594,23 @@ def db():
     conn.row_factory = sqlite3.Row
     return conn
 
+def db_tune(conn):
+    """v2.9.1 (audit P1 fix): WAL journal + NORMAL sync. The old rollback
+    journal made every write an exclusive lock and every read of the
+    worker's queue an fsync-heavy round trip on slow Windows disks; WAL
+    lets readers and the single writer proceed concurrently. Called once
+    at startup (the pragmas are persistent per database file)."""
+    try:
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA synchronous=NORMAL")
+    except Exception:
+        pass
+
 def db_init():
     ensure_dirs()
     init_config()
     with _DB_LOCK, db() as conn:
+        db_tune(conn)              # v2.9.1 (P1): WAL + synchronous=NORMAL
         conn.execute(
             """CREATE TABLE IF NOT EXISTS jobs (
                    id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1517,7 +1536,8 @@ def image_pdf_bytes(jpeg, title="screenshot", paper="a4", landscape=None):
     out += ("trailer\n<< /Size %d /Root %d 0 R >>\nstartxref\n%d\n%%%%EOF\n"
             % (cat_id + 1, cat_id, xref)).encode()
     fname = "%s-%s.pdf" % (title or "image", datetime.now().strftime("%Y%m%d%H%M%S"))
-    return bytes(out), "".join(c for c in fname if c.isalnum() or c in "-._")
+    return bytes(out), sanitize_fname(fname, maxlen=80, extra="-._",
+                                      fallback="download.pdf")
 
 def pdf_page_count(data):
     """Count /Type /Page objects in a PDF (v2.1). Best effort - None when
@@ -1760,7 +1780,8 @@ def thermal_pdf_bytes(text, title="receipt", paper="thermal",
     out += ("trailer\n<< /Size %d /Root %d 0 R >>\nstartxref\n%d\n%%%%EOF\n"
             % (next_id, cat_id, xref)).encode()
     fname = "%s-%s.pdf" % (title or "receipt", datetime.now().strftime("%Y%m%d%H%M%S"))
-    return bytes(out), "".join(c for c in fname if c.isalnum() or c in "-._")
+    return bytes(out), sanitize_fname(fname, maxlen=80, extra="-._",
+                                      fallback="download.pdf")
 
 def pages_h(page_lines):
     MM = 72 / 25.4
@@ -1770,63 +1791,110 @@ def pages_h(page_lines):
 # ------------------------------------------------------------
 # HTML / web page -> PDF via headless Chrome or Edge (zero pip)
 # ------------------------------------------------------------
+# v2.9.1 (audit H2/P4 fix): at most TWO headless-browser renders run at
+# the same time - each render is a full Chrome instance (~200 MB RAM) and
+# an unbounded number of concurrent /print html|page_url requests used to
+# spawn one each (memory exhaustion, and two requests even shared the same
+# temp file name -> one request could read/delete the other's PDF).
+_BROWSER_SEM = threading.BoundedSemaphore(2)
+
+def _kill_proc_tree(proc):
+    """v2.9.1 (audit P4 fix): kill a timed-out headless browser AND its
+    grandchild renderer processes. subprocess.run(timeout=) only kills the
+    direct child, so Chrome's renderer children used to linger forever.
+    """
+    try:
+        if IS_WIN:
+            subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                           capture_output=True, creationflags=HIDE)
+        else:
+            try:
+                os.killpg(os.getpgid(proc.pid), 15)
+            except (ProcessLookupError, PermissionError, OSError):
+                proc.kill()
+    except Exception:
+        try:
+            proc.kill()
+        except Exception:
+            pass
+
 def html_to_pdf_bytes(source, is_url=True, title="page"):
     """
     Render an HTML string or a URL to PDF using headless Chrome/Edge.
     Uses a throwaway profile dir so it never fights the user's browser.
     Returns (pdf_bytes, suggested_filename).
+    v2.9.1 (audit H2/P4 fix): every render gets its OWN temp directory for
+    the output PDF and the local HTML copy (the old code named them by
+    PID only in the SHARED temp dir, so concurrent requests overwrote /
+    deleted each other's files), builds file: URLs with pathlib (no more
+    hand-built "file:///" strings that broke on paths with spaces or '#'),
+    runs under a 2-slot semaphore, and kills the whole process tree on
+    timeout.
     """
     exe = find_browser()
     if not exe:
         raise RuntimeError(
             "No Chrome/Edge found for page printing. Install Google Chrome"
             " (or print PDFs instead - SumatraPDF handles those directly).")
-    out_path = os.path.join(tempfile.gettempdir(),
-                            "advprint-%s.pdf" % os.getpid())
-    profile = tempfile.mkdtemp(prefix="advprint-profile-")
-    if is_url:
-        target = source
-    else:
-        html_path = os.path.join(tempfile.gettempdir(),
-                                 "advprint-%s.html" % os.getpid())
-        with open(html_path, "w", encoding="utf-8") as f:
-            f.write(source)
-        target = "file:///" + html_path.replace("\\", "/").lstrip("/")
+    workdir = tempfile.mkdtemp(prefix="advprint-page-")
+    profile = os.path.join(workdir, "profile")
+    out_path = os.path.join(workdir, "out.pdf")
+    with _BROWSER_SEM:
+        try:
+            if is_url:
+                target = source
+            else:
+                html_path = os.path.join(workdir, "page.html")
+                with open(html_path, "w", encoding="utf-8") as f:
+                    f.write(source)
+                target = pathlib.Path(html_path).as_uri()
 
-    def attempt(headless_flag):
-        cmd = [exe, headless_flag, "--disable-gpu", "--no-first-run",
-               "--disable-extensions", "--user-data-dir=" + profile,
-               "--no-pdf-header-footer",
-               "--print-to-pdf=" + out_path, target]
-        if IS_WIN:
-            return subprocess.run(cmd, capture_output=True, timeout=120,
-                                  creationflags=HIDE)
-        return subprocess.run(cmd, capture_output=True, timeout=120)
+            def attempt(headless_flag):
+                cmd = [exe, headless_flag, "--disable-gpu", "--no-first-run",
+                       "--disable-extensions", "--user-data-dir=" + profile,
+                       "--no-pdf-header-footer",
+                       "--print-to-pdf=" + out_path, target]
+                if IS_WIN:
+                    return subprocess.Popen(cmd, stdout=subprocess.PIPE,
+                                            stderr=subprocess.PIPE,
+                                            creationflags=HIDE)
+                # POSIX: own process group so a timeout can kill every
+                # renderer grandchild with one killpg
+                return subprocess.Popen(cmd, stdout=subprocess.PIPE,
+                                        stderr=subprocess.PIPE,
+                                        start_new_session=True)
 
-    pdf = None
-    try:
-        for flag in ("--headless=new", "--headless"):
+            pdf = None
             try:
-                proc = attempt(flag)
-            except subprocess.TimeoutExpired:
-                continue
-            if os.path.exists(out_path) and os.path.getsize(out_path) > 100:
-                with open(out_path, "rb") as f:
-                    pdf = f.read()
-                break
-        if not pdf or not pdf[:5].startswith(b"%PDF"):
-            raise RuntimeError(
-                "headless browser did not produce a PDF (page blocked,"
-                " login required, or browser too old)")
-    finally:
-        for p in (out_path,):
-            try:
-                os.unlink(p)
-            except OSError:
-                pass
-        shutil.rmtree(profile, ignore_errors=True)
-    fname = "%s-%s.pdf" % (title or "page", datetime.now().strftime("%Y%m%d%H%M%S"))
-    return pdf, "".join(c for c in fname if c.isalnum() or c in "-._")
+                for flag in ("--headless=new", "--headless"):
+                    proc = attempt(flag)
+                    try:
+                        proc.communicate(timeout=120)
+                    except subprocess.TimeoutExpired:
+                        _kill_proc_tree(proc)      # v2.9.1 P4: tree kill
+                        proc.communicate(timeout=10)
+                        continue
+                    if os.path.exists(out_path) and \
+                            os.path.getsize(out_path) > 100:
+                        with open(out_path, "rb") as f:
+                            pdf = f.read()
+                        break
+                if not pdf or not pdf[:5].startswith(b"%PDF"):
+                    raise RuntimeError(
+                        "headless browser did not produce a PDF (page blocked,"
+                        " login required, or browser too old)")
+            finally:
+                # the browser is gone - clean the whole work dir (no more
+                # out_path deletes racing a concurrent reader: this dir is
+                # private to this call)
+                shutil.rmtree(workdir, ignore_errors=True)
+            fname = "%s-%s.pdf" % (title or "page",
+                                   datetime.now().strftime("%Y%m%d%H%M%S"))
+            return pdf, sanitize_fname(fname, maxlen=80, extra="-._",
+                                       fallback="page.pdf")
+        except BaseException:
+            shutil.rmtree(workdir, ignore_errors=True)
+            raise
 
 # ------------------------------------------------------------
 # Silent printing back-end (cancellable: keeps a handle to the process)
@@ -2119,8 +2187,12 @@ def print_file(path, kind="a4", printer="", copies=1, job_id=None,
             if df:
                 parts.append(df)
             if paper_size:
-                parts.append("paper=%s" % re.sub(r"[^A-Za-z0-9]", "",
-                                                 str(paper_size)) or "A4")
+                # v2.9.1 (audit L1 fix): parentheses - "paper=%s" % x or "A4"
+                # parsed as ("paper=%s" % x) or "A4", so the A4 fallback was
+                # dead and a value like "А4" (non-ASCII) sanitized to an
+                # empty "paper=" flag that SumatraPDF rejected.
+                parts.append("paper=%s" % (re.sub(r"[^A-Za-z0-9]", "",
+                                                  str(paper_size)) or "A4"))
             if tray:
                 log("[PRINT] note: SumatraPDF cannot select a paper tray"
                     " ('%s' ignored) - tray printing needs CUPS" % tray)
@@ -2145,6 +2217,11 @@ def print_file(path, kind="a4", printer="", copies=1, job_id=None,
                    "-print-settings", ",".join(parts)]
             if target:
                 cmd += ["-print-to", target]
+            else:
+                # v2.9.1 (audit L2 fix): without an explicit target Sumatra
+                # used to open its GUI and sit there until the 180 s timeout
+                # killed it - now the OS default printer is used.
+                cmd += ["-print-to-default"]
             cmd.append(path)
             if CFG.get("debug"):
                 log("[DEBUG] command: %s" % " ".join(cmd))
@@ -2327,8 +2404,8 @@ def _save_virtual_pdf(job):
     try:
         fdir = default_file_dir()
         os.makedirs(fdir, exist_ok=True)
-        safe = "".join(c for c in (job.get("title") or "document")
-                       if c.isalnum() or c in "-_ ")[:50].strip() or "document"
+        safe = sanitize_fname(job.get("title") or "document", maxlen=50,
+                              extra="-_ ", fallback="document")
         base = "%s-%s" % (safe.replace(" ", "_"),
                           datetime.now().strftime("%Y%m%d-%H%M%S"))
         fpath = os.path.join(fdir, base + ".pdf")
@@ -2381,10 +2458,25 @@ def _release_held_jobs():
 
 def _retry_or_dead(job, err):
     """Exponential retry: requeue with backoff, or dead-letter after the
-    final attempt (visible in the dead-letter list, retryable)."""
+    final attempt (visible in the dead-letter list, retryable).
+    v2.9.1 (audit M3/M7 fixes): (1) a missing/deleted job row no longer
+    crashes the caller with KeyError - it just logs. (2) RAW (ESC/POS /
+    ZPL) jobs and 'printer did not respond' timeouts do NOT auto-retry:
+    a raw stream may already be partially printed, and a timeout usually
+    means the paper IS in the tray - silently reprinting duplicated
+    medical receipts and labels. Both land in the dead-letter list where
+    one click reprints them on purpose."""
+    if not job or not job.get("id"):
+        log("[RETRY] job row vanished - nothing to update (%s)"
+            % str(err)[:120])
+        return
     attempts = int(job.get("attempts") or 0) + 1
     maxr = max(0, int(CFG.get("max_retries", 2)))
-    if attempts <= maxr:
+    msg = str(err)
+    no_auto_retry = (str(job.get("kind") or "") == "raw"
+                     or "did not respond within" in msg
+                     or "timed out" in msg.lower())
+    if attempts <= maxr and not no_auto_retry:
         delay = int(CFG.get("retry_base_seconds", 30)) * (2 ** (attempts - 1))
         nxt = (datetime.now() + timedelta(seconds=delay)).isoformat(timespec="seconds")
         db_update(job["id"], status="queued", attempts=attempts,
@@ -2405,10 +2497,16 @@ def _retry_or_dead(job, err):
         log("[DEAD] job #%d moved to the dead-letter list: %s"
             % (job["id"], str(err)[:120]))
 
+# v2.9.1 (audit M4 fix): remember the last failed probe per peer so a dead
+# peer is not hammered with 3×3 s timeouts on EVERY queued job - one fail
+# puts the peer on a 60 s skip list.
+_PEER_FAIL_TS = {}
+
 def _try_peer_forward(job):
     """Offline/unknown printer + peer_forwarding on: send the document to
-    the first ALIVE peer hub that has the printer. Dead peers are skipped.
-    Returns True when the job was handed over."""
+    the first ALIVE peer hub that has the printer. Dead peers are skipped
+    (with a 60 s negative cache so a down peer costs at most one probe
+    cycle). Returns True when the job was handed over."""
     if not CFG.get("peer_forwarding"):
         return False
     peers = CFG.get("peer_hubs") or []
@@ -2424,6 +2522,8 @@ def _try_peer_forward(job):
         url = (peer.get("url") or "").rstrip("/")
         if not url:
             continue
+        if time.time() - _PEER_FAIL_TS.get(url, 0) < 60:
+            continue                       # recently dead - skip this cycle
         headers = {"X-AdvPrint-Token": peer.get("token") or "",
                    "User-Agent": "AdvPrintPro/%s" % VERSION}
         try:
@@ -2451,6 +2551,7 @@ def _try_peer_forward(job):
             with urllib.request.urlopen(req, timeout=15) as r:
                 resp = json.loads(r.read().decode("utf-8", "replace"))
             if resp.get("ok"):
+                _PEER_FAIL_TS.pop(url, None)
                 db_update(job["id"], status="forwarded", peer=url,
                           error=None,
                           held_reason=None,
@@ -2462,6 +2563,7 @@ def _try_peer_forward(job):
                     % (job["id"], url, resp.get("job_id")))
                 return True
         except Exception as e:
+            _PEER_FAIL_TS[url] = time.time()   # v2.9.1 M4: 60 s skip list
             log("[PEER] %s skipped (%s)" % (url, str(e)[:80]))
             continue
     return False
@@ -2478,6 +2580,15 @@ def _execute_job(job, t0):
         candidates = [printer] if printer else [""]
     last_err = None
     for cand in candidates:
+        # v2.9.1 (audit M3 fix): the canceled check now runs BEFORE every
+        # group member attempt. The old code checked only AFTER the whole
+        # loop, so Cancel on a group job still fired every remaining
+        # member - and a successful print unconditionally overwrote
+        # status "canceled" with "printed".
+        if (db_get(job["id"]) or {}).get("status") == "canceled":
+            log("[CANCELED] job #%d killed before '%s'"
+                % (job["id"], cand or "default"))
+            return False
         try:
             target = print_file(path, kind, cand, job.get("copies") or 1,
                                 job_id=job["id"], pages=job.get("pages"),
@@ -2486,8 +2597,15 @@ def _execute_job(job, t0):
                                 tray=job.get("tray"),
                                 per_sheet=job.get("per_sheet"),
                                 quality=job.get("quality"))
-                                
+
             ms = int((time.time() - t0) * 1000)
+            # v2.9.1 (audit M3 fix): a print that FINISHED after the user
+            # pressed Cancel keeps the canceled verdict - no silent
+            # overwrite of the user's decision
+            if (db_get(job["id"]) or {}).get("status") == "canceled":
+                log("[CANCELED] job #%d was canceled while printing"
+                    % job["id"])
+                return False
             db_update(job["id"], status="printed", error=None,
                       duration_ms=ms, printer=target)
             db_audit("print.completed", job_id=job["id"], printer=target,
@@ -2499,6 +2617,9 @@ def _execute_job(job, t0):
         except Exception as e:
             last_err = e
             log("[FAIL] job #%d on '%s': %s" % (job["id"], cand or "default", e))
+            if (db_get(job["id"]) or {}).get("status") == "canceled":
+                log("[CANCELED] job #%d killed mid-print" % job["id"])
+                return False
     latest = db_get(job["id"]) or {}
     if latest.get("status") == "canceled":
         log("[CANCELED] job #%d killed mid-print" % job["id"])
@@ -2536,83 +2657,104 @@ def worker():
                 pass
             job = db_next_queued()
             if not job:
-                time.sleep(0.35)
+                # v2.9.1 (audit P1 fix): sleep on the wake event instead of
+                # a 0.35 s poll - enqueue_print sets the event the moment a
+                # job lands, so latency DROPS while idle CPU does too. The
+                # 2 s timeout keeps the scheduled-promote / hold-release
+                # passes running for jobs that nobody wakes the queue for.
+                _WORKER_WAKE.wait(2.0)
+                _WORKER_WAKE.clear()
                 continue
             if CFG.get("debug"):
                 log("[DEBUG] worker picked job #%d (%s) for printer %r"
                     % (job["id"], job.get("kind"), job.get("printer")))
-            # v2.9: resolve the destination ONCE - ANY printer: per-job
-            # name, OS default, selected printer or the upstream IP printer.
-            dkind, dest = resolve_dest(job.get("printer") or "")
-            # HOLD: printer offline / out of paper / error state (raw jobs
-            # skip the status check - receipt printers rarely report state)
-            if CFG.get("hold_offline", True) and job.get("kind") != "raw":
-                if dkind == "ip":
-                    # the destination is the network printer - probe ITS
-                    # reachability, never a local printer's state
-                    pstat = ip_printer_probe(dest)
-                else:
-                    pstat = printer_ready(job.get("printer") or "")
-                if pstat in ("offline", "paper-out", "error"):
+            # v2.9.1: observable busy flag - the queue-reset logic (and
+            # tests) can wait for the worker to be genuinely idle instead
+            # of guessing from DB statuses.
+            _WORKER_BUSY[0] = True
+            try:
+                # v2.9: resolve the destination ONCE - ANY printer: per-job
+                # name, OS default, selected printer or the upstream IP printer.
+                dkind, dest = resolve_dest(job.get("printer") or "")
+                # HOLD: printer offline / out of paper / error state (raw jobs
+                # skip the status check - receipt printers rarely report state)
+                if CFG.get("hold_offline", True) and job.get("kind") != "raw":
                     if dkind == "ip":
-                        why = ("IP printer %s:%d is unreachable - job held"
-                               " until it answers ('Print now' overrides"
-                               " this, or switch off 'Printer status hold'"
-                               " in the dashboard)" % (dest[0], dest[1]))
+                        # the destination is the network printer - probe ITS
+                        # reachability, never a local printer's state
+                        pstat = ip_printer_probe(dest)
                     else:
-                        why = ("printer '%s' is %s - job held until it"
-                               " is ready ('Print now' overrides this,"
-                               " or switch off 'Printer status hold' in"
-                               " the dashboard)"
-                               % (job.get("printer") or "default", pstat))
-                    _hold_job(job, why)
+                        pstat = printer_ready(job.get("printer") or "")
+                    if pstat in ("offline", "paper-out", "error"):
+                        if dkind == "ip":
+                            why = ("IP printer %s:%d is unreachable - job held"
+                                   " until it answers ('Print now' overrides"
+                                   " this, or switch off 'Printer status hold'"
+                                   " in the dashboard)" % (dest[0], dest[1]))
+                        else:
+                            why = ("printer '%s' is %s - job held until it"
+                                   " is ready ('Print now' overrides this,"
+                                   " or switch off 'Printer status hold' in"
+                                   " the dashboard)"
+                                   % (job.get("printer") or "default", pstat))
+                        _hold_job(job, why)
+                        continue
+                    # v2.9.1 (audit M4 fix): forward to a peer ONLY when the
+                    # printer is REALLY down (offline / paper-out / error).
+                    # The old condition was pstat != "ready", and
+                    # printer_ready() answers "unknown" for group names and
+                    # printers with no reported state - so perfectly healthy
+                    # jobs were silently shipped to a peer PC. "unknown" now
+                    # prints locally (and holds only for offline/error).
+                    if dkind != "ip" and \
+                            pstat in ("offline", "paper-out", "error") and \
+                            _try_peer_forward(job):
+                        continue
+                # v2.5: virtual PDF printer (Microsoft Print to PDF etc.) ->
+                # save the PDF directly - no renderer, no Save-As dialog.
+                # v2.9: NEVER applies when the destination is the IP printer
+                # (the remote printer decides what to do with the bytes).
+                if job.get("kind") != "raw" and dkind != "ip" and \
+                        is_virtual_pdf_printer(
+                            job.get("printer") or CFG.get("printer")
+                            or default_printer() or ""):
+                    _save_virtual_pdf(job)
                     continue
-                if pstat != "ready" and dkind != "ip" and \
-                        _try_peer_forward(job):
-                    continue
-            # v2.5: virtual PDF printer (Microsoft Print to PDF etc.) ->
-            # save the PDF directly - no renderer, no Save-As dialog.
-            # v2.9: NEVER applies when the destination is the IP printer
-            # (the remote printer decides what to do with the bytes).
-            if job.get("kind") != "raw" and dkind != "ip" and \
-                    is_virtual_pdf_printer(
-                        job.get("printer") or CFG.get("printer")
-                        or default_printer() or ""):
-                _save_virtual_pdf(job)
-                continue
-            t0 = time.time()
-            db_update(job["id"], status="printing", error=None)
-            if job.get("kind") == "raw":
-                try:
-                    with open(job["file_path"], "rb") as f:
-                        data = f.read()
-                    target = print_raw(data, job.get("printer") or "",
-                                       job_id=job["id"],
-                                       title=job.get("title") or "raw")
-                    ms = int((time.time() - t0) * 1000)
-                    db_update(job["id"], status="printed", error=None,
-                              duration_ms=ms, printer=target)
-                    db_audit("print.completed", job_id=job["id"],
-                             printer=target, actor=job.get("source"),
-                             site=job.get("site"), ip=job.get("origin_ip"),
-                             doc_hash=job.get("content_hash"))
-                    log("[OK] job #%d raw-printed on %s"
-                        % (job["id"], target))
-                except Exception as e:
-                    latest = db_get(job["id"]) or {}
-                    if latest.get("status") == "canceled":
-                        log("[CANCELED] job #%d killed mid-print"
-                            % job["id"])
-                    else:
-                        db_update(job["id"], status="failed",
-                                  error=str(e)[:500])
-                        db_audit("print.failed", job_id=job["id"],
-                                 printer=job.get("printer"),
-                                 details=str(e)[:200])
-                        _retry_or_dead(job, e)
-            else:
-                _execute_job(job, t0)
-            finally_guard(job)
+                t0 = time.time()
+                db_update(job["id"], status="printing", error=None)
+                if job.get("kind") == "raw":
+                    try:
+                        with open(job["file_path"], "rb") as f:
+                            data = f.read()
+                        target = print_raw(data, job.get("printer") or "",
+                                           job_id=job["id"],
+                                           title=job.get("title") or "raw")
+                        ms = int((time.time() - t0) * 1000)
+                        db_update(job["id"], status="printed", error=None,
+                                  duration_ms=ms, printer=target)
+                        db_audit("print.completed", job_id=job["id"],
+                                 printer=target, actor=job.get("source"),
+                                 site=job.get("site"), ip=job.get("origin_ip"),
+                                 doc_hash=job.get("content_hash"))
+                        log("[OK] job #%d raw-printed on %s"
+                            % (job["id"], target))
+                    except Exception as e:
+                        latest = db_get(job["id"]) or {}
+                        if latest.get("status") == "canceled":
+                            log("[CANCELED] job #%d killed mid-print"
+                                % job["id"])
+                        else:
+                            db_update(job["id"], status="failed",
+                                      error=str(e)[:500])
+                            db_audit("print.failed", job_id=job["id"],
+                                     printer=job.get("printer"),
+                                     details=str(e)[:200])
+                            _retry_or_dead(job, e)
+                else:
+                    _execute_job(job, t0)
+                finally_guard(job)
+            finally:
+                _WORKER_BUSY[0] = False
         except SystemExit:
             raise
         except Exception as e:                  # v2.2.1: NEVER let it die
@@ -2678,15 +2820,57 @@ def start_worker():
     threading.Thread(target=_worker_watchdog, daemon=True,
                      name="advprint-watchdog").start()
 
+# v2.9.1 (audit H1 fix): serializes the dedupe check -> file save -> DB
+# insert inside enqueue_print so two concurrent identical submissions
+# can never both pass the duplicate check and print twice.
+_ENQ_LOCK = threading.Lock()
+# v2.9.1 (audit P1 fix): the FIFO worker sleeps on this event instead of
+# polling every 0.35 s. enqueue_print sets it the moment a job lands; the
+# worker also wakes on a 2 s timeout so scheduled-promote / hold-release
+# passes still run periodically.
+_WORKER_WAKE = threading.Event()
+# v2.9.1: True while the worker is processing a job (claim -> finally).
+# The queue-reset logic and tests wait on this instead of guessing.
+_WORKER_BUSY = [False]
+
+def sanitize_fname(text, maxlen=50, extra="-_ ", fallback="job"):
+    """v2.9.1 (audit L3 fix): keep letters/numbers/marks from ANY language
+    when building file names. The old ``c.isalnum()`` check dropped Bengali
+    combining marks (category Mc/Mn are not alnum), so 'রিপোর্ট-Lab'
+    became the mangled 'রপরট-Lab'. unicodedata.category() keeps every
+    letter (L*), number (N*) AND combining mark (M*) - 'রিপোর্ট-Lab'
+    survives intact - while still removing path separators, control
+    characters and symbols that are unsafe in a filename."""
+    out = []
+    for c in (text or ""):
+        if unicodedata.category(c)[0] in "LNM" or c in extra:
+            out.append(c)
+    return ("".join(out)[:maxlen].strip() or fallback)
+
 def save_job_file(kind, title, data, ext="pdf"):
-    """Write payload bytes into the jobs dir; returns full path."""
+    """Write payload bytes into the jobs dir; returns full path.
+    v2.9.1 (audit H1 fix): the name now carries a 6-hex random suffix and
+    is created EXCLUSIVELY ('xb'), so two jobs printed in the same second
+    from the same process can never overwrite each other's payload -
+    the old name (title-second-pid) collided on a double-click and the
+    duplicate-deletion path then removed the ORIGINAL job's file."""
     ensure_dirs()
-    safe = "".join(c for c in (title or "job") if c.isalnum() or c in "-_ ")[:40] or "job"
-    fname = "%s-%s-%s.%s" % (safe.replace(" ", "_"),
-                             datetime.now().strftime("%Y%m%d%H%M%S"),
-                             os.getpid(), ext)
-    path = os.path.join(CFG["data_dir"], "jobs", fname)
-    with open(path, "wb") as f:
+    safe = sanitize_fname(title, maxlen=40, extra="-_ ", fallback="job")
+    jobs_dir = os.path.join(CFG["data_dir"], "jobs")
+    for _attempt in range(20):
+        fname = "%s-%s-%s-%s.%s" % (safe.replace(" ", "_"),
+                                    datetime.now().strftime("%Y%m%d%H%M%S"),
+                                    os.getpid(),
+                                    secrets.token_hex(3), ext)
+        path = os.path.join(jobs_dir, fname)
+        try:
+            f = open(path, "xb")            # exclusive create: never overwrite
+        except FileExistsError:
+            continue                        # freak collision - pick a new name
+        break
+    else:
+        raise RuntimeError("cannot create a unique job file in %s" % jobs_dir)
+    with f:
         f.write(data)
     return path
 
@@ -2700,29 +2884,11 @@ def enqueue_print(kind, title, data, printer="", copies=1,
                         thread, pause has no effect. Tracked like always.
     dedupe=False     -> skip duplicate blocking for this one submission."""
     ext = "prn" if kind == "raw" else "pdf"
-    path = save_job_file(kind, title, data, ext=ext)
     if not content_hash:
         content_hash = hashlib.sha256(data).hexdigest()
     dedupe_key = hashlib.sha256(("%s|%s|%s|%s" % (title, printer, kind,
                                                   content_hash))
                                 .encode()).hexdigest()[:32]
-    dup = None
-    if dedupe:
-        dup = db_find_duplicate(dedupe_key,
-                                int(CFG.get("dedupe_minutes", 5)))
-    if dup:
-        log("[DEDUPE] job identical to #%d (%s) from %s - blocked"
-            % (dup["id"], dup["title"], dup["created_at"]))
-        try:
-            os.unlink(path)
-        except OSError:
-            pass
-        return dup["id"], dup["id"]
-    status = "queued"
-    next_at = None
-    if run_at:
-        status = "scheduled"
-        next_at = run_at
     # v2.6.9 FIX (double print): decide direct-vs-queued BEFORE the DB row
     # exists. Queue Mode OFF used to insert the row as 'queued' and only
     # flip it to 'printing' AFTER the slow printer-status probe (hundreds
@@ -2732,6 +2898,11 @@ def enqueue_print(kind, title, data, printer="", copies=1,
     # physically printed twice. Now the row is BORN in its final state
     # ('printing' for direct jobs) - the worker, which only claims
     # 'queued' rows, can never see a direct job.
+    status = "queued"
+    next_at = None
+    if run_at:
+        status = "scheduled"
+        next_at = run_at
     direct = (status == "queued" and not queue_mode)
     auto_hold = None
     # v2.3 INSTANT PRINT fallback: queue mode OFF + the printer is NOT
@@ -2751,11 +2922,34 @@ def enqueue_print(kind, title, data, printer="", copies=1,
             direct = False
     if direct:
         status = "printing"        # row never visible as 'queued'
-    job_id = db_add(kind, title, printer, copies, path, source, origin_ip,
-                    status=status, priority=max(1, min(9, int(priority or 5))),
-                    run_at=run_at, next_attempt_at=next_at, site=site,
-                    dedupe_key=dedupe_key, content_hash=content_hash,
-                    **extra)
+    # v2.9.1 (audit H1 fix): the duplicate check runs BEFORE the payload is
+    # written (the old order wrote the file first, then deleted it on the
+    # duplicate path - and because two same-second submissions shared ONE
+    # file path, deleting the duplicate's file destroyed the ORIGINAL
+    # job's payload). The process-wide _ENQ_LOCK spans check -> file ->
+    # insert, so two concurrent identical requests can no longer both
+    # pass the dedupe and print twice. The slow printer probe runs BEFORE
+    # the lock so instant submissions never serialize behind each other.
+    with _ENQ_LOCK:
+        dup = None
+        if dedupe:
+            dup = db_find_duplicate(dedupe_key,
+                                    int(CFG.get("dedupe_minutes", 5)))
+        if dup:
+            log("[DEDUPE] job identical to #%d (%s) from %s - blocked"
+                % (dup["id"], dup["title"], dup["created_at"]))
+            return dup["id"], dup["id"]
+        path = save_job_file(kind, title, data, ext=ext)
+        job_id = db_add(kind, title, printer, copies, path, source,
+                        origin_ip,
+                        status=status,
+                        priority=max(1, min(9, int(priority or 5))),
+                        run_at=run_at, next_attempt_at=next_at, site=site,
+                        dedupe_key=dedupe_key, content_hash=content_hash,
+                        **extra)
+    # v2.9.1 (audit P1 fix): wake the FIFO worker the moment a job lands
+    # instead of letting it poll every 0.35 s (lower latency, less CPU).
+    _WORKER_WAKE.set()
     if status == "scheduled":
         log("[SCHEDULE] job #%d scheduled for %s" % (job_id, run_at))
         return job_id, None
@@ -2786,6 +2980,17 @@ def _print_now(job_id, path, kind, printer, copies):
         log("[DEBUG] instant print job #%d -> %r (kind=%s, copies=%d)"
             % (job_id, printer or "OS default", kind, copies))
     try:
+        # v2.9.1 (audit M3 fix): instant jobs now resolve PRINTER GROUPS
+        # exactly like the FIFO worker does. _print_now never touched
+        # printer_group_members/pick_group_printer, so a group name in
+        # Queue Mode OFF went straight to the print backend and died with
+        # "printer not found".
+        if printer_group_members(printer):
+            member = pick_group_printer(printer)
+            if member:
+                log("[GROUP] instant job #%d '%s' -> member '%s'"
+                    % (job_id, printer, member))
+                printer = member
         dkind, dtarget = resolve_dest(printer)   # v2.9: ANY printer
         if kind == "raw":
             with open(path, "rb") as f:
@@ -2851,8 +3056,8 @@ def save_file_job(kind, title, data, source="api", origin_ip="-"):
     except OSError:
         fdir = os.path.join(CFG["data_dir"], "files")
         os.makedirs(fdir, exist_ok=True)
-    safe = "".join(c for c in (title or "document")
-                   if c.isalnum() or c in "-_ ")[:50].strip() or "document"
+    safe = sanitize_fname(title or "document", maxlen=50, extra="-_ ",
+                          fallback="document")
     fname = "%s-%s.pdf" % (safe.replace(" ", "_"),
                            datetime.now().strftime("%Y%m%d-%H%M%S"))
     path = os.path.join(fdir, fname)
@@ -2998,9 +3203,14 @@ CORS_HEADERS = [
     ("Access-Control-Allow-Methods", "GET, POST, OPTIONS"),
     ("Access-Control-Allow-Headers",
      "Content-Type, X-AdvPrint-Token, Access-Control-Request-Private-Network"),
-    ("Access-Control-Allow-Private-Network", "true"),   # Chrome/Firefox LAN preflight
     ("Access-Control-Max-Age", "86400"),
 ]
+# v2.9.1 (audit H6 fix): "Access-Control-Allow-Private-Network: true" is NO
+# LONGER sent unconditionally (it used to live in the list above). It is
+# added per-request in _cors() ONLY when the caller's Origin is actually
+# allowed - so a random website's Local Network Access preflight for the
+# hub is denied by default instead of green-lit from every page on the
+# internet.
 
 # v2.0 auth hardening state
 _AUTH_FAILS = {}          # ip -> {count, until, first, last_audit, warned}
@@ -3010,6 +3220,10 @@ _AUTH_FAILS = {}          # ip -> {count, until, first, last_audit, warned}
 _AUTH_AUDIT_TS = {}       # ip -> last auth.failed audit write (survives
                           # success-clears so the audit log can never be
                           # flooded: max 1 row per 10 s per IP)
+# v2.9.1 (audit L4 fix): the two dicts above are mutated from EVERY request
+# thread - the multi-step check/increment/lock decisions now run under one
+# lock so two concurrent failures cannot interleave the bookkeeping.
+_AUTH_LOCK = threading.Lock()
 START_TS = time.time()    # for the diagnostics uptime report
 
 def _extension_origin(origin):
@@ -3084,13 +3298,28 @@ def parse_multipart(raw, ctype):
             fields[name] = content.decode("utf-8", "replace")
     return fdata, fields
 
+class _GuardedRedirect(urllib.request.HTTPRedirectHandler):
+    """v2.9.1 (audit H7 fix): re-run pdf_url_guard() on EVERY redirect hop.
+    The old download_pdf guarded the FIRST url only - urllib then followed
+    redirects un-rechecked, so an attacker URL (public host, allowed by the
+    guard) could 302 straight to file:// / http://127.0.0.1 / any private
+    address and turn the hub into an internal-network file fetcher."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        pdf_url_guard(newurl)          # blocked hop raises - fetch aborts
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
 def download_pdf(url):
     """Fetch a PDF from a URL (used by 'pdf_url' mode).
     v2.0: guarded by pdf_url_guard() - file://, ftp:// and private/local
-    addresses are blocked (see pdf_url_allowed_hosts for exemptions)."""
+    addresses are blocked (see pdf_url_allowed_hosts for exemptions).
+    v2.9.1 (audit H7 fix): EVERY redirect hop is re-guarded (see
+    _GuardedRedirect), so a redirect to loopback/private/file can no
+    longer bypass the allowlist."""
     pdf_url_guard(url)
     req = urllib.request.Request(url, headers={"User-Agent": "AdvPrintPro/%s" % VERSION})
-    with urllib.request.urlopen(req, timeout=30) as r:
+    opener = urllib.request.build_opener(_GuardedRedirect)
+    with opener.open(req, timeout=30) as r:
         data = r.read(MAX_PDF + 1)
     if not data or len(data) > MAX_PDF:
         raise ValueError("pdf_url download too large or empty")
@@ -3464,22 +3693,102 @@ def reprint_job_core(j, body, ip, site):
 class Handler(BaseHTTPRequestHandler):
     server_version = "AdvPrintPro/" + VERSION
     protocol_version = "HTTP/1.1"
+    # v2.9.1 (audit M1 fix): a per-connection socket timeout. Before this
+    # the handler had NO timeout - a slowloris client that opened a
+    # connection and dribbled bytes (or just sent a huge Content-Length
+    # and never a body) held a request thread FOREVER; 30 such sockets
+    # stalled the whole hub. 30 s per recv is far above any real client
+    # (LAN transfers stream continuously) and starves out dead peers.
+    timeout = 30
+
+    # ---- v2.9.1 (audit H5 fix): Host header allowlist ----
+    # A DNS-rebinding page can rebind its own domain to 127.0.0.1 and then
+    # fetch http://evil.example:9235/token/current FROM the hub PC - the
+    # request arrives on loopback (trusted) with an ATTACKER Host header,
+    # and "same-origin" so CORS does not help. Checking the Host header
+    # closes it: only the names this hub is legitimately reached by are
+    # accepted (loopback literals, private-LAN IP literals, this PC's LAN
+    # IP, machine hostname, *.local). An attacker domain gets 421.
+    def _host_ok(self):
+        host = (self.headers.get("Host") or "").strip().lower()
+        if not host:
+            return True          # HTTP/1.0 clients may omit it (curl legacy)
+        hostname = host.split(":")[0].strip("[]")
+        if hostname in ("localhost", "localhost.localdomain",
+                        "127.0.0.1", "::1", "::ffff:127.0.0.1"):
+            return True
+        if hostname.endswith(".local") or hostname.endswith(".localdomain"):
+            return True
+        if hostname == (CFG.get("host") or "").lower() or \
+                hostname == lan_ip().lower():
+            return True
+        try:
+            ip = ipaddress.ip_address(hostname)
+            return ip.is_private or ip.is_loopback or ip.is_link_local
+        except ValueError:
+            return False         # rebinded/attacker domain
+
+    def _host_error(self):
+        """421 Misdirected Request when the Host header is foreign."""
+        host = (self.headers.get("Host") or "-")[:100]
+        db_audit("auth.host_denied", details="Host header not allowed: %s"
+                 % host)
+        log("[SECURITY] blocked request with foreign Host header: %s" % host)
+        return self._send(421, {
+            "ok": False,
+            "error": "this is the AdvPrint Pro hub - reach it on"
+                     " 127.0.0.1, the PC's hostname or its LAN IP"
+                     " (Host header '%s' is not allowed)" % host})
+
+    # ---- v2.9.1 (audit M1 fix): pre-auth body gate ----
+    def _preauth_gate(self, q):
+        """Big request bodies are no longer read BEFORE authentication.
+        The old order read up to 25 MB of body first and only then checked
+        the token - a remote client could make the hub swallow arbitrary
+        bandwidth with zero credentials (a cheap DoS). Now: if the body
+        is LARGE (> 1 MB) and the caller cannot show the token in the
+        header OR the query string, the 401 is answered without reading
+        a byte. Small bodies keep the old readable "invalid or missing
+        token" errors, and the phone /send portal keeps working because
+        its QR link carries ?token= (query token accepted here too)."""
+        try:
+            clen = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            clen = 0
+        if clen <= 1024 * 1024:
+            return False
+        given = self.headers.get("X-AdvPrint-Token") or \
+            (q.get("token") or [""])[0]
+        if given and hmac.compare_digest(str(given), str(CFG["token"])):
+            return False
+        return True
 
     # ---- plumbing ----
+    def _origin_allowed(self, origin):
+        """v2.9.1 (audit H6 fix): shared allow-decision for ACAO + ACAPN.
+        Extension origins are always allowed; plain origins need the
+        allowed_origins list (empty list = the legacy open behaviour)."""
+        return bool(origin) and (_extension_origin(origin)
+                                 or origin_allowed(origin))
+
     def _cors(self):
         for k, v in CORS_HEADERS:
             self.send_header(k, v)
         # v2.0 origin allowlist: echo the caller origin when allowed,
         # otherwise omit Access-Control-Allow-Origin (browser blocks it).
         # Empty list = allow every origin exactly like 1.x did.
+        origin = self.headers.get("Origin")
         if CFG.get("allowed_origins"):
-            origin = self.headers.get("Origin")
-            if origin and (_extension_origin(origin) or origin_allowed(origin)):
+            if self._origin_allowed(origin):
                 self.send_header("Access-Control-Allow-Origin", origin)
             else:
                 self.send_header("Access-Control-Allow-Origin", "null")
         else:
             self.send_header("Access-Control-Allow-Origin", "*")
+        # v2.9.1 (audit H6 fix): the Private-Network preflight answer is
+        # emitted ONLY for allowed origins - not for every website.
+        if origin and self._origin_allowed(origin):
+            self.send_header("Access-Control-Allow-Private-Network", "true")
 
     def _send(self, code, obj):
         body = json.dumps(obj, ensure_ascii=False).encode("utf-8")
@@ -3535,8 +3844,18 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(200)
         self._cors()
         self.send_header("Content-Type", ctype)
-        self.send_header("Content-Disposition",
-                         'attachment; filename="%s"' % download_name)
+        # v2.9.1 (audit L7 fix): download names come from job titles, so a
+        # title containing quotes/CR/LF used to break (or inject into) the
+        # Content-Disposition header. Strip those, cap the length, and add
+        # RFC 5987 filename* for non-ASCII (Bengali titles etc.).
+        safe = "".join(c for c in str(download_name or "file")
+                       if c not in ('"', "\r", "\n", "\\"))[:100] or "file"
+        if all(ord(c) < 128 for c in safe):
+            disp = 'attachment; filename="%s"' % safe
+        else:
+            disp = ("attachment; filename*=UTF-8''%s"
+                    % quote(safe, safe=""))
+        self.send_header("Content-Disposition", disp)
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
@@ -3599,67 +3918,72 @@ class Handler(BaseHTTPRequestHandler):
         # is still accepted for compatibility but is ignored here.
         exempt = loopback
         now = time.time()
-        lock = _AUTH_FAILS.get(ip)
-        if lock and lock.get("until", 0) > now:
-            if not exempt:
-                left = int(lock["until"] - now)
-                return (429, "too many failed tokens - this IP is locked"
-                             " for another %ds" % left)
-            _AUTH_FAILS.pop(ip, None)   # owner IP: never stay locked
-        strict = bool(CFG.get("token_header_only")) and not allow_query
-        given = self.headers.get("X-AdvPrint-Token") or ""
-        if not strict:
-            given = given or str(qtoken or "") or str((body or {}).get("token") or "")
-        if given and hmac.compare_digest(str(given), str(CFG["token"])):
-            _AUTH_FAILS.pop(ip, None)   # success clears the counter
-            return None
-        # record the failure -> maybe lock this IP
-        window = max(int(CFG.get("lockout_minutes", 5)), 1) * 60
-        rec = _AUTH_FAILS.get(ip)
-        if rec is None or now - rec.get("first", 0) > window:
-            rec = {"count": 0, "until": 0.0, "first": now,
-                   "last_audit": 0.0, "warned": False}
-            _AUTH_FAILS[ip] = rec
-            if len(_AUTH_FAILS) > 512:          # memory hygiene
-                for k in [k for k, v in _AUTH_FAILS.items()
-                          if now - v.get("first", 0) > window][:64]:
-                    _AUTH_FAILS.pop(k, None)
-        rec["count"] += 1
-        # audit throttle: max 1 auth.failed row per 10 s per IP - kept in
-        # a side table so clearing the counter on success cannot be used
-        # to re-arm it and flood the audit log
-        if now - _AUTH_AUDIT_TS.get(ip, 0) >= 10:
-            _AUTH_AUDIT_TS[ip] = now
-            if len(_AUTH_AUDIT_TS) > 512:       # memory hygiene
-                for k in [k for k, t in _AUTH_AUDIT_TS.items()
-                          if now - t > 60][:64]:
-                    _AUTH_AUDIT_TS.pop(k, None)
-            db_audit("auth.failed", ip=ip,
-                     details="wrong token (attempt %d)" % rec["count"])
-        limit = max(int(CFG.get("max_auth_failures", 10)), 1)
-        if rec["count"] >= limit:
-            if exempt:
-                # v2.0.1: the owner's own IP is never locked - one stale
-                # token must not take the whole PC's printing down
-                rec["count"] = 0
-                if not rec.get("warned"):
-                    rec["warned"] = True
-                    log("[AUTH] %d wrong tokens from loopback %s - NOT"
-                        " locked (the hub PC is always exempt since"
-                        " v2.6.3; use the tray menu or '%s' to fix)"
-                        % (limit, ip, cli_cmd("token")))
-            else:
-                mins = int(CFG.get("lockout_minutes", 5))
-                rec["until"] = now + mins * 60
-                rec["count"] = 0        # fresh count after the lock ends
-                db_audit("auth.locked", ip=ip,
-                         details="IP locked for %d min after %d wrong tokens"
-                                 % (mins, limit))
-                log("[AUTH] IP %s locked for %d min (%d wrong tokens)"
-                    % (ip, mins, limit))
-                return (429, "too many failed tokens - this IP is locked"
-                             " for %d minutes" % mins)
-        return (401, "invalid or missing token - " + self._auth_hint(given))
+        # v2.9.1 (audit L4 fix): the lockout bookkeeping below mutates
+        # shared dicts from every request thread - it all runs under one
+        # lock now. db_audit() is called INSIDE the lock deliberately:
+        # it has its own DB lock and the throttle guarantees it is rare.
+        with _AUTH_LOCK:
+            lock = _AUTH_FAILS.get(ip)
+            if lock and lock.get("until", 0) > now:
+                if not exempt:
+                    left = int(lock["until"] - now)
+                    return (429, "too many failed tokens - this IP is locked"
+                                 " for another %ds" % left)
+                _AUTH_FAILS.pop(ip, None)   # owner IP: never stay locked
+            strict = bool(CFG.get("token_header_only")) and not allow_query
+            given = self.headers.get("X-AdvPrint-Token") or ""
+            if not strict:
+                given = given or str(qtoken or "") or str((body or {}).get("token") or "")
+            if given and hmac.compare_digest(str(given), str(CFG["token"])):
+                _AUTH_FAILS.pop(ip, None)   # success clears the counter
+                return None
+            # record the failure -> maybe lock this IP
+            window = max(int(CFG.get("lockout_minutes", 5)), 1) * 60
+            rec = _AUTH_FAILS.get(ip)
+            if rec is None or now - rec.get("first", 0) > window:
+                rec = {"count": 0, "until": 0.0, "first": now,
+                       "last_audit": 0.0, "warned": False}
+                _AUTH_FAILS[ip] = rec
+                if len(_AUTH_FAILS) > 512:          # memory hygiene
+                    for k in [k for k, v in _AUTH_FAILS.items()
+                              if now - v.get("first", 0) > window][:64]:
+                        _AUTH_FAILS.pop(k, None)
+            rec["count"] += 1
+            # audit throttle: max 1 auth.failed row per 10 s per IP - kept in
+            # a side table so clearing the counter on success cannot be used
+            # to re-arm it and flood the audit log
+            if now - _AUTH_AUDIT_TS.get(ip, 0) >= 10:
+                _AUTH_AUDIT_TS[ip] = now
+                if len(_AUTH_AUDIT_TS) > 512:       # memory hygiene
+                    for k in [k for k, t in _AUTH_AUDIT_TS.items()
+                              if now - t > 60][:64]:
+                        _AUTH_AUDIT_TS.pop(k, None)
+                db_audit("auth.failed", ip=ip,
+                         details="wrong token (attempt %d)" % rec["count"])
+            limit = max(int(CFG.get("max_auth_failures", 10)), 1)
+            if rec["count"] >= limit:
+                if exempt:
+                    # v2.0.1: the owner's own IP is never locked - one stale
+                    # token must not take the whole PC's printing down
+                    rec["count"] = 0
+                    if not rec.get("warned"):
+                        rec["warned"] = True
+                        log("[AUTH] %d wrong tokens from loopback %s - NOT"
+                            " locked (the hub PC is always exempt since"
+                            " v2.6.3; use the tray menu or '%s' to fix)"
+                            % (limit, ip, cli_cmd("token")))
+                else:
+                    mins = int(CFG.get("lockout_minutes", 5))
+                    rec["until"] = now + mins * 60
+                    rec["count"] = 0        # fresh count after the lock ends
+                    db_audit("auth.locked", ip=ip,
+                             details="IP locked for %d min after %d wrong tokens"
+                                     % (mins, limit))
+                    log("[AUTH] IP %s locked for %d min (%d wrong tokens)"
+                        % (ip, mins, limit))
+                    return (429, "too many failed tokens - this IP is locked"
+                                 " for %d minutes" % mins)
+            return (401, "invalid or missing token - " + self._auth_hint(given))
 
     def _origin_error(self):
         """403 when the browser Origin is not on the allowed list.
@@ -3835,6 +4159,10 @@ class Handler(BaseHTTPRequestHandler):
     # `winreg` import killed /debug + /diagnostics exactly this way.)
     def do_GET(self):
         try:
+            # v2.9.1 (audit H5 fix): every request must name THIS hub in
+            # its Host header (DNS-rebinding protection)
+            if not self._host_ok():
+                return self._host_error()
             return self._do_get_impl()
         except (BrokenPipeError, ConnectionResetError):
             pass                          # client hung up - fine
@@ -3843,6 +4171,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         try:
+            # v2.9.1 (audit H5 fix): same Host rule for POSTs
+            if not self._host_ok():
+                return self._host_error()
             return self._do_post_impl()
         except (BrokenPipeError, ConnectionResetError):
             pass
@@ -4224,7 +4555,13 @@ class Handler(BaseHTTPRequestHandler):
                 "held": db_count_held(),
                 "current": cur})
         if route == "/jobs":
-            limit = (q.get("limit") or [str(HISTORY_DEFAULT)])[0]
+            # v2.9.1 (audit L5 fix): clamp the limit (the old int() accepted
+            # ?limit=999999999 and made the hub serialize the whole table)
+            try:
+                limit = int((q.get("limit") or [str(HISTORY_DEFAULT)])[0])
+            except (TypeError, ValueError):
+                limit = HISTORY_DEFAULT
+            limit = max(1, min(200, limit))
             status = (q.get("status") or [""])[0] or None
             return self._send(200, {"ok": True,
                                     "jobs": db_list(limit, status=status)})
@@ -4242,7 +4579,11 @@ class Handler(BaseHTTPRequestHandler):
             })
             return self._send(200, st)
         if route == "/audit":
-            limit = (q.get("limit") or ["50"])[0]
+            try:
+                limit = int((q.get("limit") or ["50"])[0])
+            except (TypeError, ValueError):
+                limit = 50
+            limit = max(1, min(1000, limit))          # v2.9.1 (L5) clamped
             event = (q.get("event") or [""])[0] or None
             return self._send(200, {"ok": True,
                                     "entries": audit_list(limit, event)})
@@ -4404,6 +4745,14 @@ class Handler(BaseHTTPRequestHandler):
         q = parse_qs(u.query)
         ctype = (self.headers.get("Content-Type") or "").lower()
         raw_pdf = None
+        # v2.9.1 (audit M1 fix): refuse LARGE unauthenticated bodies before
+        # reading them (401, nothing swallowed). Query token counts - the
+        # phone /send portal rides its QR link's ?token=.
+        if self._preauth_gate(q):
+            return self._send(401, {
+                "ok": False,
+                "error": "invalid or missing token - "
+                         "the request body was not read"})
 
         # POST /peer-connect - v2.8.1 one-click invite accept. Runs on
         # the RECEIVING PC's hub and must work WITHOUT that hub's token
@@ -4422,6 +4771,20 @@ class Handler(BaseHTTPRequestHandler):
             if not ipp_printer_enabled():
                 return self._send(404, {"ok": False,
                                         "error": "IPP printer is off"})
+            # v2.9.1 (audit H6 fix): native IPP clients (Windows "add a
+            # printer by URL", phones, CUPS) NEVER send a browser Origin
+            # header - only a web page's fetch() does. A web page has no
+            # business speaking raw IPP to the hub, so any request with a
+            # browser http(s)/null Origin is refused BEFORE the body is
+            # even read. This closes the "unauthenticated IPP + CORS *"
+            # combination where any website could drive the printer.
+            ipp_origin = (self.headers.get("Origin") or "").strip()
+            if ipp_origin and ipp_origin.lower() != "null" \
+                    and not _extension_origin(ipp_origin):
+                return self._send(403, {
+                    "ok": False,
+                    "error": "IPP is for native print clients - web pages"
+                             " must use /print with the hub token"})
             data = read_raw_body(self)
             if len(data) > MAX_PDF:
                 return self._send(413, {"ok": False,
@@ -4847,6 +5210,12 @@ class Handler(BaseHTTPRequestHandler):
         # POST /config - update v2.0 settings at runtime (persists)
         if route == "/config":
             changed = []
+            # v2.9.1 (audit M6 fix): ATOMIC config apply. The old loop did
+            # CFG[key] = val per key and returned 400 mid-loop on a failing
+            # key - keys 1..N-1 stayed in memory while disk kept the old
+            # values (memory/disk drift until restart). Everything is now
+            # validated into `updates` FIRST and applied in one shot.
+            updates = {}
             for key, val in (body or {}).items():
                 if key == "token":
                     return self._send(400, {
@@ -4876,17 +5245,51 @@ class Handler(BaseHTTPRequestHandler):
                     elif want is list:
                         if not isinstance(val, list):
                             raise ValueError("must be a list")
-                        val = [str(x) for x in val]
+                        if key == "peer_hubs":
+                            # v2.9.1 (audit M6 fix): peer_hubs entries are
+                            # DICTS ({url, token, name}) - the old
+                            # [str(x) for x in val] turned real peer dicts
+                            # into useless "{'url': ...}" repr strings and
+                            # silently corrupted the peer list. Dicts pass
+                            # through with basic shape validation.
+                            cleaned = []
+                            for x in val:
+                                if isinstance(x, dict):
+                                    e = {"url": str(x.get("url") or ""),
+                                         "token": str(x.get("token") or ""),
+                                         "name": str(x.get("name") or "")[:60]}
+                                    cleaned.append(e)
+                                elif isinstance(x, str):
+                                    cleaned.append({"url": x, "token": "",
+                                                    "name": ""})
+                                else:
+                                    raise ValueError(
+                                        "peer_hubs entries must be objects")
+                            val = cleaned
+                        else:
+                            val = [str(x) for x in val]
                     elif want is dict:
                         if not isinstance(val, dict):
                             raise ValueError("must be an object")
-                        val = val
+                        if key == "printer_groups":
+                            # v2.9.1 (audit M6 fix): validate members are
+                            # string lists, so {"Lab": "printer1"} can no
+                            # longer corrupt the group picker
+                            for g, members in val.items():
+                                if not isinstance(members, list) or \
+                                        not all(isinstance(m, str)
+                                                for m in members):
+                                    raise ValueError(
+                                        "printer_groups['%s'] must be a"
+                                        " list of printer-name strings" % g)
+                        val = dict(val)
                 except (TypeError, ValueError) as e:
                     return self._send(400, {"ok": False,
                                             "error": "config '%s': %s" % (key, e)})
-                CFG[key] = val
-                changed.append(key)
-            if changed:
+                updates[key] = val
+            if updates:
+                CFG.update(updates)
+                changed = list(updates.keys())
                 disk = {k: CFG[k] for k in CONFIG_KEYS}
                 write_config_file(disk)
                 db_audit("config.changed", ip=ip, site=site,
@@ -5210,6 +5613,13 @@ class Handler(BaseHTTPRequestHandler):
                 kind = "page"
             elif body.get("page_url"):
                 try:
+                    # v2.9.1 (audit H4 fix): page_url now runs the SAME
+                    # SSRF guard as pdf_url. The old code passed the URL
+                    # straight to headless Chrome, so "page_url":
+                    # "file:///C:/..." (or any internal http URL) made
+                    # the hub render local/internal content and send it
+                    # back as a PDF to whoever asked.
+                    pdf_url_guard(str(body["page_url"]))
                     data, _ = html_to_pdf_bytes(
                         body["page_url"], is_url=True, title=title)
                     # CSS injection applies to html payloads, not live URLs
@@ -5217,6 +5627,11 @@ class Handler(BaseHTTPRequestHandler):
                         log("[PRINT] note: margin/scale/orientation are not"
                             " applied to page_url jobs (server-rendered"
                             " page) - send 'html' instead")
+                except ValueError as e:
+                    # v2.9.1 (audit H4 fix): guard rejections are the
+                    # caller's fault - a readable 400, not a server 500
+                    return self._send(400, {"ok": False,
+                                            "error": "page_url blocked: %s" % e})
                 except Exception as e:
                     return self._send(500, {"ok": False,
                                             "error": "page render failed: %s" % e})
@@ -5297,9 +5712,16 @@ class Handler(BaseHTTPRequestHandler):
                 **({"watermarked": 1} if (wm_flag and kind != "raw") else {}))
             # v2.3: read the REAL status back - the instant-print auto-queue
             # fallback may have left the job queued instead of printing
-            real_status = (db_get(job) or {}).get("status")
-            auto_queued = (not queue_mode and not run_at and
-                           dup is None and real_status == "queued")
+            # v2.9.1: the worker is INSTANT now (wake event instead of the
+            # 0.35 s poll), so an auto-queued job can already be HELD
+            # (printer offline) by the time this response is built -
+            # "held with a hold reason" counts as auto-queued too.
+            real_row = db_get(job) or {}
+            real_status = real_row.get("status")
+            auto_queued = (not queue_mode and not run_at and dup is None and
+                           (real_status == "queued" or
+                            (real_status == "held"
+                             and real_row.get("held_reason"))))
             resp = {
                 "ok": True, "job_id": job, "kind": kind, "copies": copies,
                 "destination": "printer",
@@ -5465,12 +5887,26 @@ def probe_peers(timeout=3):
     return out
 
 def _log_tail(lines=40):
+    """Last N hub.log lines with any token REDACTED.
+    v2.9.1 (audit M2 fix): the raw log used to be embedded into
+    /diagnostics while the docstring claimed "token REDACTED" - old
+    installs DO have plain tokens in hub.log (pre-2.9.1 releases printed
+    them on first start). Every token=... / token: ... value is masked
+    here so diagnostics can be shared safely."""
     path = os.path.join(CFG["data_dir"], "hub.log")
     try:
         with open(path, "r", encoding="utf-8", errors="replace") as f:
-            return f.read().splitlines()[-lines:]
+            raw = f.read().splitlines()[-lines:]
     except OSError:
         return []
+    out = []
+    for line in raw:
+        line = re.sub(r"(token=)[A-Za-z0-9_\-]{4,}", r"\1***", line,
+                      flags=re.I)
+        line = re.sub(r"(\[TOKEN\]\s*token:)\s*\S+", r"\1 ***", line)
+        line = re.sub(r"(dashboard\?token=)[^&\s\"']+", r"\1***", line)
+        out.append(line)
+    return out
 
 def build_diagnostics():
     """Everything a support request needs - with the token REDACTED."""
@@ -7550,19 +7986,26 @@ def route_print_payload(data, title, ip, source="raw9100"):
         return job, "jpeg"
     # everything below is printer-language passthrough (winspool RAW /
     # lp -o raw): PCL, PostScript, ZPL, ESC/POS...
+    # v2.9.1 (audit M5 fix): the passthrough is now ENQUEUED like every
+    # other payload instead of printing synchronously inside the socket
+    # thread - it gets a history row, pause/cancel/reprint, and the
+    # dest_mode routing (selected/default/IP printer). The old
+    # synchronous print_raw() had no history row and audit job_id=0.
     try:
-        print_raw(data, job_id=None, title=title[:60])
+        job, _dup = enqueue_print("raw", title[:90], data, source=source,
+                                  dedupe=False, origin_ip=ip)
+        db_audit("print", job_id=job, ip=ip, site="lan",
+                 printer=dest_display(),
+                 details="%s raw passthrough %s (%d KB)"
+                         % (source, _sniff_lang(data), len(data) // 1024))
+        log("[RAW9100] %s payload from %s (%d KB) -> queued #%d -> %s"
+            % (_sniff_lang(data), ip, len(data) // 1024, job,
+               dest_display()))
     except Exception as e:
         db_audit("print.failed", ip=ip, site="lan",
                  details="%s raw passthrough failed: %s" % (source, e))
         raise ValueError("raw passthrough failed: %s" % e)
-    db_audit("print", job_id=0, ip=ip, site="lan",
-             printer=dest_display(),
-             details="%s raw passthrough %s (%d KB)"
-                     % (source, _sniff_lang(data), len(data) // 1024))
-    log("[RAW9100] %s payload from %s (%d KB) -> %s"
-        % (_sniff_lang(data), ip, len(data) // 1024, dest_display()))
-    return 0, _sniff_lang(data)
+    return job, _sniff_lang(data)
 
 def _sniff_lang(data):
     """Human name for a raw printer-language payload."""
@@ -7576,15 +8019,26 @@ def _sniff_lang(data):
         return "escpos"
     return "raw"
 
+# v2.9.1 (audit M5 fix): at most 8 concurrent RAW 9100 connections - the
+# old accept loop spawned one unbounded daemon thread per connection, so
+# a forklift of open sockets could exhaust memory/threads.
+_RAW_SEM = threading.BoundedSemaphore(8)
+
 def _raw_conn_handler(conn, addr):
     """One JetDirect connection: read until the client closes or an
-    idle timeout hits, then route the payload."""
+    idle timeout hits, then route the payload. Releases the shared
+    connection slot on exit."""
     ip = addr[0] if isinstance(addr, tuple) else "unknown"
     try:
         conn.settimeout(15)
         chunks = []
         total = 0
-        while total <= MAX_PDF:
+        # v2.9.1 (audit M5 fix): the old loop condition was
+        # "while total <= MAX_PDF" and the cap-crossing chunk was STILL
+        # appended - a 30 MB payload got truncated to 25 MB and the
+        # TRUNCATED bytes were printed with no error. Now: stop reading
+        # at the cap and REJECT the whole payload.
+        while total < MAX_PDF:
             try:
                 b = conn.recv(65536)
             except socket.timeout:
@@ -7593,6 +8047,11 @@ def _raw_conn_handler(conn, addr):
                 break
             chunks.append(b)
             total += len(b)
+        if total > MAX_PDF:
+            log("[RAW9100] %s payload too large (%d KB > %d KB cap) -"
+                " rejected (send PDFs over HTTP /print or /send)"
+                % (ip, total // 1024, MAX_PDF // 1024))
+            return
         data = b"".join(chunks)
         if not data:
             return
@@ -7601,6 +8060,7 @@ def _raw_conn_handler(conn, addr):
         except Exception as e:
             log("[RAW9100] rejected %s: %s" % (ip, e))
     finally:
+        _RAW_SEM.release()             # v2.9.1 (M5): free the slot
         try:
             conn.close()
         except OSError:
@@ -7641,9 +8101,19 @@ def raw_listen_start():
                 conn, addr = srv.accept()
             except OSError:
                 break
-            threading.Thread(target=_raw_conn_handler, args=(conn, addr),
-                             daemon=True,
-                             name="advprint-raw9100").start()
+            # v2.9.1 (audit M5 fix): bounded concurrency - extra
+            # connections are closed immediately with a log line
+            if not _RAW_SEM.acquire(blocking=False):
+                log("[RAW9100] %s dropped - too many concurrent RAW"
+                    " connections (max 8)" % (addr[0] if isinstance(addr, tuple) else "?"))
+                try:
+                    conn.close()
+                except OSError:
+                    pass
+                continue
+            t = threading.Thread(target=_raw_conn_handler, args=(conn, addr),
+                                 daemon=True, name="advprint-raw9100")
+            t.start()
         try:
             srv.close()
         except OSError:
@@ -8646,7 +9116,12 @@ def cmd_serve():
     log("%s" % BRANDING)
     log("AdvPrint Pro v%s listening on http://%s:%d" % (VERSION, CFG["host"], CFG["port"]))
     log("Health check -> http://127.0.0.1:%d/health" % CFG["port"])
-    log("Dashboard     -> http://127.0.0.1:%d/dashboard?token=%s" % (CFG["port"], CFG["token"]))
+    # v2.9.1 (audit L8 fix): the startup line no longer prints the FULL
+    # dashboard URL with the token in it (console transcripts get pasted
+    # into chats / tickets). The tray menu and the loopback 302 auto-repair
+    # still open the real dashboard with one click.
+    log("Dashboard     -> http://127.0.0.1:%d/dashboard?token=%s"
+        % (CFG["port"], mask_token(CFG["token"])))
     if DEFAULT_TOKEN_WARNING:
         log("[SECURITY] WARNING: the default token is still in use!"
             " Change it with:  %s" % cli_cmd("token-rotate"))
