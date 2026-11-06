@@ -203,10 +203,48 @@ DESK
     echo "[OK] Auto-run installed (XDG autostart - starts with your desktop)"
 fi
 
+# ---- 6) v3.0.7: SILENT extension install policy (machine-wide) --------
+#  Linux Chrome/Chromium/Edge/Brave read /etc/*/policies/managed/*.json.
+#  The force-install entry points the browser at the hub's OWN
+#  /extension/updates.xml, so it installs the SIGNED extension silently
+#  and auto-updates it on every newer release (no domain requirement
+#  on Linux). Written when we are root or have passwordless sudo;
+#  otherwise the exact commands are printed for one manual run.
+EXTID="likldbkamojokkfdlcjibiljpgbbnohc"
+EXTVAL="${EXTID};http://127.0.0.1:9235/extension/updates.xml"
+POLJSON="{\"ExtensionInstallForcelist\":[\"${EXTVAL}\"]}"
+EXT_DIRS="/etc/opt/chrome/policies/managed /etc/chromium/policies/managed /etc/opt/edge/policies/managed /etc/brave/policies/managed"
+WROTE_POLICY=0
+if [ "$(id -u)" = "0" ]; then
+    for D in $EXT_DIRS; do
+        mkdir -p "$D"
+        printf '%s\n' "$POLJSON" > "$D/advprint-pro.json"
+        chmod 644 "$D/advprint-pro.json"
+    done
+    WROTE_POLICY=1
+    echo "[OK] Extension force-install policy written for Chrome/Chromium/Edge/Brave"
+elif sudo -n true 2>/dev/null; then
+    for D in $EXT_DIRS; do
+        sudo mkdir -p "$D"
+        printf '%s\n' "$POLJSON" | sudo tee "$D/advprint-pro.json" >/dev/null
+    done
+    WROTE_POLICY=1
+    echo "[OK] Extension force-install policy written for Chrome/Chromium/Edge/Brave"
+else
+    echo "[..] Silent extension install (optional, one sudo):"
+    echo "     curl -s http://127.0.0.1:9235/extension/info | grep -o '\"forcelist_value.*'"
+    echo "     or run:  sudo bash install-unix.sh   (re-run as root writes the policy)"
+fi
+
 echo ""
 echo "  Setup finished - automatic from now on:"
 echo "    hub   : http://127.0.0.1:$PORT      logs: ~/.advprint/hub.out"
-echo "    Chrome: chrome://extensions > Developer mode > Load unpacked"
-echo "            select the extension/ folder, then press Connect"
+if [ "$WROTE_POLICY" = "1" ]; then
+    echo "    Chrome: the extension installs SILENTLY via the force-install"
+    echo "            policy - restart Chrome once and it is there."
+else
+    echo "    Chrome: chrome://extensions > Developer mode > Load unpacked"
+    echo "            select the extension/ folder, then press Connect"
+fi
 echo "    uninstall:  bash uninstall-unix.sh (same folder)"
 echo ""

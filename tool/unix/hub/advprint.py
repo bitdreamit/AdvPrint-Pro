@@ -95,8 +95,21 @@ if _HUB_DIR not in sys.path:
     sys.path.insert(0, _HUB_DIR)
 
 
-VERSION = "3.0.6"
-VERSION_NAME = ("v3.0.6 (NETWORK PRINTER MODE: add this PC like a real"
+VERSION = "3.0.7"
+VERSION_NAME = ("v3.0.7 (SELF-HOST EXTENSION AUTO-INSTALL: Chrome"
+                " installs the extension SILENTLY via the enterprise"
+                " ExtensionInstallForcelist policy - the hub serves"
+                " the SIGNED .crx plus a Chromium update manifest at"
+                " /extension/updates.xml + /extension/AdvPrint-Pro.crx,"
+                " the extension ID is FIXED forever (stable signing"
+                " key) so every hub release silently updates it, the"
+                " Setup exe writes the policy for Chrome/Edge/Brave/"
+                " Chromium/Vivaldi (HKLM) and the deb writes"
+                " /etc/*/policies/managed on Linux, the dashboard has"
+                " a Browser-extension card (check / write / remove the"
+                " policy), and the Enterprise-Deploy-Kit hosts the same"
+                " two files on any web server for schools/workplaces."
+                " NETWORK PRINTER MODE: add this PC like a real"
                 " IP printer - IPP at /ipp/print for Windows 10/11 'add a"
                 " printer by URL' and phone print services, plus a"
                 " JetDirect RAW listener on TCP 9100 for the classic"
@@ -1326,6 +1339,7 @@ def build_health_snapshot():
         "printers_ready": ready,
         "audit": bool(CFG.get("audit_enabled", True)),
         "loopback_lock_exempt": True,
+        "extension": ext_health(),
         "v2": True,
     }
     with _HEALTH_LOCK:
@@ -3712,6 +3726,291 @@ def reprint_job_core(j, body, ip, site):
         return 500, {"ok": False, "error": "reprint failed: %s" % e}
 
 
+
+# ------------------------------------------------------------
+# v3.0.7 SELF-HOST EXTENSION SERVER.  The hub serves the SIGNED,
+# PACKED browser extension (.crx, CRX3 format) plus a Chromium
+# update manifest, so Chrome / Edge / Brave install it silently
+# through the enterprise force-install policy AND auto-update it
+# whenever a newer .crx lands in the install folder:
+#
+#   policy value:  <extension-id>;http://127.0.0.1:9235/extension/updates.xml
+#   open GET:      /extension/updates.xml        gupdate 2.0 XML
+#                  /extension/AdvPrint-Pro.crx   the signed package
+#                  /extension/info               dashboard JSON
+#                  /extension                    landing page
+#
+# The endpoints are OPEN because Chrome's updater cannot send our
+# token header - but the Host-header rule (localhost / LAN IP only)
+# still applies, so no outsider can pull the package.  The .crx
+# ships inside the Setup exe / deb at <hub folder>/extension/; the
+# extension ID is DERIVED FROM THE SIGNING KEY inside the .crx
+# header, so the ID is stable across versions - that stability is
+# exactly what makes silent updates possible (same ID + higher
+# version in updates.xml = Chrome updates without any prompt).
+EXT_CRX_NAME = "AdvPrint-Pro.crx"
+# Belt-and-braces: the ID of the release signing key.  Everything
+# derives from the shipped .crx at runtime; this fallback only
+# covers the "policy without package" corner (recovery installs).
+EXT_CRX_ID = "likldbkamojokkfdlcjibiljpgbbnohc"
+_EXT_CRX_CACHE = {"path": None, "mtime": None, "loaded": False,
+                  "data": None, "ext_id": None, "version": None}
+
+
+def _crx_pb_varint(buf, i):
+    shift = val = 0
+    while True:
+        b = buf[i]
+        i += 1
+        val |= (b & 0x7F) << shift
+        if not (b & 0x80):
+            return val, i
+        shift += 7
+
+
+def _crx_pb_fields(buf):
+    """Minimal protobuf reader for the CRX3 header (wire type 2 only)."""
+    out = {}
+    i = 0
+    while i < len(buf):
+        tag, i = _crx_pb_varint(buf, i)
+        fn, wt = tag >> 3, tag & 7
+        if wt == 2:
+            ln, i = _crx_pb_varint(buf, i)
+            out.setdefault(fn, []).append(buf[i:i + ln])
+            i += ln
+        elif wt == 0:
+            v, i = _crx_pb_varint(buf, i)
+            out.setdefault(fn, []).append(v)
+        else:
+            raise ValueError("wire type %d" % wt)
+    return out
+
+
+def _crx_id_from_raw(raw16):
+    """16 bytes -> 32 letters a..p (hex NIBBLE mapping, id_util.cc)."""
+    return "".join(chr(n + 97) for b in raw16
+                   for n in (b >> 4, b & 0x0F))
+
+
+def _crx_paths():
+    here = os.path.dirname(os.path.abspath(__file__))
+    return [os.path.join(here, "extension", EXT_CRX_NAME),
+            os.path.join(os.path.expanduser("~"), ".advprint",
+                         "extension", EXT_CRX_NAME)]
+
+
+def crx_package(force=False):
+    """The shipped .crx: {'data','ext_id','version','path'} or None.
+    Parsed ONCE, re-parsed automatically when the file changes (so an
+    IT admin can drop a newer package in without restarting the hub
+    and every Chrome still updates silently).  Pure stdlib."""
+    import struct as _struct
+    import zipfile as _zipfile
+    c = _EXT_CRX_CACHE
+    for p in _crx_paths():
+        try:
+            mtime = os.path.getmtime(p)
+        except OSError:
+            continue
+        if (not force and c["loaded"] and c["path"] == p
+                and c["mtime"] == mtime):
+            return c
+        try:
+            with open(p, "rb") as f:
+                data = f.read()
+            if data[:4] != b"Cr24":
+                continue
+            hlen = _struct.unpack("<I", data[8:12])[0]
+            if hlen <= 0 or 12 + hlen > len(data):
+                continue
+            header = data[12:12 + hlen]
+            fields = _crx_pb_fields(header)
+            # signed_header_data (field 10000) = SignedData{crx_id=1}
+            signed = fields[10000][0]
+            raw_id = _crx_pb_fields(signed)[1][0]
+            ext_id = _crx_id_from_raw(raw_id)
+            # manifest.json lives inside the zip that follows the header
+            with _zipfile.ZipFile(io.BytesIO(data[12 + hlen:])) as zf:
+                version = json.loads(
+                    zf.read("manifest.json").decode("utf-8")).get(
+                    "version", "?")
+            c.update(path=p, mtime=mtime, loaded=True, data=data,
+                     ext_id=ext_id, version=version)
+            return c
+        except Exception:
+            continue
+    return None
+
+
+def ext_health():
+    """Compact /health block about the served extension."""
+    c = crx_package()
+    if not c:
+        return {"served": False, "id": EXT_CRX_ID}
+    return {"served": True, "id": c["ext_id"], "version": c["version"]}
+
+
+# ---- Windows per-user force-install policy (HKCU - no UAC needed;
+#      the Setup exe writes the machine-wide HKLM twin) ----
+EXT_POLICY_BROWSERS = [          # (hive path fragment, display name)
+    ("Google\\Chrome", "Chrome"),
+    ("Microsoft\\Edge", "Edge"),
+    ("BraveSoftware\\Brave", "Brave"),
+    ("Chromium", "Chromium"),
+    ("Vivaldi", "Vivaldi"),
+]
+
+
+def ext_policy_url():
+    return "http://127.0.0.1:%d/extension/updates.xml" % int(
+        CFG.get("port", 9235))
+
+
+def ext_forcelist_value():
+    c = crx_package()
+    ext_id = c["ext_id"] if c else EXT_CRX_ID
+    return "%s;%s" % (ext_id, ext_policy_url())
+
+
+def _ext_reg_hive(hive):
+    """'HKCU'/'HKLM' -> full Python registry-ish key via reg.exe."""
+    return hive
+
+
+def _ext_reg_query_values(full_key):
+    """{value_name: data} of REG_SZ values under full_key (reg.exe)."""
+    out = {}
+    if not IS_WIN:
+        return out
+    try:
+        p = subprocess.run(["reg", "query", full_key],
+                           capture_output=True, text=True, timeout=10)
+    except Exception:
+        return out
+    if p.returncode != 0:
+        return out
+    for line in (p.stdout or "").splitlines():
+        m = re.match(r"\s+(\S+)\s+REG_SZ\s+(.*?)\s*$", line)
+        if m:
+            out[m.group(1)] = m.group(2)
+    return out
+
+
+def _ext_reg_add(full_key, name, data):
+    return subprocess.run(
+        ["reg", "add", full_key, "/v", name, "/t", "REG_SZ",
+         "/d", data, "/f"], capture_output=True, text=True,
+        timeout=10).returncode == 0
+
+
+def _ext_reg_delete(full_key, name):
+    try:
+        return subprocess.run(
+            ["reg", "delete", full_key, "/v", name, "/f"],
+            capture_output=True, text=True, timeout=10).returncode == 0
+    except Exception:
+        return False
+
+
+def ext_policy_status():
+    """Where is the force-install policy present, per browser?"""
+    ext_id = (crx_package() or {}).get("ext_id", EXT_CRX_ID)
+    want = ext_id + ";"
+    result = {"ok": True, "platform": "windows" if IS_WIN else
+              ("macos" if IS_MAC else "linux"),
+              "extension_id": ext_id,
+              "updates_url": ext_policy_url(),
+              "browsers": {}}
+    if not IS_WIN:
+        result["note"] = ("on Linux the deb package installs the policy"
+                          " as /etc/*/policies/managed/advprint-pro.json"
+                          " (Chrome, Chromium, Edge, Brave) - check that"
+                          " file; nothing is stored in the registry")
+        return result
+    for frag, name in EXT_POLICY_BROWSERS:
+        b = {"present": False}
+        for hive in ("HKCU", "HKLM"):
+            key = "%s\\SOFTWARE\\Policies\\%s\\ExtensionInstallForcelist" \
+                % (hive, frag)
+            vals = _ext_reg_query_values(key)
+            for vname, vdata in vals.items():
+                if vdata.startswith(want) or vname.startswith("AdvPrint"):
+                    b["present"] = True
+                    b["hive"] = hive
+                    b["value"] = vname
+                    b["data"] = vdata
+        result["browsers"][name] = b
+    return result
+
+
+def ext_policy_install():
+    """Write the force-install policy for THIS user (HKCU).  Returns a
+    per-browser report + the honest expectation text (silent install
+    needs a managed/domain machine on Chrome + Edge; home PCs use
+    Load unpacked instead)."""
+    if not IS_WIN:
+        return {"ok": False, "note": ext_policy_status().get("note")}
+    data = ext_forcelist_value()
+    ext_id = (crx_package() or {}).get("ext_id", EXT_CRX_ID)
+    report = {}
+    wrote = 0
+    for frag, name in EXT_POLICY_BROWSERS:
+        key = "HKCU\\SOFTWARE\\Policies\\%s\\ExtensionInstallForcelist" \
+            % frag
+        vals = _ext_reg_query_values(key)
+        target = None
+        for vname, vdata in vals.items():
+            if vdata.startswith(ext_id + ";"):
+                target = vname            # keep our existing slot
+                break
+        if target is None:
+            target = str(len(vals) + 1)   # first free index
+        ok = _ext_reg_add(key, target, data)
+        if ok:
+            # remember the slot so uninstall can remove exactly ours
+            _ext_reg_add("HKCU\\Software\\AdvPrintPro",
+                         "ExtPolicy." + frag, target)
+            wrote += 1
+        report[name] = ("written (entry %s)" % target if ok
+                        else "reg add failed (permissions?)")
+    return {"ok": wrote > 0, "browsers": report, "wrote": wrote,
+            "value": data,
+            "message": ("policy written for %d browser(s) - restart the"
+                        " browser once, then chrome://policy shows it."
+                        " Chrome/Edge install the extension silently on"
+                        " managed (domain/enrolled) PCs; on a normal PC"
+                        " Chrome ignores off-store force-install - use"
+                        " chrome://extensions > Load unpacked there"
+                        % wrote)}
+
+
+def ext_policy_remove():
+    """Delete exactly OUR force-install entries (never other
+    extensions a company may already force-install)."""
+    if not IS_WIN:
+        return {"ok": False, "note": ext_policy_status().get("note")}
+    ext_id = (crx_package() or {}).get("ext_id", EXT_CRX_ID)
+    removed = []
+    for frag, name in EXT_POLICY_BROWSERS:
+        for hive in ("HKCU", "HKLM"):
+            key = "%s\\SOFTWARE\\Policies\\%s\\ExtensionInstallForcelist" \
+                % (hive, frag)
+            vals = _ext_reg_query_values(key)
+            for vname, vdata in vals.items():
+                if vdata.startswith(ext_id + ";"):
+                    if _ext_reg_delete(key, vname):
+                        removed.append("%s %s:%s" % (name, hive, vname))
+            slot_key = "HKCU\\Software\\AdvPrintPro"
+            _ext_reg_delete(slot_key, "ExtPolicy." + frag)
+    return {"ok": True, "removed": removed,
+            "message": ("%d policy entry(ies) removed; Chrome removes the"
+                        " extension at its next start (force-install"
+                        " removal auto-uninstalls)" % len(removed))
+            if removed else
+            "no AdvPrint policy entry found - nothing to remove"}
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "AdvPrintPro/" + VERSION
     protocol_version = "HTTP/1.1"
@@ -4308,6 +4607,123 @@ class Handler(BaseHTTPRequestHandler):
             # now - even a cold or AV-slowed WMI cannot touch it.
             return self._send(200, health_snapshot())
 
+        # ---- v3.0.7 SELF-HOST extension server (OPEN endpoints:
+        # Chrome's updater sends no token; the Host rule above already
+        # limits these to localhost / LAN callers) ----
+        if route == "/extension/updates.xml":
+            c = crx_package()
+            if not c:
+                return self._send(404, {
+                    "ok": False,
+                    "error": "no extension package found (missing"
+                             " extension/" + EXT_CRX_NAME + ")"})
+            host = (self.headers.get("Host") or "127.0.0.1:%d"
+                    % int(CFG.get("port", 9235))).strip()
+            if not re.match(r"^[A-Za-z0-9.:\[\]-]+$", host):
+                host = "127.0.0.1:%d" % int(CFG.get("port", 9235))
+            base = "http://" + host
+            xml = ("<?xml version='1.0' encoding='UTF-8'?>\n"
+                   "<gupdate xmlns='http://www.google.com/update2/response'"
+                   " protocol='2.0'>\n"
+                   "  <app appid='%s'>\n"
+                   "    <updatecheck codebase='%s/extension/%s'"
+                   " version='%s' />\n"
+                   "  </app>\n"
+                   "</gupdate>\n"
+                   % (c["ext_id"], base, EXT_CRX_NAME, c["version"]))
+            body = xml.encode("utf-8")
+            self.send_response(200)
+            self._cors()
+            self.send_header("Content-Type", "text/xml; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            try:
+                self.wfile.write(body)
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+            return
+
+        if route == "/extension/" + EXT_CRX_NAME:
+            c = crx_package()
+            if not c:
+                return self._send(404, {
+                    "ok": False,
+                    "error": "no extension package found (missing"
+                             " extension/" + EXT_CRX_NAME + ")"})
+            self.send_response(200)
+            self._cors()
+            # REQUIRED: Chromium only treats the download as an
+            # installable extension with this exact Content-Type
+            # (missing it = policy install silently fails).
+            self.send_header("Content-Type",
+                             "application/x-chrome-extension")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(c["data"])))
+            self.end_headers()
+            try:
+                self.wfile.write(c["data"])
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+            return
+
+        if route == "/extension/info":
+            c = crx_package()
+            return self._send(200, {
+                "ok": True,
+                "served": bool(c),
+                "extension_id": c["ext_id"] if c else EXT_CRX_ID,
+                "version": c["version"] if c else None,
+                "updates_url": ("http://127.0.0.1:%d/extension/updates.xml"
+                                % int(CFG.get("port", 9235))),
+                "crx_url": ("http://127.0.0.1:%d/extension/%s"
+                            % (int(CFG.get("port", 9235)), EXT_CRX_NAME)),
+                "forcelist_value": ext_forcelist_value(),
+                "note": "Chrome installs silently on managed"
+                        " (domain/enrolled) PCs via"
+                        " ExtensionInstallForcelist; on a home PC use"
+                        " chrome://extensions > Load unpacked"})
+
+        if route == "/extension":
+            c = crx_package()
+            page = ("<!DOCTYPE html><html><head><meta charset='utf-8'>"
+                    "<title>AdvPrint Pro - extension server</title>"
+                    "</head><body style='font-family:Segoe UI,sans-serif;"
+                    "background:#f5f8fc;color:#0f172a;padding:32px'>"
+                    "<h2>AdvPrint Pro - self-host extension server"
+                    " (v3.0.7)</h2>"
+                    "<p>This hub serves its signed browser extension so"
+                    " Chrome / Edge / Brave can install and update it"
+                    " silently via the ExtensionInstallForcelist"
+                    " policy.</p><ul>"
+                    "<li><a href='/extension/updates.xml'>updates.xml"
+                    "</a> - Chromium update manifest (gupdate 2.0)</li>"
+                    "<li><a href='/extension/%s'>%s</a> - the signed"
+                    " package (CRX3)</li>"
+                    "<li><a href='/extension/info'>info</a> - JSON"
+                    " (ID, version, policy value)</li></ul>"
+                    "<p>Extension ID: <b>%s</b> &middot; served version:"
+                    " <b>%s</b></p><p>Policy value for registry/GPO:"
+                    " <code>%s;%s</code></p>"
+                    "<p><a href='/dashboard'>Dashboard</a></p></body>"
+                    "</html>"
+                    % (EXT_CRX_NAME, EXT_CRX_NAME,
+                       c["ext_id"] if c else EXT_CRX_ID,
+                       c["version"] if c else "-",
+                       c["ext_id"] if c else EXT_CRX_ID,
+                       ext_policy_url())).encode("utf-8")
+            self.send_response(200)
+            self._cors()
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(page)))
+            self.end_headers()
+            try:
+                self.wfile.write(page)
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+            return
+
+
         # /token/current - v2.6 ONE-CLICK TOKEN FIX. Loopback ONLY: the
         # owner's own PC can always recover the dashboard (a stale
         # bookmark must never require reading config files). Remote IPs
@@ -4728,6 +5144,8 @@ class Handler(BaseHTTPRequestHandler):
                                               else "pdf"), ctype)
                 return self._send(404, {"ok": False,
                                         "error": "job or file not found"})
+        if route == "/extension/policy/status":
+            return self._send(200, ext_policy_status())
         return self._send(404, {"ok": False, "error": "unknown endpoint"})
 
     def _csv_response(self, which, rows):
@@ -5850,6 +6268,16 @@ class Handler(BaseHTTPRequestHandler):
                 "errors": errors,
                 "message": "%d job(s) shifted to %s" % (len(shifted), target)})
 
+        if route == "/extension/policy/install":
+            db_audit("extension.policy_install", actor="dashboard",
+                     ip=self._client_ip())
+            return self._send(200, ext_policy_install())
+
+        if route == "/extension/policy/remove":
+            db_audit("extension.policy_remove", actor="dashboard",
+                     ip=self._client_ip())
+            return self._send(200, ext_policy_remove())
+
         return self._send(404, {"ok": False, "error": "unknown endpoint"})
 
 # ------------------------------------------------------------
@@ -6813,6 +7241,19 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     </div>
     <p style="font-size:13px;color:#334155;margin:2px 0 0">Where every job prints: the OS <b>default printer</b>, <b>any installed printer</b> (picked from the list), or an <b>IP printer</b> - a real network printer at IP:port (RAW&nbsp;9100 or IPP). PCs and phones that added <i>this</i> hub as their network printer print through exactly this destination, so one setting routes everything.</p>
   </div>
+  <h2>Browser extension - silent install <small style="text-transform:none;letter-spacing:0">&nbsp;- v3.0.7: Chrome/Edge/Brave install the extension BY POLICY - no chrome://extensions, no Load unpacked</small></h2>
+  <div class="panel ltbox">
+    <div class="hbar">
+      <span class="mono">ID: <span id="extId">-</span></span>
+      <span class="mono">CRX v<span id="extVer">-</span></span>
+      <button class="primary" onclick="extPolicyInstall()">Silent-install into Chrome/Edge/Brave (this user)</button>
+      <button onclick="extPolicyStatus()">Check policy</button>
+      <button onclick="extPolicyRemove()">Remove policy</button>
+      <button onclick="extCopyUrl()">Copy updates.xml URL</button>
+      <span id="extMsg" style="font-size:12px;color:var(--mut)"></span>
+    </div>
+    <p style="font-size:13px;color:#334155;margin:2px 0 0">The hub serves the <b>signed extension package</b> at <span class="mono">/extension/updates.xml</span> + <span class="mono">/extension/AdvPrint-Pro.crx</span> (open endpoints - Chrome's updater sends no token). The Windows Setup already wrote the force-install policy for <b>all users</b> (HKLM); this button writes the same policy for <b>your user</b> (HKCU) - use it when Chrome was installed after Setup or the hub port changed. Chrome/Edge honor it <b>silently on domain-joined PCs</b> (schools, workplaces); on a normal home PC Chrome ignores non-store force-install - those users load the extension once via chrome://extensions &gt; Load unpacked (files sit in the install folder). Linux: the deb package writes /etc/*/policies/managed/advprint-pro.json. Every hub release ships a new .crx, so Chrome updates the extension automatically whenever this page shows a higher version.</p>
+  </div>
   <h2>Printers</h2>
   <div class="panel" id="printers"><table><tbody>
     <tr><td>Loading printers...</td></tr></tbody></table></div>
@@ -6890,6 +7331,23 @@ async function act(p,body){const r=await fetch(withQ(p),{method:"POST",
   body:JSON.stringify(body||{})});return r.json();}
 function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,
   c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));}
+async function extInfo(){try{const d=await jget("/extension/info");
+  document.getElementById("extId").textContent=d.extension_id||"-";
+  document.getElementById("extVer").textContent=d.version||"-";
+}catch(_){}}
+async function extMsgSet(t){document.getElementById("extMsg").textContent=t;}
+async function extPolicyInstall(){await extMsgSet("writing policy...");
+  try{const d=await act("/extension/policy/install",{});
+  await extMsgSet(d.ok?(d.message||"policy written - restart the browser once"):(d.note||d.error||"failed"));}
+  catch(e){await extMsgSet("failed: "+e);}}
+async function extPolicyStatus(){try{const d=await jget("/extension/policy/status");
+  if(!d.platform||d.platform==="windows"){const parts=[];for(const[k,v]of Object.entries(d.browsers||{}))parts.push(k+": "+(v.present?("present ("+v.hive+" "+v.value+")"):"absent"));
+  await extMsgSet(parts.join(" | ")||"no browser policy found");}else{await extMsgSet(d.note||"linux uses /etc/*/policies/managed/advprint-pro.json");}}
+  catch(e){await extMsgSet("failed: "+e);}}
+async function extPolicyRemove(){try{const d=await act("/extension/policy/remove",{});
+  await extMsgSet(d.message||"done");}catch(e){await extMsgSet("failed: "+e);}}
+async function extCopyUrl(){try{await navigator.clipboard.writeText(location.origin+"/extension/updates.xml");
+  await extMsgSet("updates.xml URL copied");}catch(e){await extMsgSet("copy failed: "+e);}}
 async function refresh(){
   try{
     const st=await jget("/stats");
@@ -7340,7 +7798,7 @@ async function rotateToken(){
   else msg(r.error||"failed");
 }
 refresh();loadHistory();loadLan();loadDest();loadDebug();loadDz();
-setInterval(refresh,5000);setInterval(loadHistory,10000);
+setInterval(refresh,5000);setInterval(loadHistory,10000);extInfo();
 setInterval(loadLan,15000);setInterval(loadDebug,15000);
 async function ltSend(){
   const out=document.getElementById("ltOut");

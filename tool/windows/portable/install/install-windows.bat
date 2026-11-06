@@ -151,6 +151,25 @@ if exist "%LNK%" (
   echo     after a reboot start it with install\START-PRINT-HUB.vbs
 )
 
+REM ---- 4b) v3.0.7: SILENT extension install policy (this user) ------
+REM  Writes the ExtensionInstallForcelist policy under HKCU (no admin
+REM  needed): Chrome/Edge/Brave/Chromium/Vivaldi fetch the SIGNED
+REM  extension from the hub's own /extension/updates.xml endpoint and
+REM  install it silently + auto-update it on every newer release.
+REM  Silent install takes effect on domain-joined/enrolled machines
+REM  (schools, workplaces); a normal home PC ignores off-store
+REM  force-install - there use chrome://extensions > Load unpacked.
+echo [..] Writing the extension force-install policy ...
+powershell -NoProfile -ExecutionPolicy Bypass -Command "
+$id='likldbkamojokkfdlcjibiljpgbbnohc'; $val=$id+';http://127.0.0.1:9235/extension/updates.xml'; "
+foreach($p in @('HKCU:\\SOFTWARE\\Policies\\Google\\Chrome\\ExtensionInstallForcelist','HKCU:\\SOFTWARE\\Policies\\Microsoft\\Edge\\ExtensionInstallForcelist','HKCU:\\SOFTWARE\\Policies\\BraveSoftware\\Brave\\ExtensionInstallForcelist','HKCU:\\SOFTWARE\\Policies\\Chromium\\ExtensionInstallForcelist','HKCU:\\SOFTWARE\\Policies\\Vivaldi\\ExtensionInstallForcelist')){ "
+New-Item -Path $p -Force | Out-Null; "
+$props=(Get-Item $p).Property; $slot=$null; "
+foreach($n in $props){ $v=(Get-ItemProperty -Path $p -Name $n).$n; if($v -like ($id+';*')){ $slot=$n; break } }; "
+if(-not $slot){ $slot=[string]($props.Count+1) }; "
+Set-ItemProperty -Path $p -Name $slot -Value $val; }" >nul 2>&1
+echo [OK] Extension force-install policy written (Chrome/Edge/Brave - silent install on managed PCs)
+
 REM ---- 5) start the hub right now, hidden ------------------------------
 echo [..] Starting AdvPrint Pro on http://127.0.0.1:9235 ...
 if defined PYW (
@@ -183,8 +202,9 @@ echo     - "AdvPrint Pro" TRAY ICON near the clock: right-click
 echo       it for status page / test page / pause / auto-run / exit
 echo     - starts again automatically at every logon as the
 echo       Startup app "AdvPrint Pro" (Task Manager ^> Startup)
-echo     - Chrome: chrome://extensions ^> Developer mode
-echo       ^> Load unpacked ^> select the extension folder
+echo     - Chrome/Edge: silent install via force-install policy
+echo       (domain PCs). Home PC: chrome://extensions ^>
+echo       Developer mode ^> Load unpacked ^> extension folder
 echo     - click the AdvPrint icon ^> Connect
 echo    Remove auto-run anytime:  install\UNINSTALL-WINDOWS.bat
 echo   ====================================================

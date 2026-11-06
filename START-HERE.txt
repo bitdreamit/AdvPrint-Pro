@@ -1,9 +1,36 @@
-AdvPrint Pro (Advanced Printer) v3.0.6 - START HERE
+AdvPrint Pro (Advanced Printer) v3.0.7 - START HERE
 ====================================================
 by Bit Dream IT - Innovative Healthcare Solutions
 
-WHAT'S NEW IN 3.0.6 (RULES MATCH BY CONTENT - ZPL, TEXT, PDF, IMAGE)
+WHAT'S NEW IN 3.0.7 (SILENT EXTENSION AUTO-INSTALL - ONE DOWNLOAD)
 ----------------------------------------------------------------------
+1) DOWNLOAD ONE FILE, THE BROWSER EXTENSION INSTALLS ITSELF. The
+   Setup exe (and the deb) now ships the extension as a SIGNED
+   .crx and writes the Chrome enterprise force-install policy
+   (ExtensionInstallForcelist): Chrome/Edge/Brave install the
+   extension silently - no chrome://extensions, no Load unpacked,
+   no dragging files.
+2) IT KEEPS ITSELF UP TO DATE. The extension ID is FIXED forever
+   (stable release signing key), and the hub serves the package
+   at /extension/updates.xml + /extension/AdvPrint-Pro.crx. Every
+   newer hub version silently updates the extension in Chrome.
+3) SCHOOLS / WORKPLACES: host the two kit files (crx + updates.xml)
+   on ANY web server (internal IIS, GitHub Pages, a free host) and
+   push one registry key / GPO / Intune setting - see
+   docs/SELF-HOST-DEPLOY.md and the Enterprise-Deploy-Kit folder.
+4) HONEST LIMIT: Chrome/Edge only honor silent off-store install
+   on MANAGED machines (domain-joined or enrolled). On a normal
+   home PC Chrome ignores it - use chrome://extensions > Load
+   unpacked as before (the classic extension/ folder ships too).
+   On LINUX there is no such restriction: the deb policy installs
+   silently everywhere.
+5) NEW DASHBOARD CARD 'Browser extension - silent install': shows
+   the extension ID + served version, writes/repairs the policy
+   for your user (HKCU) after a port change or late Chrome
+   install, and removes it cleanly.
+0) NEW IN 3.0.6 (also in this build): rules match by CONTENT -
+   ZPL ^XA...^XZ, receipt text, PDF, image - no URL needed; the
+   Options page is split into 9 human tabs.
 1) HOW THE RIGHT PRINTER IS DETECTED - NOW WITHOUT A URL. A rule
    can match by CONTENT: 'Page content: ZPL label' fires for ANY
    page whose text carries ^XA...^XZ (goes to the Zebra byte-for-
@@ -225,8 +252,8 @@ WHAT'S NEW IN 2.8.2 (LAN SHARING APPLIES LIVE + FIREWALL ONE-CLICK)
      reports PASS/FAIL in the message bar: PASS + other PC still
      failing = firewall (click the button); FAIL = listener problem
      (hub.log says exactly why).
-  FILES IN THIS RELEASE: AdvPrint-Pro-Setup-3.0.6.exe (Windows),
-  advprint-pro_3.0.6_all.deb (Linux), AdvPrint-Pro-3.0.6-source.zip.
+  FILES IN THIS RELEASE: AdvPrint-Pro-Setup-3.0.7.exe (Windows),
+  advprint-pro_3.0.7_all.deb (Linux), AdvPrint-Pro-3.0.7-source.zip.
 
 WHAT'S NEW IN 2.8.1 (SEND-PORTAL QR + ONE-CLICK LAN INVITE)
 ===========================================================
@@ -247,8 +274,8 @@ WHAT'S NEW IN 2.8.1 (SEND-PORTAL QR + ONE-CLICK LAN INVITE)
      - Safe by design: loopback-only, private-LAN URLs only, explicit
        click required, every accept is audited (peer.connected).
   3. NOTHING REMOVED - everything from 2.8.0 below is unchanged.
-  FILES IN THIS RELEASE: AdvPrint-Pro-Setup-3.0.6.exe (Windows),
-  advprint-pro_3.0.6_all.deb (Linux), AdvPrint-Pro-3.0.6-source.zip.
+  FILES IN THIS RELEASE: AdvPrint-Pro-Setup-3.0.7.exe (Windows),
+  advprint-pro_3.0.7_all.deb (Linux), AdvPrint-Pro-3.0.7-source.zip.
 
 WHAT'S NEW IN 2.8.0 (TWO HUB PROFILES + DROPZONE + BULLET-PROOF UNINSTALL)
 ==========================================================================
@@ -276,13 +303,13 @@ WHAT'S NEW IN 2.8.0 (TWO HUB PROFILES + DROPZONE + BULLET-PROOF UNINSTALL)
      service before touching files, wipes old program folders and
      frees port 9235 - "some file abort install" is fixed. The
      service is reinstalled automatically on upgrade.
-  9. SILENT INSTALL: AdvPrint-Pro-Setup-3.0.6.exe /S - the exe
+  9. SILENT INSTALL: AdvPrint-Pro-Setup-3.0.7.exe /S - the exe
      requests admin by itself (UAC once), the hub auto-starts and
      the firewall rule for LAN sharing is added automatically.
  10. NEW LOGO: the letter A drawn as a printer - the crossbar is the
      output slot and a printed page slides out of it.
-  FILES IN THIS RELEASE: AdvPrint-Pro-Setup-3.0.6.exe (Windows),
-  advprint-pro_3.0.6_all.deb (Linux), AdvPrint-Pro-3.0.6-source.zip.
+  FILES IN THIS RELEASE: AdvPrint-Pro-Setup-3.0.7.exe (Windows),
+  advprint-pro_3.0.7_all.deb (Linux), AdvPrint-Pro-3.0.7-source.zip.
 
 WHAT'S NEW IN 2.7.0 (HISTORY MANAGER + SHARE MODES + CLEAN LAYOUT)
   0. JOB HISTORY IS NOW A REAL MANAGER (hub dashboard "Job history"
@@ -571,7 +598,7 @@ WHY DID MY OLD VERSION SAY "cannot access" ON THE SETUP EXE?
   No manual Security-tab work is needed anywhere.
 
 UPDATE IN 3 STEPS
-  1. Run AdvPrint-Pro-Setup-3.0.6.exe (installs over the old
+  1. Run AdvPrint-Pro-Setup-3.0.7.exe (installs over the old
      version; history + settings migrate to .advprint automatically).
      Portable users: extract the new zip over the old folder, then
      AdvPrint-Tool.bat > [13] once (unblocks), then [1] Start.
@@ -605,12 +632,12 @@ FILES IN THIS PACKAGE
                    AdvPrint-Pro-Full-Guide.html + .pdf, release notes
   tests\           pytest suite + pytest.ini
   installer\       setup.nsi - NSIS 3 source that builds
-                   AdvPrint-Pro-Setup-3.0.6.exe (per-machine, UAC)
+                   AdvPrint-Pro-Setup-3.0.7.exe (per-machine, UAC)
   prebuilt\        READY installers, no build needed:
-                   AdvPrint-Pro-Setup-3.0.6.exe (Windows setup,
+                   AdvPrint-Pro-Setup-3.0.7.exe (Windows setup,
                    ~9.5 MB - run it, UAC appears, done)
-                   advprint-pro_3.0.6_all.deb (Linux deb -
-                   sudo dpkg -i advprint-pro_3.0.6_all.deb)
+                   advprint-pro_3.0.7_all.deb (Linux deb -
+                   sudo dpkg -i advprint-pro_3.0.7_all.deb)
   README.md / CHANGELOG.md / LICENSE / pytest.ini / .gitignore
   SHA256SUMS.txt
 

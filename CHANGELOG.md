@@ -1,6 +1,102 @@
 # Changelog - AdvPrint Pro (Advanced Printer)
 by Bit Dream IT - Innovative Healthcare Solutions
 
+## v3.0.7 - SELF-HOST EXTENSION AUTO-INSTALL (FORCELIST + CRX + UPDATES.XML) (2026-11-06)
+
+User request: "Self-Host Using 'Extension Install Force-list' (For
+Schools/Workplaces) ... host the packed .crx file and a small XML
+manifest file on your own free web server ... is it possible when
+tool exe install it auto install browser also, so only download exe
+or deb auto install extension so it more easy and extension to .crx
+for extension every time update version."
+
+- **Stable signing key** (extension-signing/advprint-printer.pem):
+  extension ID likldbkamojokkfdlcjibiljpgbbnohc is now PERMANENT -
+  derived from the key, same ID on every future release, which is
+  the precondition for silent updates.
+- **tool/crx3.py**: pure-Python CRX3 packer/reader shipped in the
+  tree (format verified byte-for-byte against Chrome's own
+  --pack-extension output for the same key).
+- **Hub serves the extension**: open GET /extension/updates.xml
+  (gupdate 2.0 XML, codebase built from the request Host so the
+  port is always right), GET /extension/AdvPrint-Pro.crx with the
+  REQUIRED Content-Type application/x-chrome-extension (missing it
+  = policy install silently fails per Chromium), GET /extension/info
+  (JSON: ID, version, policy value) and GET /extension (landing
+  page). The package is re-parsed on file change, so swapping in a
+  newer .crx updates every Chrome without touching the hub.
+- **/health gains "extension": {served, id, version}**.
+- **Policy endpoints** (token-gated): GET /extension/policy/status,
+  POST /extension/policy/install (HKCU per-user write with
+  next-free-index + our-ID replace, recorded for clean removal),
+  POST /extension/policy/remove (deletes exactly OUR entries).
+- **Dashboard card** 'Browser extension - silent install': ID +
+  served version, check/write/remove buttons, updates.xml URL
+  copy, honest domain-requirement note.
+- **NSIS Setup**: new section writes the HKLM forcelist for
+  Chrome/Edge/Brave/Chromium/Vivaldi (append-safe EnumRegValue
+  loop, slot recorded under Software\AdvPrintPro, uninstaller
+  removes exactly ours) and ships AdvPrint-Pro.crx into the hub
+  folder. install-windows.bat writes the HKCU twin.
+- **deb**: ships /opt/advprint/hub/extension/AdvPrint-Pro.crx;
+  postinst writes /etc/{opt/chrome,chromium,opt/edge,brave}/
+  policies/managed/advprint-pro.json, prerm removes them (removing
+  the policy auto-uninstalls the extension on next Chrome start).
+  install-unix.sh/uninstall-unix.sh do the same for tarball users.
+- **Enterprise-Deploy-Kit**: AdvPrint-Pro.crx + updates.xml +
+  forcelist .reg templates + Linux policy JSON + DEPLOY-GUIDE for
+  hosting on your own server (schools/workplaces scenario).
+- **Extension itself unchanged** - v3.0.6 content rules carry over;
+  only the manifest version moved to 3.0.7.
+
+## v3.0.7 - SELF-HOST EXTENSION AUTO-INSTALL (FORCELIST + CRX + UPDATES.XML) (2026-11-06)
+
+User request: "Self-Host Using 'Extension Install Force-list' (For
+Schools/Workplaces) ... host the packed .crx file and a small XML
+manifest file on your own free web server ... is it possible when
+tool exe install it auto install browser also, so only download exe
+or deb auto install extension so it more easy and extension to .crx
+for extension every time update version."
+
+- **Stable signing key** (extension-signing/advprint-printer.pem):
+  extension ID likldbkamojokkfdlcjibiljpgbbnohc is now PERMANENT -
+  derived from the key, same ID on every future release, which is
+  the precondition for silent updates.
+- **tool/crx3.py**: pure-Python CRX3 packer/reader shipped in the
+  tree (format verified byte-for-byte against Chrome's own
+  --pack-extension output for the same key).
+- **Hub serves the extension**: open GET /extension/updates.xml
+  (gupdate 2.0 XML, codebase built from the request Host so the
+  port is always right), GET /extension/AdvPrint-Pro.crx with the
+  REQUIRED Content-Type application/x-chrome-extension (missing it
+  = policy install silently fails per Chromium), GET /extension/info
+  (JSON: ID, version, policy value) and GET /extension (landing
+  page). The package is re-parsed on file change, so swapping in a
+  newer .crx updates every Chrome without touching the hub.
+- **/health gains "extension": {served, id, version}**.
+- **Policy endpoints** (token-gated): GET /extension/policy/status,
+  POST /extension/policy/install (HKCU per-user write with
+  next-free-index + our-ID replace, recorded for clean removal),
+  POST /extension/policy/remove (deletes exactly OUR entries).
+- **Dashboard card** 'Browser extension - silent install': ID +
+  served version, check/write/remove buttons, updates.xml URL
+  copy, honest domain-requirement note.
+- **NSIS Setup**: new section writes the HKLM forcelist for
+  Chrome/Edge/Brave/Chromium/Vivaldi (append-safe EnumRegValue
+  loop, slot recorded under Software\AdvPrintPro, uninstaller
+  removes exactly ours) and ships AdvPrint-Pro.crx into the hub
+  folder. install-windows.bat writes the HKCU twin.
+- **deb**: ships /opt/advprint/hub/extension/AdvPrint-Pro.crx;
+  postinst writes /etc/{opt/chrome,chromium,opt/edge,brave}/
+  policies/managed/advprint-pro.json, prerm removes them (removing
+  the policy auto-uninstalls the extension on next Chrome start).
+  install-unix.sh/uninstall-unix.sh do the same for tarball users.
+- **Enterprise-Deploy-Kit**: AdvPrint-Pro.crx + updates.xml +
+  forcelist .reg templates + Linux policy JSON + DEPLOY-GUIDE for
+  hosting on your own server (schools/workplaces scenario).
+- **Extension itself unchanged** - v3.0.6 content rules carry over;
+  only the manifest version moved to 3.0.7.
+
 ## v3.0.6 - RULES MATCH BY CONTENT (ZPL / TEXT / PDF / IMAGE) + OPTIONS REORGANIZED (2026-11-06)
 
 User request: "how it detect which printer is for zpl in this

@@ -13,6 +13,26 @@ Web page ──► Chrome extension ──► AdvPrint Pro hub (localhost:9235) 
 
 ---
 
+## What's new in v3.0.7 (silent extension auto-install - one download)
+
+Download ONE file and the browser extension installs itself. AdvPrint Pro now packs the extension as a **signed .crx** with a **stable release key** - the extension ID (`likldbkamojokkfdlcjibiljpgbbnohc`) never changes - and the installers write Chrome's enterprise **ExtensionInstallForcelist** policy so the browser installs the extension silently **and keeps it updated on every release**:
+
+- **The hub IS the update server** - it serves `/extension/updates.xml` (Chromium gupdate manifest) and `/extension/AdvPrint-Pro.crx` (the signed package, `Content-Type: application/x-chrome-extension`). Open endpoints (Chrome's updater sends no token) guarded by the usual Host-header rule.
+- **Windows Setup**: ships the .crx inside the hub folder and writes the machine-wide policy (HKLM) for Chrome, Edge, Brave, Chromium and Vivaldi - append-safe (never touches another company's entries) and removed cleanly on uninstall. The dashboard card can re-write/repair the per-user (HKCU) policy after a port change.
+- **Linux deb**: writes `/etc/{opt/chrome,chromium,opt/edge,brave}/policies/managed/advprint-pro.json` - on Linux silent install has **no domain requirement**; it just works.
+- **Schools / workplaces**: point the policy at ANY web server hosting the two files from `AdvPrint-Enterprise-Deploy-Kit` (internal IIS, GitHub Pages, any free host) - GPO / Intune / one .reg import. See **docs/SELF-HOST-DEPLOY.md**.
+- **Honest limit**: on a non-domain Windows PC, Chrome/Edge ignore silent off-store install (Google/Microsoft policy, not ours) - home users keep the classic Load-unpacked path; the extension folder still ships. Linux is unrestricted.
+
+## What's new in v3.0.7 (silent extension auto-install - one download)
+
+Download ONE file and the browser extension installs itself. AdvPrint Pro now packs the extension as a **signed .crx** with a **stable release key** - the extension ID (`likldbkamojokkfdlcjibiljpgbbnohc`) never changes - and the installers write Chrome's enterprise **ExtensionInstallForcelist** policy so the browser installs the extension silently **and keeps it updated on every release**:
+
+- **The hub IS the update server** - it serves `/extension/updates.xml` (Chromium gupdate manifest) and `/extension/AdvPrint-Pro.crx` (the signed package, `Content-Type: application/x-chrome-extension`). Open endpoints (Chrome's updater sends no token) guarded by the usual Host-header rule.
+- **Windows Setup**: ships the .crx inside the hub folder and writes the machine-wide policy (HKLM) for Chrome, Edge, Brave, Chromium and Vivaldi - append-safe (never touches another company's entries) and removed cleanly on uninstall. The dashboard card can re-write/repair the per-user (HKCU) policy after a port change.
+- **Linux deb**: writes `/etc/{opt/chrome,chromium,opt/edge,brave}/policies/managed/advprint-pro.json` - on Linux silent install has **no domain requirement**; it just works.
+- **Schools / workplaces**: point the policy at ANY web server hosting the two files from `AdvPrint-Enterprise-Deploy-Kit` (internal IIS, GitHub Pages, any free host) - GPO / Intune / one .reg import. See **docs/SELF-HOST-DEPLOY.md**.
+- **Honest limit**: on a non-domain Windows PC, Chrome/Edge ignore silent off-store install (Google/Microsoft policy, not ours) - home users keep the classic Load-unpacked path; the extension folder still ships. Linux is unrestricted.
+
 ## What's new in v3.0.6 (rules match by content - ZPL, text, PDF, image)
 
 Until 3.0.5 a rule fired only when the URL matched - the only way to route a ZPL page to the Zebra was a URL pattern plus Action: ZPL label. v3.0.6 lets a rule match **by content** - the page itself decides:
@@ -117,7 +137,7 @@ The ten most-requested features, all in one release:
 - **DropZone + Send portal — printing WITHOUT the extension.** The hub watches a folder: in Word/Excel/ANY app choose *Microsoft Print to PDF* and save into the DropZone — the page prints seconds later (dashboard → DropZone card; `POST /dropzone/open` opens the folder). Phones/tablets/other PCs print through the built-in **Send portal** (`/send`, token-protected, same as every endpoint).
 - **Restart hub** — in the tray menu, AdvPrint Tool [14] and the dashboard button: the hub relaunches itself cleanly (new process waits for the port; queued jobs, settings and history are kept).
 - **Bullet-proof upgrade & uninstall.** The setup now runs `hub-stop.ps1` BEFORE touching files: stops the optional *AdvPrint* service (wait + PID kill), **deletes the service registration** (reinstalled fresh when ticked — upgrades keep it automatically), kills every process under the install folder and frees TCP 9235. Old program folders are wiped, so no stale file can abort an install any more; the uninstaller retries the folder sweep and reports leftovers honestly.
-- **Silent install** `AdvPrint-Pro-Setup-3.0.6.exe /S` — elevation is requested by the exe manifest itself ("auto permission" on any PC), the hub auto-starts after a silent install, and the firewall rule for LAN sharing (TCP 9235) is added automatically (removed on uninstall).
+- **Silent install** `AdvPrint-Pro-Setup-3.0.7.exe /S` — elevation is requested by the exe manifest itself ("auto permission" on any PC), the hub auto-starts after a silent install, and the firewall rule for LAN sharing (TCP 9235) is added automatically (removed on uninstall).
 - **New A + printer logo** — the letter A drawn as a printer: the crossbar is the output slot and a printed page slides out of it. Same mark in the extension, popup, dashboard, tray icon, installer and docs.
 
 Nothing removed: every v2.7.0 feature (history manager, share toggles, live test tool) is unchanged.

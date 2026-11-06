@@ -35,6 +35,21 @@ if command -v lsof >/dev/null 2>&1; then
     fi
 fi
 
+# v3.0.7: remove the silent-install policy files (Chrome uninstalls
+# the force-installed extension at its next start automatically)
+for D in /etc/opt/chrome/policies/managed /etc/chromium/policies/managed \
+         /etc/opt/edge/policies/managed /etc/brave/policies/managed; do
+    if [ -f "$D/advprint-pro.json" ]; then
+        if [ "$(id -u)" = "0" ]; then
+            rm -f "$D/advprint-pro.json"
+        elif sudo -n rm -f "$D/advprint-pro.json" 2>/dev/null; then
+            :
+        else
+            echo "[..] Remove manually once:  sudo rm -f $D/advprint-pro.json"
+        fi
+    fi
+done
+
 echo "[OK] AdvPrint Pro uninstalled."
 echo "     Print data kept in ~/.advprint - delete it manually if you want:"
 echo "       rm -rf ~/.advprint"
