@@ -29,7 +29,7 @@ from conftest import wait_until  # noqa: E402
 def test_health_open_no_token(hub):
     code, d = hub.get("/health", token=None)
     assert code == 200 and d["ok"] is True
-    assert d["version"] == "3.0.5"
+    assert d["version"] == "3.0.6"
     assert d["v2"] is True
     assert "100% local" in d["branding"]
 
@@ -539,13 +539,13 @@ def test_v1_database_migration(tmp_path):
 
 
 def test_version_anchors():
-    assert advprint.VERSION == "3.0.5"
+    assert advprint.VERSION == "3.0.6"
     # repo/package layout: tool/windows/portable/hub -> root/extension
     root = os.path.dirname(os.path.dirname(os.path.dirname(
         os.path.dirname(os.path.dirname(advprint.__file__)))))
     ext = os.path.join(root, "extension", "manifest.json")
     with open(ext) as f:
-        assert json.load(f)["version"] == "3.0.5"
+        assert json.load(f)["version"] == "3.0.6"
 
 
 def test_log_rotation(tmp_path):
@@ -1062,7 +1062,7 @@ def test_v26_token_current_loopback_only(hub):
     code, d = hub.get("/token/current")
     assert code == 200 and d["ok"] is True
     assert d["token"] == hub.token
-    assert d["app"] == "AdvPrint Pro" and d["version"] == "3.0.5"
+    assert d["app"] == "AdvPrint Pro" and d["version"] == "3.0.6"
 
 
 def test_v26_token_current_rejects_remote(hub):
@@ -1136,8 +1136,8 @@ def test_v261_tray_module_ships_and_parses():
 
 
 def test_v261_version_single_source():
-    assert advprint.VERSION == "3.0.5"
-    assert advprint.VERSION_NAME.startswith("v3.0.5")
+    assert advprint.VERSION == "3.0.6"
+    assert advprint.VERSION_NAME.startswith("v3.0.6")
 
 
 def test_v261_cli_cmd_full_path():
@@ -1303,7 +1303,7 @@ def test_v264_setup_exe_kills_zombie_hubs():
     assert "Stop-Process -Name AdvPrintPro" in stopps
     assert "Stop-Process -Name PrintHubPro" in stopps
     assert "sc.exe delete AdvPrint" in stopps
-    assert 'VIProductVersion "3.0.5.0"' in src
+    assert 'VIProductVersion "3.0.6.0"' in src
 
 
 # ---------------- v2.6.8: printer-name self-heal + menu guard ----------
@@ -1586,7 +1586,7 @@ def _v280_pdf(tmp_path, name="z.pdf", big="AdvPrint Pro v2.8 test"):
 
 
 def test_v280_version_and_config_keys():
-    assert advprint.VERSION == "3.0.5"
+    assert advprint.VERSION == "3.0.6"
     for k in ("drop_enabled", "drop_dir", "drop_delete"):
         assert k in advprint.CFG and k in advprint.CONFIG_KEYS
         assert k in advprint.CONFIG_TYPES
@@ -1811,7 +1811,7 @@ def test_v280_source_wiring_restart_tray_tool_installer():
     nsi = open(os.path.join(root, "installer", "setup.nsi"),
                encoding="utf-8").read()
     assert "hub-stop.ps1" in nsi
-    assert "3.0.5" in nsi and "${IfNot} ${Silent}" in nsi
+    assert "3.0.6" in nsi and "${IfNot} ${Silent}" in nsi
     # extension dual profile
     ext = os.path.join(root, "extension")
     bg = open(os.path.join(ext, "background.js"), encoding="utf-8").read()
@@ -1823,7 +1823,7 @@ def test_v280_source_wiring_restart_tray_tool_installer():
     opt = open(os.path.join(ext, "options.html"), encoding="utf-8").read()
     assert "hubUrlLan" in opt and "bDashboardLan" in opt
     man = json.load(open(os.path.join(ext, "manifest.json")))
-    assert man["version"] == "3.0.5"
+    assert man["version"] == "3.0.6"
 
 
 def test_v280_lan_profile_never_auto_heals():
@@ -2076,8 +2076,8 @@ def test_v281_setup_nsi_version():
         root = os.path.dirname(root)
     nsi = open(os.path.join(root, "installer", "setup.nsi"),
                encoding="utf-8", errors="replace").read()
-    assert 'VIProductVersion "3.0.5.0"' in nsi
-    assert "AdvPrint-Pro-Setup-3.0.5.exe" in nsi
+    assert 'VIProductVersion "3.0.6.0"' in nsi
+    assert "AdvPrint-Pro-Setup-3.0.6.exe" in nsi
 
 
 # ============================================================
@@ -2529,14 +2529,14 @@ def test_v301_hook_switch_in_power_block():
                 encoding="utf-8").read()
     assert html.count('id="hookPrint"') == 1
     power = html.index('<div class="power">')
-    behavior = html.index('<h2>Behavior</h2>')
+    behavior = html.index('<h2>Browser behavior</h2>')
     hook = html.index('id="hookPrint"')
     assert power < hook < behavior, "hookPrint is not inside Power switches"
     seg = html[power:behavior]
     assert seg.index('id="enabled"') < seg.index('id="queueMode"') \
         < seg.index('id="hookPrint"') < seg.index('id="debugMode"'), \
         "hookPrint must sit between Queue mode and Debug mode"
-    assert "moved here into <b>Power switches</b>" in seg
+    assert "one setting: hookPrint" in seg
 
 
 def test_v302_popup_has_no_hook_switch():
@@ -2558,7 +2558,7 @@ def test_v302_popup_has_no_hook_switch():
     html = open(os.path.join(ext, "options.html"), encoding="utf-8").read()
     assert html.count('id="hookPrint"') == 1
     power = html.index('<div class="power">')
-    behavior = html.index('<h2>Behavior</h2>')
+    behavior = html.index('<h2>Browser behavior</h2>')
     assert power < html.index('id="hookPrint"') < behavior
 
 
@@ -2598,7 +2598,7 @@ def test_v303_rules_print_labels_actions():
     # the label pipeline exists and is wired into auto + manual paths
     for marker in ("function rulePrintExtras", "async function printTabRawLang",
                    "async function printRawText",
-                   'rule.action === "zpl" || rule.action === "raw"'):
+                   'effAction === "zpl" || effAction === "raw"'):
         assert marker in bg, "missing %r in background.js" % marker
     # extraction order: selection first, then pre/textarea, then body
     i_sel = bg.index("window.getSelection")
@@ -2622,8 +2622,8 @@ def test_v303_rules_copies_paper_columns():
     ext = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
         os.path.dirname(os.path.dirname(advprint.__file__))))), "extension")
     html = open(os.path.join(ext, "options.html"), encoding="utf-8").read()
-    assert "<th style=\"width:6%\">Copies</th>" in html
-    assert "<th style=\"width:9%\">Paper</th>" in html
+    assert "<th style=\"width:5%\">Copies</th>" in html
+    assert "<th style=\"width:7%\">Paper</th>" in html
     ojs = open(os.path.join(ext, "options.js"), encoding="utf-8").read()
     # copies input + paper select render, collect stores both
     assert 'inC.type = "number"' in ojs and 'rule.copies' in ojs
@@ -2658,14 +2658,14 @@ def test_v303_lab_card_and_docs():
     html = open(os.path.join(ext, "options.html"), encoding="utf-8").read()
     assert 'id="labRulesCard"' in html
     card = html[html.index('id="labRulesCard"'):]
-    assert "no JavaScript needed" in card and "ZPL" in card
+    assert "byte-for-byte" in card and "ZPL" in card and "Match by" in card
     assert "docs/MULTI-PRINTER.md" in card
     md = open(os.path.join(docs, "MULTI-PRINTER.md"), encoding="utf-8").read()
     assert "ROUTING RULES do the lab work" in md
     assert 'ZPL label (text on page)' in md
     assert "ESC-POS receipt (text on page)" in md
     # the rules flow comes BEFORE the page-API fallback in the label step
-    assert md.index("v3.0.3 makes this a RULE") < md.index("Page API still there")
+    assert md.index("two ways, both zero-code") < md.index("Page API still there")
     notes = open(os.path.join(docs, "RELEASE-NOTES-v3.0.3.md"),
                  encoding="utf-8").read()
     assert "no page JavaScript" in notes and "byte-for-byte" in notes
@@ -2709,7 +2709,7 @@ def test_v304_multi_printer_rules_made_easy():
     # the rule printer dropdown explains the multi-printer idea
     assert "DIFFERENT printer per rule" in ojs
     # the rules sub text points at chips/Copy/Contains
-    assert "<b>+ rule</b> per" in html and "<b>Copy</b> button" in html
+    assert "<b>+ rule</b>" in html and 'bc.textContent = "Copy"' in ojs
 
 
 def test_v305_rule_manager_tab():
@@ -2725,20 +2725,21 @@ def test_v305_rule_manager_tab():
     # the tab + panel exist
     assert 'data-tab="rules"' in html and 'id="panel-rules"' in html
     # the whole rule workplace moved INTO the Rules panel
-    seg = html[html.index('id="panel-rules"'):html.index('id="panel-settings"')]
+    seg = html[html.index('id="panel-rules"'):html.index('id="panel-general"')]
     for marker in ('id="rulesTable"', 'id="rulesBody"', 'id="printerChips"',
                    'id="labRulesCard"', 'id="bAddRule"', 'id="pdfUrl"',
                    'id="saveMsg"'):
         assert marker in seg, "%s must live in the Rules tab" % marker
     # manager controls ship in the markup
     for marker in ('id="rmDot"', 'id="rmState"', 'id="rmInfo"',
-                   'id="bRulesPause"', 'id="bSaveRules"', 'id="testUrl"',
+                   'id="rulesPower"', 'id="rulesPowerSub"', 'id="bSaveRules"',
+                   'id="testText"', 'id="bRuleTestText"', 'id="testUrl"',
                    'id="bRuleTest"', 'id="ruleTestOut"', 'id="ruleLogBody"',
                    'id="bRuleLogRefresh"', 'id="bRuleLogClear"',
                    'id="bRuleStatsReset"'):
         assert marker in html, "missing %s" % marker
     # the Settings tab keeps only the pointer card - no second rule table
-    s_seg = html[html.index('id="panel-settings"'):html.index('id="panel-debug"')]
+    s_seg = html[html.index('id="panel-general"'):html.index('id="panel-debug"')]
     assert 'id="bGoRules"' in s_seg, "Settings must point to the Rule Manager"
     assert 'id="rulesTable"' not in s_seg, "rule table must exist ONCE"
     ojs = open(os.path.join(ext, "options.js"), encoding="utf-8").read()
@@ -2749,7 +2750,7 @@ def test_v305_rule_manager_tab():
     for marker in ("async function refreshRuleManager",
                    "function renderRuleManager", "async function saveRules",
                    "function renderRuleLog", 'type: "ruleState"',
-                   'patch: { rulesPaused: paused }',
+                   'patch: { rulesPaused: !on }',
                    'type: "testRuleUrl"', 'type: "clearRuleLog"'):
         assert marker in ojs, "missing %r in options.js" % marker
     # the Rules tab pulls fresh data on every open
@@ -2792,22 +2793,127 @@ def test_v305_pause_counters_and_log():
     assert '"manual"' in bg
     popup = open(os.path.join(ext, "popup.html"), encoding="utf-8").read()
     pjs = open(os.path.join(ext, "popup.js"), encoding="utf-8").read()
-    # the popup switch: same rulesPaused setting, inverted UI checkbox
-    assert 'id="swRules"' in popup and 'id="swRulesSub"' in popup
-    assert "rulesPaused: !on" in pjs
-    assert "rulesPaused !== true" in pjs
+    # v3.0.6: the popup switch was REMOVED - the rules power switch
+    # lives in Options ONLY (Rule Manager bar + General power switches),
+    # same setting: rulesPaused
+    assert 'id="swRules"' not in popup, "popup must not carry the rules switch"
+    assert "swRules" not in pjs and "rulesPaused" not in pjs
+    ohtml = open(os.path.join(ext, "options.html"), encoding="utf-8").read()
+    assert 'id="rulesPower"' in ohtml and 'id="rulesEnabled"' in ohtml, \
+        "the rules power switch must exist in Options (both places)"
+    ojs = open(os.path.join(ext, "options.js"), encoding="utf-8").read()
+    assert "rulesPaused: !on" in ojs
+    assert ojs.count('patch: { rulesPaused: !on }') >= 2, \
+        "both switches drive the same rulesPaused setting"
     i18n = open(os.path.join(ext, "i18n.js"), encoding="utf-8").read()
     for key in ("popSwitchRules", "popRulesOn", "popRulesPaused",
                 "popRulesNone", "popRulesOnMsg", "popRulesOffMsg"):
-        assert key in i18n, "missing i18n key %s" % key
-    # both languages ship the keys
-    assert i18n.count("popRulesPaused") >= 2
+        assert key not in i18n, "popup i18n key %s must be gone" % key
     # docs tell the same story
     docs = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
         os.path.dirname(os.path.dirname(advprint.__file__))))), "docs")
     md = open(os.path.join(docs, "MULTI-PRINTER.md"), encoding="utf-8").read()
-    assert "RULE MANAGER" in md and "Pause all rules" in md
+    assert "RULE MANAGER" in md and "power switch" in md
     assert "rule activity log" in md
     notes = open(os.path.join(docs, "RELEASE-NOTES-v3.0.5.md"),
                  encoding="utf-8").read()
     assert "managed and controlled" in notes and "URL simulator" in notes
+
+
+def test_v306_content_rules_engine():
+    """v3.0.6: a rule can match by CONTENT - the page itself decides.
+    matchRule() takes a kind parameter, isContentRule() classifies the
+    rule, detectTabKind() probes the already-open tab ONCE (content
+    type + text sample), ruleActionFor() picks the pipeline that fits
+    the kind, printTabImage() prints picture tabs, the auto path runs
+    a SECOND matching pass for content rules (gated by
+    hasContentRules), and the simulators answer URL + text questions
+    without printing. URL rules are untouched (no kind -> no content
+    rule can match)."""
+    ext = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.dirname(os.path.dirname(advprint.__file__))))), "extension")
+    bg = open(os.path.join(ext, "background.js"), encoding="utf-8").read()
+    # engine helpers exist
+    for marker in ("function isContentRule",
+                   "function matchRule(url, rules, title, kind)",
+                   "function ruleActionFor(rule, kind)",
+                   "function hasContentRules(cfg)",
+                   "async function detectTabKind(tab)",
+                   "async function printTabImage(tab, rule, printerOverride)"):
+        assert marker in bg, "missing %r in background.js" % marker
+    # the ZPL signature detection (full ^XA...^XZ + loose ^-command form)
+    assert "ZPL_RX" in bg and "ZPL_RX_LOOSE" in bg
+    assert "\\^XA" in bg
+    # content kinds + their natural pipelines
+    for kind in ("zpl", "text", "pdf", "image", "html"):
+        assert '"%s"' % kind in bg
+    assert 'KIND_DEFAULT_ACTION' in bg and 'KIND_OK_ACTIONS' in bg
+    # a content rule WITHOUT a known kind can never match (URL-only
+    # queries are unaffected) - the kind gate sits in matchRule
+    seg_m = bg[bg.index("function matchRule"):]
+    seg_m = seg_m[:seg_m.index("async function") if "async function" in seg_m else len(seg_m)]
+    assert "if (!kind || r.kind !== kind) continue" in seg_m
+    # the auto path: two-pass matching (URL pass, then content pass)
+    i_auto = bg.index("chrome.tabs.onUpdated.addListener")
+    seg_a = bg[i_auto:bg.index("window.print() hook")]
+    assert "pass 1" in seg_a and "pass 2" in seg_a
+    assert "hasContentRules(cfg0)" in seg_a
+    assert "detectTabKind(tab)" in seg_a
+    assert "ruleActionFor(rule, kind)" in seg_a
+    assert "printTabImage(tab, rule, printer)" in seg_a
+    # the manual path probes too
+    i_pt = bg.index("async function printTab(tab")
+    seg_pt = bg[i_pt:bg.index("async function printTabAuto")]
+    assert "matchRule(url, cfg.rules, tab.title, kind)" in seg_pt
+    # image pipeline: cookie download + captureVisibleTab fallback
+    seg_img = bg[bg.index("async function printTabImage"):]
+    seg_img = seg_img[:seg_img.index("async function printScreenshot")]
+    assert 'credentials: "include"' in seg_img
+    assert "captureVisibleTab" in seg_img
+    assert "image_base64" in seg_img
+    # simulators: URL sniffing + text classifier, neither prints
+    assert 'case "testRuleText"' in bg
+    seg_u = bg[bg.index('case "testRuleUrl"'):bg.index("default:")]
+    assert "credentials: \"include\"" in seg_u and "hubPrint" not in seg_u
+    assert "kindSrc" in seg_u
+    seg_t = bg[bg.index('case "testRuleText"'):bg.index("default:")]
+    assert "hubPrint" not in seg_t
+
+    # ---- Rules tab UI: Match by + Page content columns, power switch,
+    #      text simulator
+    html = open(os.path.join(ext, "options.html"), encoding="utf-8").read()
+    assert "Match by" in html and "Page content" in html
+    assert 'id="rulesPower"' in html and 'id="rulesEnabled"' in html
+    assert 'id="testText"' in html and 'id="bRuleTestText"' in html
+    assert 'id="ruleTestTextOut"' in html
+    # the old Settings tab is gone; the new tabs exist
+    for tab in ("queue", "history", "rules", "general", "printing",
+                "connections", "hub", "debug", "about"):
+        assert 'data-tab="%s"' % tab in html, "missing tab %s" % tab
+    assert 'id="panel-settings"' not in html and 'id="panel-lan"' not in html
+    for panel in ("panel-general", "panel-printing", "panel-connections",
+                  "panel-hub"):
+        assert 'id="%s"' % panel in html
+
+    # ---- options.js: the row renders both selects, collect() stores
+    #      match/kind, syncMatchUi grays out what the rule ignores
+    ojs = open(os.path.join(ext, "options.js"), encoding="utf-8").read()
+    assert 'selM.appendChild(new Option("Content", "content"))' in ojs
+    assert '"zpl", "ZPL label (^XA\\u2026^XZ)"' in ojs
+    assert "function syncMatchUi(tr)" in ojs
+    assert "match: m.value === \"content\" ? \"content\" : \"url\"" in ojs
+    assert "kind: m.value === \"content\" ? k.value : \"\"" in ojs
+    # a content rule saves WITHOUT a pattern; a URL rule still needs one
+    assert 'if (p.value.trim() || (m.value === "content" && k.value))' in ojs
+    # Copy carries the new fields
+    copy_seg = ojs[ojs.index('bc.addEventListener("click"'):]
+    assert "match: m.value" in copy_seg and "kind: k.value" in copy_seg
+    # the power switch is wired (Rule Manager bar + General), text sim too
+    assert '$("rulesPower").addEventListener("change"' in ojs
+    assert '$("rulesEnabled").addEventListener("change"' in ojs
+    assert '$("bRuleTestText").addEventListener("click"' in ojs
+    assert 'type: "testRuleText"' in ojs
+    assert "function kindLabel(k)" in ojs
+    # tab logic knows all nine tabs
+    assert '"connections", "hub", "debug", "about"' in ojs
+    assert 'valid === "connections") startLanLoop()' in ojs

@@ -58,10 +58,12 @@ const DEFAULTS = {
                             //   https://reports.example.com/*
                             // The extension's own pages are always allowed.
   rulesPaused: false,       // v3.0.5 RULE MANAGER: pause ALL auto-print
-                            // rules with ONE switch (Options > Rules tab,
-                            // popup switch). Only the HIDDEN auto work is
-                            // paused - manual prints (popup button, right-
-                            // click menu) keep working, like queue Pause.
+                            // rules with ONE switch. v3.0.6: the switch
+                            // lives in the OPTIONS page only (Rules tab
+                            // power switch + General > Power switches) -
+                            // the popup row was removed. Only the HIDDEN
+                            // auto work is paused - manual prints (popup
+                            // button, right-click menu) keep working.
   rules: [
     {
       pattern: "*://www.htncr.org/lab/medical_reports/pdf/*",
@@ -70,7 +72,12 @@ const DEFAULTS = {
       printer: "",
       action: "auto",         // pdf if the URL serves a PDF, else page render
       auto: true,             // print automatically when the URL is opened
-      enabled: true           // v2.0: per-site on/off switch
+      enabled: true,          // v2.0: per-site on/off switch
+      match: "url",           // v3.0.6: "url" (address matches pattern)
+                              // or "content" (the PAGE CONTENT decides)
+      kind: ""                // v3.0.6 content rule: "zpl" (^XA...^XZ
+                              // label text), "text" (receipt / plain
+                              // text page), "pdf", "image", "html"
     }
   ]
 };
@@ -447,21 +454,113 @@ function patternToRegex(pattern, type) {
 
 /* v2.0 rules: type glob|regex|contains (contains since 3.0.4), optional
  * page-title filter, and a per-rule on/off switch (per-site settings).
- * First matching wins. */
-function matchRule(url, rules, title) {
+ * First matching wins.
+ * v3.0.6 CONTENT RULES: a rule can match by WHAT THE PAGE IS, not only
+ * by its address. rule.match = "url" (classic, pattern decides) or
+ * "content" (the detected content kind decides - see detectTabKind).
+ * A content rule MAY still carry a pattern: then the URL must match it
+ * too (extra filter). kind = "zpl" | "text" | "pdf" | "image" | "html". */
+function isContentRule(r) {
+  return !!r && (r.match === "content" ||
+                 (!r.pattern && !!r.kind));   // saved without match field
+}
+
+function matchRule(url, rules, title, kind) {
   for (const r of rules || []) {
-    if (!r || !r.pattern) continue;
+    if (!r) continue;
     if (r.enabled === false) continue;          // per-site OFF switch
-    try {
-      if (!patternToRegex(r.pattern, r.type).test(url)) continue;
-      if (r.title &&
-          !(title || "").toLowerCase().includes(String(r.title).toLowerCase())) {
-        continue;                                 // title filter miss
-      }
-      return r;
-    } catch (_) {}
+    const byContent = isContentRule(r);
+    if (r.pattern) {
+      try {
+        if (!patternToRegex(r.pattern, r.type).test(url)) continue;
+      } catch (_) { continue; }
+    } else if (!byContent) {
+      continue;                                 // URL rule without pattern
+    }
+    if (byContent) {
+      if (!r.kind) continue;                    // content rule needs a kind
+      if (!kind || r.kind !== kind) continue;   // probed kind mismatch
+    }
+    if (r.title &&
+        !(title || "").toLowerCase().includes(String(r.title).toLowerCase())) {
+      continue;                                 // title filter miss
+    }
+    return r;
   }
   return null;
+}
+
+/* --------- v3.0.6: CONTENT DETECTION (what kind of page is this?) ----
+ * Answers "how does AdvPrint know THIS page is ZPL / a receipt / a PDF /
+ * an image" without any URL rule:
+ *   1. .pdf URL or document.contentType "application/pdf"  -> "pdf"
+ *   2. image URL or contentType "image/*"                  -> "image"
+ *   3. the page text carries a ZPL signature (^XA ... ^XZ)  -> "zpl"
+ *   4. document.contentType "text/plain"                    -> "text"
+ *      (a receipt / label web tool that shows plain text)
+ *   5. everything else                                      -> "html"
+ * The text sample comes from the ALREADY LOADED tab (selection first,
+ * then <pre>/<textarea>, then visible body text) - zero extra network
+ * requests, no page JavaScript is ever injected for this. */
+const ZPL_RX = /\^XA[\s\S]{0,4000}\^XZ/;      // one full label format
+const ZPL_RX_LOOSE = /\^(XA|FO|FD|PQ|BC|MM|PW|LL|CI|MD|SD)/;   // any ZPL command
+
+async function detectTabKind(tab) {
+  if (!printableTab(tab)) return null;
+  const url = tab.url || "";
+  if (/\.pdf(\?|#|$)/i.test(url)) return "pdf";
+  if (/\.(png|jpe?g|gif|webp|bmp|svg)(\?|#|$)/i.test(url)) return "image";
+  let probe = null;
+  try {
+    const [res] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: () => {
+        try {
+          const sel = String((window.getSelection &&
+                              window.getSelection()) || "").trim();
+          const el = document.querySelector("pre, textarea");
+          const blk = el ? (el.value !== undefined ? el.value
+                                                   : el.textContent) : "";
+          const body = ((document.body && document.body.innerText) || "").trim();
+          return { ct: document.contentType || "",
+                   text: String(sel || blk || body).slice(0, 4000) };
+        } catch (_) { return { ct: "", text: "" }; }
+      }
+    });
+    probe = res && res.result;
+  } catch (_) { return null; }                 // cannot inject - no opinion
+  const ct = String((probe && probe.ct) || "").toLowerCase();
+  if (ct.indexOf("application/pdf") >= 0) return "pdf";
+  if (ct.indexOf("image/") === 0) return "image";
+  const text = String((probe && probe.text) || "");
+  if (ZPL_RX.test(text) || ZPL_RX_LOOSE.test(text)) return "zpl";
+  if (ct.indexOf("text/plain") === 0) return "text";
+  return "html";
+}
+
+/* v3.0.6: which Action actually runs for a content rule? The rule's own
+ * action is honored when it makes sense for the detected kind, otherwise
+ * the kind's natural pipeline is used (a ZPL page always prints as ZPL,
+ * an image always prints as an image - a wrong dropdown choice can never
+ * send garbage to the printer). URL rules are untouched. */
+const KIND_DEFAULT_ACTION = { zpl: "zpl", text: "raw", pdf: "pdf",
+                              image: "image", html: "page" };
+const KIND_OK_ACTIONS = { zpl: ["zpl"], text: ["raw"], pdf: ["pdf", "auto"],
+                          image: ["image"], html: ["page", "auto"] };
+function ruleActionFor(rule, kind) {
+  if (!rule) return "auto";
+  if (!kind || !isContentRule(rule)) return rule.action || "auto";
+  const ok = KIND_OK_ACTIONS[kind];
+  return (ok && ok.indexOf(rule.action) >= 0)
+    ? rule.action : (KIND_DEFAULT_ACTION[kind] || "page");
+}
+
+/* v3.0.6: are there any enabled content rules at all? The auto path and
+ * the manual path probe the tab ONLY then - zero cost for users who
+ * still use pure URL rules. */
+function hasContentRules(cfg) {
+  return (cfg && cfg.rules || []).some(
+    (r) => r && r.enabled !== false && isContentRule(r) && r.kind);
 }
 
 /* ------------- v3.0.5: RULE MANAGER - stats + activity log ----------
@@ -874,7 +973,14 @@ async function printTab(tab, force, printerOverride) {
   if (!printableTab(tab)) { notifyNotPrintable(); return null; }
   const url = tab.url || "";
   const cfg = await loadCfg();
-  const rule = matchRule(url, cfg.rules, tab.title);
+  let rule = matchRule(url, cfg.rules, tab.title);
+  let kind = "";
+  // v3.0.6: a CONTENT rule (match by what the page IS) also wins for
+  // manual prints - probe the tab once, only when such rules exist
+  if (!rule && hasContentRules(cfg)) {
+    kind = (await detectTabKind(tab)) || "";
+    if (kind) rule = matchRule(url, cfg.rules, tab.title, kind);
+  }
   // v3.0.5: a rule-matched MANUAL print (Print page button, reprint box)
   // also lands in the Rule Manager run counters + activity log - the
   // manager shows the hidden work, whichever way it was triggered.
@@ -886,10 +992,15 @@ async function printTab(tab, force, printerOverride) {
   // manual "Print page" button into a label/receipt print too - the page
   // text (or the selection) goes to the hub in the printer's own
   // language for the rule's printer. No page JavaScript, ever.
-  if (force !== "pdf" && printerOverride !== "__file__" &&
-      rule && (rule.action === "zpl" || rule.action === "raw")) {
+  // v3.0.6: Action "Image" joins - the tab's picture prints on the rule
+  // printer; content rules use the action that fits the detected kind.
+  const effAction = ruleActionFor(rule, kind);
+  if (force !== "pdf" && printerOverride !== "__file__" && rule &&
+      (effAction === "zpl" || effAction === "raw" || effAction === "image")) {
     try {
-      const outL = await printTabRawLang(tab, rule, printerOverride || "");
+      const outL = effAction === "image"
+        ? await printTabImage(tab, rule, printerOverride || "")
+        : await printTabRawLang(tab, rule, printerOverride || "");
       await bumpManual("sent");
       await flashBadge(true, "OK");
       return outL;
@@ -1030,6 +1141,50 @@ async function printRawText(text, rule, tab, printerOverride) {
   return data;
 }
 
+/* --------- v3.0.6: IMAGE printing (photo / scan tabs) ----------------
+ * A rule with kind "image" (or Action "Image") prints the picture the
+ * tab is showing: the image is downloaded with the page's login cookies
+ * and handed to the hub as image_base64 (the same route the screenshot
+ * uses) - the hub rasterizes it for the printer. If the direct download
+ * fails (hotlink protection, expired URL), the visible tab itself is
+ * captured as a fallback, so what you see is what prints. */
+async function printTabImage(tab, rule, printerOverride) {
+  const url = (tab && tab.url) || "";
+  let b64 = "";
+  try {
+    const res = await fetch(url, { credentials: "include" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const buf = new Uint8Array(await res.arrayBuffer());
+    let bin = "";
+    const CH = 0x8000;
+    for (let i = 0; i < buf.length; i += CH) {
+      bin += String.fromCharCode.apply(null, buf.subarray(i, i + CH));
+    }
+    b64 = btoa(bin);
+  } catch (_) {
+    try {
+      const shot = await chrome.tabs.captureVisibleTab(
+        tab.windowId, { format: "png" });
+      b64 = String(shot || "").split(",")[1] || "";
+    } catch (_) { /* both failed - report below */ }
+  }
+  if (!b64) throw new HubError("could not read the image on this tab");
+  const payload = {
+    image_base64: b64,
+    title: (tab && (tab.title || "image")) || "image",
+    printer: printerOverride || (rule && rule.printer) || "",
+    source: "extension"
+  };
+  const copies = parseInt(rule && rule.copies, 10);
+  if (copies >= 1) payload.copies = copies;
+  const data = await hubPrint(payload);
+  await markPrinted(url);
+  await rememberJob({ id: data.job_id, title: payload.title, url: url,
+                      printer: printerLabel(payload.printer),
+                      status: data.status || "queued" });
+  return data;
+}
+
 async function printScreenshot(windowId) {
   const cfg = await loadCfg();
   const dataUrl = await chrome.tabs.captureVisibleTab(windowId, {
@@ -1089,9 +1244,11 @@ async function markPrinted(url) {
   await chrome.storage.session.set({ seen });
 }
 
-async function shouldAutoPrint(url, title) {
+async function shouldAutoPrint(url, title, kind) {
   const cfg = await loadCfg();
-  const rule = matchRule(url, cfg.rules, title);
+  // v3.0.6: kind (when given) lets CONTENT rules match; without it only
+  // URL rules are considered (no tab probe happened yet)
+  const rule = matchRule(url, cfg.rules, title, kind);
   if (!rule || !rule.auto) return null;
   if (cfg.rulesPaused) return null;   // v3.0.5: ALL auto rules paused
   const { seen, now, fresh } = await printedRecently(url);
@@ -1106,19 +1263,39 @@ chrome.tabs.onUpdated.addListener(async (tabId, info, tab) => {
   try {
     const cfg0 = await loadCfg();
     if (cfg0.enabled === false) return;      // master switch OFF - do nothing
-    const rule = await shouldAutoPrint(tab.url, tab.title);
+    // v3.0.6 two-pass matching:
+    //   pass 1 - URL rules (no tab probe, as before)
+    //   pass 2 - CONTENT rules: only when such rules exist, the tab is
+    //            probed ONCE (content type + text sample) and the kind
+    //            decides - "any page with ^XA -> Zebra" etc.
+    let rule = await shouldAutoPrint(tab.url, tab.title);
+    let kind = "";
+    if (!rule && hasContentRules(cfg0)) {
+      kind = (await detectTabKind(tab)) || "";
+      if (kind) {
+        rule = await shouldAutoPrint(tab.url, tab.title, kind);
+      }
+    }
     if (rule) {
       const printer = rule.printer || (await loadCfg()).defaultPrinter || "";
       const rex = rulePrintExtras(rule);       // v3.0.3 copies/paper
+      // v3.0.6: content rules run the pipeline that FITS the detected
+      // kind (ZPL page -> ZPL stream, image tab -> image print, ...);
+      // URL rules keep their own Action exactly as configured.
+      const effAction = ruleActionFor(rule, kind);
       try {
-        if (rule.action === "page") {
+        if (effAction === "page") {
           await printPageDom(tab, tab.title, printer, rex);
-        } else if (rule.action === "pdf") {
+        } else if (effAction === "pdf") {
           await printPdfUrl(tab.url, tab.title, printer, rex);
-        } else if (rule.action === "zpl" || rule.action === "raw") {
+        } else if (effAction === "zpl" || effAction === "raw") {
           // v3.0.3: label/receipt rule - page text goes to the hub in the
           // printer's own language (ZPL verbatim / ESC-POS built)
           await printTabRawLang(tab, rule, printer);
+        } else if (effAction === "image") {
+          // v3.0.6: image rule - the tab's picture prints on the rule
+          // printer (cookie download, visible-tab capture fallback)
+          await printTabImage(tab, rule, printer);
         } else {
           await printTabAuto(tab, rex);
         }
@@ -1133,7 +1310,10 @@ chrome.tabs.onUpdated.addListener(async (tabId, info, tab) => {
         throw eRule;
       }
       await flashBadge(true, "OK");
-      await maybeCloseTab(tabId);
+      // v3.0.6: a content-rule hit closes the tab directly (force) -
+      // maybeCloseTab re-matches by URL only and would never see a
+      // kind-only rule. closeAfterPrint stays the user's opt-in switch.
+      await maybeCloseTab(tabId, !!kind);
       return;
     }
     /* ---- SIMPLE MODE (v1.1.9): ANY pdf opened in the browser prints
@@ -1627,14 +1807,66 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
           // v3.0.5: the Rules-tab simulator - WHICH rule would fire, on
           // which printer, with which action? It only MATCHES; nothing
           // is printed, no tab is touched, the dedupe is not fed.
+          // v3.0.6: the simulator now also SNIFFS THE CONTENT - the URL
+          // is fetched once with login cookies (PDF/image/text types are
+          // read from the headers, the first bytes are checked for ^XA)
+          // so URL rules AND content rules are reported. If the fetch
+          // fails (login page, offline) only URL rules are matched and
+          // the answer says so.
           const cfgT = await loadCfg();
+          let kindT = String(msg.kind || "");
+          let kindSrc = kindT ? "given" : "";
+          let contentType = "";
+          if (!kindT && /^https?:/i.test(String(msg.url || ""))) {
+            try {
+              const res = await fetch(String(msg.url),
+                                      { credentials: "include" });
+              const ct = (res.headers.get("content-type") || "")
+                .toLowerCase();
+              contentType = ct.split(";")[0];
+              if (ct.indexOf("application/pdf") >= 0) {
+                kindT = "pdf";
+              } else if (ct.indexOf("image/") === 0) {
+                kindT = "image";
+              } else {
+                const sample = (await res.text()).slice(0, 4000);
+                if (ZPL_RX.test(sample) || ZPL_RX_LOOSE.test(sample)) {
+                  kindT = "zpl";
+                } else if (ct.indexOf("text/plain") === 0) {
+                  kindT = "text";
+                } else {
+                  kindT = "html";
+                }
+              }
+              kindSrc = "fetched";
+            } catch (_) { kindSrc = "fetch-failed"; }
+          }
           const rT = matchRule(String(msg.url || ""), cfgT.rules,
-                               String(msg.title || ""));
+                               String(msg.title || ""), kindT || undefined);
           reply({ ok: true, matched: !!rT, rule: rT || null,
                   index: rT ? cfgT.rules.indexOf(rT) + 1 : 0,
                   printer: rT ? (rT.printer || cfgT.defaultPrinter || "")
                               : (cfgT.defaultPrinter || ""),
                   simplePdf: cfgT.autoPrintAllPdfs !== false,
+                  paused: cfgT.rulesPaused === true,
+                  kind: kindT, kindSrc: kindSrc,
+                  contentType: contentType });
+          break;
+        }
+        case "testRuleText": {
+          // v3.0.6: paste label / receipt text - the simulator tells you
+          // WHICH content rule would fire for it (and as what). Nothing
+          // is printed, no URL is touched.
+          const cfgT = await loadCfg();
+          const text = String(msg.text || "");
+          const kindTx = ZPL_RX.test(text) || ZPL_RX_LOOSE.test(text)
+            ? "zpl" : "text";
+          const rTx = matchRule("", cfgT.rules, "", kindTx);
+          reply({ ok: true, kind: kindTx, matched: !!rTx,
+                  rule: rTx || null,
+                  index: rTx ? cfgT.rules.indexOf(rTx) + 1 : 0,
+                  printer: rTx ? (rTx.printer || cfgT.defaultPrinter || "")
+                               : (cfgT.defaultPrinter || ""),
                   paused: cfgT.rulesPaused === true });
           break;
         }

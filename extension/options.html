@@ -31,7 +31,7 @@
   nav#tabs { max-width:860px; margin:18px auto 0; padding:0 20px;
              display:flex; gap:6px; flex-wrap:wrap; }
   nav#tabs button { border:1px solid var(--line); background:#fff; color:var(--mut);
-                    border-radius:9px 9px 0 0; border-bottom:none; padding:10px 18px;
+                    border-radius:9px 9px 0 0; border-bottom:none; padding:10px 16px;
                     font:600 13.5px "Segoe UI",system-ui,sans-serif; cursor:pointer;
                     transition:color .15s, background .15s; }
   nav#tabs button:hover { color:var(--blue); background:#f0f6ff; }
@@ -46,6 +46,7 @@
             border-radius:0 12px 12px 12px; padding:20px 22px; margin-bottom:16px; }
   section.panel.active { display:block; }
   h2 { font-size:15px; margin-bottom:4px; }
+  h3 { font-size:13.5px; }
   .sub { color:var(--mut); font-size:12px; margin-bottom:14px; }
   .row { display:flex; gap:12px; align-items:center; margin-bottom:10px; flex-wrap:wrap; }
   label { font-weight:600; font-size:13px; min-width:150px; }
@@ -66,8 +67,8 @@
   .toggle div p { color:var(--mut); font-size:12px; }
   table { width:100%; border-collapse:collapse; font-size:12.5px; }
   th { text-align:left; color:var(--mut); font-size:11px; text-transform:uppercase;
-       letter-spacing:.06em; padding:7px 8px; border-bottom:1px solid var(--line); }
-  td { padding:7px 8px; border-bottom:1px solid #f1f5f9; vertical-align:middle; }
+       letter-spacing:.06em; padding:7px 6px; border-bottom:1px solid var(--line); }
+  td { padding:7px 6px; border-bottom:1px solid #f1f5f9; vertical-align:middle; }
   td input[type=text] { min-width:0; width:100%; padding:6px 8px; }
   td select { min-width:0; width:100%; padding:6px 8px; }
   .st { font-size:10.5px; font-weight:700; padding:2px 8px; border-radius:9px; }
@@ -113,6 +114,23 @@
                      text-transform:uppercase; letter-spacing:.05em; }
   .kpi .card b { font-size:17px; }
   .gh { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:8px 0; }
+  /* ---- v3.0.6: real power switch (the rules pause toggle on the Rule
+   * Manager bar - the same setting as General > Power switches) ---- */
+  .pwswitch { display:flex; align-items:center; gap:9px; cursor:pointer;
+              user-select:none; background:#fff; border:1px solid var(--line);
+              border-radius:9px; padding:6px 10px; min-width:auto; }
+  .pwswitch .pwlbl b { display:block; font-size:12px; line-height:1.2; }
+  .pwswitch .pwlbl small { display:block; color:var(--mut); font-size:10px;
+                           line-height:1.2; max-width:210px; }
+  .pwswitch input { display:none; }
+  .pwswitch .slider { width:34px; height:19px; border-radius:10px; background:#cbd5e1;
+                      position:relative; transition:background .15s; flex:none; }
+  .pwswitch .slider::after { content:""; position:absolute; top:2px; left:2px;
+                      width:15px; height:15px; border-radius:50%; background:#fff;
+                      transition:left .15s; box-shadow:0 1px 2px rgb(0 0 0 / .25); }
+  .pwswitch input:checked + .slider { background:var(--ok); }
+  .pwswitch input:checked + .slider::after { left:17px; }
+  .pwswitch.off .slider { background:#94a3b8; }
 </style>
 </head>
 <body>
@@ -122,7 +140,7 @@
     <h1>AdvPrint Pro</h1>
     <p>Print from any web page to any printer &middot; silent &middot; 100% local &middot; MIT open source</p>
   </div>
-  <span class="verchip" id="verChip">v3.0.5</span>
+  <span class="verchip" id="verChip">v3.0.6</span>
   <span class="pill" id="hubPill" title="Live hub status (checked automatically)"><i class="pdot" id="pillDot"></i><span id="pillTxt">checking…</span></span>
 </header>
 
@@ -130,9 +148,11 @@
   <button data-tab="queue" id="tabBtnQueue">Queue<span class="tbadge" id="tabQBadge"></span></button>
   <button data-tab="history">History</button>
   <button data-tab="rules" id="tabBtnRules">Rules</button>
-  <button data-tab="settings">Settings</button>
+  <button data-tab="general">General</button>
+  <button data-tab="printing">Printing</button>
+  <button data-tab="connections" id="tabBtnConn">Connections</button>
+  <button data-tab="hub">Hub</button>
   <button data-tab="debug" id="tabBtnDebug">Debug<span class="tbadge" id="tabDbgBadge"></span></button>
-  <button data-tab="lan" id="tabBtnLan">LAN / PCs</button>
   <button data-tab="about">About</button>
 </nav>
 
@@ -156,17 +176,17 @@
     <div class="row" style="margin-top:10px">
       <button class="mini" id="bQRefresh">Refresh now</button>
     </div>
-    <div class="note">Queue mode can be switched in <b>Settings</b> or directly in the
+    <div class="note">Queue mode can be switched in <b>General</b> (Power switches) or directly in the
       popup: <b>ON</b> = jobs print in order (Pause holds them back);
       <b>OFF</b> = every job prints immediately, skipping the line.</div>
   </section>
 
   <!-- ================= HISTORY ================= -->
   <section class="panel" id="panel-history">
-    <h2>Job history <span class="sub" style="display:inline">(hub SQLite - v2.7.0 manager)</span></h2>
+    <h2>Job history <span class="sub" style="display:inline">(hub SQLite - bulk reprint manager)</span></h2>
     <p class="sub">Filter, search, <b>tick rows</b> and reprint in bulk - or clear the
       whole finished history. Waiting jobs (queued / held) are never touched.
-      Reprint needs the original file on disk (Settings &rarr; Keep printed files).</p>
+      Reprint needs the original file on disk (Hub tab &rarr; Keep printed files).</p>
     <div class="row" style="gap:8px;flex-wrap:wrap">
       <select id="histFilter" title="Show only one status - or every job that never printed">
         <option value="">All statuses</option>
@@ -205,49 +225,74 @@
     </table>
   </section>
 
-  <!-- ================= RULES (v3.0.5 RULE MANAGER) ================= -->
-  <!-- The rules print HIDDENLY (silent auto-print). This tab is the ONE
-       place that manages and controls the hidden multi-printer lab:
-       edit rules, pause them all, simulate a URL without printing, per-
-       rule run counters, and an activity log of the last 100 hits. -->
+  <!-- ================= RULES (v3.0.5 Rule Manager, v3.0.6 content rules)
+       The one place that manages and controls the hidden multi-printer
+       lab: URL rules AND content rules (ZPL / receipt text / PDF / image),
+       the power switch, the simulator (URL + text), per-rule run counters
+       and the activity log of the last 100 hidden hits. -->
   <section class="panel" id="panel-rules">
-    <h2>Rule Manager <span class="sub" style="display:inline">- the multi-printer control center (v3.0.5)</span></h2>
+    <h2>Auto-print rules <span class="sub" style="display:inline">- the multi-printer control center</span></h2>
     <p class="sub">Everything the rules print happens hiddenly - silent,
       no dialog, each job on its rule's printer (PDF reports on the A4/A5
       laser, ZPL labels on the Zebra, ESC-POS receipts on the thermal
       printer). This tab makes that hidden work <b>managed and
-      controlled</b>: edit every rule here, pause them ALL with one
-      switch, test which rule would fire WITHOUT printing, watch the
+      controlled</b>: edit every rule here, switch them ALL off with one
+      power switch, test which rule would fire WITHOUT printing, watch the
       per-rule run counters and the activity log of every hidden hit.</p>
     <div class="qstate">
       <span class="dot" id="rmDot"></span>
       <b id="rmState">checking rules...</b>
       <span id="rmInfo" class="mono" style="color:var(--mut)"></span>
       <span style="flex:1"></span>
-      <button class="mini" id="bRulesPause" title="ONE switch for every rule: paused = no rule auto-prints (manual prints from the popup keep working)">Pause all rules</button>
-      <button class="mini primary" id="bSaveRules" title="Save every rule row now (the Save settings button in Settings saves these too)">Save rules</button>
+      <label class="pwswitch" id="rulesPowerRow" title="THE power switch for every hidden auto-print rule (v3.0.6 - moved here from the popup): ON = armed rules fire hiddenly when their URL or page content matches. OFF = paused - NO rule auto-prints; manual prints (popup buttons, right-click menu) keep working, like the queue Pause. The same switch is in General > Power switches.">
+        <span class="pwlbl"><b>Auto-print rules</b><small id="rulesPowerSub">power switch for all hidden rules</small></span>
+        <input type="checkbox" id="rulesPower">
+        <span class="slider"></span>
+      </label>
+      <button class="mini primary" id="bSaveRules" title="Save every rule row now (the Save settings button in General saves these too)">Save rules</button>
     </div>
     <div class="row" style="margin-top:12px">
       <label style="min-width:auto">Test a URL <span class="sub" style="display:inline">(prints nothing)</span></label>
       <input type="text" id="testUrl" placeholder="https://www.htncr.org/lab/medical_reports/pdf/4711">
-      <button id="bRuleTest" title="Show WHICH rule would fire, on which printer, with which action - nothing is printed">Which rule fires?</button>
+      <button id="bRuleTest" title="Show WHICH rule would fire, on which printer, with which action - nothing is printed. The URL is fetched once (with your login) to also detect PDF / image / ZPL / text content rules">Which rule fires?</button>
     </div>
     <div class="note" id="ruleTestOut" style="display:none"></div>
+    <div class="row" style="margin-top:8px">
+      <label style="min-width:auto">Test label / receipt text <span class="sub" style="display:inline">(prints nothing)</span></label>
+      <input type="text" id="testText" class="mono" placeholder="^XA^LL200^FO30^FDLAB-4711^FS^XZ">
+      <button id="bRuleTestText" title="Detects what this text is (ZPL label or receipt text) and shows which CONTENT rule would fire - nothing is printed">Which rule fires?</button>
+    </div>
+    <div class="note" id="ruleTestTextOut" style="display:none"></div>
     <table id="rulesTable" style="margin-top:12px">
       <thead><tr>
-        <th style="width:27%" data-i18n="optRulesRegex">URL pattern</th>
-        <th style="width:7%" data-i18n="optRulesType">Type</th>
-        <th style="width:11%" data-i18n="optRulesTitle">Title</th>
-        <th style="width:15%">Printer</th>
-        <th style="width:14%">Action</th>
-        <th style="width:6%">Copies</th>
-        <th style="width:9%">Paper</th>
-        <th style="width:4%" data-i18n="optRulesEnabled">On</th>
-        <th style="width:4%">Auto</th><th></th>
+        <th style="width:17%">URL / address (filter)</th>
+        <th style="width:7%">Match by</th>
+        <th style="width:11%">Page content</th>
+        <th style="width:6%">URL type</th>
+        <th style="width:8%">Title filter</th>
+        <th style="width:13%">Printer</th>
+        <th style="width:12%">What to print</th>
+        <th style="width:5%">Copies</th>
+        <th style="width:7%">Paper</th>
+        <th style="width:3%">On</th>
+        <th style="width:3%">Auto</th>
+        <th style="width:8%"></th>
       </tr></thead>
       <tbody id="rulesBody"></tbody>
     </table>
-    <div class="note" id="printerChips" style="margin-top:10px">Connect to the hub (Settings tab) to list every printer installed on this PC - then one click <b>+ rule</b> starts a rule for that printer.</div>
+    <div class="note" style="margin-top:10px">
+      <b>Match by URL</b> (classic): the rule fires when the page address
+      matches the pattern - use <span class="mono">Contains</span> for the
+      easiest setup (the URL just contains the text).
+      <b>Match by content (v3.0.6)</b>: the page ITSELF decides, no URL
+      needed - "ZPL label text" fires for any page whose text carries a
+      <span class="mono">^XA...^XZ</span> label, "Receipt / plain text" for
+      text pages (printed as an ESC-POS receipt), "PDF document", "Image",
+      "Web page". AdvPrint reads the already-open tab (content type + text
+      sample) - no extra download, no page JavaScript. A URL typed in a
+      content rule narrows it further ("ZPL pages on THIS site only").
+    </div>
+    <div class="note" id="printerChips" style="margin-top:10px">Connect to the hub (Connections tab) to list every printer installed on this PC - then one click <b>+ rule</b> starts a rule for that printer.</div>
     <div class="row" style="margin-top:12px">
       <button id="bAddRule">+ Add rule</button>
       <span id="saveMsg"></span>
@@ -258,15 +303,16 @@
       <button id="bPrintPdf">Print it</button>
     </div>
     <div class="note" id="labRulesCard" style="margin-top:10px">
-      <b>Multi-printer lab (v3.0.3) - no JavaScript needed.</b> One hub, many printers on this
-      PC: rule 1 prints PDF reports on the A4/A5 printer (<i>Action: Auto or PDF</i>,
-      <i>Paper: A5</i> for receipts), rule 2 sends ZPL label pages straight to the Zebra
-      (<i>Action: ZPL label</i> - the <span class="mono">^XA...^XZ</span> text on the page is streamed
-      byte-for-byte), rule 3 prints receipt text on the thermal printer (<i>Action: ESC-POS</i>).
-      Every job carries its rule's printer, copies and paper - the per-job printer name always
-      wins over the Print destination card, so both printers run at the same time and the card
-      is never flipped. <b>v3.0.5:</b> all of this is managed and controlled HERE - pause all
-      rules, simulate a URL, run counters, activity log. More recipes:
+      <b>Multi-printer lab - how the RIGHT printer is picked.</b> One hub, many printers on this
+      PC. Every job carries its rule's printer, copies and paper - the per-job printer name always
+      wins over the Print destination card, so all printers run at the same time and the card
+      is never flipped. <b>Rule 1:</b> PDF reports on the A4/A5 printer (<i>Match by: URL</i>,
+      <i>What to print: Auto or PDF</i>, <i>Paper: A5</i>). <b>Rule 2:</b> ZPL label pages straight
+      to the Zebra (<i>Match by: Content &rarr; ZPL label text</i> - the <span class="mono">^XA...^XZ</span>
+      text is streamed byte-for-byte; a URL filter is optional). <b>Rule 3:</b> receipt text on
+      the thermal printer (<i>Match by: Content &rarr; Receipt / plain text</i> - built into an
+      ESC-POS receipt with auto cut). <b>v3.0.5/3.0.6:</b> all of this is managed and controlled
+      HERE - power switch, simulator, run counters, activity log. More recipes:
       <span class="mono">docs/MULTI-PRINTER.md</span>.
     </div>
 
@@ -280,16 +326,17 @@
       <button class="mini" id="bRuleStatsReset" title="Also reset the per-rule run counters (the 12 runs / last 14:02 lines under each rule)">Reset run counters</button>
     </div>
     <table style="margin-top:8px">
-      <thead><tr><th style="width:135px">Time</th><th style="width:26%">Rule pattern</th>
+      <thead><tr><th style="width:135px">Time</th><th style="width:26%">Rule (URL or content)</th>
         <th style="width:110px">Action</th><th style="width:22%">Printer</th><th>Page / result</th></tr></thead>
       <tbody id="ruleLogBody"><tr><td colspan="5">No rule activity yet.</td></tr></tbody>
     </table>
   </section>
 
-  <!-- ================= SETTINGS ================= -->
-  <section class="panel" id="panel-settings">
+  <!-- ================= GENERAL ================= -->
+  <section class="panel" id="panel-general">
     <div class="power">
       <h2>Power switches</h2>
+      <p class="sub" style="margin-bottom:8px">Every silent / background behavior of AdvPrint Pro - one switch each, plain English.</p>
       <div class="toggle">
         <input type="checkbox" id="enabled">
         <div><b>AdvPrint enabled (master switch)</b>
@@ -297,23 +344,28 @@
       </div>
       <div class="toggle">
         <input type="checkbox" id="queueMode">
-        <div><b>Queue mode</b>
-          <p>ON = every job goes through the hub queue in order (Pause/Resume in the popup or hub works, big jobs line up). OFF = <b>instant print</b> - each job is handed straight to the printer the moment it arrives (hub sends queue:false), nothing waits behind earlier jobs, Pause has no effect. <b>If no printer is active</b> (offline / paper-out / error) the job is <b>auto-queued</b> instead of failing and prints when the printer is back (v2.3, fallback can be turned off with POST /config {"instant_auto_queue": false}).</p></div>
+        <div><b>Queue mode (jobs wait in order)</b>
+          <p>ON = every job goes through the hub queue in order (Pause/Resume in the popup or hub works, big jobs line up). OFF = <b>instant print</b> - each job is handed straight to the printer the moment it arrives (hub sends queue:false), nothing waits behind earlier jobs, Pause has no effect. <b>If no printer is active</b> (offline / paper-out / error) the job is <b>auto-queued</b> instead of failing and prints when the printer is back.</p></div>
+      </div>
+      <div class="toggle">
+        <input type="checkbox" id="rulesEnabled">
+        <div><b>Auto-print rules (silent background printing)</b>
+          <p>The power switch for every rule in the <b>Rules</b> tab - the same switch that sits on the Rule Manager bar (v3.0.6: the popup no longer carries it; it lives here). ON = armed rules fire hiddenly when their URL or page content matches, each job on its rule's printer, copies and paper. OFF (paused) = NO rule auto-prints; manual prints (popup buttons, right-click menu) keep working - exactly like the queue Pause, but for rules.</p></div>
       </div>
       <div class="toggle">
         <input type="checkbox" id="hookPrint">
-        <div><b>Intercept window.print()</b>
-          <p>Web apps (Odoo, POS, dashboards) that call window.print() are printed silently through the hub instead of opening the dialog. Also intercepts Ctrl+P / Cmd+P. v3.0.1: this switch moved here into <b>Power switches</b> so it sits next to the master switch and Queue mode - it is the SAME switch as the popup's "window.print() hook" toggle (one setting, hookPrint).</p></div>
+        <div><b>Intercept window.print() (web app prints go silent)</b>
+          <p>Web apps (Odoo, POS, dashboards) that call window.print() are printed silently through the hub instead of opening the dialog. Also intercepts Ctrl+P / Cmd+P. This is the same switch that used to sit in the popup (moved to Options in v3.0.2) - one setting: hookPrint.</p></div>
       </div>
       <div class="toggle">
         <input type="checkbox" id="debugMode">
-        <div><b>Debug mode - find problems fast (v2.3)</b>
+        <div><b>Debug mode - find problems fast</b>
           <p>ON = this extension reports every error it hits (network failures, rejected token, print-call exceptions, jobs that ended failed/dead) to the hub, and the hub logs verbosely. Open the <b>Debug</b> tab (or the dashboard Debug card, or <span class="mono">/debug</span>) to see WHEN / WHY / WHERE printing fails - no guessing. Turn off again when everything works.</p></div>
       </div>
       <div class="toggle">
         <input type="checkbox" id="retryOffline">
-        <div><b data-i18n="optRetryOffline">Retry when the hub comes back</b>
-          <p data-i18n="optRetryOfflineDesc">If the hub is offline, jobs are kept in the browser and sent automatically as soon as the hub answers again (checked every minute).</p></div>
+        <div><b>Retry when the hub comes back</b>
+          <p>If the hub is offline, jobs are kept in the browser and sent automatically as soon as the hub answers again (checked every minute).</p></div>
       </div>
       <div class="toggle">
         <select id="langSelect">
@@ -327,70 +379,72 @@
     </div>
 
     <section style="border:none;padding:0;margin:0">
-      <h2>Connection 1 - Self PC (this computer)</h2>
-      <p class="sub">The hub + printers on THIS computer. Used when Share Send Mode is OFF (default).</p>
-      <div class="row">
-        <label>Hub URL</label>
-        <input type="text" id="hubUrl" placeholder="http://127.0.0.1:9235">
+      <h2>Browser behavior</h2>
+      <p class="sub">What happens around the printing - tabs, menus, the toolbar icon.</p>
+      <div class="toggle">
+        <input type="checkbox" id="autoPrintAllPdfs">
+        <div><b>Print every PDF opened in the browser (simple mode)</b>
+          <p>ANY PDF you open - any site, any URL - is printed silently and its tab closes. No print view, no dialog, no rules needed. Turn off to auto-print only URLs matching your rules (Rules tab).</p></div>
       </div>
-      <div class="row">
-        <label>Token</label>
-        <input type="password" id="token" placeholder="token from the hub">
-        <button class="primary" id="bTestHub">Connect</button>
-        <button id="bDetectToken" title="Ask the running hub for its current token (works on the hub PC - one-click fix for a stale token)">Detect token</button>
-        <span id="hubState" class="mono"></span>
+      <div class="toggle">
+        <input type="checkbox" id="closeAfterPrint">
+        <div><b>Close tab after auto-print (default OFF)</b>
+          <p>OFF (default): auto-printed URLs keep their tab open like a normal page. ON: when a rule auto-prints an opened URL, the tab is closed right after the job is queued - zero browser view, the paper just comes out. You opt in; AdvPrint never closes tabs on its own by default.</p></div>
       </div>
-      <div class="note">Start the hub with <b>python advprint.py serve</b>, or use the
-        installed "AdvPrint Pro" shortcut / "AdvPrint Tool" menu.
-        v2.0: new installs get a <b>private random token</b> - read it with
-        <span class="mono">python advprint.py token</span> or in the hub
-        dashboard. Old installs keep the pre-2.0 default token
-        until changed (the hub will warn you).
-        <b>Detect token</b> fills the current token automatically from the running hub (v2.6 one-click fix - also offered on the dashboard error page itself).</div>
-      <div class="row" style="margin-top:8px">
-        <button id="bDashboard" data-i18n="optDashboard" title="Open THIS PC's hub dashboard (http://127.0.0.1:9235/dashboard)">Open dashboard - Self PC</button>
-        <button id="bAudit" data-i18n="optAudit" title="Open THIS PC's hub audit log">Open audit log - Self PC</button>
+      <div class="toggle">
+        <select id="failFallback">
+          <option value="tab">Open the URL in a new tab</option>
+          <option value="none">Stay silent (no tab)</option>
+        </select>
+        <div><b>When a page print call fails</b>
+          <p>Controls the automatic fallback of printPdfLink() / printPdf() on web pages: if the hub cannot print a PDF (hub off, printer error, not a PDF), either open the URL in a normal tab so the browser prints it the default way, or stay completely silent. A per-call opts.fallback (true/false) in page JS overrides this setting.</p></div>
       </div>
-    </section>
-
-    <section id="lan-settings" style="border:none;padding:0;margin-top:18px">
-      <h2>Connection 2 - LAN PC (share-send target)</h2>
-      <p class="sub">v2.8: a SECOND hub profile. Put the OTHER PC's hub URL + its token here; turning <b>Share Send Mode</b> ON in the popup sends every print job to that PC. OFF (default) prints on the Self PC above.</p>
-      <div class="row">
-        <label>LAN PC hub URL</label>
-        <input type="text" id="hubUrlLan" placeholder="http://192.168.0.60:9235">
+      <div class="toggle">
+        <input type="checkbox" id="contextMenu">
+        <div><b>Right-click menu</b>
+          <p>Adds "AdvPrint Pro" to the right-click menu: print page / print selection / print linked PDF / print screenshot.</p></div>
       </div>
-      <div class="row">
-        <label>LAN PC token</label>
-        <input type="password" id="hubTokenLan" placeholder="that PC's hub token">
-        <button class="primary" id="bTestHubLan">Connect</button>
-        <button id="bClearLan" title="Forget the LAN PC profile (URL + token)">Clear</button>
-        <span id="hubStateLan" class="mono"></span>
-      </div>
-      <div class="note">On the OTHER PC: enable <b>Share Receive Mode</b> (its popup or LAN tab =
-        <span class="mono">share_lan</span>), <b>restart its hub</b> and allow TCP 9235 through the
-        firewall once. Copy its token there (dashboard or <span class="mono">python advprint.py token</span>).
-        Your own PC does NOT need Share Receive ON to send - receiving is the OTHER PC's switch.</div>
-      <div class="row" style="margin-top:8px">
-        <button id="bDashboardLan" title="Open the LAN PC's hub dashboard in a browser">Open dashboard - LAN PC</button>
-        <button id="bAuditLan" title="Open the LAN PC's hub audit log">Open audit log - LAN PC</button>
+      <div class="toggle">
+        <input type="checkbox" id="badge">
+        <div><b>Toolbar badge (green OK / red !)</b>
+          <p>Shows OK or ! on the extension icon for a few seconds after every job, so you see it worked without opening anything.</p></div>
       </div>
     </section>
 
     <section style="border:none;padding:0;margin-top:18px">
-      <h2>Printing</h2>
-      <p class="sub">Where jobs go when no routing rule matches.</p>
+      <h2>Auto-print rules</h2>
+      <p class="sub">URL rules AND content rules (ZPL / receipt text / PDF /
+        image) live in their own <b>Rules</b> tab - the Rule Manager. There
+        you edit every rule, drive the <b>Auto-print rules</b> power switch
+        (the same switch in Power switches above), test with the URL and
+        text <b>simulator</b> (prints nothing), and watch per-rule <b>run
+        counters</b> plus the <b>activity log</b> of the last 100 hidden
+        hits.</p>
       <div class="row">
-        <label>Default printer</label>
-        <select id="defaultPrinter"><option value="">OS default printer</option></select>
-        <button class="mini" id="bReloadPrinters">Reload list</button>
+        <button class="primary" id="bGoRules">Open the Rule Manager</button>
       </div>
     </section>
 
+    <div class="row" style="margin-top:14px">
+      <button class="primary" id="bSave">Save settings</button>
+      <button id="bTestPage">Send test page</button>
+    </div>
+  </section>
+
+  <!-- ================= PRINTING ================= -->
+  <section class="panel" id="panel-printing">
+    <h2>Default printer</h2>
+    <p class="sub">Where jobs go when no routing rule matches. Rules always win over this (each rule carries its own printer).</p>
+    <div class="row">
+      <label>Default printer</label>
+      <select id="defaultPrinter"><option value="">OS default printer</option></select>
+      <button class="mini" id="bReloadPrinters">Reload list</button>
+    </div>
+
     <section style="border:none;padding:0;margin-top:18px">
-      <h2>Default print options <span class="sub" style="display:inline">(v2.2 - all printer options)</span></h2>
-      <p class="sub">Sent with EVERY job printed from this browser - rules, page
-        scripts and the popup can still override. Shown only as the printer
+      <h2>Default print options <span class="sub" style="display:inline">(sent with every job)</span></h2>
+      <p class="sub">Sent with EVERY job printed from this browser - rules,
+        page scripts and the popup can still override. Shown only as the printer
         supports them (ask the hub: /printers/&lt;name&gt;/capabilities).</p>
       <div class="row">
         <label>Copies</label>
@@ -455,24 +509,103 @@
       </div>
       <div class="note" id="capsNote">Connect to the hub to see what the selected printer supports.</div>
     </section>
+    <div class="row" style="margin-top:14px">
+      <button class="primary saveAll">Save settings</button>
+      <span class="sub" style="margin:0">same as Save settings in General - saves everything</span>
+    </div>
+  </section>
 
-    <section style="border:none;padding:0;margin-top:18px">
-      <h2>Auto-print &amp; routing rules</h2>
-      <p class="sub">v3.0.5: the rules live in their own <b>Rules</b> tab
-        now - the <b>Rule Manager</b>. One place manages and controls the
-        hidden multi-printer lab: edit every rule (pattern, printer,
-        Action Auto/PDF/Page/<b>ZPL label</b>/<b>ESC-POS receipt</b>,
-        copies, paper), <b>Pause all rules</b> with one switch (the popup
-        has the same switch), test which rule fires with the URL
-        <b>simulator</b> (prints nothing), per-rule <b>run counters</b>,
-        and a <b>rule activity log</b> of the last 100 hidden hits.</p>
+  <!-- ================= CONNECTIONS ================= -->
+  <section class="panel" id="panel-connections">
+    <section style="border:none;padding:0;margin:0">
+      <h2>This PC (Self PC) - the main hub</h2>
+      <p class="sub">The hub + printers on THIS computer. Used when Share Send Mode is OFF (default).</p>
       <div class="row">
-        <button class="primary" id="bGoRules">Open the Rule Manager</button>
+        <label>Hub URL</label>
+        <input type="text" id="hubUrl" placeholder="http://127.0.0.1:9235">
+      </div>
+      <div class="row">
+        <label>Token</label>
+        <input type="password" id="token" placeholder="token from the hub">
+        <button class="primary" id="bTestHub">Connect</button>
+        <button id="bDetectToken" title="Ask the running hub for its current token (works on the hub PC - one-click fix for a stale token)">Detect token</button>
+        <span id="hubState" class="mono"></span>
+      </div>
+      <div class="note">Start the hub with <b>python advprint.py serve</b>, or use the
+        installed "AdvPrint Pro" shortcut / "AdvPrint Tool" menu.
+        New installs get a <b>private random token</b> - read it with
+        <span class="mono">python advprint.py token</span> or in the hub
+        dashboard. Old installs keep the pre-2.0 default token
+        until changed (the hub will warn you).
+        <b>Detect token</b> fills the current token automatically from the running hub (one-click fix - also offered on the dashboard error page itself).</div>
+      <div class="row" style="margin-top:8px">
+        <button id="bDashboard" data-i18n="optDashboard" title="Open THIS PC's hub dashboard (http://127.0.0.1:9235/dashboard)">Open dashboard - Self PC</button>
+        <button id="bAudit" data-i18n="optAudit" title="Open THIS PC's hub audit log">Open audit log - Self PC</button>
+      </div>
+    </section>
+
+    <section id="lan-settings" style="border:none;padding:0;margin-top:18px">
+      <h2>Another PC (LAN PC) - print over the network</h2>
+      <p class="sub">A SECOND hub profile. Put the OTHER PC's hub URL + its token here; turning <b>Share Send Mode</b> ON in the popup sends every print job to that PC. OFF (default) prints on the Self PC above.</p>
+      <div class="row">
+        <label>LAN PC hub URL</label>
+        <input type="text" id="hubUrlLan" placeholder="http://192.168.0.60:9235">
+      </div>
+      <div class="row">
+        <label>LAN PC token</label>
+        <input type="password" id="hubTokenLan" placeholder="that PC's hub token">
+        <button class="primary" id="bTestHubLan">Connect</button>
+        <button id="bClearLan" title="Forget the LAN PC profile (URL + token)">Clear</button>
+        <span id="hubStateLan" class="mono"></span>
+      </div>
+      <div class="note">On the OTHER PC: enable <b>Share Receive Mode</b> (its popup or the LAN sharing block below =
+        <span class="mono">share_lan</span>), <b>restart its hub</b> and allow TCP 9235 through the
+        firewall once. Copy its token there (dashboard or <span class="mono">python advprint.py token</span>).
+        Your own PC does NOT need Share Receive ON to send - receiving is the OTHER PC's switch.</div>
+      <div class="row" style="margin-top:8px">
+        <button id="bDashboardLan" title="Open the LAN PC's hub dashboard in a browser">Open dashboard - LAN PC</button>
+        <button id="bAuditLan" title="Open the LAN PC's hub audit log">Open audit log - LAN PC</button>
       </div>
     </section>
 
     <section style="border:none;padding:0;margin-top:18px">
-      <h2>Website API <span class="sub" style="display:inline">(security allowlist - added in v2.9.1)</span></h2>
+      <h2>LAN sharing - let other PCs print through this one</h2>
+      <p class="sub">The hub listens on 127.0.0.1 only until you switch this on. Other PCs must use your token - wrong tokens get locked out.</p>
+      <div class="qstate">
+        <span class="dot" id="lanDot"></span>
+        <b id="lanState">checking...</b>
+        <span id="lanUrl" class="mono"></span>
+        <span style="flex:1"></span>
+        <button class="mini" id="bLanToggle">Enable</button>
+        <button class="mini" id="bLanCopy">Copy URL</button>
+        <button class="mini" id="bLanRefresh">Refresh</button>
+      </div>
+      <div class="note" id="lanHint">After enabling: <b>restart the hub</b>
+        (tray icon &rarr; Exit, start AdvPrint Pro again) and allow the port
+        through the firewall once:<br>
+        <span class="mono">netsh advfirewall firewall add rule name="AdvPrint Pro"
+        dir=in action=allow protocol=TCP localport=9235</span></div>
+
+      <h3 style="margin:14px 0 6px">Other PCs (peers)</h3>
+      <p class="sub" style="margin-bottom:8px">Fixed peers live in <span class="mono">"peer_hubs"</span> in the
+        hub's config.json. <b>Shift</b> re-uploads the waiting jobs to that PC
+        and marks them forwarded here.</p>
+      <table>
+        <thead><tr><th>PC (hub URL)</th><th>Status</th><th>Version</th>
+          <th style="width:180px"></th></tr></thead>
+        <tbody id="peersBody"><tr><td colspan="4">Connect to the hub first.</td></tr></tbody>
+      </table>
+      <div class="row" style="margin-top:12px">
+        <label>Shift whole queue to</label>
+        <input type="text" id="shiftTarget" placeholder="http://192.168.0.60:9235">
+        <input type="password" id="shiftToken" placeholder="that PC's token (optional for peers)" style="min-width:190px">
+        <button class="primary" id="bShiftAll">Shift all waiting</button>
+      </div>
+    </section>
+
+    <section id="api-settings" style="border:none;padding:0;margin-top:18px">
+      <div id="api" style="margin-top:-70px;padding-top:70px"></div>
+      <h2>Website API permission (which sites may print)</h2>
       <p class="sub">Sites allowed to call <b>window.advprint</b> / <b>printPdfLink</b> (the page developer API).
         One pattern per line - e.g. <span class="mono">*://www.htncr.org/*</span> or
         <span class="mono">https://reports.example.com/*</span> (<span class="mono">*.example.org</span> matches subdomains).
@@ -485,46 +618,16 @@
         <span class="sub" id="apiSitesCount"></span>
       </div>
     </section>
+    <div class="row" style="margin-top:14px">
+      <button class="primary saveAll">Save settings</button>
+      <span class="sub" style="margin:0">saves the hub URLs and tokens too</span>
+    </div>
+  </section>
 
-    <section style="border:none;padding:0;margin-top:18px">
-      <h2>Behavior</h2>
-      <div class="toggle">
-        <input type="checkbox" id="autoPrintAllPdfs">
-        <div><b>Print every PDF opened in the browser (simple mode)</b>
-          <p>ANY PDF you open - any site, any URL - is printed silently and its tab closes. No print view, no dialog, no rules needed. Turn off to auto-print only URLs matching your rules below.</p></div>
-      </div>
-      <div class="toggle">
-        <input type="checkbox" id="closeAfterPrint">
-        <div><b>Close tab after auto-print (default OFF)</b>
-          <p>OFF (default): auto-printed URLs keep their tab open like a normal page. ON: when a rule auto-prints an opened URL, the tab is closed right after the job is queued - zero browser view, the paper just comes out. You opt in; AdvPrint never closes tabs on its own by default.</p></div>
-      </div>
-      <div class="toggle">
-        <select id="failFallback">
-          <option value="tab">Open the URL in a new tab</option>
-          <option value="none">Stay silent (no tab)</option>
-        </select>
-        <div><b>When a page print call fails</b>
-          <p>Controls the automatic fallback of printPdfLink() / printPdf() on web pages: if the hub cannot print a PDF (hub off, printer error, not a PDF), either open the URL in a normal tab so the browser prints it the default way, or stay completely silent. A per-call opts.fallback (true/false) in page JS overrides this setting.</p></div>
-      </div>
-      <div class="toggle">
-        <input type="checkbox" id="contextMenu">
-        <div><b>Right-click menu</b>
-          <p>Add "AdvPrint Pro" to the context menu (print page / selection / linked PDF / screenshot).</p></div>
-      </div>
-      <div class="toggle">
-        <input type="checkbox" id="badge">
-        <div><b>Toolbar badge</b>
-          <p>Green OK / red ! on the extension icon after every job.</p></div>
-      </div>
-      <div class="row" style="margin-top:8px">
-        <button class="primary" id="bSave">Save settings</button>
-        <button id="bTestPage">Send test page</button>
-      </div>
-    </section>
-
-    <!-- v2.6: hub-side settings, edited live over GET/POST /config -->
-    <section style="border:none;padding:0;margin-top:18px">
-      <h2>Hub settings (advanced) <span class="sub" style="display:inline">- live in config.json, saved over POST /config</span></h2>
+  <!-- ================= HUB ================= -->
+  <section class="panel" id="panel-hub">
+    <section style="border:none;padding:0;margin:0">
+      <h2>Hub settings - the printing engine on this PC</h2>
       <p class="sub">These are the hub's own settings - the same ones the
         dashboard Settings card and <span class="mono">~/.advprint/config.json</span> hold.
         Changes apply immediately; some (LAN binding) need a hub restart.</p>
@@ -548,7 +651,7 @@
       <div class="toggle">
         <input type="checkbox" id="hInstantQueue">
         <div><b>Instant print fallback to queue</b>
-          <p>Queue mode OFF + printer not active: the job is auto-queued instead of failing, and prints when the printer is back (v2.3).</p></div>
+          <p>Queue mode OFF + printer not active: the job is auto-queued instead of failing, and prints when the printer is back.</p></div>
       </div>
 
       <h3 style="margin:14px 0 6px;font-size:13.5px">Security</h3>
@@ -576,7 +679,8 @@
       <h3 style="margin:14px 0 6px;font-size:13.5px">Reprint &amp; audit</h3>
       <div class="toggle">
         <input type="checkbox" id="hWatermark">
-        <div><b>Stamp REPRINT on reprinted pages</b></div>
+        <div><b>Stamp REPRINT on reprinted pages</b>
+          <p>Reprinted copies carry a visible REPRINT mark - nobody mistakes them for originals.</p></div>
       </div>
       <div class="toggle">
         <input type="checkbox" id="hReasonRequired">
@@ -636,7 +740,7 @@
   <section class="panel" id="panel-debug">
     <h2>Debug - WHEN / WHY / WHERE is the problem?</h2>
     <p class="sub">One page answer to "nothing prints". Switch <b>Debug mode</b>
-      ON in Settings first - then this extension also sends its errors here
+      ON in General first - then this extension also sends its errors here
       (the hub keeps the last 100 reports).</p>
     <div class="row" style="gap:8px;flex-wrap:wrap">
       <button class="primary" id="bDbgRefresh">Refresh</button>
@@ -667,63 +771,14 @@
     </table>
   </section>
 
-  <!-- ================= LAN / PCs ================= -->
-  <section class="panel" id="panel-lan">
-    <h2>LAN sharing - let OTHER PCs print through this one</h2>
-    <p class="sub">v2.2 &middot; the hub listens on 127.0.0.1 only until you switch
-      this on. Other PCs must use your token - wrong tokens get locked out.</p>
-    <div class="qstate">
-      <span class="dot" id="lanDot"></span>
-      <b id="lanState">checking...</b>
-      <span id="lanUrl" class="mono"></span>
-      <span style="flex:1"></span>
-      <button class="mini" id="bLanToggle">Enable</button>
-      <button class="mini" id="bLanCopy">Copy URL</button>
-      <button class="mini" id="bLanRefresh">Refresh</button>
-    </div>
-    <div class="note">v2.7.0: the same two switches live in the <b>popup</b> -
-      <b>Share Receive Mode</b> (= this "Enable" button, hub-side
-      <span class="mono">share_lan</span>) and <b>Share Send Mode</b>.
-      v2.8: Share Send now has its own <b>full profile</b> - Settings &rarr;
-      <b>Connection 2 - LAN PC</b> (URL + token). With Share Send ON, every print
-      job from this browser prints on that PC; OFF prints here. This PC does
-      NOT need Receive ON to send - Receive is the OTHER PC's switch.</div>
-    <div class="note" id="lanHint">After enabling: <b>restart the hub</b>
-      (tray icon &rarr; Exit, start AdvPrint Pro again) and allow the port
-      through the firewall once:<br>
-      <span class="mono">netsh advfirewall firewall add rule name="AdvPrint Pro"
-      dir=in action=allow protocol=TCP localport=9235</span></div>
-
-    <h2 style="margin-top:16px">Other PCs (peers)</h2>
-    <p class="sub">Fixed peers live in <span class="mono">"peer_hubs"</span> in the
-      hub's config.json. <b>Shift</b> re-uploads the waiting jobs to that PC
-      and marks them forwarded here.</p>
-    <table>
-      <thead><tr><th>PC (hub URL)</th><th>Status</th><th>Version</th>
-        <th style="width:180px"></th></tr></thead>
-      <tbody id="peersBody"><tr><td colspan="4">Connect to the hub first.</td></tr></tbody>
-    </table>
-    <div class="row" style="margin-top:12px">
-      <label>Shift whole queue to</label>
-      <input type="text" id="shiftTarget" placeholder="http://192.168.0.60:9235">
-      <input type="password" id="shiftToken" placeholder="that PC's token (optional for peers)" style="min-width:190px">
-      <button class="primary" id="bShiftAll">Shift all waiting</button>
-    </div>
-    <div class="note"><b>Print FROM another PC through this one:</b> install the
-      extension there, set <b>Settings &rarr; Hub URL</b> to this PC's LAN URL
-      (Copy button above) and the same token. Single jobs: the
-      <b>Shift to PC</b> buttons in the <b>Queue</b> tab. Full guide:
-      <b>About &rarr; Open user guide</b> (the hub serves it at /docs).</div>
-  </section>
-
   <!-- ================= ABOUT ================= -->
   <section class="panel" id="panel-about">
-    <div id="api" style="margin-top:-70px;padding-top:70px"></div>
     <h2>About AdvPrint Pro</h2>
-    <p class="sub">Version <b id="aboutVer">3.0.5</b> &middot; AdvPrint (Advanced Printer) by Bit Dream IT - Innovative Healthcare Solutions &middot; MIT license &middot; 100% local - no cloud, no tracking.</p>
-    <p class="sub">v3.0.5 highlights: <b>Rule Manager</b> - the hidden multi-printer lab rules get their own <b>Rules</b> tab in Options: manage and control everything in one place (edit rules, <b>Pause all rules</b> - the popup has the same switch, a <b>URL simulator</b> that shows which rule would fire WITHOUT printing, per-rule <b>run counters</b>, and a <b>rule activity log</b> of the last 100 hidden hits) &middot; <b>v3.0.4:</b> <b>network printer mode</b> - add this PC like a real IP printer: IPP URL <span class="mono">http://ip:9235/ipp/print</span> (Windows 10/11 "Select a shared printer by name") or the classic <b>TCP/IP port 9100</b> (JetDirect RAW) - Windows, phones and label apps print straight into the hub; <b>print destination</b>: jobs print on ANY printer - the OS default, any installed printer, or an upstream IP printer (RAW/IPP); PDF, JPEG, PostScript, PCL, ESC/POS and ZPL are routed automatically &middot; <b>responsive dashboard tables</b> - every column, button and option is visible on load, nothing hides inside an inner scroll &middot; phone <b>"Auth fail" on the Send portal QR is fixed</b> (works with every token setting) &middot; <b>one version everywhere</b>: popup, Options and About all read the manifest version &middot; <b>smooth tray menu</b>: every tray action now runs in its own thread &middot; <b>tray menu click fix (3.0.1)</b>: every menu item now runs its OWN action - the old build ran the wrong command for items after the first separator &middot; <b>window.print() hook switch</b> lives in Options &gt; Power switches, next to the master switch (v3.0.2: the popup copy was removed - one switch, one place) &middot; <b>multi-printer guide (3.0.2)</b>: docs/MULTI-PRINTER.md - one PC, A4/A5 PDF reports on the laser + ZPL labels on the Zebra at the same time &middot; <b>rules print labels (3.0.3)</b>: rule Action <b>ZPL label</b> / <b>ESC-POS receipt</b> streams the page text (selection &rarr; &lt;pre&gt;/textarea &rarr; body) to the rule's printer in its own language - no page JavaScript, no curl; per-rule <b>Copies</b> and <b>Paper</b> (A4/A5/Letter/...) ride along, and the Reprint-a-PDF-link box honours the matching rule &middot; <b>multi-printer rules made easy (3.0.4)</b>: "Printers on this PC" chip strip under the rules table (one click <b>+ rule</b> per printer preselects it), a <b>Copy</b> button on every rule (duplicate, change pattern + printer), and the new <b>Contains</b> pattern type - the URL just contains the text.</p>
+    <p class="sub">Version <b id="aboutVer">3.0.6</b> &middot; AdvPrint (Advanced Printer) by Bit Dream IT - Innovative Healthcare Solutions &middot; MIT license &middot; 100% local - no cloud, no tracking.</p>
+    <p class="sub">v3.0.6 highlights: <b>rules match by CONTENT</b> - a rule no longer needs a URL: "Match by: Content" fires for ANY page whose text is a ZPL label (<span class="mono">^XA...^XZ</span> &rarr; Zebra), a plain-text receipt (text/plain &rarr; ESC-POS thermal), a <b>PDF</b>, an <b>image</b> (picture tabs print the photo) or a web page - detection reads the already-open tab (content type + text sample), no extra download, no page JavaScript; URL rules keep working exactly as before and a URL typed in a content rule narrows it further &middot; <b>rules power switch moved to Options</b> - the popup no longer carries the auto-print rules switch; it lives on the Rule Manager bar and in General &gt; Power switches (one setting, manual prints keep working while paused) &middot; <b>settings split into human tabs</b> - Queue, History, Rules, General, Printing, Connections, Hub, Debug, About: every option renamed in plain English with a full description &middot; <b>text simulator</b> - paste label/receipt text and see which content rule would fire; the URL simulator now also fetches the URL (with your login) to detect PDF/image/ZPL/text &middot; <b>Action: Image</b> for rules - the tab's picture prints via the hub (cookie download, visible-tab capture fallback).<br>
+      <b>v3.0.5:</b> Rule Manager tab - pause all rules, URL simulator, per-rule run counters, activity log &middot; <b>v3.0.4:</b> printers-on-this-PC chips, per-rule Copy, "Contains" pattern &middot; <b>v3.0.3:</b> rules print ZPL labels / ESC-POS receipts with per-rule copies &amp; paper &middot; <b>v3.0.2:</b> multi-printer guide &middot; <b>v3.0.1:</b> window.print() hook switch to Options &middot; <b>v3.0.0:</b> network printer mode (IPP URL / TCP 9100), print destination routing.</p>
     <p class="sub">v2.7.0 highlights: <b>History manager</b> - filter, search, tick rows, <b>Reprint selected</b>, <b>Reprint all non-printed</b>, <b>Clear ALL history</b> (waiting jobs are never touched) &middot; <b>Share Receive / Send Mode</b> toggles right in the popup &middot; the dashboard's <b>Live debug &amp; test tool</b> now sits properly inside the page &middot; new API: <span class="mono">POST /jobs/bulk-reprint</span>, <span class="mono">POST /history/clear</span>.</p>
-    <p class="sub">v2.3 highlights: <b>Debug tab</b> - see WHEN / WHY / WHERE printing fails (hub problems + browser error reports, one Copy button) &middot; <b>instant print</b> (Queue mode OFF) with auto-queue fallback when no printer is active &middot; v2.2: <b>Default print options</b> (copies, odd/even/custom pages, per-sheet n-up, <b>quality draft/normal/high AND DPI</b>, scale, margins, duplex, paper, layout) &middot; <b>LAN / PCs tab</b>: LAN sharing, peers, shift single jobs or the whole queue to another PC &middot; the hub serves the full user guide at <b>/docs</b>.</p>
+    <p class="sub">v2.3 highlights: <b>Debug tab</b> - see WHEN / WHY / WHERE printing fails (hub problems + browser error reports, one Copy button) &middot; <b>instant print</b> (Queue mode OFF) with auto-queue fallback when no printer is active &middot; v2.2: <b>Default print options</b> (copies, odd/even/custom pages, per-sheet n-up, <b>quality draft/normal/high AND DPI</b>, scale, margins, duplex, paper, layout) &middot; the hub serves the full user guide at <b>/docs</b>.</p>
     <div class="gh">
       <button class="primary" id="bOpenDocs">Open user guide (built-in docs)</button>
     </div>

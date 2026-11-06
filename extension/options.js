@@ -16,16 +16,21 @@ function saved(text) {
   setTimeout(() => { $("saveMsg").textContent = ""; }, 2500);
 }
 
-/* ---------- tabs (Queue | History | Rules | Settings | Debug | LAN | About) ---------- */
+/* ---------- tabs (v3.0.6: Queue | History | Rules | General | Printing |
+ *            Connections | Hub | Debug | About - every tab has a human
+ *            name and ONE job, instead of one endless Settings page) ---- */
+const TABS = ["queue", "history", "rules", "general", "printing",
+              "connections", "hub", "debug", "about"];
 function showTab(name) {
-  const valid = ["queue", "history", "rules", "settings", "debug", "lan", "about"].includes(name)
-    ? name : "settings";
+  const valid = TABS.includes(name) ? name : "general";
   document.querySelectorAll("#tabs button").forEach((b) =>
     b.classList.toggle("active", b.dataset.tab === valid));
   document.querySelectorAll("section.panel").forEach((p) =>
     p.classList.toggle("active", p.id === "panel-" + valid));
   if (valid === "queue") startQueueLoop(); else stopQueueLoop();
-  if (valid === "lan") startLanLoop(); else stopLanLoop();
+  // v3.0.6: the LAN sharing tools (share toggle, peers, shift) now live
+  // in the Connections tab - the same 8 s refresh follows them there
+  if (valid === "connections") startLanLoop(); else stopLanLoop();
   if (valid === "history") startJobsLoop(); else stopJobsLoop();
   if (valid === "debug") startDebugLoop(); else stopDebugLoop();
   // v3.0.5: opening the Rule Manager pulls FRESH pause state, run
@@ -66,20 +71,30 @@ function startQueueLoop() {
   QUEUE_TIMER = setInterval(refreshQueue, 3000);
 }
 
-/* default tab: Queue when the queue/jobs hold data, otherwise Settings.
- * #hash links (options.html#api etc.) always win. */
+/* default tab: Queue when the queue/jobs hold data, otherwise General.
+ * #hash links (options.html#api etc.) always win.
+ * v3.0.6: the Settings tab was split - old hashes keep working:
+ *   #settings -> General, #lan / #lan-settings -> Connections (LAN PC
+ *   profile scrolled into view), #api -> Connections (Website API). */
 async function pickDefaultTab() {
   const hash = (location.hash || "").replace("#", "");
   if (hash) {
-    if (hash === "lan-settings") {
-      // v2.8: the popup's "Share Send ON without a LAN PC" flow lands
-      // here - open the Settings tab and scroll to the LAN PC profile.
-      showTab("settings");
+    if (hash === "lan-settings" || hash === "lan") {
+      // the popup's "Share Send ON without a LAN PC" flow lands here -
+      // open Connections and scroll to the LAN PC profile
+      showTab("connections");
       const el = document.getElementById("lan-settings");
       if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
       return;
     }
-    showTab(hash === "api" ? "about" : hash);
+    if (hash === "api") {
+      showTab("connections");
+      const el = document.getElementById("api-settings");
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    const map = { settings: "general" };   // old hash - new tab
+    showTab(map[hash] || hash);
     return;
   }
   try {
@@ -89,8 +104,8 @@ async function pickDefaultTab() {
     const active = (jobs.ok ? jobs.jobs : []).filter(
       (j) => j.status === "queued" || j.status === "printing");
     if (active.length) { showTab("queue"); return; }
-  } catch (_) { /* offline -> settings */ }
-  showTab("settings");
+  } catch (_) { /* offline -> general */ }
+  showTab("general");
 }
 
 /* ---------- live queue ---------- */
@@ -192,7 +207,12 @@ async function updateCheck() {
   }
 }
 
-/* ---------- rules table (v2.0: type glob/regex, title filter, on/off) -- */
+/* ---------- rules table (v2.0: type glob/regex, title filter, on/off)
+ * v3.0.6: two new columns make content rules possible:
+ *   Match by  - "URL" (the address decides, classic) or "Content" (the
+ *               page itself decides: ZPL text, receipt text, PDF, image,
+ *               web page) - a URL typed in a content rule narrows it.
+ *   Page content - WHAT the page must be (only used by content rules). */
 function ruleRow(rule) {
   const tr = document.createElement("tr");
   // v3.0.5: every rule row carries a stable id so the Rule Manager can
@@ -206,8 +226,42 @@ function ruleRow(rule) {
   const inP = document.createElement("input");
   inP.type = "text"; inP.value = rule.pattern || "";
   inP.placeholder = "*://example.com/reports/*";
+  inP.title = "URL rule: the address must match this. Content rule: " +
+              "optional extra filter (e.g. only label pages on THIS site)";
   inP.addEventListener("change", collect);
   tdP.appendChild(inP);
+
+  // v3.0.6: Match by - URL (classic) or Content (the page decides)
+  const tdM = document.createElement("td");
+  const selM = document.createElement("select");
+  selM.appendChild(new Option("URL", "url"));
+  selM.appendChild(new Option("Content", "content"));
+  selM.value = (rule.match === "content" || (!rule.pattern && rule.kind))
+    ? "content" : "url";
+  selM.title = "URL = the page ADDRESS matches the pattern (classic). " +
+               "Content = WHAT the page is decides - any page whose text " +
+               "is a ZPL label, a receipt, a PDF, an image or a web page " +
+               "fires the rule, no URL needed";
+  selM.addEventListener("change", () => { syncMatchUi(tr); collect(); });
+  tdM.appendChild(selM);
+
+  // v3.0.6: Page content - the kind a content rule matches on
+  const tdK = document.createElement("td");
+  const selK = document.createElement("select");
+  [["", "(pick content\u2026)"],
+   ["zpl", "ZPL label (^XA\u2026^XZ)"],
+   ["text", "Receipt / plain text"],
+   ["pdf", "PDF document"],
+   ["image", "Image"],
+   ["html", "Web page (HTML)"]]
+    .forEach(([v, t]) => selK.appendChild(new Option(t, v)));
+  selK.value = rule.kind || "";
+  selK.title = "ZPL label = the page text carries ^XA...^XZ (goes to the " +
+               "printer byte-for-byte). Receipt / plain text = a text page " +
+               "printed as an ESC-POS receipt. PDF / Image = the browser's " +
+               "PDF or picture viewer. Web page = any normal page";
+  selK.addEventListener("change", collect);
+  tdK.appendChild(selK);
 
   const tdT = document.createElement("td");
   const selT = document.createElement("select");
@@ -215,8 +269,8 @@ function ruleRow(rule) {
   selT.appendChild(new Option("Regex", "regex"));
   selT.appendChild(new Option("Contains", "contains"));
   selT.value = rule.type || "glob";
-  selT.title = "Glob = 1.x style wildcards; Regex = v2.0 regular expression; " +
-               "Contains (3.0.4) = the URL just contains this text - the " +
+  selT.title = "Glob = 1.x style wildcards; Regex = regular expression; " +
+               "Contains = the URL just contains this text - the " +
                "easiest way, e.g. medical_reports/pdf";
   selT.addEventListener("change", collect);
   tdT.appendChild(selT);
@@ -245,15 +299,21 @@ function ruleRow(rule) {
   const selA = document.createElement("select");
   // v3.0.3: label & receipt actions - the page text (or the selection)
   // goes to the hub in the printer's own language, rule printer only
+  // v3.0.6: Image joins - the tab's picture prints on the rule printer.
+  // For CONTENT rules the action is automatic (ZPL text always prints
+  // as ZPL, an image always as an image) - this choice matters for
+  // URL rules only.
   [["auto", "Auto (PDF or page)"], ["pdf", "PDF only"], ["page", "Page render"],
    ["zpl", "ZPL label (text on page)"],
-   ["raw", "ESC-POS receipt (text on page)"]]
+   ["raw", "ESC-POS receipt (text on page)"],
+   ["image", "Image (photo on page)"]]
     .forEach(([v, t]) => selA.appendChild(new Option(t, v)));
   selA.value = rule.action || "auto";
-  selA.title = "ZPL label / ESC-POS receipt (v3.0.3): the text shown on the " +
-               "page (selection first, then <pre>/textarea, then body text) " +
-               "is printed in the printer's own language on the rule " +
-               "printer - no page JavaScript needed";
+  selA.title = "What is sent to the printer: Auto detects PDF vs page, " +
+               "ZPL label / ESC-POS receipt print the page TEXT in the " +
+               "printer's own language, Image prints the tab's picture - " +
+               "no page JavaScript needed. Content rules pick the right " +
+               "one automatically from the detected content";
   selA.addEventListener("change", collect);
   tdA.appendChild(selA);
 
@@ -275,22 +335,22 @@ function ruleRow(rule) {
    ["Letter", "Letter"], ["Legal", "Legal"], ["Tabloid", "Tabloid"]]
     .forEach(([v, t]) => selPa.appendChild(new Option(t, v)));
   selPa.value = rule.paper || "";
-  selPa.title = "Paper for PDF/page jobs (v3.0.3); blank = print defaults " +
-                "(ignored by ZPL/ESC-POS - labels carry their own media)";
+  selPa.title = "Paper for PDF/page jobs; blank = print defaults " +
+                "(ignored by ZPL/ESC-POS/images - labels carry their own media)";
   selPa.addEventListener("change", collect);
   tdPa.appendChild(selPa);
 
   const tdOn = document.createElement("td");
   const onChk = document.createElement("input");
   onChk.type = "checkbox"; onChk.checked = rule.enabled !== false;
-  onChk.title = "Per-site on/off switch";
+  onChk.title = "Per-rule on/off switch";
   onChk.addEventListener("change", collect);
   tdOn.appendChild(onChk);
 
   const tdAuto = document.createElement("td");
   const chk = document.createElement("input");
   chk.type = "checkbox"; chk.checked = !!rule.auto;
-  chk.title = "Print automatically when the URL is opened";
+  chk.title = "Print automatically when the rule matches (URL opens or the content appears)";
   chk.addEventListener("change", collect);
   tdAuto.appendChild(chk);
 
@@ -299,12 +359,15 @@ function ruleRow(rule) {
   // and the printer. The fastest way to one rule per printer.
   const bc = document.createElement("button");
   bc.className = "mini"; bc.textContent = "Copy";
-  bc.title = "Duplicate this rule - change the URL pattern and the printer " +
-             "for the next printer";
+  bc.title = "Duplicate this rule - change the URL pattern / content and " +
+             "the printer for the next printer";
   bc.addEventListener("click", () => {
-    const [p, ty, ti, pr, a, co, pa, on, auto] =
+    // v3.0.6 row order: pattern, match, kind, type, title, printer,
+    // action, copies, paper, on, auto (the buttons are not inputs)
+    const [p, m, k, ty, ti, pr, a, co, pa, on, auto] =
       tr.querySelectorAll("input, select");
-    const nr = ruleRow({ pattern: p.value, type: ty.value, title: ti.value,
+    const nr = ruleRow({ pattern: p.value, match: m.value, kind: k.value,
+                         type: ty.value, title: ti.value,
                          printer: pr.value, action: a.value,
                          copies: co.value, paper: pa.value,
                          enabled: on.checked, auto: auto.checked });
@@ -326,8 +389,24 @@ function ruleRow(rule) {
   rstat.textContent = "\u00a0";
   tdX.appendChild(rstat);
 
-  tr.append(tdP, tdT, tdTi, tdPr, tdA, tdC, tdPa, tdOn, tdAuto, tdX);
+  tr.append(tdP, tdM, tdK, tdT, tdTi, tdPr, tdA, tdC, tdPa, tdOn, tdAuto, tdX);
+  syncMatchUi(tr);
   return tr;
+}
+
+/* v3.0.6: gray out what a rule does not use - a URL rule ignores the
+ * content dropdown, a content rule treats the URL as an optional filter. */
+function syncMatchUi(tr) {
+  const [p, m, k] = tr.querySelectorAll("input, select");
+  if (!p || !m || !k) return;
+  const byContent = m.value === "content";
+  k.disabled = !byContent;
+  p.placeholder = byContent ? "optional URL filter (blank = any site)"
+                            : "*://example.com/reports/*";
+  p.title = byContent
+    ? "OPTIONAL: also require the URL to match this - e.g. only label " +
+      "pages on YOUR site. Leave empty to match that content everywhere"
+    : "The page address must match this pattern (Contains is the easiest type)";
 }
 
 function renderRules(rules) {
@@ -339,14 +418,18 @@ function renderRules(rules) {
 function collect() {
   const rules = [];
   $("rulesBody").querySelectorAll("tr").forEach((tr) => {
-    // v3.0.3 row order: pattern, type, title, printer, action,
-    // copies, paper, on, auto (delete button is not an input)
-    const [p, ty, ti, pr, a, co, pa, on, auto] =
+    // v3.0.6 row order: pattern, match, kind, type, title, printer,
+    // action, copies, paper, on, auto (delete button is not an input)
+    const [p, m, k, ty, ti, pr, a, co, pa, on, auto] =
       tr.querySelectorAll("input, select");
-    if (p.value.trim()) {
+    // v3.0.6: a row is saved when it has a URL pattern (URL rule) OR it
+    // is a content rule with a chosen content kind (pattern optional)
+    if (p.value.trim() || (m.value === "content" && k.value)) {
       const cv = parseInt(co.value, 10);
       rules.push({ id: tr.dataset.rid || "",
                    pattern: p.value.trim(), type: ty.value,
+                   match: m.value === "content" ? "content" : "url",
+                   kind: m.value === "content" ? k.value : "",
                    title: ti.value.trim(), printer: pr.value,
                    action: a.value,
                    copies: (co.value && cv >= 1) ? String(cv) : "",
@@ -367,7 +450,15 @@ let RULE_STATE = { paused: false, stats: {}, log: [], total: 0 };
 
 function ruleActionLabel(a) {
   return ({ auto: "Auto", pdf: "PDF", page: "Page render",
-            zpl: "ZPL label", raw: "ESC-POS" })[a] || (a || "Auto");
+            zpl: "ZPL label", raw: "ESC-POS", image: "Image" })[a] ||
+         (a || "Auto");
+}
+
+/* v3.0.6: human name for a detected content kind */
+function kindLabel(k) {
+  return ({ zpl: "ZPL label text (^XA\u2026^XZ)", text: "Receipt / plain text",
+            pdf: "PDF document", image: "Image",
+            html: "Web page (HTML)" })[k] || (k || "?");
 }
 
 async function refreshRuleManager() {
@@ -395,7 +486,18 @@ function renderRuleManager() {
   info.textContent =
     armed + " of " + total + " armed (On + Auto) \u00b7 " +
     ((st.log || []).length) + " log entries";
-  $("bRulesPause").textContent = paused ? "Resume all rules" : "Pause all rules";
+  // v3.0.6: the power switch replaces the old Pause-all button - the
+  // SAME rulesPaused setting, shown and driven here and in General
+  const pw = $("rulesPower");
+  if (pw) {
+    pw.checked = !paused;
+    $("rulesPowerRow").classList.toggle("off", paused);
+    $("rulesPowerSub").textContent = paused
+      ? "PAUSED - no rule auto-prints"
+      : "ON - armed rules print hiddenly";
+  }
+  const genSw = $("rulesEnabled");
+  if (genSw && genSw.checked === paused) genSw.checked = !paused;
   // per-rule run counters (stats are keyed by the row's stable rule id)
   $("rulesBody").querySelectorAll("tr").forEach((tr) => {
     const el = tr.querySelector(".rstat");
@@ -663,6 +765,8 @@ async function loadAll() {
   $("hubTokenLan").value = c.hubTokenLan || "";
   $("enabled").checked = c.enabled !== false;
   $("queueMode").checked = c.queueMode !== false;
+  // v3.0.6: the rules power switch lives in Options (General + Rules)
+  $("rulesEnabled").checked = c.rulesPaused !== true;
   $("retryOffline").checked = c.retryOffline !== false;
   $("langSelect").value = c.lang || "auto";
   $("debugMode").checked = !!c.debugMode;   // v2.3 Debug switch
@@ -1113,19 +1217,42 @@ $("bAddRule").addEventListener("click", () => {
   collect();
 });
 $("bSave").addEventListener("click", saveAll);
+/* v3.0.6: Printing and Connections tabs carry their own Save button -
+ * every one of them saves the WHOLE config (they are the same action). */
+document.querySelectorAll("button.saveAll").forEach(
+  (b) => b.addEventListener("click", saveAll));
 
-/* ---------- v3.0.5 Rule Manager controls ---------- */
+/* ---------- v3.0.6 Rule Manager controls ---------- */
 $("bSaveRules").addEventListener("click", saveRules);
 
-$("bRulesPause").addEventListener("click", async () => {
-  const paused = !(RULE_STATE && RULE_STATE.paused);
-  const r = await send({ type: "saveCfg", patch: { rulesPaused: paused } });
+/* v3.0.6: the power switch ON THE RULE MANAGER BAR replaces the old
+ * "Pause all rules" button. Same setting (rulesPaused): OFF = paused -
+ * no hidden auto-print; manual prints keep working. */
+$("rulesPower").addEventListener("change", async () => {
+  const on = $("rulesPower").checked;
+  const r = await send({ type: "saveCfg", patch: { rulesPaused: !on } });
   if (r && r.ok) {
-    RULE_STATE.paused = paused;
+    RULE_STATE.paused = !on;
     renderRuleManager();
-    saved(paused ? "ALL rules PAUSED - nothing auto-prints (manual prints work)"
-                 : "Rules resumed - armed rules auto-print again");
+    saved(on ? "Rules ACTIVE - armed rules auto-print hiddenly"
+             : "ALL rules PAUSED - nothing auto-prints (manual prints work)");
   } else {
+    $("rulesPower").checked = !on;
+    saved("Save failed: " + ((r && r.error) || "?"));
+  }
+});
+
+/* v3.0.6: the same power switch in General > Power switches - one
+ * setting, two switches, always in sync. */
+$("rulesEnabled").addEventListener("change", async () => {
+  const on = $("rulesEnabled").checked;
+  const r = await send({ type: "saveCfg", patch: { rulesPaused: !on } });
+  if (r && r.ok) {
+    RULE_STATE.paused = !on;
+    renderRuleManager();
+    saved(on ? "Auto-print rules ON" : "Auto-print rules PAUSED");
+  } else {
+    $("rulesEnabled").checked = !on;
     saved("Save failed: " + ((r && r.error) || "?"));
   }
 });
@@ -1148,11 +1275,24 @@ $("bRuleTest").addEventListener("click", async () => {
   if (r.matched && r.rule) {
     const ru = r.rule;
     const bits = [];
+    const how = ru.match === "content"
+      ? " <b>by content</b> (" + dbgEsc(kindLabel(ru.kind)) + ")"
+      : (ru.kind ? " <b>by content</b> (" + dbgEsc(kindLabel(ru.kind)) + ")"
+                 : "");
     bits.push("<b>Rule #" + (r.index || "?") + " fires:</b> " +
               '<span class="mono">' + dbgEsc(ru.pattern || "") + "</span>" +
-              (ru.type === "regex" ? " (regex)" : ru.type === "contains" ? " (contains)" : " (glob)"));
+              (ru.type === "regex" ? " (regex)" : ru.type === "contains" ? " (contains)" : " (glob)") +
+              how);
     bits.push("<b>Printer:</b> " + dbgEsc(r.printer || "(OS default printer)"));
-    bits.push("<b>Action:</b> " + dbgEsc(ruleActionLabel(ru.action)));
+    bits.push("<b>What to print:</b> " + dbgEsc(ruleActionLabel(ru.action)));
+    if (r.kind) {
+      bits.push("<b>Detected content:</b> " + dbgEsc(kindLabel(r.kind)) +
+        (r.contentType ? " <span class=\"mono\">(" + dbgEsc(r.contentType) + ")</span>" : "") +
+        (r.kindSrc === "fetched" ? " - read from the page itself"
+         : r.kindSrc === "fetch-failed"
+           ? " - page could NOT be fetched (login?); matched by URL only"
+           : ""));
+    }
     const ex = [];
     if (parseInt(ru.copies, 10) >= 1) ex.push(ru.copies + " copies");
     if (ru.paper) ex.push("paper " + ru.paper);
@@ -1160,13 +1300,61 @@ $("bRuleTest").addEventListener("click", async () => {
     if (ex.length) bits.push("<b>Extras:</b> " + dbgEsc(ex.join(" \u00b7 ")));
     if (ru.enabled === false) bits.push('<b style="color:var(--bad)">BUT this rule is switched OFF (On) - nothing prints.</b>');
     if (ru.auto === false) bits.push("<b>Note:</b> Auto is off - it prints only when you press Print page (manual).");
-    if (r.paused) bits.push('<b style="color:#b45309">BUT all rules are PAUSED right now - resume them (popup or the button above) or nothing auto-prints.</b>');
+    if (r.paused) bits.push('<b style="color:#b45309">BUT all rules are PAUSED right now (the Auto-print rules power switch) - nothing auto-prints.</b>');
     out.innerHTML = bits.join("<br>");
   } else {
-    out.innerHTML = "<b>No rule matches this URL.</b>" +
-      (r.simplePdf ? " Simple mode would still print it silent if it is a PDF (Settings &gt; Behavior)."
+    const kindNote = r.kind
+      ? "<br><b>Detected content:</b> " + dbgEsc(kindLabel(r.kind)) +
+        (r.kindSrc === "fetch-failed"
+          ? " (page could NOT be fetched - content rules could not be checked)"
+          : "") +
+        (r.kind && r.kind !== "html"
+          ? "<br>No <b>content rule</b> for " + dbgEsc(kindLabel(r.kind)) +
+            " yet - add one above: <i>Match by: Content \u2192 " +
+            dbgEsc(kindLabel(r.kind)) + "</i>, pick the printer."
+          : "")
+      : "";
+    out.innerHTML = "<b>No rule matches this URL.</b>" + kindNote +
+      (r.simplePdf ? " Simple mode would still print it silent if it is a PDF (General &gt; Browser behavior)."
                    : " Simple mode is OFF - nothing would auto-print.");
   }
+});
+
+/* v3.0.6: TEXT simulator - paste label / receipt text, see which
+ * content rule would fire. Nothing is printed. */
+$("bRuleTestText").addEventListener("click", async () => {
+  const out = $("ruleTestTextOut");
+  out.style.display = "";
+  const text = ($("testText").value || "").trim();
+  if (!text) {
+    out.innerHTML = "Paste the label or receipt text first - the simulator only MATCHES, it never prints.";
+    return;
+  }
+  const r = await send({ type: "testRuleText", text });
+  if (!r || !r.ok) {
+    out.innerHTML = "Could not test - " + dbgEsc((r && r.error) || "extension error");
+    return;
+  }
+  const bits = [];
+  bits.push("<b>This text is:</b> " +
+    (r.kind === "zpl" ? "ZPL label (^XA\u2026^XZ found - streams to the printer byte-for-byte)"
+                      : "receipt / plain text (built into an ESC-POS receipt)"));
+  if (r.matched && r.rule) {
+    const ru = r.rule;
+    bits.push("<b>Content rule #" + (r.index || "?") + " fires:</b> prints on <b>" +
+              dbgEsc(r.printer || "(OS default printer)") + "</b> as <b>" +
+              dbgEsc(ruleActionLabel(ru.action)) + "</b>" +
+              (parseInt(ru.copies, 10) >= 1
+                ? " \u00b7 " + dbgEsc(ru.copies) + " copies" : ""));
+    if (ru.enabled === false) bits.push('<b style="color:var(--bad)">BUT this rule is switched OFF - nothing prints.</b>');
+    if (r.paused) bits.push('<b style="color:#b45309">BUT all rules are PAUSED right now (the Auto-print rules power switch) - nothing auto-prints.</b>');
+  } else {
+    bits.push("<b>No content rule matches " + (r.kind === "zpl" ? "ZPL labels" : "receipt text") + " yet.</b> " +
+      "Add one: <i>Match by: Content \u2192 " +
+      (r.kind === "zpl" ? "ZPL label (^XA\u2026^XZ)" : "Receipt / plain text") +
+      "</i>, pick the printer (the Zebra / the thermal printer).");
+  }
+  out.innerHTML = bits.join("<br>");
 });
 
 $("bRuleLogRefresh").addEventListener("click", async () => {

@@ -1,6 +1,72 @@
 # Changelog - AdvPrint Pro (Advanced Printer)
 by Bit Dream IT - Innovative Healthcare Solutions
 
+## v3.0.6 - RULES MATCH BY CONTENT (ZPL / TEXT / PDF / IMAGE) + OPTIONS REORGANIZED (2026-11-06)
+
+User request: "how it detect which printer is for zpl in this
+logic. similarly other rule current design not rule manage like
+this. currently it only url base controller/managed. i need this
+zpl, text, pdf, image, etc ... Auto-print rules no need popup,
+section it shift to setting power switch setting option. updated
+setting options.html also all option same but rename easy understud
+name /and it details. in setting tab it has many option it also
+separate, more tab section and human readable naming." Extension-
+only change; the hub is untouched. Nothing removed: old URL rules
+keep working, the new rule fields (match/kind) default to the old
+behavior, and every option survived the tab split (old hash links
+#settings/#api/#lan-settings keep working).
+
+- **Content rules** (rule.match "content" + rule.kind):
+  matchRule() gains a kind parameter; isContentRule() treats a
+  rule with match=content (or kind without pattern) as a content
+  rule; a content rule may still carry a URL filter (both must
+  match). Kinds: zpl (^XA...^XZ signature, loose ^-command
+  fallback), text (text/plain), pdf (contentType or .pdf URL),
+  image (contentType image/* or image URL), html (everything
+  else).
+- **detectTabKind(tab)**: ONE probe of the already-open tab
+  (document.contentType + text sample: selection -> pre/textarea
+  -> body, first 4000 chars) classifies the page. Zero network
+  traffic, no page JavaScript. Used by the auto path (second
+  matching pass after URL rules), the manual path (Print page
+  button / reprint box) and gated by hasContentRules() so pure
+  URL users pay nothing.
+- **ruleActionFor(rule, kind)**: content rules run the pipeline
+  that fits the detected kind (zpl->ZPL stream, text->ESC-POS,
+  pdf->PDF, image->image, html->page render); the rule's Action is
+  honored when compatible, so a wrong dropdown choice can never
+  send garbage to the printer.
+- **printTabImage()**: image jobs download the picture with login
+  cookies and hand it to the hub as image_base64 (screenshot
+  fallback via captureVisibleTab); per-rule copies ride along.
+- **Rules power switch in Options only**: the popup switch row was
+  removed (one less setting in the popup); the SAME rulesPaused
+  setting is now a real toggle on the Rule Manager bar
+  (#rulesPower) and in General > Power switches (#rulesEnabled),
+  always in sync, replacing the old Pause-all button.
+- **Options split into 9 tabs**: Queue, History, Rules, General
+  (power switches + browser behavior), Printing (default printer
+  + default print options), Connections (Self PC, LAN PC, LAN
+  sharing tools, Website API), Hub (hub-side settings), Debug,
+  About. Every option renamed in plain English with its full
+  description; LAN tab merged into Connections; pickDefaultTab
+  maps old hashes.
+- **Rules table**: new Match-by and Page-content columns (URL
+  rules gray the content dropdown out; content rules treat the
+  URL as an optional filter), Copy carries the new fields, +
+  Action: Image for URL rules.
+- **Simulators**: testRuleUrl now fetches the URL once with login
+  cookies and reports the detected kind + content type (falls
+  back to URL-only matching when the fetch fails); new
+  testRuleText classifies pasted label/receipt text and names the
+  matching content rule. Neither prints anything.
+- **maybeCloseTab(force)**: content-rule hits can close the tab
+  (closeAfterPrint) even though the URL-only re-match cannot see
+  a kind-only rule.
+- Version strings bumped to 3.0.6 everywhere (hub, dashboard
+  badge, extension manifest/popup/About, Setup exe
+  VIProductVersion 3.0.6.0, deb control, docs).
+
 ## v3.0.5 - RULE MANAGER: THE HIDDEN LAB, NOW MANAGED & CONTROLLED (2026-11-06)
 
 User request: "this work hiddenly. so this option or rule need

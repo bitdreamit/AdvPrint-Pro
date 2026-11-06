@@ -13,6 +13,17 @@ Web page ──► Chrome extension ──► AdvPrint Pro hub (localhost:9235) 
 
 ---
 
+## What's new in v3.0.6 (rules match by content - ZPL, text, PDF, image)
+
+Until 3.0.5 a rule fired only when the URL matched - the only way to route a ZPL page to the Zebra was a URL pattern plus Action: ZPL label. v3.0.6 lets a rule match **by content** - the page itself decides:
+
+- **Match by: Content** - "Page content: **ZPL label (^XA...^XZ)**" fires for ANY page whose text carries a ZPL label and streams it byte-for-byte to the rule's printer (the Zebra); "**Receipt / plain text**" prints text/plain pages as an ESC-POS receipt on the thermal printer; "**PDF document**", "**Image**" (a picture tab prints the photo - new **Action: Image** pipeline with cookie download + visible-tab capture fallback) and "**Web page**" complete the list.
+- **How detection works**: the already-open tab is probed once (document.contentType + a text sample: selection, then <pre>/<textarea>, then body). .pdf URLs / application/pdf -> PDF, image URLs / image/* -> image, text carrying ^XA...^XZ -> ZPL, text/plain -> receipt text, everything else -> web page. No extra download, no page JavaScript. A URL typed into a content rule narrows it ("ZPL pages on THIS site only").
+- **Rules power switch in Options only** - the popup no longer carries the auto-print rules switch; it lives on the Rule Manager bar and as the same switch in General > Power switches (one setting: rulesPaused; paused = no hidden auto-print, manual prints keep working).
+- **Options split into 9 human tabs** - Queue, History, Rules, General, Printing, Connections, Hub, Debug, About. Every option kept, renamed in plain English with a full description; the old endless Settings page is gone (old #settings/#api/#lan-settings links keep working).
+- **Two simulators** - the URL simulator now fetches the URL once (with your login cookies) and reports the detected content as well; the new text simulator answers "which content rule fires for THIS label/receipt text". Both print nothing.
+- The lab recipe (PDF reports to the A4/A5 laser + ZPL labels to the Zebra + ESC-POS receipts to the thermal printer) is unchanged - see docs/MULTI-PRINTER.md.
+
 ## What's new in v3.0.5 (Rule Manager - the hidden lab, now controlled)
 
 The multi-printer lab rules printed hiddenly (silent auto-print, no dialog). v3.0.5 gives them a dedicated **Rules** tab in the extension Options - the Rule Manager - so everything hidden is now managed and controlled:
@@ -106,7 +117,7 @@ The ten most-requested features, all in one release:
 - **DropZone + Send portal — printing WITHOUT the extension.** The hub watches a folder: in Word/Excel/ANY app choose *Microsoft Print to PDF* and save into the DropZone — the page prints seconds later (dashboard → DropZone card; `POST /dropzone/open` opens the folder). Phones/tablets/other PCs print through the built-in **Send portal** (`/send`, token-protected, same as every endpoint).
 - **Restart hub** — in the tray menu, AdvPrint Tool [14] and the dashboard button: the hub relaunches itself cleanly (new process waits for the port; queued jobs, settings and history are kept).
 - **Bullet-proof upgrade & uninstall.** The setup now runs `hub-stop.ps1` BEFORE touching files: stops the optional *AdvPrint* service (wait + PID kill), **deletes the service registration** (reinstalled fresh when ticked — upgrades keep it automatically), kills every process under the install folder and frees TCP 9235. Old program folders are wiped, so no stale file can abort an install any more; the uninstaller retries the folder sweep and reports leftovers honestly.
-- **Silent install** `AdvPrint-Pro-Setup-3.0.5.exe /S` — elevation is requested by the exe manifest itself ("auto permission" on any PC), the hub auto-starts after a silent install, and the firewall rule for LAN sharing (TCP 9235) is added automatically (removed on uninstall).
+- **Silent install** `AdvPrint-Pro-Setup-3.0.6.exe /S` — elevation is requested by the exe manifest itself ("auto permission" on any PC), the hub auto-starts after a silent install, and the firewall rule for LAN sharing (TCP 9235) is added automatically (removed on uninstall).
 - **New A + printer logo** — the letter A drawn as a printer: the crossbar is the output slot and a printed page slides out of it. Same mark in the extension, popup, dashboard, tray icon, installer and docs.
 
 Nothing removed: every v2.7.0 feature (history manager, share toggles, live test tool) is unchanged.

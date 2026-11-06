@@ -25,13 +25,31 @@ and the new **Contains** pattern type matches a URL by plain text
 **New in v3.0.5: the RULE MANAGER - the hidden lab, now managed and
 controlled.** The rules print hiddenly (silent, no dialogs), so they
 get their own **Rules** tab in the extension Options: the whole rule
-table lives there next to a manager status bar ("N of M armed"),
-a **Pause all rules** switch (the popup has the same switch - pausing
-stops only the hidden auto work, manual prints keep working), a **URL
-simulator** that shows which rule would fire on which printer WITHOUT
-printing, per-rule **run counters** ("12 runs · last 14:02") and a
-**rule activity log** of the last 100 hidden hits (time, pattern,
-action, printer, result incl. FAILED + why).
+table lives there next to a manager status bar ("N of M armed"), a
+**power switch** for every hidden rule (pausing stops only the hidden
+auto work, manual prints keep working), a **URL simulator** that shows
+which rule would fire on which printer WITHOUT printing, per-rule
+**run counters** ("12 runs · last 14:02") and a **rule activity log**
+of the last 100 hidden hits (time, pattern, action, printer, result
+incl. FAILED + why).
+
+**New in v3.0.6: rules match by CONTENT - the page itself decides.**
+Until now a rule fired only when the URL matched. A rule can now be
+**Match by: Content**: "Page content: **ZPL label (^XA…^XZ)**" fires
+for ANY page whose text carries a ZPL label - no URL needed, so the
+label pages of every web tool land on the Zebra automatically. The
+same for **Receipt / plain text** (a text/plain page -> ESC-POS
+receipt on the thermal printer), **PDF document**, **Image** (a
+picture tab prints the photo) and **Web page**. A URL typed into a
+content rule narrows it ("ZPL pages on THIS site only"). Detection
+reads the already-open tab (content type + a text sample: selection
+first, then <pre>/<textarea>, then body) - no extra download, no page
+JavaScript. The extension Options are also re-organized into 9 human
+tabs (Queue, History, Rules, General, Printing, Connections, Hub,
+Debug, About) with a plain-English description on every option, and
+the rules **power switch** lives in Options only (Rules tab + General
+> Power switches) - the popup row is gone. A **text simulator**
+answers "which rule fires for THIS label text" without printing.
 
 ---
 
@@ -53,8 +71,8 @@ Every sending path can address a printer:
 
 | Sender | How to pick the printer |
 | --- | --- |
-| Extension auto-print rule | the rule's **printer** dropdown (Options > Auto-print rules - every rule has its own printer, paper, tray, duplex, copies) |
-| Extension default | Options > Connection > **Default printer** dropdown (lists every printer + groups from the hub) |
+| Extension auto-print rule | the rule's **printer** dropdown (Options > Rules tab - every rule has its own printer, paper, tray, duplex, copies) |
+| Extension default | Options > Printing tab > **Default printer** dropdown (lists every printer + groups from the hub) |
 | Page API (`window.advprint`) | `printPage({printer:"Zebra ZD421"})` / `printPdf(..., {printer:...})` - per call |
 | `POST /print` (your app) | `"printer": "Zebra ZD421"` field |
 | Print profile | `profiles` in config: `{"LabReport": {"printer": "HP...", "paper_size": "a4", "duplex": true}}` + `profile=LabReport` in the job |
@@ -90,31 +108,41 @@ PDF job.
 1. **Install** the hub (Setup exe / deb) + the extension
    (chrome://extensions > Load unpacked). Connect the extension
    (popup > Connect - token auto-detected on this PC).
-2. **Reports (PDF, A4 or A5)** - Options > Auto-print rules > Add rule:
-   - pattern `*://lis.hospital.local/*` (your LIS/portal URL)
+2. **Reports (PDF, A4 or A5)** - Options > **Rules** tab > + Add rule:
+   - URL pattern `*://lis.hospital.local/*` (your LIS/portal URL)
    - printer: `HP LaserJet M404`
-   - **Paper: `A4` or `A5`** (new v3.0.3 per-rule Paper column - passed
-     straight to the print engine as media size; A5 halves the sheet
-     for short reports) and **Copies** if the lab wants duplicates
+   - **Paper: `A4` or `A5`** (per-rule Paper column - passed straight
+     to the print engine as media size; A5 halves the sheet for short
+     reports) and **Copies** if the lab wants duplicates
    - every PDF opened on that portal now prints silently on the HP -
      other tabs keep the OS default printer.
-3. **Labels (ZPL) - v3.0.3 makes this a RULE too (the easy way):**
-   - **Browser label page -> add a second rule:**
-     - pattern `*://lis.hospital.local/labels/*` (the page that shows
-       the label), printer: `Zebra ZD421`
-     - **Action: `ZPL label (text on page)`**, tick **Auto**
-     - when the URL opens, the extension takes the TEXT from the page -
-       the user's selection first, then a `<pre>`/`<textarea>` block
-       (what ZPL viewers and label web tools show), then the visible
-       body text - and sends it to the hub with `lang:"zpl"`. The hub
-       streams the ZPL **byte-for-byte** to the Zebra. A safety guard
-       refuses text with no `^` commands, so a mis-matched page can
-       never waste labels. **Copies: 2** prints two labels per visit.
-     - no Auto tick? Then the popup's **Print page** button does the
-       same thing on demand (the rule turns it into a label print).
-   - **Receipt text -> thermal printer rule**: Action
+3. **Labels (ZPL) - two ways, both zero-code:**
+   - **BY CONTENT (v3.0.6 - no URL needed at all):** add a rule with
+     **Match by: `Content`**, **Page content: `ZPL label (^XA…^XZ)`**,
+     printer: `Zebra ZD421`, tick **Auto**. ANY page whose text carries
+     a `^XA...^XZ` label now auto-prints on the Zebra - the label
+     viewer of any web tool, no pattern to maintain. Leave the URL
+     filter empty to match everywhere, or type e.g. `lis.hospital.local`
+     to only fire on your LIS. **Copies: 2** prints two labels per
+     visit. When the rule fires, the extension takes the TEXT from the
+     page - the user's selection first, then a `<pre>`/`<textarea>`
+     block, then the visible body text - and sends it to the hub with
+     `lang:"zpl"`; the hub streams the ZPL **byte-for-byte** to the
+     Zebra. A safety guard refuses text with no `^` commands, so a
+     mis-detected page can never waste labels.
+   - **BY URL (classic):** pattern `*://lis.hospital.local/labels/*`,
+     printer: `Zebra ZD421`, **What to print: `ZPL label (text on
+     page)`**, tick **Auto** - same result, but only for that URL.
+     No Auto tick? Then the popup's **Print page** button does the
+     same thing on demand (the rule turns it into a label print).
+   - **Receipt text -> thermal printer rule**: Match by Content ->
+     **Receipt / plain text** (a text/plain page) or URL + Action
      `ESC-POS receipt (text on page)` - the hub builds the ESC/POS
      bytes (auto cut) for the receipt printer.
+   - **Not sure which rule matches?** The Rules tab has TWO simulators:
+     paste a URL (it is fetched once with your login and the content
+     is detected) or paste the label text itself - the answer names
+     the rule, printer and action. Nothing is printed.
    - **Desktop label software** (NiceLabel, BarTender, ZebraDesigner...):
      install the hub as a NETWORK PRINTER for it - add
      `http://<this-PC-IP>:9235/ipp/print` (IPP) or a RawTCP 9100 port
