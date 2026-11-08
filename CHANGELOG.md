@@ -1,6 +1,69 @@
 # Changelog - AdvPrint Pro (Advanced Printer)
 by Bit Dream IT - Innovative Healthcare Solutions
 
+## v3.0.8 - PROFESSIONAL IPP PRINTER (WINDOWS 10/11 / MACOS / IOS / ANDROID) (2026-11-08)
+
+User report: "http://192.168.1.7:9235/ipp/print - this IPP printer mode
+not work ... Windows couldn't connect to the printer ... update and fix
+IPP mode, make it more professional for connecting mobile or any OS."
+
+Root cause (three protocol defects in the v2.9 engine):
+1. Wrong RFC 8010 value tags/types: printer-state + job-state encoded
+   as ASCII text inside a charset/uri tag, printer-is-accepting-jobs
+   inside an enum tag, queued-job-count inside a boolean tag,
+   copies-supported inside a boolean tag, printer-name inside a text
+   tag. Strict parsers (the Microsoft IPP Class Driver every Windows
+   10/11 "Add a printer -> IPP Device" install runs) reject the whole
+   response on the first mistyped attribute -> "Windows couldn't
+   connect to the printer".
+2. Missing RFC 8011-required printer description attributes:
+   printer-uri-supported, uri-authentication-supported,
+   operations-supported, charset-configured, natural-language-
+   configured, document-format-default, pdl-override-supported,
+   printer-up-time, printer-current-time (+ job template defaults).
+3. Missing operations: no Create-Job + Send-Document (how macOS CUPS,
+   iOS PrintKit and Android Mopria submit jobs), no Get-Jobs,
+   Get-Job-Attributes, Cancel-Job, Print-URI; no chunked request-body
+   support for phone IPP stacks.
+
+Fixes / additions in the hub (both tool/unix/hub and
+tool/windows/portable/hub stay byte-identical):
+- IPP wire layer rebuilt with byte-exact encodings verified against
+  CUPS cups/ipp.h; typed helpers _ipp_int/_ipp_enum/_ipp_bool/
+  _ipp_range/_ipp_date; additional values repeat the primary tag.
+- Get-Printer-Attributes answers the full RFC 8011 section 4.2.5.2
+  required set + job template defaults (media, color, sides,
+  finishings, copies, compression, multiple-document support,
+  which-jobs, job-creation-attributes), printer-uri-supported carries
+  BOTH http:// (Windows) and ipp:// (macOS/iOS/CUPS) forms,
+  uri-authentication-supported matches the URI count, stable
+  printer-uuid, printer-current-time (11-byte RFC 2579 DateAndTime).
+- New operations: Print-URI (SSRF-guarded), Validate-Job (no phantom
+  job), Create-Job + Send-Document multi-document sessions (ids from
+  1000000, 5-minute abandon timeout), Cancel-Job (session + db jobs,
+  RFC job-id-required -> bad-request), Get-Job-Attributes,
+  Get-Jobs (which-jobs completed/not-completed + my-jobs).
+- read_raw_body decodes Transfer-Encoding: chunked; the IPP POST
+  route turns body errors into a clean HTTP 400.
+- NEW mDNS/DNS-SD announcer (pure stdlib RFC 6762/6763 subset):
+  announces _ipp._tcp + _universal subtype + A record on UDP 5353
+  while LAN sharing is on; TXT carries rp=ipp/print, pdl, URF=V1.4,
+  UUID; answers unicast+multicast queries, re-announces, says
+  goodbye on toggle; config key "ipp_mdns" (default true) - this is
+  why the printer now appears BY ITSELF in Windows 10/11, macOS,
+  iPhone AirPrint and Android print dialogs. (Smoke test caught and
+  fixed a DNS header layout bug during development.)
+- The IPP info page is now a per-OS add-printer cheat sheet.
+
+Tests: tests/test_ipp.py adds 16 protocol-conformance tests (a strict
+wire linter validates every attribute tag/type; Windows-style,
+macOS-style and phone-style request flows; chunked upload; error
+paths). Suite: 259 passed + 1 skipped. A live-boot smoke test
+(scripts/live_ipp_smoke.py) re-verifies the exact Windows flow.
+
+Installer: setup.nsi adds the UDP 5353 mDNS firewall rule (discovery
+is useless if the firewall silently drops the announcements).
+
 ## v3.0.7 - SELF-HOST EXTENSION AUTO-INSTALL (FORCELIST + CRX + UPDATES.XML) (2026-11-06)
 
 User request: "Self-Host Using 'Extension Install Force-list' (For

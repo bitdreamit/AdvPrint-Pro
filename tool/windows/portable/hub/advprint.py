@@ -95,60 +95,8 @@ if _HUB_DIR not in sys.path:
     sys.path.insert(0, _HUB_DIR)
 
 
-VERSION = "3.0.7"
-VERSION_NAME = ("v3.0.7 (SELF-HOST EXTENSION AUTO-INSTALL: Chrome"
-                " installs the extension SILENTLY via the enterprise"
-                " ExtensionInstallForcelist policy - the hub serves"
-                " the SIGNED .crx plus a Chromium update manifest at"
-                " /extension/updates.xml + /extension/AdvPrint-Pro.crx,"
-                " the extension ID is FIXED forever (stable signing"
-                " key) so every hub release silently updates it, the"
-                " Setup exe writes the policy for Chrome/Edge/Brave/"
-                " Chromium/Vivaldi (HKLM) and the deb writes"
-                " /etc/*/policies/managed on Linux, the dashboard has"
-                " a Browser-extension card (check / write / remove the"
-                " policy), and the Enterprise-Deploy-Kit hosts the same"
-                " two files on any web server for schools/workplaces."
-                " NETWORK PRINTER MODE: add this PC like a real"
-                " IP printer - IPP at /ipp/print for Windows 10/11 'add a"
-                " printer by URL' and phone print services, plus a"
-                " JetDirect RAW listener on TCP 9100 for the classic"
-                " 'Add a printer using TCP/IP address' flow; PDF, JPEG,"
-                " PostScript, PCL, ESC/POS and ZPL payloads all routed to"
-                " the real printer. Phone 'Auth fail' on the Send portal"
-                " QR is FIXED (token now accepted from the portal link in"
-                " token_header_only mode too), the extension shows ONE"
-                " version everywhere read from the manifest, and the tray"
-                " menu is smooth - every action runs in its own thread."
-                " Print DESTINATION is any printer - the OS default,"
-                " any installed printer, or an upstream IP printer (raw"
-                " JetDirect or IPP): PCs and phones that add this hub as"
-                " THEIR network printer print through exactly that"
-                " destination. NEW IN 3.0.6: RULES MATCH BY CONTENT - a"
-                " rule no longer needs a URL: Match by Content fires"
-                " for ANY page whose text is a ZPL label (^XA...^XZ"
-                " -> the Zebra), a plain-text receipt (text/plain ->"
-                " ESC-POS thermal), a PDF, an IMAGE (picture tabs"
-                " print the photo) or a web page - detection reads"
-                " the already-open tab (content type + text sample),"
-                " no extra download, no page JavaScript. The rules"
-                " power switch moved OUT of the popup into the"
-                " Options page (Rule Manager bar + General > Power"
-                " switches), and the Options page is split into 9"
-                " human tabs (Queue, History, Rules, General,"
-                " Printing, Connections, Hub, Debug, About) with a"
-                " plain-English description on every option. A TEXT"
-                " simulator shows which content rule would fire"
-                " without printing. NEW IN 3.0.5: RULE MANAGER -"
-                " URL simulator, per-rule run counters, rule"
-                " activity log. NEW IN 3.0.4: printers-on-this-PC"
-                " chips (one click '+ rule'), per-rule Copy button,"
-                " 'Contains' pattern. NEW IN"
-                " 3.0.3: rule Actions 'ZPL label' / 'ESC-POS receipt'"
-                " print labels straight from the page text (selection,"
-                " <pre>/textarea, or visible text) with per-rule Copies"
-                " and Paper (A4/A5/Letter/...). v3.0.2 shipped the"
-                " popup hook-switch removal + docs/MULTI-PRINTER.md)")
+VERSION = "3.0.8"
+VERSION_NAME = ("v3.0.8 (PROFESSIONAL IPP PRINTER: Windows 10/11 'Add a printer -> IPP Device' now CONNECTS - the v2.9 IPP engine encoded printer-state / booleans / integers / ranges with the wrong wire tags and skipped the attributes every RFC 8011 printer must answer with, so the Microsoft IPP Class Driver refused the hub with 'Windows couldn't connect to the printer'; v3.0.8 speaks the full RFC 8011 required attribute set with byte-exact RFC 8010 encodings verified against CUPS, and answers Print-Job / Print-URI / Validate-Job / Create-Job + Send-Document (how macOS CUPS, iOS PrintKit and Android Mopria really submit jobs) / Cancel-Job / Get-Job-Attributes / Get-Jobs plus chunked request bodies for phone IPP stacks. NEW: an mDNS / Bonjour announcer (_ipp._tcp + _universal) makes the printer show up BY ITSELF in Windows 10/11, macOS, iPhone AirPrint and Android Mopria print dialogs while LAN sharing is on. The v3.0.7 self-host extension chain (ExtensionInstallForcelist + signed .crx + updates.xml with a fixed extension ID) ships unchanged - every hub release silently updates the browser extension.")
 FULL_BRAND = ("AdvPrint Pro (Advanced Printer) by "
               "Bit Dream IT - Innovative Healthcare Solutions")
 BRANDING = ("AdvPrint Pro (Advanced Printer) - Version %s - by "
@@ -255,6 +203,11 @@ CFG = {
                                       #  Windows 10/11 ("add a printer by
                                       #  URL") and phone print services can
                                       #  add it like a normal IP printer
+    "ipp_mdns": True,                 # v3.0.8: mDNS/Bonjour announce so the
+                                      #  printer appears BY ITSELF in the
+                                      #  printer list of phones (AirPrint /
+                                      #  Mopria), Windows 10/11 and macOS
+                                      #  while LAN sharing is on
     "raw_printer_port": 9100,         # v2.9: JetDirect RAW listener port for
                                       #  Windows "Standard TCP/IP port"
                                       #  printers (0 = off)
@@ -334,6 +287,7 @@ CONFIG_TYPES = {"token_header_only": bool, "allowed_origins": list,
                 "retry_base_seconds": int, "dedupe_minutes": int,
                 "hold_offline": bool, "audit_enabled": bool,
                 "share_lan": bool, "ipp_printer": bool,
+                "ipp_mdns": bool,
                 "raw_printer_port": int,
                 "reprint_watermark": bool, "reprint_reason_required": bool,
                 "peer_hubs": list, "peer_forwarding": bool,
@@ -1383,6 +1337,12 @@ def start_health_refresher():
             # v2.9.0: same for the RAW JetDirect printer port (9100).
             try:
                 raw_listen_ensure()
+            except Exception:
+                pass
+            # v3.0.8: AirPrint-grade mDNS discovery (phones/PCs see the
+            # printer by itself when LAN sharing is on).
+            try:
+                ipp_mdns_ensure()
             except Exception:
                 pass
             time.sleep(3.0)
@@ -3295,7 +3255,38 @@ def read_json_body(handler, required=True):
     return json.loads(raw.decode("utf-8", "replace"))
 
 def read_raw_body(handler):
-    """Read the request body as raw bytes (raw-PDF / multipart uploads)."""
+    """Read the request body as raw bytes (raw-PDF / multipart / IPP).
+    v3.0.8: also decodes "Transfer-Encoding: chunked" - some phone IPP
+    print stacks POST without a Content-Length, and a body reader that
+    only knows Content-Length turns that into "empty body" errors."""
+    te = (handler.headers.get("Transfer-Encoding") or "").lower()
+    if "chunked" in te:
+        chunks = []
+        total = 0
+        while True:
+            line = handler.rfile.readline(1024)
+            if not line:
+                raise ValueError("truncated chunked body")
+            try:
+                size = int(line.strip().split(b";")[0], 16)
+            except ValueError:
+                raise ValueError("bad chunk size header")
+            if size == 0:
+                # consume trailers (optionally sent) up to the blank line
+                while True:
+                    t = handler.rfile.readline(1024)
+                    if t in (b"\r\n", b"\n", b""):
+                        break
+                break
+            total += size
+            if total > MAX_BODY:
+                raise ValueError("oversized chunked body")
+            data = handler.rfile.read(size)
+            if len(data) < size:
+                raise ValueError("truncated chunk")
+            chunks.append(data)
+            handler.rfile.readline(1024)   # CRLF after each chunk
+        return b"".join(chunks)
     length = int(handler.headers.get("Content-Length") or 0)
     if length <= 0:
         raise ValueError("empty body (0 bytes)")
@@ -4879,31 +4870,51 @@ class Handler(BaseHTTPRequestHandler):
                                     "error": "IPP printer is off"})
         if route in ("/ipp/print", "/ipp", "/ipp/"):
             # v2.9.0: humans who open the IPP printer URL in a browser
-            # get a short how-to (IPP clients POST binary IPP instead).
+            # get a how-to page (IPP clients POST binary IPP instead).
+            # v3.0.8: per-OS cheat sheet for the professional printer.
             host = socket.gethostname()
+            ipp_url = lan_share_url("ipp")
             return self._send_html(200, """<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport"
  content="width=device-width,initial-scale=1"><title>AdvPrint Pro - IPP printer</title>
 <style>body{font:15px/1.55 "Segoe UI",system-ui,sans-serif;background:#f5f8fc;
- color:#0f172a;margin:0;padding:24px}.b{max-width:560px;margin:4vh auto;background:#fff;
+ color:#0f172a;margin:0;padding:24px}.b{max-width:640px;margin:4vh auto;background:#fff;
  border:1px solid #e2e8f0;border-radius:14px;padding:22px}
+ h1{font-size:19px;margin:0 0 6px}h2{font-size:15px;margin:18px 0 6px;color:#1d4ed8}
  code{background:#f1f5f9;border:1px solid #e2e8f0;border-radius:4px;padding:1px 6px;
- font-size:12.5px;word-break:break-all}</style></head><body><div class="b">
- <h1 style="font-size:19px">AdvPrint Pro - IPP network printer</h1>
+ font-size:12.5px;word-break:break-all}li{margin:5px 0}
+ .ok{background:#ecfdf5;border:1px solid #a7f3d0;border-radius:10px;padding:10px 14px;
+ margin:14px 0;font-size:13.5px}</style></head><body><div class="b">
+ <h1>AdvPrint Pro - IPP network printer</h1>
  <p>This URL is the <b>IPP print endpoint of <span>%s</span></b>.
  Add it as a printer - do not open it in a browser:</p>
- <p><b>Windows 10/11:</b> Settings &rarr; Bluetooth &amp; devices &rarr;
- Printers &amp; scanners &rarr; Add device &rarr; Add manually &rarr;
- \u201cSelect a shared printer by name\u201d &rarr; paste
- <code>%s</code></p>
- <p><b>Phones:</b> a print service that supports manual IPP addresses
- (e.g. Samsung Print Service) can add <code>%s</code>. Or simply use
- the Send portal QR from the dashboard.</p>
- <p style="color:#64748b">100%% local - the hub prints on this PC's
- printer. Powered by AdvPrint Pro %s.</p>
+ <p style="font-size:16px"><code>%s</code></p>
+ <h2>Windows 10 / 11</h2>
+ <ul><li>Settings &rarr; Bluetooth &amp; devices &rarr; Printers &amp;
+ scanners &rarr; <b>Add device</b>. The printer appears by itself
+ (AirPrint-style discovery) when LAN sharing is on - click it.</li>
+ <li>Or: <b>Add manually</b> &rarr; &ldquo;Add a printer using an IP
+ address or hostname&rdquo; &rarr; Device type <b>IPP Device</b> &rarr;
+ paste <code>%s</code> &rarr; Next.</li></ul>
+ <h2>macOS</h2>
+ <ul><li>System Settings &rarr; Printers &amp; Scanners &rarr;
+ <b>Add Printer</b> - it appears in the Bonjour list.</li>
+ <li>Or: IP tab &rarr; Protocol <b>IPP</b> &rarr; Address
+ <code>host:9235</code> &rarr; Queue <code>ipp/print</code>.</li></ul>
+ <h2>iPhone / iPad (AirPrint)</h2>
+ <ul><li>Open anything printable &rarr; Share &rarr; Print &rarr;
+ Select Printer - <b>AdvPrint Pro appears by itself</b> while this PC
+ is on the same Wi-Fi.</li></ul>
+ <h2>Android</h2>
+ <ul><li>Print from any app &rarr; Default Print Service / Mopria -
+ the printer is discovered automatically.</li></ul>
+ <div class="ok"><b>Prints go to THIS PC's printer</b> through the
+ AdvPrint Pro hub - the PC must be on and the hub running (tray icon).
+ The first job also shows in the hub history like every other print.
+ 100%% local - powered by AdvPrint Pro %s.</div>
  </div></body></html>""" % (_html_escape(host),
-                             _html_escape(lan_share_url("ipp"), quote=True),
-                             _html_escape(lan_share_url("ipp"), quote=True),
+                             _html_escape(ipp_url, quote=True),
+                             _html_escape(ipp_url, quote=True),
                              VERSION))
         err = self._auth_error(qt, allow_query=True)   # v2.0.2: every GET
         if err:
@@ -5225,7 +5236,13 @@ class Handler(BaseHTTPRequestHandler):
                     "ok": False,
                     "error": "IPP is for native print clients - web pages"
                              " must use /print with the hub token"})
-            data = read_raw_body(self)
+            try:
+                data = read_raw_body(self)
+            except ValueError as e:
+                # chunked decode errors / oversized bodies - a clean
+                # HTTP 400 instead of a traceback in the thread
+                return self._send(400, {"ok": False,
+                                        "error": "bad IPP request: %s" % e})
             if len(data) > MAX_PDF:
                 return self._send(413, {"ok": False,
                                         "error": "IPP request too large"})
@@ -8295,37 +8312,196 @@ _RAW_BIND_IP = None
 IPP_VERSION_STR = "1.1"
 IPP_MIME = "application/ipp"
 
+# ------------------------------------------------------------
+# v3.0.8 PROFESSIONAL IPP PRINTER - the v2.9 engine encoded several
+# printer attributes with the WRONG wire tags and string values
+# ("printer-state" as a charset-tagged ASCII "3", booleans inside an
+# enum tag, integers inside a boolean tag, a range inside a boolean
+# tag) and omitted the attributes every RFC 8011 printer MUST
+# answer with (printer-uri-supported, uri-authentication-supported,
+# operations-supported, document-format-default, charset-configured,
+# printer-up-time...). Loose clients still printed, but the
+# Microsoft IPP Class Driver that Windows 10/11 uses for
+# "Add a printer -> IPP Device" runs a strict parser: the first
+# mistyped attribute makes it answer "Windows couldn't connect to
+# the printer". v3.0.8 rebuilds the whole wire layer with the exact
+# RFC 8010 value tags (verified byte-for-byte against CUPS'
+# cups/ipp.h) and answers every standard operation:
+#
+#   Get-Printer-Attributes (full RFC 8011 required set)
+#   Print-Job / Print-URI / Validate-Job
+#   Create-Job + Send-Document  (multi-document - how macOS CUPS,
+#                                iOS PrintKit and Android Mopria
+#                                actually submit jobs)
+#   Get-Jobs / Get-Job-Attributes / Cancel-Job
+#
+# Wire reference (RFC 8010 §3.5.2, confirmed via cups/ipp.h):
+#   0x21 integer   4-byte signed big-endian
+#   0x22 boolean   1 byte 0x00/0x01
+#   0x23 enum      4-byte signed big-endian
+#   0x33 range     8 bytes (two signed ints)
+#   0x31 dateTime  11-byte RFC 2579 DateAndTime
+#   0x41 text      0x42 name   0x44 keyword   0x45 uri
+#   0x47 charset   0x48 language   0x49 mimeMediaType
+# ------------------------------------------------------------
+IPP_TAG_OP = 0x01                  # delimiter: operation-attributes
+IPP_TAG_JOB = 0x02                 # delimiter: job-attributes
+IPP_TAG_END = 0x03                 # delimiter: end-of-attributes
+IPP_TAG_PRINTER = 0x04             # delimiter: printer-attributes
+
+V_INT = 0x21                       # SIGNED-INTEGER (4 bytes)
+V_BOOL = 0x22                      # boolean (1 byte)
+V_ENUM = 0x23                      # enumeration (4 bytes)
+V_OCTETS = 0x30                    # octet-string
+V_DATE = 0x31                      # dateTime (11 bytes)
+V_RESOLUTION = 0x32                # resolution (9 bytes)
+V_RANGE = 0x33                     # rangeOfInteger (8 bytes)
+V_TEXT = 0x41                      # textWithoutLanguage
+V_NAME = 0x42                      # nameWithoutLanguage
+V_KEYWORD = 0x44                   # keyword
+V_URI = 0x45                       # uri
+V_CHARSET = 0x47                   # charset
+V_LANG = 0x48                      # naturalLanguage
+V_MIME = 0x49                      # mimeMediaType
+
+# RFC 8011 operation-id values this printer implements
+IPP_OP_PRINT_JOB = 0x0002
+IPP_OP_PRINT_URI = 0x0003
+IPP_OP_VALIDATE_JOB = 0x0004
+IPP_OP_CREATE_JOB = 0x0005
+IPP_OP_SEND_DOCUMENT = 0x0006
+IPP_OP_CANCEL_JOB = 0x0008
+IPP_OP_GET_JOB_ATTR = 0x0009
+IPP_OP_GET_JOBS = 0x000A
+IPP_OP_GET_PRINTER_ATTR = 0x000B
+IPP_OPERATIONS_SUPPORTED = (
+    IPP_OP_PRINT_JOB, IPP_OP_PRINT_URI, IPP_OP_VALIDATE_JOB,
+    IPP_OP_CREATE_JOB, IPP_OP_SEND_DOCUMENT, IPP_OP_CANCEL_JOB,
+    IPP_OP_GET_JOB_ATTR, IPP_OP_GET_JOBS, IPP_OP_GET_PRINTER_ATTR,
+)
+
+# RFC 8011 job-state enums
+IPP_JOB_PENDING = 3
+IPP_JOB_PROCESSING = 4
+IPP_JOB_STOPPED = 5
+IPP_JOB_CANCELED = 6
+IPP_JOB_ABORTED = 7
+IPP_JOB_COMPLETED = 8
+
+IPP_STATUS_OK = 0x0000
+IPP_STATUS_BAD_REQUEST = 0x0400
+IPP_STATUS_NOT_FOUND = 0x0406
+IPP_STATUS_NOT_POSSIBLE = 0x040A
+IPP_STATUS_FORMAT_NOT_SUPPORTED = 0x040B
+IPP_STATUS_OP_NOT_SUPPORTED = 0x040F
+IPP_STATUS_INTERNAL_ERROR = 0x0500
+
+# RFC 8011 status strings (kept for the log)
+IPP_STATUS_NAMES = {
+    0x0000: "successful-ok", 0x0400: "client-error-bad-request",
+    0x0406: "client-error-not-found",
+    0x040A: "client-error-not-possible",
+    0x040B: "client-error-document-format-not-supported",
+    0x040F: "client-error-operation-not-supported",
+    0x0500: "server-error-internal-error",
+}
+
+# RFC 8011 document formats the virtual printer accepts. PDF first:
+# Windows (MS IPP Class Driver), macOS CUPS, iOS PrintKit and the
+# Android Default Print Service all send PDF as soon as it is
+# advertised, which the hub prints natively. image/urf covers iOS
+# AirPrint raster when a client chooses it (passed through raw, like
+# a physical AirPrint printer would). PWG-raster is accepted even
+# though not advertised (some Mopria builds send it regardless).
+IPP_DOCUMENT_FORMATS = ("application/pdf", "image/urf", "image/jpeg",
+                        "text/plain", "application/octet-stream")
+
+IPP_MULTIDOC_BASE = 1000000        # Create-Job ids start here so they
+                                   # can never collide with db job ids
+IPP_MULTIDOC_TIMEOUT = 300         # seconds a session may stay open
+
+_IPP_JOBS = {}                     # session id -> job dict (see below)
+_IPP_JOB_SEQ = [IPP_MULTIDOC_BASE]
+_IPP_JOBS_LOCK = threading.Lock()
+
+
 def _ipp_attr(tag, name, value):
-    """Encode one IPP attribute (value-tag, name, value)."""
+    """Encode one IPP attribute (value-tag, name, value). Binary tags
+    (int/bool/enum/range/date) take pre-encoded bytes; string tags take
+    str. Additional values repeat the SAME tag with an empty name."""
     nb = name.encode("utf-8") if isinstance(name, str) else name
     vb = value if isinstance(value, bytes) else str(value).encode("utf-8")
     return (bytes([tag]) + len(nb).to_bytes(2, "big") + nb +
             len(vb).to_bytes(2, "big") + vb)
 
+
 def _ipp_additional_attr(tag, value):
-    """Additional-value entry: empty name (per RFC 8010)."""
+    """Additional-value entry: empty name (per RFC 8010 §3.1.4)."""
     return _ipp_attr(tag, "", value)
+
+
+def _ipp_int(name, n):
+    """integer attribute (4-byte signed big-endian)."""
+    return _ipp_attr(V_INT, name,
+                     int(n).to_bytes(4, "big", signed=True))
+
+
+def _ipp_enum(name, n):
+    """enum attribute (4-byte signed big-endian - NEVER the ASCII digit)."""
+    return _ipp_attr(V_ENUM, name,
+                     int(n).to_bytes(4, "big", signed=True))
+
+
+def _ipp_bool(name, b):
+    """boolean attribute (1 byte)."""
+    return _ipp_attr(V_BOOL, name, b"\x01" if b else b"\x00")
+
+
+def _ipp_range(name, lo, hi):
+    """rangeOfInteger attribute (two 4-byte signed ints)."""
+    return _ipp_attr(V_RANGE, name,
+                     int(lo).to_bytes(4, "big", signed=True) +
+                     int(hi).to_bytes(4, "big", signed=True))
+
+
+def _ipp_date_bytes(ts=None):
+    """11-byte RFC 2579 DateAndTime (year..deci-second, +/-hh:mm)."""
+    import datetime as _dt
+    now = _dt.datetime.now().astimezone()
+    off = int((now.utcoffset() or _dt.timedelta(0)).total_seconds()) // 60
+    sign = "+" if off >= 0 else "-"
+    off = abs(off)
+    out = bytearray()
+    out += now.year.to_bytes(2, "big")
+    out += bytes((now.month, now.day, now.hour, now.minute, now.second,
+                  now.microsecond // 100000))
+    out += sign.encode("ascii") + bytes((off // 60, off % 60))
+    return bytes(out)
+
 
 def _ipp_group(tag, attrs):
     return bytes([tag]) + b"".join(attrs)
 
 def _ipp_parse(data):
     """Parse an IPP request far enough to route it. Returns
-    (ver_tuple, operation_id, request_id, op_attrs, document_bytes).
-    op_attrs is a dict of the operation-attribute names (first value
-    wins)."""
+    (ver_tuple, operation_id, request_id, op_attrs, op_raw, doc).
+    op_attrs maps operation-attribute name -> first value decoded as
+    text (handy for job-name / user / uri). op_raw maps name ->
+    (value_tag, raw_bytes) so binary operation attributes (job-id,
+    last-document, my-jobs) can be read with their real types.
+    Truncated attribute sections no longer raise mid-walk."""
     if len(data) < 8:
         raise ValueError("IPP request too short")
     ver = (data[0], data[1])
     op = int.from_bytes(data[2:4], "big")
     rid = int.from_bytes(data[4:8], "big")
+    n = len(data)
     i = 8
     op_attrs = {}
+    op_raw = {}
     doc = b""
     group = None
-    name = b""
-    value_tag = 0
-    while i < len(data):
+    while i < n:
         b = data[i]
         if b == 0x03:                       # end-of-attributes tag
             doc = data[i + 1:]
@@ -8335,21 +8511,27 @@ def _ipp_parse(data):
             i += 1
             continue
         # value-tag + name + value triple
+        if i + 3 > n:
+            break                           # truncated - stop cleanly
         value_tag = b
         nl = int.from_bytes(data[i + 1:i + 3], "big")
         i += 3
         name = data[i:i + nl]
         i += nl
+        if i + 2 > n:
+            break
         vl = int.from_bytes(data[i:i + 2], "big")
         i += 2
         value = data[i:i + vl]
         i += vl
-        if group == 0x01 and nl and value_tag not in (0x35, 0x36):
-            # operation attributes (skip charset/language entries)
+        if group == 0x01 and nl and value_tag not in (0x34, 0x35, 0x36,
+                                                      0x37, 0x4a):
+            # operation attributes (skip collection scaffolding)
             key = name.decode("utf-8", "replace")
             if key not in op_attrs:
                 op_attrs[key] = value.decode("utf-8", "replace")
-    return ver, op, rid, op_attrs, doc
+            op_raw.setdefault(key, (value_tag, value))
+    return ver, op, rid, op_attrs, op_raw, doc
 
 def _ipp_header(ver, status, rid):
     if isinstance(ver, (tuple, list)):
@@ -8360,80 +8542,472 @@ def _ipp_header(ver, status, rid):
             int(rid).to_bytes(4, "big"))
 
 def _ipp_response(ver, status, rid, groups):
-    head = _ipp_header(ver, status, rid)
-    opg = _ipp_group(0x01, [
-        _ipp_attr(0x47, "attributes-charset", "utf-8"),
-        _ipp_attr(0x48, "attributes-natural-language", "en"),
+    """RFC 8011 §4.1.1: the response version echoes the request
+    version when we support it (Windows speaks 1.1, modern stacks
+    speak 2.0); anything above 2.0 is answered as 2.0."""
+    if isinstance(ver, (tuple, list)) and len(ver) == 2:
+        maj, mnr = int(ver[0]), int(ver[1])
+    else:
+        maj, mnr = 1, 1
+    if (maj, mnr) > (2, 0) or maj not in (1, 2):
+        maj, mnr = 2, 0
+    head = _ipp_header((maj, mnr), status, rid)
+    opg = _ipp_group(IPP_TAG_OP, [
+        _ipp_attr(V_CHARSET, "attributes-charset", "utf-8"),
+        _ipp_attr(V_LANG, "attributes-natural-language", "en"),
     ])
     return head + opg + b"".join(groups) + b"\x03"
 
+def _ipp_uri_base():
+    """(lan_ip_or_loopback, port) the same way lan_share_url computes
+    reachability for the IPP printer."""
+    ip = lan_ip() if CFG.get("share_lan") else "127.0.0.1"
+    return ip, int(CFG.get("port", 9235))
+
+def _ipp_printer_uris():
+    """printer-uri-supported: BOTH schemes, because Windows "Add a
+    printer -> IPP Device" speaks http:// (the URI the user typed)
+    while macOS/iOS/CUPS speak ipp://. Every client matches its own
+    entry, so both work."""
+    ip, port = _ipp_uri_base()
+    return ["http://%s:%d/ipp/print" % (ip, port),
+            "ipp://%s:%d/ipp/print" % (ip, port)]
+
+def _ipp_printer_uuid():
+    """Stable urn:uuid (derived from the hub token + hostname) - the
+    same value every response, which iOS/Android use to remember the
+    printer across reboots."""
+    seed = str(CFG.get("token", "")) + "|" + socket.gethostname()
+    h = hashlib.md5(seed.encode("utf-8")).hexdigest()
+    return "urn:uuid:%s-%s-%s-%s-%s" % (h[0:8], h[8:12], h[12:16],
+                                        h[16:20], h[20:32])
+
 def _ipp_printer_group():
-    """Printer-attributes group for Get-Printer-Attributes - enough for
-    the Microsoft IPP Class Driver and common phone print services."""
+    """Printer-attributes group for Get-Printer-Attributes - the FULL
+    RFC 8011 §4.2.5.2 required set with CORRECT value tags and value
+    encodings, plus the job-template defaults the Microsoft IPP Class
+    Driver and phone print services query for."""
     host = socket.gethostname()
     try:
         pending = int(db_count_pending())
     except Exception:
         pending = 0
+    uris = _ipp_printer_uris()
+    ip, port = _ipp_uri_base()
     attrs = [
-        _ipp_attr(0x45, "printer-state", "3"),              # enum: idle
-        _ipp_attr(0x44, "printer-state-reasons", "none"),   # keyword
-        _ipp_attr(0x41, "printer-name", host),              # name w/o lang
-        _ipp_attr(0x41, "printer-make-and-model",
-                  "AdvPrint Pro %s (virtual)" % VERSION),
-        _ipp_attr(0x44, "ipp-versions-supported", IPP_VERSION_STR),
-        _ipp_attr(0x23, "printer-is-accepting-jobs", b"\x01"),  # true
-        _ipp_attr(0x22, "queued-job-count",
-                  int(pending).to_bytes(4, "big", signed=True)),
-        _ipp_attr(0x22, "copies-supported",
-                  (1).to_bytes(4, "big", signed=True) +
-                  (99).to_bytes(4, "big", signed=True)),    # range 1-99
+        # -- printer description (RFC 8011 REQUIRED for every response)
+        _ipp_attr(V_URI, "printer-uri-supported", uris[0]),
+        _ipp_additional_attr(V_URI, uris[1]),
+        _ipp_attr(V_KEYWORD, "uri-authentication-supported", "none"),
+        _ipp_additional_attr(V_KEYWORD, "none"),
+        _ipp_enum("printer-state",
+                  IPP_JOB_PROCESSING if pending else IPP_JOB_PENDING),
+        _ipp_attr(V_KEYWORD, "printer-state-reasons", "none"),
+        _ipp_bool("printer-is-accepting-jobs", True),
+        _ipp_int("queued-job-count", pending),
+        _ipp_attr(V_KEYWORD, "ipp-versions-supported", "1.1"),
+        _ipp_additional_attr(V_KEYWORD, "2.0"),
+        # operations-supported: one enum per implemented operation
+        _ipp_enum("operations-supported", IPP_OPERATIONS_SUPPORTED[0]),
     ]
-    # document formats: PDF first (phones + Windows both send PDF)
-    fmts = [_ipp_attr(0x49, "document-format-supported", "application/pdf"),
-            _ipp_additional_attr(0x44, "image/jpeg"),
-            _ipp_additional_attr(0x44, "application/octet-stream")]
-    return _ipp_group(0x04, attrs + fmts)
+    for opid in IPP_OPERATIONS_SUPPORTED[1:]:
+        attrs.append(_ipp_additional_attr(
+            V_ENUM, int(opid).to_bytes(4, "big", signed=True)))
+    attrs += [
+        _ipp_attr(V_MIME, "document-format-default", "application/pdf"),
+        _ipp_attr(V_MIME, "document-format-supported",
+                  IPP_DOCUMENT_FORMATS[0]),
+    ]
+    for fmt in IPP_DOCUMENT_FORMATS[1:]:
+        attrs.append(_ipp_additional_attr(V_MIME, fmt))
+    attrs += [
+        _ipp_attr(V_KEYWORD, "pdl-override-supported", "attempted"),
+        _ipp_int("printer-up-time", int(time.time() - START_TS)),
+        _ipp_attr(V_DATE, "printer-current-time", _ipp_date_bytes()),
+        _ipp_attr(V_CHARSET, "charset-configured", "utf-8"),
+        _ipp_attr(V_LANG, "natural-language-configured", "en"),
+        _ipp_attr(V_NAME, "printer-name", host),
+        _ipp_attr(V_NAME, "printer-info", "AdvPrint Pro on %s" % host),
+        _ipp_attr(V_NAME, "printer-location", ip),
+        _ipp_attr(V_URI, "printer-more-info", "http://%s:%d/" % (ip, port)),
+        _ipp_attr(V_URI, "printer-uuid", _ipp_printer_uuid()),
+        _ipp_attr(V_TEXT, "printer-make-and-model",
+                  "AdvPrint Pro %s Virtual Printer" % VERSION),
+        # -- job template defaults / supported values
+        _ipp_range("copies-supported", 1, 99),
+        _ipp_int("copies-default", 1),
+        _ipp_enum("finishings-supported", 3),        # 3 = none
+        _ipp_enum("finishings-default", 3),
+        _ipp_attr(V_KEYWORD, "sides-supported", "one-sided"),
+        _ipp_attr(V_KEYWORD, "sides-default", "one-sided"),
+        _ipp_attr(V_KEYWORD, "print-color-mode-supported", "color"),
+        _ipp_additional_attr(V_KEYWORD, "monochrome"),
+        _ipp_attr(V_KEYWORD, "print-color-mode-default", "color"),
+        _ipp_attr(V_KEYWORD, "media-supported", "iso_a4_210x297mm"),
+        _ipp_additional_attr(V_KEYWORD, "na_letter_8.5x11in"),
+        _ipp_additional_attr(V_KEYWORD, "na_legal_8.5x14in"),
+        _ipp_attr(V_KEYWORD, "media-default", "iso_a4_210x297mm"),
+        _ipp_attr(V_KEYWORD, "compression-supported", "none"),
+        _ipp_bool("multiple-document-jobs-supported", True),
+        _ipp_int("multiple-operation-time-out", 60),
+        _ipp_attr(V_KEYWORD, "which-jobs-supported", "not-completed"),
+        _ipp_additional_attr(V_KEYWORD, "completed"),
+        _ipp_attr(V_KEYWORD, "job-creation-attributes-supported",
+                  "job-name"),
+        _ipp_additional_attr(V_KEYWORD, "requesting-user-name"),
+        _ipp_additional_attr(V_KEYWORD, "copies"),
+        _ipp_additional_attr(V_KEYWORD, "media"),
+        _ipp_additional_attr(V_KEYWORD, "print-color-mode"),
+        _ipp_additional_attr(V_KEYWORD, "sides"),
+    ]
+    return _ipp_group(IPP_TAG_PRINTER, attrs)
 
-def _ipp_job_group(job_id, state=3):
-    return _ipp_group(0x02, [
-        _ipp_attr(0x21, "job-id", int(job_id).to_bytes(4, "big", signed=True)),
-        _ipp_attr(0x45, "job-state", str(state)),           # enum
-        _ipp_attr(0x44, "job-state-reasons", "job-queued" if state == 3
-                  else "job-completed-successfully"),
-    ])
+def _ipp_job_group(job_id, state=IPP_JOB_PENDING, reasons=None,
+                   name=None, user=None, created=None, size_kb=None):
+    """job-attributes group with correctly typed job-id (integer),
+    job-state (enum) and job-state-reasons (keyword)."""
+    ip, port = _ipp_uri_base()
+    attrs = [
+        _ipp_int("job-id", int(job_id)),
+        _ipp_attr(V_URI, "job-uri",
+                  "ipp://%s:%d/ipp/print/job/%d" % (ip, port,
+                                                    int(job_id))),
+        _ipp_enum("job-state", state),
+        _ipp_attr(V_KEYWORD, "job-state-reasons",
+                  reasons or _ipp_job_state_reasons(state)),
+    ]
+    if name:
+        attrs.append(_ipp_attr(V_NAME, "job-name", str(name)[:90]))
+    if user:
+        attrs.append(_ipp_attr(V_NAME, "job-originating-user-name",
+                               str(user)[:60]))
+    if created is not None:
+        attrs.append(_ipp_int("time-at-creation", int(created)))
+    if size_kb is not None:
+        attrs.append(_ipp_int("job-k-octets", int(size_kb)))
+    return _ipp_group(IPP_TAG_JOB, attrs)
+
+def _ipp_job_state_reasons(state):
+    return {IPP_JOB_PENDING: "none",
+            IPP_JOB_PROCESSING: "job-printing",
+            IPP_JOB_STOPPED: "processing-to-stop-point",
+            IPP_JOB_CANCELED: "job-canceled-by-user",
+            IPP_JOB_ABORTED: "job-aborted-by-system",
+            IPP_JOB_COMPLETED: "job-completed-successfully",
+            }.get(state, "none")
+
+def _ipp_job_state_from_db(status):
+    """db job status -> (IPP job-state enum, reasons keyword)."""
+    return {"queued": (IPP_JOB_PENDING, "none"),
+            "printing": (IPP_JOB_PROCESSING, "job-printing"),
+            "printed": (IPP_JOB_COMPLETED, "job-completed-successfully"),
+            "saved": (IPP_JOB_COMPLETED, "job-completed-successfully"),
+            "failed": (IPP_JOB_ABORTED, "job-aborted-by-system"),
+            "dead": (IPP_JOB_ABORTED, "job-aborted-by-system"),
+            "canceled": (IPP_JOB_CANCELED, "job-canceled-by-user"),
+            }.get(status, (IPP_JOB_PENDING, "none"))
+
+def _ipp_row_koctets(row):
+    """job-k-octets for a db job row (file size, best effort)."""
+    try:
+        return os.path.getsize(row.get("file_path") or "") // 1024
+    except OSError:
+        return 0
+
+def _ipp_session_new(title, user):
+    """Create-Job: register an in-memory multi-document session with a
+    guaranteed-unique id (1000000+ - never collides with db ids).
+    Abandoned sessions are purged past multiple-operation-time-out."""
+    with _IPP_JOBS_LOCK:
+        for k in [k for k, v in _IPP_JOBS.items()
+                  if time.time() - v["created"] > IPP_MULTIDOC_TIMEOUT]:
+            _IPP_JOBS.pop(k, None)
+        _IPP_JOB_SEQ[0] += 1
+        jid = _IPP_JOB_SEQ[0]
+        _IPP_JOBS[jid] = {"title": title, "user": user, "chunks": [],
+                          "bytes": 0, "done": False, "canceled": False,
+                          "db_id": None, "created": time.time()}
+        return jid
+
+def _ipp_session_doc_format(op_attrs, fallback="application/pdf"):
+    """document-format operation attribute -> accepted or None."""
+    fmt = (op_attrs.get("document-format") or fallback).strip().lower()
+    if ";" in fmt:                       # strip ";parameter=value" suffix
+        fmt = fmt.split(";", 1)[0].strip()
+    if fmt in ("", "*"):
+        fmt = fallback
+    if fmt not in IPP_DOCUMENT_FORMATS and \
+            fmt not in ("image/pwg-raster",):
+        return None
+    return fmt
+
+def _ipp_op_int(op_raw, name, default=0):
+    """Read a binary integer operation attribute (job-id...)."""
+    entry = op_raw.get(name)
+    if not entry:
+        return default
+    tag, val = entry
+    if tag in (V_INT, V_ENUM) and len(val) == 4:
+        return int.from_bytes(val, "big", signed=True)
+    try:
+        return int(val.decode("utf-8", "replace").strip() or default)
+    except ValueError:
+        return default
+
+def _ipp_op_bool(op_raw, name, default=False):
+    entry = op_raw.get(name)
+    if not entry:
+        return default
+    tag, val = entry
+    if tag == V_BOOL and val:
+        return val[0] != 0
+    s = val.decode("utf-8", "replace").strip().lower()
+    return s in ("true", "t", "1", "yes")
 
 def ipp_handle(data, ip):
     """Top-level IPP request entry. Returns the IPP response bytes.
-    Audit + logging included; every accepted job goes through the
-    same pipeline as the Send portal."""
+    Implements the RFC 8011 operations a desktop OS / phone print
+    stack uses to add and drive a network printer:
+      Print-Job, Print-URI, Validate-Job, Create-Job, Send-Document,
+      Cancel-Job, Get-Job-Attributes, Get-Jobs, Get-Printer-Attributes.
+    Every accepted document goes through the same pipeline as the
+    Send portal; every request is audited with the source IP."""
     try:
-        ver, op, rid, op_attrs, doc = _ipp_parse(data)
+        ver, op, rid, op_attrs, op_raw, doc = _ipp_parse(data)
     except Exception as e:
-        return _ipp_response((1, 1), 0x0400, 0, [])         # bad-request
-    if op == 0x000B:                                        # Get-Printer-Attributes
-        return _ipp_response(ver, 0x0000, rid, [_ipp_printer_group()])
-    if op in (0x0002, 0x0004):                              # Print-Job / Validate-Job
-        if op == 0x0004:
-            return _ipp_response(ver, 0x0000, rid, [_ipp_job_group(0)])
+        log("[IPP] unparsable request from %s (%d bytes): %s"
+            % (ip, len(data), e))
+        return _ipp_response((1, 1), IPP_STATUS_BAD_REQUEST, 0, [])
+
+    if op == IPP_OP_GET_PRINTER_ATTR:                  # 0x000B
+        return _ipp_response(ver, IPP_STATUS_OK, rid,
+                             [_ipp_printer_group()])
+
+    if op == IPP_OP_VALIDATE_JOB:                      # 0x0004
+        # No job is created - successful-ok means "would accept".
+        return _ipp_response(ver, IPP_STATUS_OK, rid, [])
+
+    if op == IPP_OP_PRINT_JOB:                         # 0x0002
         if not doc:
-            return _ipp_response(ver, 0x0400, rid, [])
+            return _ipp_response(ver, IPP_STATUS_BAD_REQUEST, rid, [])
+        fmt = _ipp_session_doc_format(op_attrs)
+        if fmt is None:
+            return _ipp_response(ver, IPP_STATUS_FORMAT_NOT_SUPPORTED,
+                                 rid, [])
         title = (op_attrs.get("job-name") or
                  op_attrs.get("requesting-user-name") or "IPP job")
+        user = op_attrs.get("requesting-user-name") or "ipp"
         try:
             job_id, kind = route_print_payload(doc, str(title)[:90], ip,
                                                source="ipp")
         except ValueError as e:
             log("[IPP] rejected from %s: %s" % (ip, e))
-            return _ipp_response(ver, 0x040B, rid, [])      # format not supported
+            return _ipp_response(ver, IPP_STATUS_FORMAT_NOT_SUPPORTED,
+                                 rid, [])
         except Exception as e:
             log("[IPP] print failed from %s: %s" % (ip, e))
-            return _ipp_response(ver, 0x0500, rid, [])      # server error
-        log("[IPP] job from %s (%d KB, %s) -> #%d" %
-            (ip, len(doc) // 1024, kind, job_id))
-        return _ipp_response(ver, 0x0000, rid, [_ipp_job_group(job_id)])
+            return _ipp_response(ver, IPP_STATUS_INTERNAL_ERROR, rid, [])
+        log("[IPP] Print-Job from %s (%d KB, %s, %s) -> db job #%d"
+            % (ip, len(doc) // 1024, fmt, kind, job_id))
+        db_audit("print", job_id=job_id, ip=ip, site="lan",
+                 printer=dest_display(),
+                 details="IPP Print-Job %s (%d KB)" % (fmt,
+                                                       len(doc) // 1024))
+        return _ipp_response(ver, IPP_STATUS_OK, rid,
+                             [_ipp_job_group(job_id, name=title,
+                                             user=user,
+                                             size_kb=len(doc) // 1024)])
+
+    if op == IPP_OP_PRINT_URI:                         # 0x0003
+        url = (op_attrs.get("document-uri") or "").strip()
+        if not url:
+            return _ipp_response(ver, IPP_STATUS_BAD_REQUEST, rid, [])
+        title = op_attrs.get("job-name") or "IPP URI job"
+        user = op_attrs.get("requesting-user-name") or "ipp"
+        try:
+            pdf_url_guard(url)               # http/https only, LAN off
+            data_bytes, _name = download_pdf(url)
+        except Exception as e:
+            log("[IPP] Print-URI rejected from %s (%s): %s" %
+                (ip, url[:80], e))
+            return _ipp_response(ver, IPP_STATUS_BAD_REQUEST, rid, [])
+        try:
+            job_id, kind = route_print_payload(data_bytes,
+                                               str(title)[:90], ip,
+                                               source="ipp")
+        except ValueError as e:
+            return _ipp_response(ver, IPP_STATUS_FORMAT_NOT_SUPPORTED,
+                                 rid, [])
+        except Exception as e:
+            log("[IPP] Print-URI failed from %s: %s" % (ip, e))
+            return _ipp_response(ver, IPP_STATUS_INTERNAL_ERROR, rid, [])
+        log("[IPP] Print-URI from %s (%s) -> db job #%d" %
+            (ip, url[:60], job_id))
+        return _ipp_response(ver, IPP_STATUS_OK, rid,
+                             [_ipp_job_group(job_id, name=title,
+                                             user=user)])
+
+    if op == IPP_OP_CREATE_JOB:                        # 0x0005
+        title = (op_attrs.get("job-name") or "IPP job")
+        user = op_attrs.get("requesting-user-name") or "ipp"
+        jid = _ipp_session_new(str(title)[:90], str(user)[:60])
+        log("[IPP] Create-Job from %s -> session #%d (%s)" %
+            (ip, jid, title[:40]))
+        return _ipp_response(ver, IPP_STATUS_OK, rid,
+                             [_ipp_job_group(jid, name=title, user=user)])
+
+    if op == IPP_OP_SEND_DOCUMENT:                     # 0x0006
+        jid = _ipp_op_int(op_raw, "job-id", 0)
+        last = _ipp_op_bool(op_raw, "last-document", True)
+        sess = _IPP_JOBS.get(jid)
+        if not sess:
+            return _ipp_response(ver, IPP_STATUS_NOT_FOUND, rid, [])
+        if sess["canceled"]:
+            return _ipp_response(ver, IPP_STATUS_NOT_POSSIBLE, rid, [])
+        fmt = _ipp_session_doc_format(op_attrs)
+        if fmt is None:
+            return _ipp_response(ver, IPP_STATUS_FORMAT_NOT_SUPPORTED,
+                                 rid, [])
+        sess["chunks"].append(doc)
+        sess["bytes"] += len(doc)
+        if not last:
+            # more documents to come - acknowledge without printing
+            return _ipp_response(ver, IPP_STATUS_OK, rid,
+                                 [_ipp_job_group(jid, name=sess["title"],
+                                                 user=sess["user"])])
+        payload = b"".join(sess["chunks"])
+        sess["done"] = True
+        if not payload:
+            _IPP_JOBS.pop(jid, None)
+            return _ipp_response(ver, IPP_STATUS_BAD_REQUEST, rid, [])
+        try:
+            job_id, kind = route_print_payload(payload,
+                                               sess["title"] or "IPP job",
+                                               ip, source="ipp")
+        except ValueError as e:
+            log("[IPP] rejected Send-Document from %s: %s" % (ip, e))
+            return _ipp_response(ver, IPP_STATUS_FORMAT_NOT_SUPPORTED,
+                                 rid, [])
+        except Exception as e:
+            log("[IPP] Send-Document failed from %s: %s" % (ip, e))
+            return _ipp_response(ver, IPP_STATUS_INTERNAL_ERROR, rid, [])
+        sess["db_id"] = job_id
+        log("[IPP] Send-Document #%d from %s (%d KB, %s) -> db job #%d"
+            % (jid, ip, len(payload) // 1024, kind, job_id))
+        db_audit("print", job_id=job_id, ip=ip, site="lan",
+                 printer=dest_display(),
+                 details="IPP Send-Document session #%d (%d KB)"
+                         % (jid, len(payload) // 1024))
+        return _ipp_response(ver, IPP_STATUS_OK, rid,
+                             [_ipp_job_group(job_id, name=sess["title"],
+                                             user=sess["user"],
+                                             size_kb=len(payload) // 1024)])
+
+    if op == IPP_OP_CANCEL_JOB:                        # 0x0008
+        # RFC 8011 §4.3.4: job-id is REQUIRED for Cancel-Job
+        if "job-id" not in op_raw:
+            return _ipp_response(ver, IPP_STATUS_BAD_REQUEST, rid, [])
+        jid = _ipp_op_int(op_raw, "job-id", 0)
+        sess = _IPP_JOBS.get(jid)
+        if sess is not None:
+            sess["canceled"] = True
+            sess["done"] = True
+            log("[IPP] Cancel-Job: session #%d dropped" % jid)
+            return _ipp_response(ver, IPP_STATUS_OK, rid,
+                                 [_ipp_job_group(jid, IPP_JOB_CANCELED,
+                                                 name=sess.get("title"))])
+        job = db_get(jid) if jid else None
+        if not job:
+            return _ipp_response(ver, IPP_STATUS_NOT_FOUND, rid, [])
+        if job["status"] in ("printed", "failed", "canceled", "saved",
+                             "dead", "forwarded"):
+            return _ipp_response(ver, IPP_STATUS_NOT_POSSIBLE, rid,
+                                 [_ipp_job_group(jid, name=job["title"])])
+        db_update(job["id"], status="canceled",
+                  error="canceled via IPP", held_reason=None)
+        cancel_current_print()
+        db_audit("job.canceled", job_id=job["id"], ip=ip, site="lan",
+                 printer=job.get("printer"),
+                 details="canceled via IPP Cancel-Job")
+        log("[IPP] Cancel-Job: db job #%d canceled" % jid)
+        return _ipp_response(ver, IPP_STATUS_OK, rid,
+                             [_ipp_job_group(jid, IPP_JOB_CANCELED,
+                                             name=job["title"])])
+
+    if op == IPP_OP_GET_JOB_ATTR:                      # 0x0009
+        jid = _ipp_op_int(op_raw, "job-id", 0)
+        sess = _IPP_JOBS.get(jid)
+        if sess is not None:
+            if sess["canceled"]:
+                return _ipp_response(ver, IPP_STATUS_OK, rid,
+                                     [_ipp_job_group(jid, IPP_JOB_CANCELED,
+                                                     name=sess["title"],
+                                                     user=sess["user"],
+                                                     size_kb=sess["bytes"]
+                                                     // 1024)])
+            if sess["done"] and sess["db_id"]:
+                row = db_get(sess["db_id"])
+                if row:
+                    st, rs = _ipp_job_state_from_db(row["status"])
+                    return _ipp_response(ver, IPP_STATUS_OK, rid,
+                                         [_ipp_job_group(
+                                             jid, st, rs,
+                                             name=sess["title"],
+                                             user=sess["user"],
+                                             size_kb=sess["bytes"]
+                                             // 1024)])
+            return _ipp_response(ver, IPP_STATUS_OK, rid,
+                                 [_ipp_job_group(jid, name=sess["title"],
+                                                 user=sess["user"],
+                                                 created=sess["created"],
+                                                 size_kb=sess["bytes"]
+                                                 // 1024)])
+        job = db_get(jid) if jid else None
+        if not job:
+            return _ipp_response(ver, IPP_STATUS_NOT_FOUND, rid, [])
+        st, rs = _ipp_job_state_from_db(job["status"])
+        return _ipp_response(ver, IPP_STATUS_OK, rid,
+                             [_ipp_job_group(jid, st, rs,
+                                             name=job["title"],
+                                             size_kb=_ipp_row_koctets(job))])
+
+    if op == IPP_OP_GET_JOBS:                          # 0x000A
+        which = (op_attrs.get("which-jobs") or "not-completed").strip()
+        my = _ipp_op_bool(op_raw, "my-jobs", False)
+        user = (op_attrs.get("requesting-user-name") or "").strip()
+        limit = 20
+        groups = []
+        with _IPP_JOBS_LOCK:
+            sessions = sorted(_IPP_JOBS.items())
+        for sid, s in sessions:
+            if s["canceled"] or s["done"]:
+                continue                # sessions appear only while open
+            if my and user and s["user"] and s["user"] != user:
+                continue
+            groups.append(_ipp_job_group(sid, name=s["title"],
+                                         user=s["user"],
+                                         created=s["created"],
+                                         size_kb=s["bytes"] // 1024))
+        for row in db_list(limit=limit):
+            completed = row["status"] in ("printed", "failed", "canceled",
+                                          "saved", "dead", "forwarded")
+            if which == "completed" and not completed:
+                continue
+            if which != "completed" and completed:
+                continue
+            if my and user:
+                src = (row.get("source") or "").strip()
+                if src and src != user:
+                    continue
+            st, rs = _ipp_job_state_from_db(row["status"])
+            groups.append(_ipp_job_group(row["id"], st, rs,
+                                         name=row["title"],
+                                         size_kb=_ipp_row_koctets(row)))
+        return _ipp_response(ver, IPP_STATUS_OK, rid, groups[:limit])
+
     # every other operation: not implemented
-    return _ipp_response(ver, 0x040F, rid, [])              # operation-not-supported
+    log("[IPP] operation 0x%04X from %s not supported" % (op, ip))
+    return _ipp_response(ver, IPP_STATUS_OP_NOT_SUPPORTED, rid, [])
 
 def route_print_payload(data, title, ip, source="raw9100"):
     """Shared routing for IPP Print-Job and the RAW 9100 listener.
@@ -8637,6 +9211,313 @@ def raw_listen_ensure():
 
 def ipp_printer_enabled():
     return bool(CFG.get("ipp_printer", True))
+
+
+# ------------------------------------------------------------
+# v3.0.8 AIRPRINT-GRADE DISCOVERY - mDNS / DNS-SD announcer.
+# Manually typing http://192.168.1.x:9235/ipp/print works on
+# Windows/macOS, but PHONES discover printers through mDNS
+# (Bonjour). With this responder running, the hub shows up by
+# itself in:
+#   - Windows 10/11 "Settings -> Printers -> Add device"
+#     (Windows browses _ipp._tcp since 1903)
+#   - iOS AirPrint picker (needs the _universal subtype + URF TXT)
+#   - Android Default/Mopria Print Service
+#   - macOS "Add Printer" (Bonjour list)
+# Pure stdlib (RFC 6762/6763 subset): one UDP multicast socket,
+# queries answered + proactive announces, no third-party deps.
+# Fail-safe by design: any error only disables DISCOVERY, never
+# printing (the /ipp/print endpoint keeps working). Control:
+# config.json "ipp_mdns": true|false. Announces ONLY while LAN
+# sharing is on and bound to a real LAN IP - loopback is never
+# advertised. Windows firewall needs inbound UDP 5353 (the Setup
+# exe adds it; the dashboard firewall button covers TCP only).
+# ------------------------------------------------------------
+_MDNS_PORT = 5353
+_MDNS_GROUP = "224.0.0.251"
+_MDNS_TTL = 4500                    # advertised record TTL (75 min)
+_MDNS_ANNOUNCE_EVERY = 1500         # proactive re-announce cadence (25 min)
+_MDNS_QTYPE_A = 1
+_MDNS_QTYPE_PTR = 12
+_MDNS_QTYPE_TXT = 16
+_MDNS_QTYPE_SRV = 33
+_MDNS_QTYPE_ANY = 255
+
+_mdns_state = {"sock": None, "thread": None, "ip": None,
+               "last_announce": 0.0, "announced": False, "err_logged": False}
+
+
+def _mdns_instance_name():
+    """Service instance shown in printer pickers."""
+    host = (socket.gethostname() or "").strip() or "This PC"
+    return ("AdvPrint Pro @ %s" % host).replace(".", "-")
+
+
+def _mdns_host_target():
+    h = re.sub(r"[^A-Za-z0-9-]", "-",
+               (socket.gethostname() or "").strip() or "advprint")
+    return (h or "advprint").strip("-").lower() + ".local"
+
+
+def _mdns_encode_name(name):
+    """DNS wire name ("Instance._ipp._tcp.local" -> labels)."""
+    out = bytearray()
+    for label in name.rstrip(".").split("."):
+        if not label:
+            continue
+        lb = label.encode("utf-8")[:63]
+        out += bytes([len(lb)]) + lb
+    out += b"\x00"
+    return bytes(out)
+
+
+def _mdns_txt_records():
+    kv = [("txtvers", "1"), ("qtotal", "1"), ("rp", "ipp/print"),
+          ("pdl", "application/pdf,image/urf,image/jpeg"),
+          ("ty", "AdvPrint Pro"), ("product", "(AdvPrint Pro)"),
+          ("Note", "AdvPrint Pro print hub"),
+          ("UUID", _ipp_printer_uuid().replace("urn:uuid:", "")),
+          ("URF", "V1.4"), ("Color", "T"), ("Duplex", "F"),
+          ("Scan", "F"), ("Sort", "F")]
+    out = b""
+    for k, v in kv:
+        item = ("%s=%s" % (k, v)).encode("utf-8")[:255]
+        out += bytes([len(item)]) + item
+    return out
+
+
+def _mdns_rr(name, rtype, ttl, rdata, flush=False):
+    """One resource record: NAME TYPE CLASS TTL RDLENGTH RDATA.
+    cache-flush bit set for unique records (SRV/TXT/A)."""
+    cls = 0x8001 if flush else 0x0001
+    return (_mdns_encode_name(name) + rtype.to_bytes(2, "big") +
+            cls.to_bytes(2, "big") + int(ttl).to_bytes(4, "big") +
+            len(rdata).to_bytes(2, "big") + rdata)
+
+
+def _mdns_rrset(ip, ttl=_MDNS_TTL):
+    """All records that describe this hub as an IPP printer."""
+    inst = _mdns_instance_name() + "._ipp._tcp.local"
+    target = _mdns_host_target()
+    port = int(CFG.get("port", 9235))
+    srv = ((0).to_bytes(2, "big") + (0).to_bytes(2, "big") +
+           port.to_bytes(2, "big") + _mdns_encode_name(target))
+    return [
+        _mdns_rr("_ipp._tcp.local", _MDNS_QTYPE_PTR, ttl,
+                 _mdns_encode_name(inst)),
+        _mdns_rr("_universal._sub._ipp._tcp.local", _MDNS_QTYPE_PTR, ttl,
+                 _mdns_encode_name(inst)),
+        _mdns_rr(inst, _MDNS_QTYPE_SRV, ttl, srv, flush=True),
+        _mdns_rr(inst, _MDNS_QTYPE_TXT, ttl, _mdns_txt_records(),
+                 flush=True),
+        _mdns_rr(target, _MDNS_QTYPE_A, ttl, socket.inet_aton(ip),
+                 flush=True),
+    ]
+
+
+def _mdns_packet(answers, questions=b"", qdcount=0):
+    """Build an mDNS response: ID + QR=1/AA=1 flags + counts, optional
+    echoed questions. RFC 1035 §4.1.1 header layout."""
+    header = ((0).to_bytes(2, "big") +                  # transaction id
+              (0x8400).to_bytes(2, "big") +             # QR + AA
+              qdcount.to_bytes(2, "big") +              # QDCOUNT
+              len(answers).to_bytes(2, "big") +         # ANCOUNT
+              (0).to_bytes(2, "big") +                  # NSCOUNT
+              (0).to_bytes(2, "big"))                   # ARCOUNT
+    return header + questions + b"".join(answers)
+
+
+def _mdns_parse_questions(pkt):
+    """Extract (qname_str, qtype, class, raw_bytes) per question."""
+    out = []
+    if len(pkt) < 12:
+        return out
+    qd = int.from_bytes(pkt[4:6], "big")
+    i = 12
+    for _ in range(min(qd, 8)):        # sane cap - we only match our own
+        labels = []
+        start = i
+        try:
+            while True:
+                if i >= len(pkt):
+                    return out
+                ln = pkt[i]
+                i += 1
+                if ln == 0:
+                    break
+                if ln & 0xC0:          # compression pointer - unsupported
+                    return out
+                labels.append(pkt[i:i + ln].decode("utf-8", "replace"))
+                i += ln
+            qtype = int.from_bytes(pkt[i:i + 2], "big")
+            qclass = int.from_bytes(pkt[i + 2:i + 4], "big")
+            i += 4
+        except (IndexError, ValueError):
+            return out
+        out.append((".".join(labels).lower(), qtype, qclass,
+                    pkt[start:i]))
+    return out
+
+
+def _mdns_announce(ip, ttl=_MDNS_TTL):
+    """Unsolicited multicast announce (RFC 6762 §8.3)."""
+    sock = _mdns_state["sock"]
+    if sock is None:
+        return
+    try:
+        pkt = _mdns_packet(_mdns_rrset(ip, ttl))
+        sock.sendto(pkt, (_MDNS_GROUP, _MDNS_PORT))
+        _mdns_state["last_announce"] = time.time()
+        _mdns_state["announced"] = ttl > 0
+    except OSError as e:
+        if not _mdns_state["err_logged"]:
+            log("[MDNS] announce failed: %s" % e)
+            _mdns_state["err_logged"] = True
+
+
+def _ipp_mdns_loop():
+    """Responder thread: opens the socket while discovery is wanted,
+    answers queries, re-announces periodically, says goodbye (TTL 0)
+    when LAN sharing turns off. Any error silently downgrades to
+    "no discovery" - printing itself never depends on this."""
+    while True:
+        try:
+            want = (ipp_printer_enabled() and
+                    bool(CFG.get("ipp_mdns", True)) and
+                    bool(CFG.get("share_lan")))
+            ip = lan_ip() if want else None
+            if ip in ("127.0.0.1", "::1", ""):
+                want, ip = False, None
+            sock = _mdns_state["sock"]
+            if want and sock is None:
+                _mdns_state["announced"] = False
+                _mdns_state["last_announce"] = 0.0
+                try:
+                    _mdns_state["sock"] = _mdns_socket_open()
+                    _mdns_state["err_logged"] = False
+                    log("[MDNS] AirPrint discovery UP on %s (%s) - the"
+                        " hub now shows up in phone/PC printer lists"
+                        % (ip, _mdns_instance_name()))
+                except OSError as e:
+                    if not _mdns_state["err_logged"]:
+                        log("[MDNS] cannot join multicast group (%s) -"
+                            " phones will need the manual IPP URL" % e)
+                        _mdns_state["err_logged"] = True
+                    _mdns_state["sock"] = None
+            elif not want and sock is not None:
+                _mdns_announce(ip or "0.0.0.0", ttl=0)   # goodbye
+                try:
+                    sock.close()
+                except OSError:
+                    pass
+                _mdns_state["sock"] = None
+                _mdns_state["announced"] = False
+                log("[MDNS] discovery stopped")
+            sock = _mdns_state["sock"]
+            if sock is not None:
+                if ip and _mdns_state["ip"] != ip:
+                    _mdns_announce(ip, ttl=0)            # IP changed
+                    _mdns_state["announced"] = False
+                _mdns_state["ip"] = ip
+                if ip and (not _mdns_state["announced"] or
+                           time.time() - _mdns_state["last_announce"]
+                           >= _MDNS_ANNOUNCE_EVERY):
+                    _mdns_announce(ip)
+                sock.settimeout(2.0)
+                try:
+                    pkt, addr = sock.recvfrom(9000)
+                    _mdns_answer_query(pkt, addr, ip)
+                except socket.timeout:
+                    pass
+                except OSError:
+                    pass
+        except Exception:
+            pass                    # discovery must never break the hub
+        time.sleep(3.0)
+
+
+def ipp_mdns_ensure():
+    """Health-refresher hook: start the responder thread once; the
+    thread itself tracks share_lan / ipp_printer / ipp_mdns live."""
+    if _mdns_state["thread"] and _mdns_state["thread"].is_alive():
+        return
+    t = threading.Thread(target=_ipp_mdns_loop, daemon=True,
+                         name="advprint-mdns")
+    _mdns_state["thread"] = t
+    t.start()
+
+
+def _mdns_socket_open():
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    try:
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+    except (AttributeError, OSError):
+        pass
+    mreq = socket.inet_aton(_MDNS_GROUP) + socket.inet_aton("0.0.0.0")
+    s.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
+    try:
+        s.bind(("", _MDNS_PORT))
+    except OSError:
+        s.close()
+        raise
+    return s
+
+
+def _mdns_answer_query(pkt, addr, ip):
+    """Answer a query with the records that match its questions."""
+    sock = _mdns_state["sock"]
+    if sock is None or not ip:
+        return
+    qs = _mdns_parse_questions(pkt)
+    if not qs:
+        return
+    inst = _mdns_instance_name() + "._ipp._tcp.local"
+    target = _mdns_host_target()
+    port = int(CFG.get("port", 9235))
+    services = {
+        "_ipp._tcp.local": ("_ipp._tcp.local", True),
+        "_universal._sub._ipp._tcp.local": ("_ipp._tcp.local", True),
+    }
+    answers = []
+    echoed = b""
+    qdcount = 0
+    for name, qtype, qclass, raw in qs:
+        matched = False
+        for svc, want in services.items():
+            if name == svc or name.endswith("." + svc):
+                matched = want
+                break
+        if not matched and name not in (inst.lower(), target):
+            continue
+        qdcount += 1
+        echoed += raw
+        if qtype in (_MDNS_QTYPE_PTR, _MDNS_QTYPE_ANY):
+            answers += [r for r in _mdns_rrset(ip) if r]
+            break               # PTR/ANY -> full record set
+        if qtype == _MDNS_QTYPE_SRV:
+            srv = ((0).to_bytes(2, "big") + (0).to_bytes(2, "big") +
+                   port.to_bytes(2, "big") + _mdns_encode_name(target))
+            answers.append(_mdns_rr(inst, _MDNS_QTYPE_SRV, _MDNS_TTL,
+                                    srv, flush=True))
+        elif qtype == _MDNS_QTYPE_TXT:
+            answers.append(_mdns_rr(inst, _MDNS_QTYPE_TXT, _MDNS_TTL,
+                                    _mdns_txt_records(), flush=True))
+        elif qtype == _MDNS_QTYPE_A and name == target:
+            answers.append(_mdns_rr(target, _MDNS_QTYPE_A, _MDNS_TTL,
+                                    socket.inet_aton(ip), flush=True))
+    if not answers:
+        return
+    reply = _mdns_packet(answers, questions=echoed, qdcount=qdcount)
+    try:
+        # legacy unicast clients (source port != 5353) get a unicast
+        # reply; mDNS-capable clients get multicast (RFC 6762 §18)
+        if addr[1] != _MDNS_PORT:
+            sock.sendto(reply, addr)
+        else:
+            sock.sendto(reply, (_MDNS_GROUP, _MDNS_PORT))
+    except OSError:
+        pass
 
 
 # ------------------------------------------------------------

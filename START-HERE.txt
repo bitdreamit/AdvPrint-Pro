@@ -1,6 +1,35 @@
-AdvPrint Pro (Advanced Printer) v3.0.7 - START HERE
+AdvPrint Pro (Advanced Printer) v3.0.8 - START HERE
 ====================================================
 by Bit Dream IT - Innovative Healthcare Solutions
+
+WHAT'S NEW IN 3.0.8 (PROFESSIONAL IPP PRINTER - WINDOWS/MAC/PHONES)
+----------------------------------------------------------------------
+1) FIXED: "Windows couldn't connect to the printer". Adding the hub
+   in Windows (Settings > Printers > Add device > Add manually >
+   IPP Device > http://<pc-ip>:9235/ipp/print) FAILED because the
+   v2.9 IPP engine answered with wrong protocol types (printer-
+   state as text, booleans/integers/ranges inside the wrong wire
+   tags) and skipped the attributes every IPP printer must send.
+   Windows' strict driver refused the whole answer. v3.0.8 speaks
+   byte-exact RFC 8010/8011 (verified against CUPS) - Windows
+   10/11, macOS and Linux desktops can all add the hub now.
+2) PHONES / ANY OS: the hub now answers Create-Job + Send-Document
+   (how macOS CUPS, iOS PrintKit and Android Mopria actually submit
+   jobs), Get-Jobs, Get-Job-Attributes, Cancel-Job, Print-URI and
+   chunked uploads - the operations real print stacks use.
+3) NEW: AIRPRINT-GRADE DISCOVERY. While LAN sharing is ON the hub
+   announces itself over mDNS/Bonjour (_ipp._tcp): the printer
+   appears BY ITSELF in Windows 10/11 'Add device', macOS 'Add
+   Printer', the iPhone/iPad AirPrint picker and the Android
+   Default/Mopria print service - no URL typing at all. Turn it
+   off with config.json "ipp_mdns": false. (Windows firewall: the
+   Setup exe now also opens UDP 5353 for discovery.)
+4) The printer info page (open http://<pc-ip>:9235/ipp/print in a
+   browser) is now a per-OS cheat sheet: exact steps for Windows,
+   macOS, iPhone/iPad and Android.
+5) Everything from 3.0.7 ships unchanged: one download auto-installs
+   the browser extension (signed .crx + force-install policy +
+   auto-update on every release).
 
 WHAT'S NEW IN 3.0.7 (SILENT EXTENSION AUTO-INSTALL - ONE DOWNLOAD)
 ----------------------------------------------------------------------
@@ -252,8 +281,8 @@ WHAT'S NEW IN 2.8.2 (LAN SHARING APPLIES LIVE + FIREWALL ONE-CLICK)
      reports PASS/FAIL in the message bar: PASS + other PC still
      failing = firewall (click the button); FAIL = listener problem
      (hub.log says exactly why).
-  FILES IN THIS RELEASE: AdvPrint-Pro-Setup-3.0.7.exe (Windows),
-  advprint-pro_3.0.7_all.deb (Linux), AdvPrint-Pro-3.0.7-source.zip.
+  FILES IN THIS RELEASE: AdvPrint-Pro-Setup-3.0.8.exe (Windows),
+  advprint-pro_3.0.8_all.deb (Linux), AdvPrint-Pro-3.0.8-source.zip.
 
 WHAT'S NEW IN 2.8.1 (SEND-PORTAL QR + ONE-CLICK LAN INVITE)
 ===========================================================
@@ -274,8 +303,8 @@ WHAT'S NEW IN 2.8.1 (SEND-PORTAL QR + ONE-CLICK LAN INVITE)
      - Safe by design: loopback-only, private-LAN URLs only, explicit
        click required, every accept is audited (peer.connected).
   3. NOTHING REMOVED - everything from 2.8.0 below is unchanged.
-  FILES IN THIS RELEASE: AdvPrint-Pro-Setup-3.0.7.exe (Windows),
-  advprint-pro_3.0.7_all.deb (Linux), AdvPrint-Pro-3.0.7-source.zip.
+  FILES IN THIS RELEASE: AdvPrint-Pro-Setup-3.0.8.exe (Windows),
+  advprint-pro_3.0.8_all.deb (Linux), AdvPrint-Pro-3.0.8-source.zip.
 
 WHAT'S NEW IN 2.8.0 (TWO HUB PROFILES + DROPZONE + BULLET-PROOF UNINSTALL)
 ==========================================================================
@@ -303,13 +332,13 @@ WHAT'S NEW IN 2.8.0 (TWO HUB PROFILES + DROPZONE + BULLET-PROOF UNINSTALL)
      service before touching files, wipes old program folders and
      frees port 9235 - "some file abort install" is fixed. The
      service is reinstalled automatically on upgrade.
-  9. SILENT INSTALL: AdvPrint-Pro-Setup-3.0.7.exe /S - the exe
+  9. SILENT INSTALL: AdvPrint-Pro-Setup-3.0.8.exe /S - the exe
      requests admin by itself (UAC once), the hub auto-starts and
      the firewall rule for LAN sharing is added automatically.
  10. NEW LOGO: the letter A drawn as a printer - the crossbar is the
      output slot and a printed page slides out of it.
-  FILES IN THIS RELEASE: AdvPrint-Pro-Setup-3.0.7.exe (Windows),
-  advprint-pro_3.0.7_all.deb (Linux), AdvPrint-Pro-3.0.7-source.zip.
+  FILES IN THIS RELEASE: AdvPrint-Pro-Setup-3.0.8.exe (Windows),
+  advprint-pro_3.0.8_all.deb (Linux), AdvPrint-Pro-3.0.8-source.zip.
 
 WHAT'S NEW IN 2.7.0 (HISTORY MANAGER + SHARE MODES + CLEAN LAYOUT)
   0. JOB HISTORY IS NOW A REAL MANAGER (hub dashboard "Job history"
@@ -598,7 +627,7 @@ WHY DID MY OLD VERSION SAY "cannot access" ON THE SETUP EXE?
   No manual Security-tab work is needed anywhere.
 
 UPDATE IN 3 STEPS
-  1. Run AdvPrint-Pro-Setup-3.0.7.exe (installs over the old
+  1. Run AdvPrint-Pro-Setup-3.0.8.exe (installs over the old
      version; history + settings migrate to .advprint automatically).
      Portable users: extract the new zip over the old folder, then
      AdvPrint-Tool.bat > [13] once (unblocks), then [1] Start.
@@ -632,12 +661,12 @@ FILES IN THIS PACKAGE
                    AdvPrint-Pro-Full-Guide.html + .pdf, release notes
   tests\           pytest suite + pytest.ini
   installer\       setup.nsi - NSIS 3 source that builds
-                   AdvPrint-Pro-Setup-3.0.7.exe (per-machine, UAC)
+                   AdvPrint-Pro-Setup-3.0.8.exe (per-machine, UAC)
   prebuilt\        READY installers, no build needed:
-                   AdvPrint-Pro-Setup-3.0.7.exe (Windows setup,
+                   AdvPrint-Pro-Setup-3.0.8.exe (Windows setup,
                    ~9.5 MB - run it, UAC appears, done)
-                   advprint-pro_3.0.7_all.deb (Linux deb -
-                   sudo dpkg -i advprint-pro_3.0.7_all.deb)
+                   advprint-pro_3.0.8_all.deb (Linux deb -
+                   sudo dpkg -i advprint-pro_3.0.8_all.deb)
   README.md / CHANGELOG.md / LICENSE / pytest.ini / .gitignore
   SHA256SUMS.txt
 

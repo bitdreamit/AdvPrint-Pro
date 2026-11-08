@@ -13,6 +13,15 @@ Web page ──► Chrome extension ──► AdvPrint Pro hub (localhost:9235) 
 
 ---
 
+## What's new in v3.0.8 (professional IPP printer - Windows, macOS, iPhone, Android)
+
+The bug report that drove this release: *"http://192.168.1.7:9235/ipp/print - this IPP printer mode does not work. Windows says 'Windows couldn't connect to the printer'."* Root cause found and fixed: the v2.9 IPP engine answered with **wrong wire tags and value types** (`printer-state` as a text "3", booleans inside an enum tag, integers inside a boolean tag, a range inside a boolean tag) and **omitted every attribute an RFC 8011 printer must answer with** (`printer-uri-supported`, `uri-authentication-supported`, `operations-supported`, `document-format-default`, `printer-up-time`, ...). Loose clients still printed, but the strict **Microsoft IPP Class Driver** refused the answer - hence the connect error. v3.0.8 rebuilds the whole printer:
+
+- **Byte-exact RFC 8010/8011** - every attribute carries the correct value tag and encoding (verified against CUPS' `cups/ipp.h`); a strict wire linter in `tests/test_ipp.py` guards it (16 conformance tests).
+- **All the operations real OSes use**: Print-Job, Print-URI, Validate-Job, **Create-Job + Send-Document** (how macOS CUPS, iOS PrintKit and Android Mopria actually submit jobs), Cancel-Job, Get-Job-Attributes, Get-Jobs, Get-Printer-Attributes - plus **chunked request bodies** for phone IPP stacks.
+- **AirPrint-grade discovery**: while LAN sharing is on, a stdlib **mDNS/Bonjour announcer** (`_ipp._tcp` + `_universal`) makes the hub appear **by itself** in Windows 10/11 "Add device", macOS "Add Printer", the iPhone/iPad AirPrint picker and Android's Default/Mopria print service. No URL typing. Disable with `config.json` `"ipp_mdns": false`. The Setup exe adds the UDP 5353 firewall rule discovery needs.
+- **Per-OS cheat sheet**: the printer info page (`http://<pc-ip>:9235/ipp/print`) now shows exact add-printer steps for Windows, macOS, iPhone/iPad and Android. Full guide: **docs/IPP-GUIDE.md**.
+
 ## What's new in v3.0.7 (silent extension auto-install - one download)
 
 Download ONE file and the browser extension installs itself. AdvPrint Pro now packs the extension as a **signed .crx** with a **stable release key** - the extension ID (`likldbkamojokkfdlcjibiljpgbbnohc`) never changes - and the installers write Chrome's enterprise **ExtensionInstallForcelist** policy so the browser installs the extension silently **and keeps it updated on every release**:
@@ -137,7 +146,7 @@ The ten most-requested features, all in one release:
 - **DropZone + Send portal — printing WITHOUT the extension.** The hub watches a folder: in Word/Excel/ANY app choose *Microsoft Print to PDF* and save into the DropZone — the page prints seconds later (dashboard → DropZone card; `POST /dropzone/open` opens the folder). Phones/tablets/other PCs print through the built-in **Send portal** (`/send`, token-protected, same as every endpoint).
 - **Restart hub** — in the tray menu, AdvPrint Tool [14] and the dashboard button: the hub relaunches itself cleanly (new process waits for the port; queued jobs, settings and history are kept).
 - **Bullet-proof upgrade & uninstall.** The setup now runs `hub-stop.ps1` BEFORE touching files: stops the optional *AdvPrint* service (wait + PID kill), **deletes the service registration** (reinstalled fresh when ticked — upgrades keep it automatically), kills every process under the install folder and frees TCP 9235. Old program folders are wiped, so no stale file can abort an install any more; the uninstaller retries the folder sweep and reports leftovers honestly.
-- **Silent install** `AdvPrint-Pro-Setup-3.0.7.exe /S` — elevation is requested by the exe manifest itself ("auto permission" on any PC), the hub auto-starts after a silent install, and the firewall rule for LAN sharing (TCP 9235) is added automatically (removed on uninstall).
+- **Silent install** `AdvPrint-Pro-Setup-3.0.8.exe /S` — elevation is requested by the exe manifest itself ("auto permission" on any PC), the hub auto-starts after a silent install, and the firewall rule for LAN sharing (TCP 9235) is added automatically (removed on uninstall).
 - **New A + printer logo** — the letter A drawn as a printer: the crossbar is the output slot and a printed page slides out of it. Same mark in the extension, popup, dashboard, tray icon, installer and docs.
 
 Nothing removed: every v2.7.0 feature (history manager, share toggles, live test tool) is unchanged.
