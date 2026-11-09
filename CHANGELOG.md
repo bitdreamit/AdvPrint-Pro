@@ -1,6 +1,45 @@
 # Changelog - AdvPrint Pro (Advanced Printer)
 by Bit Dream IT - Innovative Healthcare Solutions
 
+## v3.1.3 - THE ONE UI SKIN (2026-11-09)
+
+Base: v3.1.2 - every previous feature ships unchanged, zero behavior
+change, no API change. This release makes the installed product LOOK
+like the approved UI designs (v3.1.2 shipped the same functionality
+behind a plain utility skin).
+
+### 1. Hub console (/ui) = approved Design 1, pixel for pixel
+
+- Real window chrome: blue gradient title bar (AP logo, live hub
+  version + PC name from the new /health "host" key), menu bar,
+  glossy SVG toolbar (New Job / Pause-Resume / Clear / Printers /
+  IPP Queue / Refresh / Extension / Settings / Audit / Dashboard),
+  address bar with live hub dot + token badge, 218px category tree
+  with count badges, segmented status bar.
+- IDM components everywhere: 4 KPI stat cards, striped progress
+  bars, chip status badges, dark #0d1731 log terminal, fchip job
+  filters, live settings switches in a 2-column form grid.
+- Same live API wiring as before (health/stats/queue/printers/
+  jobs/audit/config/debug), same auth, same actions.
+
+### 2. Extension options = approved Design 2, all 10 tabs
+
+- The same IDM window chrome around the existing 10 tabs: sidebar
+  category tree (Overview / Automation / Settings / System) with
+  live red badges (queue + debug), toolbar buttons that DO the real
+  actions (Save Settings / Test Page / Connect Hub / New Rule /
+  Reprint / Pause Queue / Self-Test / Hub Config / Console / About),
+  address bar with the live hub status pill, status bar mirroring
+  the active tab + hub state.
+- Every input id, save button and settings flow untouched -
+  options.js drives the exact same ids as v3.1.2.
+
+### 3. Small
+
+- /health now reports "host" (PC name) - shown in the console title
+  bar, matching the mockup ("AI-Lab-PC").
+- Window close button in the options title bar closes the tab.
+
 ## v3.1.2 - PREMIUM GRAPHICAL WINDOW + CENTER MODE (2026-11-09)
 
 Base: v3.0.9 - every previous feature ships unchanged.

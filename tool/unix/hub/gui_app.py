@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-AdvPrint Pro v3.1.2 - PREMIUM GRAPHICAL WINDOW (gui_app v2)
+AdvPrint Pro v3.1.3 - PREMIUM GRAPHICAL WINDOW (gui_app v2)
 by Bit Dream IT - Innovative Healthcare Solutions. MIT license.
 
 The native window hosts THE ONE UI: the hub serves the console at
@@ -29,7 +29,7 @@ import time
 import urllib.request
 import webbrowser
 
-VERSION = "3.1.2"
+VERSION = "3.1.3"
 PORT = 9235
 URL = "http://127.0.0.1:%d/ui" % PORT
 TITLE = "AdvPrint Pro Console v%s - THE ONE UI" % VERSION

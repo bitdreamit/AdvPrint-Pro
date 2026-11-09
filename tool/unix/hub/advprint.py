@@ -95,8 +95,8 @@ if _HUB_DIR not in sys.path:
     sys.path.insert(0, _HUB_DIR)
 
 
-VERSION = "3.1.2"
-VERSION_NAME = ("v3.1.2 (PREMIUM GRAPHICAL WINDOW + CENTER MODE: (1) THE ONE UI - console.html, a Windows-IDM style console served by the hub at /ui (Dashboard / Printers / Jobs / Audit / IPP Printer / Extension / Settings / Logs, live 3 s polling, queue pause/resume, job cancel/retry/print-now, per-printer IPP queue URLs with copy, live settings switches) - the SAME page runs in the native window, in Chrome and embedded in the extension options Console tab. (2) gui_app v2 - the native window wraps /ui through a backend ladder: pywebview (WebView2/WebKit) -> Qt WebEngine -> GTK WebKit -> Chrome/Edge --app window -> default browser; PySide6 (241 MB) is GONE, the installer is ~11 MB again; the hub is auto-started and the tray menu gained 'Console (THE ONE UI)'. (3) CENTER MODE - one center PC, many child PCs: a child PC installs ONLY the extension (no tool) and prints through the Center PC's hub (Connections > Center PC / child PC mode: auto / local / center + URL + token, probe-cached 60 s); the popup gained a Console button and options gained the Console tab with offline fallback. All v3.0.9 features ship unchanged - per-printer IPP queues, mDNS per printer, RFC 8011 engine, queue, rules, LAN.")
+VERSION = "3.1.3"
+VERSION_NAME = ("v3.1.3 (THE ONE UI SKIN - THE APPROVED IDM DESIGN SHIPPED FOR REAL: (1) hub console.html now renders the exact approved Design-1 mockup - real window frame (blue gradient title bar with AP logo + live hub version + PC name, menu bar, glossy SVG toolbar: New Job / Pause-Resume / Clear / Printers / IPP Queue / Refresh / Extension / Settings / Audit / Dashboard, address bar with live hub dot + token badge, 218px category tree with count badges, KPI stat cards, IDM striped progress bars, chip status badges, dark #0d1731 log terminal, 24px pane status bar) - same live API wiring, zero behavior change. (2) extension options.html now renders the exact approved Design-2 mockup - the same IDM window chrome with a sidebar category tree (Overview / Automation / Settings / System) carrying all 10 tabs (Console / Queue / History / Rules / General / Printing / Connections / Hub / Debug / About), an IDM toolbar whose buttons DO the real actions (Save Settings / Test Page / Connect Hub / New Rule / Reprint / Pause Queue / Self-Test / Hub Config / Console / About), a live hub status pill in the address bar and an IDM status bar - every input id, save button and settings flow untouched. (3) /health gained a 'host' key - the console title bar now shows the PC name like the mockup. All v3.0.9 + v3.1.2 features ship unchanged - per-printer IPP queues, mDNS, gui_app v2 ladder, CENTER MODE, queue, rules, LAN, history.")
 FULL_BRAND = ("AdvPrint Pro (Advanced Printer) by "
               "Bit Dream IT - Innovative Healthcare Solutions")
 BRANDING = ("AdvPrint Pro (Advanced Printer) - Version %s - by "
@@ -1272,6 +1272,7 @@ def build_health_snapshot():
         paused = False
     snap = {
         "ok": True, "app": APP_NAME, "version": VERSION,
+        "host": socket.gethostname(),
         "branding": BRANDING,
         "os": "windows" if IS_WIN else ("macos" if IS_MAC else "linux"),
         "default_printer": default_printer_cached(),

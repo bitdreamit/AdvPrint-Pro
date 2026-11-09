@@ -1,4 +1,4 @@
-' AdvPrint Pro v3.1.2 - PREMIUM GRAPHICAL WINDOW launcher
+' AdvPrint Pro v3.1.3 - PREMIUM GRAPHICAL WINDOW launcher
 ' Starts gui_app v2: the native window hosting THE ONE UI console
 ' (pywebview -> Qt WebEngine -> GTK WebKit -> Chrome app window ->
 ' default browser). The hub is auto-started by gui_app when needed.

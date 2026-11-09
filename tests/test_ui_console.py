@@ -1,4 +1,4 @@
-"""v3.1.2 THE ONE UI - the hub serves the IDM-style console at /ui.
+"""v3.1.3 THE ONE UI - the hub serves the IDM-style console at /ui.
 
 - GET /ui?token=... answers with console.html from disk (next to
   advprint.py) - Cache-Control: no-store, text/html.

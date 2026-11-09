@@ -19,7 +19,10 @@ function saved(text) {
 /* ---------- tabs (v3.0.6: Queue | History | Rules | General | Printing |
  *            Connections | Hub | Debug | About - every tab has a human
  *            name and ONE job, instead of one endless Settings page) ---- */
-const TABS = ["queue", "history", "rules", "general", "printing",
+/* v3.1.3 FIX: "console" was missing from this list in v3.1.2 - the
+ * Console tab existed in the HTML but showTab("console") silently fell
+ * back to "general", so the tab could never be opened. */
+const TABS = ["console", "queue", "history", "rules", "general", "printing",
               "connections", "hub", "debug", "about"];
 function showTab(name) {
   const valid = TABS.includes(name) ? name : "general";
@@ -104,8 +107,11 @@ async function pickDefaultTab() {
     const active = (jobs.ok ? jobs.jobs : []).filter(
       (j) => j.status === "queued" || j.status === "printing");
     if (active.length) { showTab("queue"); return; }
-  } catch (_) { /* offline -> general */ }
-  showTab("general");
+  } catch (_) { /* offline -> console shows the fallback card */ }
+  /* v3.1.3: THE ONE UI is the landing tab (Design 2) - the Console
+   * tab carries its own offline fallback card, so it is safe even
+   * when the hub is down. */
+  showTab("console");
 }
 
 /* ---------- live queue ---------- */
