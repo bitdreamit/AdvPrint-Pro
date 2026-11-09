@@ -103,7 +103,7 @@
   /* v2.6.2 SINGLE VERSION SOURCE: the version comes from the DOM
    * attribute stamped by the ISOLATED-world relay (which reads the
    * real manifest). The string below is only a last-resort fallback. */
-  var _apVerFallback = "3.0.8";
+  var _apVerFallback = "3.0.9";
   function _apVersion() {
     try {
       var v = document.documentElement &&

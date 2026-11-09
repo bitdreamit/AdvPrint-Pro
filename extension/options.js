@@ -6,6 +6,23 @@ let LAN_TIMER = null;
 let DEBUG_TIMER = null;   // v2.3: Debug tab auto-refresh
 let CAPS = null;
 
+/* v3.0.9 BUG FIX: collapse a printer name that is the same text twice
+ * in a row ("HP Laser 103 107 108HP Laser 103 107 108" ->
+ * "HP Laser 103 107 108"). The hub heals names at the source since
+ * v3.0.9; this client-side copy protects against an OLDER hub that
+ * still serves doubled names (same idea as healPrinterName in
+ * background.js since v2.6.8). Never throws. */
+function healPrinterName(p) {
+  if (typeof p !== "string") return p;
+  let s = p.trim();
+  while (s.length >= 4 && s.length % 2 === 0) {
+    const half = s.slice(0, s.length / 2);
+    if (half.trim() && s.slice(s.length / 2) === half) s = half;
+    else break;
+  }
+  return s;
+}
+
 function send(m) {
   return new Promise((resolve) => {
     chrome.runtime.sendMessage(m, (r) => resolve(r || { ok: false, error: "no response" }));
@@ -694,7 +711,22 @@ async function loadLan() {
 /* ---------- load / save ---------- */
 async function loadPrinters() {
   const r = await send({ type: "hubPrinters" });
-  PRINTERS = (r.ok && r.printers) || [];
+  /* v3.0.9 BUG FIX: heal doubled names ("NameName" -> "Name") and
+   * dedupe by name - the Default-printer dropdown, the rule printer
+   * selects and the printer chips all read PRINTERS, so fixing the
+   * list here fixes every select at once (the user-visible bug was
+   * "AdvPrint Pro @ AI-LabAdvPrint Pro @ AI-Lab" etc.). */
+  const raw = (r.ok && r.printers) || [];
+  PRINTERS = [];
+  const seen = new Set();
+  for (const p of raw) {
+    if (!p || typeof p.name !== "string") continue;
+    p.name = healPrinterName(p.name);
+    const key = p.name.toLowerCase();
+    if (!p.name || seen.has(key)) continue;   // drop dupes + empties
+    seen.add(key);
+    PRINTERS.push(p);
+  }
   const sel = $("defaultPrinter");
   sel.innerHTML = "";
   sel.appendChild(new Option("OS default printer", ""));

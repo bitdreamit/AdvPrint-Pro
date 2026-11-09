@@ -13,6 +13,16 @@ Web page ──► Chrome extension ──► AdvPrint Pro hub (localhost:9235) 
 
 ---
 
+## What's new in v3.0.9 (bug-fix release: dropdown doubling + one IPP queue per printer)
+
+Two fixes from the 2026-11-09 bug report, on the v3.0.8 professional IPP printer base:
+
+- **Default-printer dropdown doubling fixed** — the dropdown showed every name twice ("HP Laser 103 107 108HP Laser 103 107 108", "AdvPrint Pro @ AI-LabAdvPrint Pro @ AI-Lab", ...). v3.0.9 heals the names **at the source** in the hub (`list_printers` / `default_printer` / status maps collapse a name that is the same text twice in a row, then dedupe) and the options page heals + dedupes defensively too — the fix covers the dropdown, the rule chips, the status table and every API client at once.
+- **Per-printer IPP queues — the hub is now central IPP middleware for ALL PC printers.** Every local printer also gets its own `ipp://host:9235/ipp/print/<printer>` queue + its own mDNS/Bonjour announcement (`rp=ipp/print/<printer>`, per-queue UUID, capped at 12 services) — so iPhone (AirPrint), Android (Mopria), macOS and other Windows PCs pick ANY printer on this PC BY NAME from the print dialog while LAN sharing is on. The main `ipp/print` queue keeps meaning the OS default destination. `/printers` now reports each printer's own `ipp_url`.
+- Upgrade in place (Setup EXE over the old install / `dpkg -i`), no config changes, still one Python file with zero dependencies. 17 new regression tests in `tests/test_309.py`; full suite 276 passed.
+
+---
+
 ## What's new in v3.0.8 (professional IPP printer - Windows, macOS, iPhone, Android)
 
 The bug report that drove this release: *"http://192.168.1.7:9235/ipp/print - this IPP printer mode does not work. Windows says 'Windows couldn't connect to the printer'."* Root cause found and fixed: the v2.9 IPP engine answered with **wrong wire tags and value types** (`printer-state` as a text "3", booleans inside an enum tag, integers inside a boolean tag, a range inside a boolean tag) and **omitted every attribute an RFC 8011 printer must answer with** (`printer-uri-supported`, `uri-authentication-supported`, `operations-supported`, `document-format-default`, `printer-up-time`, ...). Loose clients still printed, but the strict **Microsoft IPP Class Driver** refused the answer - hence the connect error. v3.0.8 rebuilds the whole printer:
@@ -146,7 +156,7 @@ The ten most-requested features, all in one release:
 - **DropZone + Send portal — printing WITHOUT the extension.** The hub watches a folder: in Word/Excel/ANY app choose *Microsoft Print to PDF* and save into the DropZone — the page prints seconds later (dashboard → DropZone card; `POST /dropzone/open` opens the folder). Phones/tablets/other PCs print through the built-in **Send portal** (`/send`, token-protected, same as every endpoint).
 - **Restart hub** — in the tray menu, AdvPrint Tool [14] and the dashboard button: the hub relaunches itself cleanly (new process waits for the port; queued jobs, settings and history are kept).
 - **Bullet-proof upgrade & uninstall.** The setup now runs `hub-stop.ps1` BEFORE touching files: stops the optional *AdvPrint* service (wait + PID kill), **deletes the service registration** (reinstalled fresh when ticked — upgrades keep it automatically), kills every process under the install folder and frees TCP 9235. Old program folders are wiped, so no stale file can abort an install any more; the uninstaller retries the folder sweep and reports leftovers honestly.
-- **Silent install** `AdvPrint-Pro-Setup-3.0.8.exe /S` — elevation is requested by the exe manifest itself ("auto permission" on any PC), the hub auto-starts after a silent install, and the firewall rule for LAN sharing (TCP 9235) is added automatically (removed on uninstall).
+- **Silent install** `AdvPrint-Pro-Setup-3.0.9.exe /S` — elevation is requested by the exe manifest itself ("auto permission" on any PC), the hub auto-starts after a silent install, and the firewall rule for LAN sharing (TCP 9235) is added automatically (removed on uninstall).
 - **New A + printer logo** — the letter A drawn as a printer: the crossbar is the output slot and a printed page slides out of it. Same mark in the extension, popup, dashboard, tray icon, installer and docs.
 
 Nothing removed: every v2.7.0 feature (history manager, share toggles, live test tool) is unchanged.
