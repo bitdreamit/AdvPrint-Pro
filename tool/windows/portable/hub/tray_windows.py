@@ -88,8 +88,8 @@ DWMWA_WINDOW_CORNER_PREFERENCE = 33     # Win11 rounded corners (fail-safe)
 DWMWCP_ROUND       = 2
 
 # menu item ids (high word safety: keep < 0x8000)
-M_OPEN, M_TEST, M_PAUSE, M_AUTO, M_EXIT, M_RESTART, M_FIREWALL = (
-    1001, 1002, 1003, 1004, 1005, 1006, 1007)
+M_OPEN, M_TEST, M_PAUSE, M_AUTO, M_EXIT, M_RESTART, M_FIREWALL, M_CONSOLE = (
+    1001, 1002, 1003, 1004, 1005, 1006, 1007, 1008)
 
 # menu colors (COLORREF = 0x00BBGGRR)
 COL_BG     = 0x301B0D              # dark navy  RGB(13, 27, 48)
@@ -793,6 +793,7 @@ class Tray(object):
         auto = bool(self._cb("is_autostart"))
         return [
             ("Open dashboard", M_OPEN, False),
+            ("Console (THE ONE UI)", M_CONSOLE, False),
             ("Print test page", M_TEST, False),
             ("sep",),
             ("Pause queue", M_PAUSE, paused),
@@ -849,6 +850,8 @@ class Tray(object):
     def _dispatch_menu_cmd(self, cmd):
         if cmd == M_OPEN:
             self._cb_async("on_open")
+        elif cmd == M_CONSOLE:
+            self._cb_async("on_console")
         elif cmd == M_TEST:
             self._cb_async("on_test", done=lambda r: self._log(
                 "test page queued from the tray menu"))

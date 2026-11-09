@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=AdvPrint Pro
+Exec=/usr/bin/advprint-start
+X-GNOME-Autostart-enabled=true
+NoDisplay=false

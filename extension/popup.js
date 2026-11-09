@@ -403,6 +403,12 @@ $("lnkDash").addEventListener("click", (e) => {
   e.preventDefault();
   send({ type: "openHubPage", page: "/dashboard", target: "active" });
 });
+/* v3.1.2: Console button - opens THE ONE UI (/ui) of the ACTIVE hub
+ * (local tool, or the Center PC in child-PC mode). */
+$("lnkConsole").addEventListener("click", (e) => {
+  e.preventDefault();
+  send({ type: "openHubPage", page: "/ui", target: "active" });
+});
 $("lnkDebug").addEventListener("click", (e) => {
   e.preventDefault();
   chrome.tabs.create({ url: "options.html#debug" });

@@ -1,0 +1,10 @@
+[Unit]
+Description=AdvPrint Pro (Advanced Printer) - silent print hub
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/python3 /opt/advprint/hub/advprint.py serve
+Restart=on-failure
+
+[Install]
+WantedBy=default.target

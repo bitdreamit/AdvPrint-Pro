@@ -1,0 +1,3 @@
+#!/bin/sh
+# AdvPrint Pro launcher
+exec python3 /opt/advprint/hub/advprint.py "$@"

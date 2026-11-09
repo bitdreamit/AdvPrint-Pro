@@ -6,23 +6,6 @@ let LAN_TIMER = null;
 let DEBUG_TIMER = null;   // v2.3: Debug tab auto-refresh
 let CAPS = null;
 
-/* v3.0.9 BUG FIX: collapse a printer name that is the same text twice
- * in a row ("HP Laser 103 107 108HP Laser 103 107 108" ->
- * "HP Laser 103 107 108"). The hub heals names at the source since
- * v3.0.9; this client-side copy protects against an OLDER hub that
- * still serves doubled names (same idea as healPrinterName in
- * background.js since v2.6.8). Never throws. */
-function healPrinterName(p) {
-  if (typeof p !== "string") return p;
-  let s = p.trim();
-  while (s.length >= 4 && s.length % 2 === 0) {
-    const half = s.slice(0, s.length / 2);
-    if (half.trim() && s.slice(s.length / 2) === half) s = half;
-    else break;
-  }
-  return s;
-}
-
 function send(m) {
   return new Promise((resolve) => {
     chrome.runtime.sendMessage(m, (r) => resolve(r || { ok: false, error: "no response" }));
@@ -711,32 +694,23 @@ async function loadLan() {
 /* ---------- load / save ---------- */
 async function loadPrinters() {
   const r = await send({ type: "hubPrinters" });
-  /* v3.0.9 BUG FIX: heal doubled names ("NameName" -> "Name") and
-   * dedupe by name - the Default-printer dropdown, the rule printer
-   * selects and the printer chips all read PRINTERS, so fixing the
-   * list here fixes every select at once (the user-visible bug was
-   * "AdvPrint Pro @ AI-LabAdvPrint Pro @ AI-Lab" etc.). */
-  const raw = (r.ok && r.printers) || [];
-  PRINTERS = [];
-  const seen = new Set();
-  for (const p of raw) {
-    if (!p || typeof p.name !== "string") continue;
-    p.name = healPrinterName(p.name);
-    const key = p.name.toLowerCase();
-    if (!p.name || seen.has(key)) continue;   // drop dupes + empties
-    seen.add(key);
-    PRINTERS.push(p);
-  }
+  PRINTERS = (r.ok && r.printers) || [];
   const sel = $("defaultPrinter");
   sel.innerHTML = "";
   sel.appendChild(new Option("OS default printer", ""));
   sel.appendChild(new Option("File (save as PDF, no paper)", "__file__"));
+  // v3.0.9 FIX (duplicated names): the label expression used to miss one
+  // closing paren - "(ternary..., p.name)" parsed as the COMMA OPERATOR,
+  // so the text argument evaluated to p.name + p.name and every option
+  // showed its name twice ("HP Laser 103 107 108HP Laser 103 107 108")
+  // while the status / OS-default decorations were silently discarded.
   PRINTERS.forEach((p) =>
     sel.appendChild(new Option(
       p.name + (p.is_group ? "  (group)"
-              : (p.status && p.status !== "unknown"
+              : ((p.status && p.status !== "unknown"
                  ? "  [" + p.status + "]" : "") +
-              (p.is_default ? "  (OS default)" : ""), p.name))));
+                (p.is_default ? "  (OS default)" : ""))),
+      p.name)));
   // v3.0.4: the rules section shows EVERY printer on this PC as a chip -
   // one click on '+ rule' starts a new rule with that printer selected,
   // so one rule per printer is two clicks away
@@ -795,6 +769,11 @@ async function loadAll() {
   // v2.8: LAN PC profile (Connection 2)
   $("hubUrlLan").value = c.hubUrlLan || "";
   $("hubTokenLan").value = c.hubTokenLan || "";
+  // v3.1.2 CENTER MODE (child PC / center PC)
+  $("hubMode").value = c.hubMode || "auto";
+  $("centerUrl").value = c.centerUrl || "";
+  $("centerToken").value = c.centerToken || "";
+  refreshCenterState();
   $("enabled").checked = c.enabled !== false;
   $("queueMode").checked = c.queueMode !== false;
   // v3.0.6: the rules power switch lives in Options (General + Rules)
@@ -841,6 +820,11 @@ async function saveAll() {
       ...(tok ? { token: tok } : {}),
       hubUrlLan: $("hubUrlLan").value.trim(),
       ...(tokLan ? { hubTokenLan: tokLan } : {}),
+      // v3.1.2 CENTER MODE
+      hubMode: $("hubMode").value || "auto",
+      centerUrl: $("centerUrl").value.trim(),
+      ...(function(){ const ct = $("centerToken").value.trim();
+                       return ct ? { centerToken: ct } : {}; })(),
       enabled: $("enabled").checked,
       queueMode: $("queueMode").checked,
       debugMode: $("debugMode").checked,   // v2.3: background also syncs
@@ -1632,3 +1616,74 @@ try {
   $("aboutVer").textContent = chrome.runtime.getManifest().version;
   $("verChip").textContent = "v" + chrome.runtime.getManifest().version;
 } catch (_) { /* keep the HTML default */ }
+
+/* ============================================================
+ * v3.1.2 CONSOLE TAB (THE ONE UI) + CENTER MODE status
+ * ============================================================ */
+async function activeHubUrl() {
+  /* the hub the console should open: active hub from the background
+   * (honors center mode) - falls back to the local hub URL */
+  try {
+    const st = await send({ type: "hubState" });
+    if (st && st.ok && st.activeUrl) return st.activeUrl;
+  } catch (_) {}
+  const cfg = await send({ type: "loadCfg" });
+  return (cfg && cfg.cfg && cfg.cfg.hubUrl) || "http://127.0.0.1:9235";
+}
+
+async function hubTokenValue() {
+  const cfg = await send({ type: "loadCfg" });
+  return (cfg && cfg.cfg && cfg.cfg.token) || "";
+}
+
+async function loadConsoleTab() {
+  const frame = $("consoleFrame");
+  const fb = $("consoleFallback");
+  const url = await activeHubUrl();
+  const tok = await hubTokenValue();
+  try {
+    const r = await fetch(url + "/health", { signal: AbortSignal.timeout(2500) });
+    if (r.ok) {
+      frame.src = url + "/ui?token=" + encodeURIComponent(tok);
+      frame.style.display = "block";
+      fb.style.display = "none";
+      return;
+    }
+  } catch (_) {}
+  frame.style.display = "none";
+  fb.style.display = "block";
+}
+$("bConsoleRetry").addEventListener("click", loadConsoleTab);
+$("bConsoleReload").addEventListener("click", loadConsoleTab);
+$("bConsoleNewTab").addEventListener("click", async () => {
+  const url = await activeHubUrl();
+  const tok = await hubTokenValue();
+  chrome.tabs.create({ url: url + "/ui?token=" + encodeURIComponent(tok) });
+});
+/* load the console when its tab opens */
+const _showTab = showTab;
+showTab = function (name) {
+  _showTab(name);
+  if (name === "console") loadConsoleTab();
+};
+
+/* v3.1.2 CENTER MODE live status line */
+async function refreshCenterState() {
+  const el = $("centerState");
+  try {
+    const st = await send({ type: "hubState" });
+    if (!st || !st.ok) throw new Error("no state");
+    const mode = st.mode || "auto";
+    const where = st.isCenter ? "CENTER PC: " + st.activeUrl
+                              : "THIS PC: " + st.activeUrl;
+    const local = st.localUp
+      ? "local tool RUNNING"
+      : "local tool NOT running";
+    el.textContent = "[" + mode + "] " + local + " -> printing on " + where;
+    el.style.color = st.isCenter ? "#1d4ed8" : "#16a34a";
+  } catch (e) {
+    el.textContent = "state unknown - Save settings and retry";
+    el.style.color = "#64748b";
+  }
+}
+$("bCenterCheck").addEventListener("click", refreshCenterState);

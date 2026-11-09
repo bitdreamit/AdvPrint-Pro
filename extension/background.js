@@ -28,6 +28,14 @@ const DEFAULTS = {
                             // profiles exist: Self PC (hubUrl + token) and
                             // LAN PC (hubUrlLan + hubTokenLan).
   hubTokenLan: "",          // v2.8 the LAN PC's hub token (Options)
+  hubMode: "auto",          // v3.1.2 CENTER MODE: "auto" = use the local
+                            // tool's hub when it answers, otherwise the
+                            // Center PC (child-PC mode). "local" = this PC
+                            // only. "center" = always the Center PC.
+  centerUrl: "",            // v3.1.2 the Center PC's hub URL (the one hub
+                            // many child PCs connect to - the child PC
+                            // needs NO AdvPrint tool, only this extension)
+  centerToken: "",          // v3.1.2 the Center PC's hub token (Options)
   retryOffline: true,       // v2.0: keep jobs in the browser while the hub
                             // is unreachable and send them when it returns
   lang: "auto",             // v2.0 UI language: auto | en | bn
@@ -110,6 +118,52 @@ function hubBase(cfg, target) {
     return String(cfg.hubUrlLan).replace(/\/+$/, "");
   }
   return (cfg.hubUrl || DEFAULTS.hubUrl).replace(/\/+$/, "");
+}
+
+/* v3.1.2 CENTER MODE - one center PC, many child PCs.
+ * A child PC installs ONLY this extension (no AdvPrint tool): when the
+ * local tool is not answering, print traffic goes to the CENTER PC's
+ * hub. The probe is cached for 60 s so every job does not pay a
+ * timeout; the probe failure itself is fast (AbortController 1200 ms). */
+let _localProbe = { t: 0, up: null };
+
+async function localHubUp(cfg) {
+  const now = Date.now();
+  if (_localProbe.up !== null && now - _localProbe.t < 60000) {
+    return _localProbe.up;
+  }
+  let up = false;
+  try {
+    const ctl = new AbortController();
+    const to = setTimeout(() => ctl.abort(), 1200);
+    const r = await fetch(hubBase(cfg, "self") + "/health",
+                          { signal: ctl.signal });
+    clearTimeout(to);
+    up = !!r.ok;
+  } catch (_) {
+    up = false;
+  }
+  _localProbe = { t: now, up };
+  return up;
+}
+
+/* The ACTIVE self hub: honors hubMode + the live local-hub probe. */
+async function activeHub(cfg) {
+  const mode = cfg.hubMode || "auto";
+  const local = hubBase(cfg, "self");
+  const center = cfg.centerUrl ? String(cfg.centerUrl).replace(/\/+$/, "") : "";
+  if (mode === "local" || !center) {
+    return { url: local, token: cfg.token, isCenter: false, mode };
+  }
+  if (mode === "center") {
+    return { url: center, token: cfg.centerToken || cfg.token,
+             isCenter: true, mode };
+  }
+  // auto: local when it answers, else the center PC (child-PC mode)
+  const up = await localHubUp(cfg);
+  if (up) return { url: local, token: cfg.token, isCenter: false, mode };
+  return { url: center, token: cfg.centerToken || cfg.token,
+           isCenter: true, mode };
 }
 
 function hubToken(cfg, target) {
@@ -299,10 +353,20 @@ function autoHealToken() {
 
 async function hubFetch(path, opts = {}, target = "self") {
   const cfg = await loadCfg();
-  const base = hubBase(cfg, target);
+  let base, tok;
+  if (target === "lan") {
+    base = hubBase(cfg, target);
+    tok = hubToken(cfg, target);
+  } else {
+    // v3.1.2 CENTER MODE: the self target resolves through the
+    // local/center ladder (probe-cached, see activeHub)
+    const act = await activeHub(cfg);
+    base = act.url;
+    tok = act.token;
+  }
   let url = base + path;
   const headers = Object.assign(
-    { "X-AdvPrint-Token": hubToken(cfg, target) },
+    { "X-AdvPrint-Token": tok },
     opts.body ? { "Content-Type": "application/json" } : {}
   );
   let body = opts.body ? JSON.stringify(opts.body) : undefined;
@@ -1632,6 +1696,18 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
         case "hubPrinters":
           reply(await hubFetch("/printers"));
           break;
+        case "hubState":
+          /* v3.1.2 CENTER MODE status for the popup + options page */
+          {
+            const c = await loadCfg();
+            const act = await activeHub(c);
+            reply({ ok: true, mode: act.mode, isCenter: act.isCenter,
+                    activeUrl: act.url,
+                    localUrl: hubBase(c, "self"),
+                    centerUrl: c.centerUrl || "",
+                    localUp: await localHubUp(c) });
+          }
+          break;
         case "hubPeers":
           reply(await hubFetch("/peers"));
           break;
@@ -1729,9 +1805,20 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
           const t = msg.target === "lan" ? "lan"
                   : msg.target === "active" ? await resolveTarget()
                   : "self";
-          const baseO = hubBase(cfgO, t);
-          const tokO = t === "lan" ? (cfgO.hubTokenLan || cfgO.token || "")
-                                   : (cfgO.token || "");
+          let baseO, tokO;
+          if (t === "lan") {
+            baseO = hubBase(cfgO, "lan");
+            tokO = cfgO.hubTokenLan || cfgO.token || "";
+          } else if (msg.target === "active") {
+            // v3.1.2 CENTER MODE: "active" resolves through the
+            // local/center ladder (child PC -> Center PC hub)
+            const act = await activeHub(cfgO);
+            baseO = act.url;
+            tokO = act.token;
+          } else {
+            baseO = hubBase(cfgO, "self");
+            tokO = cfgO.token || "";
+          }
           chrome.tabs.create({ url: baseO + (msg.page || "/dashboard") +
             "?token=" + encodeURIComponent(tokO) });
           reply({ ok: true, target: t, base: baseO });

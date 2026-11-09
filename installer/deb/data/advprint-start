@@ -1,0 +1,26 @@
+#!/bin/sh
+# AdvPrint Pro start guard: no double start
+python3 - <<'PYEOF'
+import json, socket, sys, subprocess, os, time, urllib.request
+port = 9235
+try:
+    with open(os.path.expanduser("~/.advprint/config.json")) as fh:
+        port = json.load(fh).get("port", 9235)
+except Exception:
+    pass
+s = socket.socket()
+s.settimeout(0.4)
+up = s.connect_ex(("127.0.0.1", port)) == 0
+s.close()
+if up:
+    print("AdvPrint Pro already running on port %d" % port)
+    sys.exit(0)
+PYEOF
+nohup python3 /opt/advprint/hub/advprint.py serve \
+  >>"$HOME/.advprint/hub.log" 2>&1 &
+for i in $(seq 1 20); do
+  sleep 0.5
+  curl -s -o /dev/null "http://127.0.0.1:9235/health" && exit 0
+done
+echo "AdvPrint Pro did not answer within 10s - check ~/.advprint/hub.log"
+exit 0

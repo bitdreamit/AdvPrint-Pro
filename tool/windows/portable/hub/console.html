@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AdvPrint Pro Console — THE ONE UI</title>
+<!-- ============================================================
+     AdvPrint Pro Console v3.1.2 - THE ONE UI (Windows IDM style)
+     Served by the hub at  http://127.0.0.1:9235/ui?token=...
+     Same page in the native window (gui_app), in Chrome and in the
+     extension options Console tab. by Bit Dream IT - Innovative
+     Healthcare Solutions. Design language = extension options blue.
+     ============================================================ -->
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --navy:#1e3a8a; --blue:#1d4ed8; --blue-deep:#1e40af; --blue-soft:#eff6ff;
+  --blue-line:#bfdbfe; --line:#e2e8f0; --ink:#0f172a; --ink-2:#475569;
+  --muted:#94a3b8; --bg:#f5f8fc; --panel:#fff;
+  --ok:#16a34a; --ok-bg:#dcfce7; --warn:#d97706; --warn-bg:#fef9c3;
+  --err:#dc2626; --err-bg:#fee2e2;
+  --mono:'Cascadia Mono','Consolas',monospace;
+}
+html,body{height:100%}
+body{font:13px/1.5 'Segoe UI',system-ui,sans-serif;color:var(--ink);background:var(--bg);overflow:hidden}
+.desktop{height:100vh;display:flex;flex-direction:column;padding:10px}
+.window{flex:1;min-height:0;display:flex;flex-direction:column;border-radius:10px;
+  overflow:hidden;border:1px solid #16307a;background:var(--bg);
+  box-shadow:0 20px 60px rgba(2,8,35,.45)}
+/* title bar */
+.titlebar{height:36px;flex:0 0 36px;display:flex;align-items:center;
+  background:linear-gradient(135deg,#1e3a8a,#1d4ed8);color:#fff;padding-left:10px;user-select:none}
+.titlebar .logo{width:22px;height:22px;border-radius:5px;background:#fff;color:var(--blue);
+  display:flex;align-items:center;justify-content:center;font-weight:800;font-size:11px;margin-right:9px}
+.titlebar .t{font-size:12.5px;font-weight:600}
+.titlebar .t small{font-weight:400;opacity:.75;margin-left:8px;font-size:11px}
+.titlebar .sp{flex:1}
+.titlebar .tb{font-size:10.5px;background:#ffffff2b;border:1px solid #ffffff45;
+  border-radius:10px;padding:2px 10px;margin-right:10px}
+/* menu bar */
+.menubar{height:25px;flex:0 0 25px;display:flex;align-items:center;gap:2px;
+  background:linear-gradient(#f8fafc,#eef3fa);border-bottom:1px solid var(--line);
+  padding:0 6px;user-select:none}
+.menu-item{font-size:12px;padding:2px 9px;border-radius:3px;color:var(--ink)}
+.menu-item:hover{background:var(--blue-soft);color:var(--blue-deep)}
+.menubar .mr{margin-left:auto;font-size:11px;color:var(--muted);padding-right:8px}
+/* toolbar */
+.toolbar{flex:0 0 auto;display:flex;align-items:stretch;gap:2px;
+  background:linear-gradient(#f2f6fc,#e2eaf5);border-bottom:1px solid #c9d6ea;padding:5px 8px;overflow-x:auto}
+.tbtn{border:1px solid transparent;background:transparent;border-radius:5px;min-width:60px;
+  padding:4px 9px 3px;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;font-family:inherit}
+.tbtn .ic{width:25px;height:25px;border-radius:6px;display:flex;align-items:center;justify-content:center;
+  background:linear-gradient(#fff,#e7eefb);border:1px solid #c4d4ec;font-size:13px}
+.tbtn span{font-size:10.5px;color:var(--ink-2);font-weight:600;white-space:nowrap}
+.tbtn:hover{background:linear-gradient(#eaf3ff,#d3e6ff);border-color:var(--blue)}
+.tbtn:hover span{color:var(--blue-deep)}
+.tbtn.primary .ic{background:linear-gradient(135deg,#1e40af,#1d4ed8);border-color:#16307a;color:#fff}
+.tbtn.danger .ic{color:var(--err)}
+.tsep{width:1px;background:#c9d6ea;margin:4px 5px}
+.tsp{flex:1}
+/* address bar */
+.addrbar{flex:0 0 auto;display:flex;align-items:center;gap:8px;background:#fff;
+  border-bottom:1px solid var(--line);padding:6px 10px}
+.addrbar .fld{flex:1;display:flex;align-items:center;gap:8px;height:27px;
+  border:1px solid #c4d4ec;border-radius:5px;background:var(--blue-soft);padding:0 10px}
+.addrbar .dot{width:8px;height:8px;border-radius:50%;background:#94a3b8}
+.addrbar .dot.up{background:#22c55e;box-shadow:0 0 6px #22c55e}
+.addrbar .dot.down{background:#f87171;box-shadow:0 0 6px #f87171}
+.addrbar .url{font-family:var(--mono);font-size:11.5px;color:var(--blue-deep);font-weight:600}
+.addrbar .lock{margin-left:auto;font-size:10px;border-radius:10px;padding:1px 8px;font-weight:700}
+.lock.ok{color:var(--ok);background:var(--ok-bg);border:1px solid #86efac}
+.lock.no{color:var(--err);background:var(--err-bg);border:1px solid #fca5a5}
+.pill-btn{height:27px;padding:0 11px;border-radius:5px;border:1px solid #c4d4ec;
+  background:linear-gradient(#fff,#eef3fb);font-size:11px;font-weight:700;color:var(--ink-2);cursor:pointer;font-family:inherit}
+.pill-btn.blue{background:linear-gradient(135deg,#1e40af,#1d4ed8);color:#fff;border-color:#16307a}
+.pill-btn:hover{border-color:var(--blue)}
+/* body */
+.body{flex:1;min-height:0;display:flex}
+.sidebar{width:212px;flex:0 0 212px;background:#f0f5fb;border-right:1px solid #d5dfef;
+  padding:10px 8px;overflow-y:auto;user-select:none}
+.sb-group{font-size:9.5px;font-weight:800;letter-spacing:1.2px;color:var(--muted);
+  padding:10px 10px 5px;text-transform:uppercase}
+.sb-item{display:flex;align-items:center;gap:9px;padding:7px 10px;border-radius:6px;cursor:pointer;
+  font-size:12.5px;color:var(--ink-2);margin-bottom:1px}
+.sb-item .ic{width:16px;text-align:center}
+.sb-item .cnt{margin-left:auto;font-size:10px;font-weight:800;background:#dbe6f6;color:#3b5ea8;
+  border-radius:9px;padding:1px 7px}
+.sb-item:hover{background:#e3edfb;color:var(--blue-deep)}
+.sb-item.active{background:linear-gradient(135deg,#1e40af,#1d4ed8);color:#fff;font-weight:600}
+.sb-item.active .cnt{background:#ffffff2e;color:#fff}
+.sb-note{margin:14px 10px;padding:9px 10px;border:1px dashed #b6c8e0;border-radius:7px;
+  font-size:10.5px;color:var(--ink-2);line-height:1.5;background:#fff}
+.sb-note b{color:var(--blue-deep)}
+.content{flex:1;min-width:0;overflow-y:auto;padding:14px 16px 20px}
+.panel{display:none;animation:fadein .15s ease}
+.panel.active{display:block}
+@keyframes fadein{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+.p-head{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.p-head h2{font-size:16.5px;font-weight:700}
+.p-head .sub{font-size:11.5px;color:var(--muted)}
+.p-head .right{margin-left:auto;display:flex;gap:8px}
+/* generic */
+.card{background:var(--panel);border:1px solid var(--line);border-radius:9px;margin-bottom:13px}
+.card .ch{display:flex;align-items:center;gap:8px;padding:9px 13px;border-bottom:1px solid var(--line);
+  font-size:12.5px;font-weight:700;color:var(--ink-2)}
+.card .ch .r{margin-left:auto;font-weight:500;font-size:11px;color:var(--muted);display:flex;gap:7px;align-items:center}
+.card .cb{padding:11px 13px}
+.btn{height:27px;padding:0 11px;border-radius:5px;border:1px solid #c4d4ec;cursor:pointer;
+  background:linear-gradient(#fff,#eef3fb);font-size:11px;font-weight:700;color:var(--ink-2);
+  font-family:inherit;display:inline-flex;align-items:center;gap:5px}
+.btn:hover{border-color:var(--blue);color:var(--blue-deep)}
+.btn.blue{background:linear-gradient(135deg,#1e40af,#1d4ed8);color:#fff;border-color:#16307a}
+.btn.blue:hover{color:#fff;filter:brightness(1.08)}
+.btn.danger{color:var(--err)} .btn.danger:hover{border-color:var(--err);color:var(--err)}
+.btn.small{height:23px;padding:0 8px;font-size:10.5px}
+.chip{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:700;
+  border-radius:10px;padding:2px 8px;border:1px solid}
+.chip.ok{color:var(--ok);background:var(--ok-bg);border-color:#86efac}
+.chip.err{color:var(--err);background:var(--err-bg);border-color:#fca5a5}
+.chip.warn{color:var(--warn);background:var(--warn-bg);border-color:#fcd34d}
+.chip.info{color:var(--blue-deep);background:var(--blue-soft);border-color:var(--blue-line)}
+.chip.gray{color:#475569;background:#e2e8f0;border-color:#cbd5e1}
+.chip .d{width:6px;height:6px;border-radius:50%;background:currentColor}
+.mono{font-family:var(--mono)}
+.note{background:var(--blue-soft);border:1px solid var(--blue-line);color:var(--blue-deep);
+  border-radius:8px;padding:9px 11px;font-size:11px;line-height:1.6;margin-top:10px}
+.note.orange{background:#fff7ed;border-color:#fdba74;color:#9a3412}
+/* stats */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:11px;margin-bottom:13px}
+.stat{background:#fff;border:1px solid var(--line);border-radius:9px;padding:11px 14px;position:relative;overflow:hidden}
+.stat::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--blue)}
+.stat.g::before{background:var(--ok)}.stat.r::before{background:var(--err)}.stat.w::before{background:var(--warn)}
+.stat .v{font-size:22px;font-weight:800}
+.stat .l{font-size:10.5px;color:var(--ink-2);margin-top:1px;font-weight:600}
+.stat .d{position:absolute;right:11px;top:11px;font-size:10px;color:var(--muted)}
+/* tables */
+table.tbl{width:100%;border-collapse:collapse;font-size:11.5px}
+.tbl th{text-align:left;font-size:9.5px;letter-spacing:.7px;text-transform:uppercase;color:var(--muted);
+  padding:7px 10px;border-bottom:1px solid var(--line);background:#f8fafc;font-weight:800;white-space:nowrap}
+.tbl td{padding:6px 10px;border-bottom:1px solid #eef2f8;color:var(--ink-2)}
+.tbl tr:last-child td{border-bottom:none}
+.tbl tr:hover td{background:var(--blue-soft)}
+.tbl .doc{color:var(--ink);font-weight:600;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tbl .id{font-family:var(--mono);color:var(--muted);font-size:10.5px}
+.prog{width:110px;height:10px;border:1px solid #b6c8e0;border-radius:6px;background:#eef2f8;overflow:hidden}
+.prog i{display:block;height:100%;background:linear-gradient(90deg,#1d4ed8,#3b82f6);border-radius:5px}
+.prog.done i{background:linear-gradient(90deg,#16a34a,#22c55e)}
+.prog.fail i{background:#ef4444}
+.kv{display:grid;grid-template-columns:120px 1fr;row-gap:6px;column-gap:10px;font-size:11.5px;padding:2px 2px 8px}
+.kv .k{color:var(--muted);font-weight:600}
+.kv .v{color:var(--ink);font-weight:600;overflow-wrap:anywhere}
+/* printers grid */
+.pgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:11px}
+.pcard{background:#fff;border:1px solid var(--line);border-radius:9px;padding:12px 14px;position:relative}
+.pcard .top{display:flex;align-items:center;gap:10px}
+.pcard .pic{width:34px;height:34px;border-radius:8px;background:var(--blue-soft);
+  border:1px solid var(--blue-line);display:flex;align-items:center;justify-content:center;font-size:16px}
+.pcard .nm{font-size:13px;font-weight:700}
+.pcard .mdl{font-size:10.5px;color:var(--muted)}
+.pcard .badge{position:absolute;top:11px;right:11px;font-size:9px;font-weight:800;letter-spacing:.5px;
+  background:linear-gradient(135deg,#1e40af,#1d4ed8);color:#fff;border-radius:9px;padding:2px 8px}
+.pcard .st{margin:8px 0;display:flex;gap:12px;font-size:10.5px;color:var(--ink-2);align-items:center}
+.pcard .url{font-family:var(--mono);font-size:10px;color:var(--blue-deep);background:var(--blue-soft);
+  border:1px solid var(--blue-line);border-radius:6px;padding:5px 8px;display:flex;gap:8px;align-items:center;
+  overflow:hidden;white-space:nowrap}
+.pcard .url .cp{margin-left:auto;border:none;background:none;cursor:pointer;color:var(--blue-deep);
+  font-size:9.5px;font-weight:800;font-family:inherit}
+.pcard .ops{display:flex;gap:6px;margin-top:9px;flex-wrap:wrap}
+/* filters */
+.filters{display:flex;gap:7px;margin-bottom:11px;align-items:center;flex-wrap:wrap}
+.fchip{font-size:10.5px;font-weight:700;padding:3px 11px;border-radius:13px;border:1px solid #c4d4ec;
+  background:#fff;color:var(--ink-2);cursor:pointer}
+.fchip.on{background:linear-gradient(135deg,#1e40af,#1d4ed8);color:#fff;border-color:#16307a}
+.fchip .n{opacity:.75;margin-left:2px}
+/* logs */
+.logbox{background:#0d1731;border:1px solid #16307a;border-radius:9px;padding:11px 13px;
+  font-family:var(--mono);font-size:11px;line-height:1.7;color:#c7d6f5;max-height:430px;overflow:auto}
+.logbox .ts{color:#5b6f9e}
+.logbox .lv{font-weight:800;display:inline-block;width:48px}
+.logbox .lv.I{color:#4ade80}.logbox .lv.W{color:#fbbf24}.logbox .lv.E{color:#f87171}
+.logbox .hl{color:#7cb1ff}
+/* settings */
+.frow{display:flex;gap:10px;align-items:center;margin-bottom:9px;flex-wrap:wrap}
+.frow label{font-weight:700;font-size:11.5px;color:var(--ink-2);min-width:150px}
+.inp{height:28px;border:1px solid #c4d4ec;border-radius:6px;padding:0 9px;font-size:11.5px;
+  font-family:inherit;color:var(--ink);background:#fff;outline:none}
+.inp:focus{border-color:var(--blue);box-shadow:0 0 0 2px #bfdbfe}
+.switch{position:relative;display:inline-block;width:38px;height:19px;border-radius:10px;
+  background:#cbd5e1;cursor:pointer;transition:.15s;vertical-align:middle}
+.switch::after{content:'';position:absolute;left:2px;top:2px;width:15px;height:15px;border-radius:50%;
+  background:#fff;transition:.15s;box-shadow:0 1px 3px rgba(0,0,0,.25)}
+.switch.on{background:var(--blue)}
+.switch.green.on{background:var(--ok)}
+.switch.on::after{left:21px}
+/* status bar */
+.statusbar{flex:0 0 auto;height:23px;display:flex;align-items:stretch;gap:1px;
+  background:linear-gradient(#eef3fb,#dde7f5);border-top:1px solid #b6c8e0;padding:0 6px;user-select:none}
+.sb-pane{display:flex;align-items:center;gap:6px;padding:0 10px;font-size:10px;color:var(--ink-2);
+  border-right:1px solid #c4d2e8;font-weight:600;white-space:nowrap}
+.sb-pane .d2{width:7px;height:7px;border-radius:50%;background:#22c55e;box-shadow:0 0 5px #22c55e}
+.sb-pane .d2.a{background:#fbbf24;box-shadow:0 0 5px #fbbf24}
+.sb-pane .d2.x{background:#f87171;box-shadow:0 0 5px #f87171}
+.sb-pane.grow{flex:1;border-right:none;color:var(--muted);font-weight:500}
+.sb-pane b{color:var(--ink)}
+#tokenCard{max-width:420px;margin:12vh auto 0}
+@media (max-width:1000px){.pgrid{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<div class="desktop">
+  <div class="window">
+
+    <div class="titlebar">
+      <div class="logo">AP</div>
+      <div class="t">AdvPrint Pro Console <small id="tSub">— Print Hub · THE ONE UI</small></div>
+      <div class="sp"></div>
+      <span class="tb" id="tVer">v…</span>
+    </div>
+
+    <div class="menubar">
+      <span class="menu-item">File</span><span class="menu-item">View</span>
+      <span class="menu-item">Printers</span><span class="menu-item">Jobs</span>
+      <span class="menu-item">IPP Queue</span><span class="menu-item">Tools</span>
+      <span class="menu-item">Help</span>
+      <span class="mr" id="mRight">hub starting…</span>
+    </div>
+
+    <div class="toolbar">
+      <button class="tbtn primary" data-tab="jobs"><span class="ic">&#10133;</span><span>New Job</span></button>
+      <button class="tbtn" id="bPause"><span class="ic" id="pauseIc">&#9209;</span><span id="pauseLbl">Pause</span></button>
+      <button class="tbtn danger" id="bClearQ"><span class="ic">&#10006;</span><span>Clear</span></button>
+      <div class="tsep"></div>
+      <button class="tbtn" data-tab="printers"><span class="ic">&#128424;</span><span>Printers</span></button>
+      <button class="tbtn" data-tab="ipp"><span class="ic">&#127760;</span><span>IPP Queue</span></button>
+      <button class="tbtn" id="bRefresh"><span class="ic">&#10227;</span><span>Refresh</span></button>
+      <div class="tsep"></div>
+      <button class="tbtn" data-tab="extension"><span class="ic">&#128279;</span><span>Extension</span></button>
+      <button class="tbtn" data-tab="settings"><span class="ic">&#9881;</span><span>Settings</span></button>
+      <button class="tbtn" data-tab="audit"><span class="ic">&#128737;</span><span>Audit</span></button>
+      <div class="tsp"></div>
+      <button class="tbtn" id="bDashboard"><span class="ic">&#9889;</span><span>Dashboard</span></button>
+    </div>
+
+    <div class="addrbar">
+      <div class="fld">
+        <span class="dot" id="hubDot"></span>
+        <span class="url" id="hubUrl">http://127.0.0.1:9235/ui</span>
+        <span class="lock ok" id="authLock">&#128274; token ok</span>
+      </div>
+      <button class="pill-btn blue" data-tab="ipp">&#128279; IPP queues</button>
+      <button class="pill-btn" id="bLan">&#127760; LAN</button>
+    </div>
+
+    <div class="body">
+      <aside class="sidebar">
+        <div class="sb-group">Overview</div>
+        <div class="sb-item active" data-tab="dashboard"><span class="ic">&#9638;</span> Dashboard</div>
+        <div class="sb-group">Devices</div>
+        <div class="sb-item" data-tab="printers"><span class="ic">&#128424;</span> Printers <span class="cnt" id="cPrinters">0</span></div>
+        <div class="sb-item" data-tab="ipp"><span class="ic">&#127760;</span> IPP Printer <span class="cnt" id="cIpp">0</span></div>
+        <div class="sb-group">Activity</div>
+        <div class="sb-item" data-tab="jobs"><span class="ic">&#9776;</span> Jobs <span class="cnt" id="cJobs">0</span></div>
+        <div class="sb-item" data-tab="audit"><span class="ic">&#128737;</span> Audit</div>
+        <div class="sb-item" data-tab="logs"><span class="ic">&#8250;_</span> Logs</div>
+        <div class="sb-group">System</div>
+        <div class="sb-item" data-tab="extension"><span class="ic">&#128279;</span> Extension</div>
+        <div class="sb-item" data-tab="settings"><span class="ic">&#9881;</span> Settings</div>
+        <div class="sb-note"><b>THE ONE UI</b><br>
+          This page is served by the hub at <span class="mono">/ui</span> —
+          the same UI runs in the native window (gui_app), in Chrome and
+          embedded in the extension options Console tab.</div>
+      </aside>
+
+      <main class="content">
+        <div class="note orange" id="offlineCard" style="display:none;margin-top:0">
+          <b style="display:block;margin-bottom:4px">&#9888; The hub is not reachable right now.</b>
+          Start the AdvPrint Pro tool (tray icon, Start menu) and retry.
+          Everything on this page goes live the moment the hub answers.
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <button class="btn blue small" id="bRetry">&#8635; Retry now</button>
+            <button class="btn small" id="bOpenDash">Open classic dashboard</button>
+          </div>
+        </div>
+        <div class="card" id="tokenCard" style="display:none">
+          <div class="ch">&#128274; Token required</div>
+          <div class="cb">
+            <p style="font-size:12px;color:var(--ink-2);margin-bottom:9px">
+              This console talks to the hub API. Paste the hub token
+              (shown in the classic dashboard or
+              <span class="mono">python advprint.py token</span>):</p>
+            <div class="frow" style="margin:0">
+              <input class="inp mono" id="tokInp" placeholder="hub token" style="flex:1">
+              <button class="btn blue" id="bTokGo">Connect</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ============ DASHBOARD ============ -->
+        <section class="panel active" id="p-dashboard">
+          <div class="p-head"><h2>Dashboard</h2><span class="sub" id="dashSub">…</span>
+            <div class="right"><button class="btn blue" id="bRefresh2">&#8635; Refresh</button></div></div>
+          <div class="stats">
+            <div class="stat"><div class="d" id="sdToday">today</div><div class="v" id="sJobs">0</div><div class="l">Jobs today</div></div>
+            <div class="stat g"><div class="d" id="sRate"></div><div class="v" id="sPrinted">0</div><div class="l">Printed (7d)</div></div>
+            <div class="stat r"><div class="d"></div><div class="v" id="sFailed">0</div><div class="l">Failed (7d)</div></div>
+            <div class="stat w"><div class="d" id="sPaused"></div><div class="v" id="sQueue">0</div><div class="l">In queue</div></div>
+          </div>
+          <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:12px" id="dashRow">
+            <div class="card">
+              <div class="ch">&#9889; Print Hub Status <span class="r" id="uptime"></span></div>
+              <div class="cb"><div class="kv">
+                <span class="k">Service</span><span class="v" id="kvSvc">…</span>
+                <span class="k">Listen</span><span class="v mono" id="kvListen">…</span>
+                <span class="k">LAN sharing</span><span class="v" id="kvLan">…</span>
+                <span class="k">IPP</span><span class="v" id="kvIpp">…</span>
+                <span class="k">mDNS</span><span class="v" id="kvMdns">…</span>
+                <span class="k">Mode</span><span class="v" id="kvMode">…</span>
+              </div></div>
+            </div>
+            <div class="card">
+              <div class="ch">&#128424; Default Printer</div>
+              <div class="cb"><div class="kv">
+                <span class="k">Name</span><span class="v" id="kvDefName">…</span>
+                <span class="k">Status</span><span class="v" id="kvDefSt">…</span>
+              </div>
+              <div style="display:flex;gap:7px">
+                <button class="btn blue" id="bTestPage">Test page</button>
+                <button class="btn" data-tab="printers">All printers</button>
+              </div></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="ch">&#128203; Recent Jobs <span class="r">live · newest first</span></div>
+            <table class="tbl"><tbody id="recentBody"></tbody></table>
+          </div>
+        </section>
+
+        <!-- ============ PRINTERS ============ -->
+        <section class="panel" id="p-printers">
+          <div class="p-head"><h2>Printers</h2><span class="sub" id="prSub">…</span>
+            <div class="right"><button class="btn" id="bRescan">&#128269; Re-scan</button></div></div>
+          <div class="pgrid" id="prGrid"></div>
+        </section>
+
+        <!-- ============ IPP PRINTER ============ -->
+        <section class="panel" id="p-ipp">
+          <div class="p-head"><h2>IPP Printer</h2>
+            <span class="sub">per-printer queues + mDNS — the hub as central IPP middleware</span>
+            <div class="right"><button class="btn blue" id="bCopyAll">&#128203; Copy all queues</button></div></div>
+          <div class="card">
+            <div class="ch">&#127760; Per-printer IPP queues <span class="r">RFC 8010 / 8011 · v3.0.9+</span></div>
+            <table class="tbl">
+              <thead><tr><th>Printer</th><th>Queue URL</th><th>State</th><th></th></tr></thead>
+              <tbody id="ippBody"></tbody>
+            </table>
+          </div>
+          <div class="card">
+            <div class="ch">&#128161; Add a queue on ANY device — no AdvPrint tool needed on the client</div>
+            <div class="cb" style="font-size:11.5px;color:var(--ink-2);line-height:1.7">
+              1. <b>Windows</b> — Settings &rarr; Bluetooth &amp; devices &rarr; Printers &rarr; Add device
+              (appears by itself via mDNS) or <b>Add manually &rarr; Select a shared printer by name</b>, paste the queue URL.<br>
+              2. <b>Linux / CUPS</b> — <span class="mono">lpadmin -p advprint-queue -E -v ipp://IP:9235/ipp/print/QUEUE -m everywhere</span><br>
+              3. <b>macOS / iPhone / Android</b> — discovered automatically (Bonjour / AirPrint / Mopria) while LAN sharing is on.
+            </div>
+          </div>
+          <div class="note" id="ippCentral"></div>
+        </section>
+
+        <!-- ============ JOBS ============ -->
+        <section class="panel" id="p-jobs">
+          <div class="p-head"><h2>Jobs</h2><span class="sub">live queue — IDM-style progress</span>
+            <div class="right"><button class="btn danger" id="bClearDone">&#128465; Clear finished</button></div></div>
+          <div class="filters" id="jobFilters">
+            <span class="fchip on" data-f="">All</span>
+            <span class="fchip" data-f="queued">Queued</span>
+            <span class="fchip" data-f="printing">Printing</span>
+            <span class="fchip" data-f="printed">Printed</span>
+            <span class="fchip" data-f="failed">Failed</span>
+            <span class="fchip" data-f="held">Held</span>
+            <span class="fchip" data-f="scheduled">Scheduled</span>
+            <span class="fchip" data-f="saved">Saved</span>
+          </div>
+          <div class="card">
+            <table class="tbl">
+              <thead><tr><th>ID</th><th>Document</th><th>Printer</th><th>Status</th><th>Progress</th><th>Time</th><th></th></tr></thead>
+              <tbody id="jobsBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- ============ AUDIT ============ -->
+        <section class="panel" id="p-audit">
+          <div class="p-head"><h2>Audit</h2><span class="sub">who printed what — full trail</span>
+            <div class="right"><button class="btn" id="bAuditCsv">&#8632; Export CSV</button></div></div>
+          <div class="card">
+            <table class="tbl">
+              <thead><tr><th>Time</th><th>Action</th><th>Actor / IP</th><th>Target</th><th>Details</th></tr></thead>
+              <tbody id="auditBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- ============ LOGS ============ -->
+        <section class="panel" id="p-logs">
+          <div class="p-head"><h2>Logs</h2><span class="sub">hub self-check + live activity feed</span>
+            <div class="right"><button class="btn" id="bLogsRefresh">&#8635; Refresh</button></div></div>
+          <div class="logbox" id="logBox">loading…</div>
+          <div class="note">The full text log lives on disk —
+            <span class="mono">~/.advprint/hub.log</span> (Linux) or
+            <span class="mono">%USERPROFILE%\.advprint\hub.log</span> (Windows).
+            Debug mode adds WHY/WHEN/WHERE detail to this feed (Settings &rarr; Debug mode).</div>
+        </section>
+
+        <!-- ============ EXTENSION ============ -->
+        <section class="panel" id="p-extension">
+          <div class="p-head"><h2>Extension</h2><span class="sub">browser extension pairing + silent install chain</span></div>
+          <div class="card">
+            <div class="ch">&#128274; Hub token <span class="r"><button class="btn small" id="bTokCopy">Copy</button></span></div>
+            <div class="cb"><div class="kv">
+              <span class="k">Token</span><span class="v mono" id="kvTok">…</span>
+              <span class="k">Header</span><span class="v mono">X-AdvPrint-Token</span>
+              <span class="k">Loopback fix</span><span class="v mono">/token/current</span>
+            </div></div>
+          </div>
+          <div class="card">
+            <div class="ch">&#128279; Silent install / auto-update (v3.0.7 chain)</div>
+            <div class="cb"><div class="kv">
+              <span class="k">CRX</span><span class="v"><a class="mono" id="crxLink" href="#" style="color:var(--blue-deep)">/extension/AdvPrint-Pro.crx</a>
+                <button class="btn small" id="bCrxCopy">Copy URL</button></span>
+              <span class="k">updates.xml</span><span class="v mono" id="updLink">…</span>
+              <span class="k">Policy</span><span class="v mono" id="polTxt" style="font-size:10px">ExtensionInstallForcelist</span>
+            </div>
+            <div class="note">Chrome / Edge / Brave install the extension silently
+              while the policy points at this hub — every release auto-updates the browser.</div></div>
+          </div>
+          <div class="card">
+            <div class="ch">&#128187; Recent browser activity <span class="r">from the audit trail</span></div>
+            <table class="tbl"><tbody id="extBody"></tbody></table>
+          </div>
+        </section>
+
+        <!-- ============ SETTINGS ============ -->
+        <section class="panel" id="p-settings">
+          <div class="p-head"><h2>Settings</h2><span class="sub">hub config.json · applied live</span>
+            <div class="right"><button class="btn blue" id="bSaveCfg">&#128190; Save &amp; Apply</button></div></div>
+          <div class="card">
+            <div class="cb" style="padding-top:14px">
+              <div class="frow"><label>LAN sharing</label>
+                <span class="switch" id="swLan" data-k="share_lan"></span>
+                <span style="font-size:11px;color:var(--muted)">other PCs / phones print through this hub</span></div>
+              <div class="frow"><label>Per-printer IPP queues</label>
+                <span class="switch" id="swIpp" data-k="ipp_printer"></span>
+                <span style="font-size:11px;color:var(--muted)">ipp://ip:9235/ipp/print/&lt;printer&gt; (v3.0.9)</span></div>
+              <div class="frow"><label>mDNS / Bonjour</label>
+                <span class="switch" id="swMdns" data-k="ipp_mdns"></span>
+                <span style="font-size:11px;color:var(--muted)">printers announce themselves on the LAN</span></div>
+              <div class="frow"><label>Hold when offline</label>
+                <span class="switch" id="swHold" data-k="hold_offline"></span>
+                <span style="font-size:11px;color:var(--muted)">jobs wait while the printer reports offline</span></div>
+              <div class="frow"><label>Instant fallback</label>
+                <span class="switch" id="swInstant" data-k="instant_auto_queue"></span>
+                <span style="font-size:11px;color:var(--muted)">no printer active &rarr; auto-queue instead of failing</span></div>
+              <div class="frow"><label>Debug mode</label>
+                <span class="switch" id="swDebug" data-k="debug"></span>
+                <span style="font-size:11px;color:var(--muted)">verbose hub log + browser error reports</span></div>
+              <div class="frow"><label>Default printer</label>
+                <input class="inp" id="defPrinter" style="flex:1" placeholder="OS default">
+                <span style="font-size:11px;color:var(--muted)">exact Windows printer name, empty = OS default</span></div>
+              <div class="frow"><label>Keep printed files</label>
+                <span class="switch green" id="swKeep" data-k="keep_files"></span>
+                <span style="font-size:11px;color:var(--muted)">needed for Reprint from History</span></div>
+            </div>
+          </div>
+          <div class="note">Port / token / tray behavior live in the config file and the tray menu —
+            the console edits everything else live. Some changes apply on the next job.</div>
+        </section>
+
+      </main>
+    </div>
+
+    <div class="statusbar">
+      <span class="sb-pane"><span class="d2" id="sbDot"></span> <span id="sbHub">hub starting…</span></span>
+      <span class="sb-pane mono" id="sbUrl">http://127.0.0.1:9235</span>
+      <span class="sb-pane" id="sbPrinters">Printers 0</span>
+      <span class="sb-pane" id="sbQueue">Queue 0</span>
+      <span class="sb-pane" id="sbMdns">mDNS —</span>
+      <span class="sb-pane grow"></span>
+      <span class="sb-pane" id="sbVer">v…</span>
+      <span class="sb-pane">Bit Dream IT</span>
+    </div>
+
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ============================================================
+   AdvPrint Pro Console - THE ONE UI. Talks straight to the hub
+   API with the same token the classic dashboard uses.
+   ============================================================ */
+var qs = new URLSearchParams(location.search);
+var TOKEN = qs.get("token") || localStorage.getItem("advprintHubToken") || "";
+var BASE = location.origin;
+var pollTimer = null, cfgCache = {}, jobFilter = "", auditRows = [];
+
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s == null ? "" : s).replace(/[&<>"']/g,
+  function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
+
+async function api(path, opts){
+  opts = opts || {};
+  var h = Object.assign({"X-AdvPrint-Token": TOKEN}, opts.headers || {});
+  if (opts.body) h["Content-Type"] = "application/json";
+  var r = await fetch(BASE + path, { method: opts.method || "GET",
+    headers: h, body: opts.body ? JSON.stringify(opts.body) : undefined });
+  if (r.status === 401) { showTokenCard(true); throw new Error("auth"); }
+  var d = {};
+  try { d = await r.json(); } catch(_){}
+  if (!r.ok || d.ok === false) throw new Error(d.error || ("HTTP " + r.status));
+  return d;
+}
+
+function showTokenCard(show){
+  $("tokenCard").style.display = show ? "block" : "none";
+  if (show) { $("offlineCard").style.display = "none"; }
+}
+$("bTokGo").addEventListener("click", async function(){
+  TOKEN = $("tokInp").value.trim();
+  if (!TOKEN) return;
+  localStorage.setItem("advprintHubToken", TOKEN);
+  var u = new URL(location.href); u.searchParams.set("token", TOKEN);
+  history.replaceState(null, "", u);
+  showTokenCard(false); boot();
+});
+
+/* ---------- tabs ---------- */
+function showTab(name){
+  document.querySelectorAll(".panel").forEach(function(p){
+    p.classList.remove("active"); });
+  var el = $("p-" + name); if (el) el.classList.add("active");
+  document.querySelectorAll(".sb-item").forEach(function(i){
+    i.classList.toggle("active", i.getAttribute("data-tab") === name); });
+  $("content").scrollTop = 0;
+}
+document.querySelectorAll("[data-tab]").forEach(function(el){
+  el.addEventListener("click", function(){ showTab(el.getAttribute("data-tab")); });
+});
+
+/* ---------- status chips ---------- */
+var ST_CHIP = {
+  printed:["ok","PRINTED"], printing:["info","PRINTING"], queued:["gray","QUEUED"],
+  held:["warn","HELD"], scheduled:["warn","SCHEDULED"], failed:["err","FAILED"],
+  dead:["err","DEAD"], canceled:["gray","CANCELED"], saved:["ok","SAVED"],
+  forwarded:["info","FORWARDED"], offline:["err","OFFLINE"]
+};
+function chip(st){
+  var c = ST_CHIP[st] || ["gray", (st || "?").toUpperCase()];
+  return '<span class="chip ' + c[0] + '"><span class="d"></span>' + c[1] + "</span>";
+}
+function prog(st, pct){
+  var cls = st === "printed" || st === "saved" ? "done"
+          : (st === "failed" || st === "dead") ? "fail" : "";
+  var w = cls === "" ? Math.max(6, pct == null ? 0 : Math.min(100, pct)) : 100;
+  return '<div class="prog ' + cls + '"><i style="width:' + w + '%"></i></div>';
+}
+function jobPct(j){
+  if (j.status === "printing") return j.pages_total ? (j.pages_done||0)*100/j.pages_total : 45;
+  return 0;
+}
+
+/* ---------- renderers ---------- */
+function renderStats(h, st, q){
+  $("sJobs").textContent = st.jobs_today != null ? st.jobs_today : "0";
+  $("sPrinted").textContent = st.printed_7d != null ? st.printed_7d : (st.by_status && st.by_status.printed) || 0;
+  $("sFailed").textContent = st.failed_7d != null ? st.failed_7d :
+    ((st.by_status && ((st.by_status.failed||0)+(st.by_status.dead||0))) || 0);
+  $("sQueue").textContent = q.pending + (q.held ? " (+" + q.held + " held)" : "");
+  $("sRate").textContent = st.success_rate != null ? st.success_rate + "%" : "";
+  $("sPaused").textContent = q.paused ? "PAUSED" : "live";
+  $("pauseLbl").textContent = q.paused ? "Resume" : "Pause";
+  $("pauseIc").textContent = q.paused ? "\u25B6" : "\u23F9";
+  $("cJobs").textContent = q.pending;
+  $("kvSvc").innerHTML = "Running " + chip("printed").replace("PRINTED","HEALTHY");
+  $("kvListen").textContent = q.listen || (BASE.replace(/^http:\/\//,""));
+  $("kvLan").innerHTML = q.lan_active
+    ? "ON — <span class='mono'>" + esc(q.lan_url || "") + "</span>" : "OFF (127.0.0.1 only)";
+  $("kvMdns").textContent = cfgCache.ipp_mdns ? "ON — printers announce themselves" : "OFF";
+  $("kvMode").textContent = q.queue_mode === false ? "instant print" : "queue mode";
+  $("uptime").textContent = "";
+}
+function renderPrinters(list){
+  $("cPrinters").textContent = list.filter(function(p){ return !p.is_group; }).length;
+  $("cIpp").textContent = list.filter(function(p){ return p.ipp_queue; }).length;
+  $("sbPrinters").textContent = "Printers " + $("cPrinters").textContent;
+  $("sbMdns").textContent = "mDNS " + (cfgCache.ipp_mdns ? "ON" : "OFF");
+  var g = $("prGrid"); g.innerHTML = "";
+  list.forEach(function(p){
+    if (p.is_group) return;
+    var d = document.createElement("div");
+    d.className = "pcard";
+    d.innerHTML =
+      (p.is_default ? '<span class="badge">DEFAULT</span>' : "") +
+      '<div class="top"><div class="pic">&#128424;</div>' +
+      '<div><div class="nm">' + esc(p.name) + '</div>' +
+      '<div class="mdl">' + (p.is_default ? "OS default · " : "") +
+      esc(p.status || "unknown") + '</div></div></div>' +
+      '<div class="st">' + chip(p.status === "ready" ? "printed" : p.status) +
+      '<span>IPP ' + (p.ipp_queue ? '<span class="chip ok"><span class="d"></span>queue</span>' :
+        '<span class="chip gray">—</span>') + '</span></div>' +
+      (p.ipp_queue ? '<div class="url"><span style="overflow:hidden;text-overflow:ellipsis">' +
+        esc(p.ipp_queue) + '</span><button class="cp" data-cp="' + esc(p.ipp_queue) + '">COPY</button></div>' : "") +
+      '<div class="ops">' +
+      '<button class="btn small" data-setdef="' + esc(p.name) + '"' +
+        (p.is_default ? " disabled" : "") + '>Set default</button>' +
+      (p.ipp_queue ? '<button class="btn small" data-open="' +
+        esc(p.ipp_path) + '">Queue page</button>' : "") +
+      '</div>';
+    g.appendChild(d);
+  });
+}
+function renderIpp(list){
+  var b = $("ippBody"); b.innerHTML = "";
+  list.forEach(function(p){
+    if (!p.ipp_queue) return;
+    var tr = document.createElement("tr");
+    tr.innerHTML = "<td><b>" + esc(p.name) + "</b></td>" +
+      '<td class="mono" style="font-size:10px;color:var(--blue-deep)">' +
+      esc(p.ipp_queue) + "</td><td>" + chip(p.status === "ready" ? "printed" : p.status) +
+      "</td>" + '<td><button class="btn small" data-cp="' + esc(p.ipp_queue) + '">Copy</button></td>';
+    b.appendChild(tr);
+  });
+  $("ippCentral").innerHTML = "<b>Central shared queue</b> (all printers, classic behavior): <span class='mono'>" +
+    esc((cfgCache && $("ippBody").dataset && $("ippBody").dataset.central) || "") + "</span>" +
+    " — every job without an explicit printer goes here.";
+}
+function jobRow(j, withActions){
+  var tr = document.createElement("tr");
+  tr.innerHTML =
+    '<td class="id">#' + j.id + "</td>" +
+    '<td class="doc" title="' + esc(j.title) + '">' + esc(j.title) + "</td>" +
+    "<td>" + esc(j.printer || "default") + "</td><td>" + chip(j.status) + "</td>" +
+    "<td>" + prog(j.status, jobPct(j)) + "</td>" +
+    '<td class="id">' + esc((j.created_at || "").replace("T", " ").slice(5, 19)) + "</td>" +
+    (withActions ? '<td><div style="display:flex;gap:4px">' +
+      (j.status === "queued" || j.status === "held" ?
+        '<button class="btn small" data-pnow="' + j.id + '">Now</button>' : "") +
+      ((j.status === "failed" || j.status === "dead" || j.status === "canceled") ?
+        '<button class="btn small" data-retry="' + j.id + '">Retry</button>' : "") +
+      (["queued","printing","held","scheduled"].indexOf(j.status) >= 0 ?
+        '<button class="btn small danger" data-cancel="' + j.id + '">Cancel</button>' : "") +
+      "</div></td>" : "<td></td>");
+  return tr;
+}
+function renderJobs(jobs){
+  var b = $("jobsBody"); b.innerHTML = "";
+  var list = jobs.filter(function(j){ return !jobFilter || j.status === jobFilter; });
+  list.slice(0, 60).forEach(function(j){ b.appendChild(jobRow(j, true)); });
+  if (!list.length) b.innerHTML = '<tr><td colspan="7">No jobs' +
+    (jobFilter ? " with status " + esc(jobFilter) : "") + " yet.</td></tr>";
+  var recent = $("recentBody"); recent.innerHTML = "";
+  jobs.slice(0, 8).forEach(function(j){ recent.appendChild(jobRow(j, false)); });
+}
+function renderAudit(rows){
+  var b = $("auditBody"); b.innerHTML = "";
+  rows.slice(0, 40).forEach(function(a){
+    var tr = document.createElement("tr");
+    tr.innerHTML = '<td class="id">' + esc((a.created_at || "").replace("T"," ").slice(5,19)) +
+      "</td><td>" + chip(a.action && a.action.indexOf("fail") >= 0 ? "failed" : "printed")
+        .replace(a.action && a.action.indexOf("fail") >= 0 ? "FAILED" : "PRINTED", esc(a.action)) +
+      "</td><td>" + esc(a.actor || a.ip || "") + "</td>" +
+      '<td class="doc">' + esc(a.printer || a.site || "") + "</td>" +
+      '<td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
+      esc(a.details || "") + "</td>";
+    b.appendChild(tr);
+  });
+  if (!rows.length) b.innerHTML = '<tr><td colspan="5">No audit rows yet.</td></tr>';
+}
+function renderLogs(dbg, jobs, audit){
+  var lines = [];
+  (dbg.problems || []).forEach(function(p){
+    lines.push('<div><span class="ts">self-check</span> <span class="lv ' +
+      (p.level === "warn" ? "W" : p.level === "error" ? "E" : "I") + '">' +
+      (p.level === "warn" ? "WARN" : p.level === "error" ? "ERROR" : "INFO") +
+      '</span> ' + esc(p.check || "") + ": " + esc(p.what || "") + "</div>");
+  });
+  if (dbg.ok !== false && !(dbg.problems || []).length)
+    lines.push('<div><span class="ts">self-check</span> <span class="lv I">INFO</span> hub verdict: <span class="hl">all clear</span> — worker running, queue healthy</div>');
+  jobs.slice(0, 12).forEach(function(j){
+    var lv = j.status === "failed" || j.status === "dead" ? "E"
+           : j.status === "held" ? "W" : "I";
+    lines.push('<div><span class="ts">' + esc((j.created_at||"").slice(11,19)) +
+      '</span> <span class="lv ' + lv + '">' + (lv === "E" ? "ERROR" : lv === "W" ? "WARN" : "INFO") +
+      '</span> job <span class="hl">#' + j.id + "</span> " + esc(j.title) +
+      " → " + esc(j.printer || "default") + " · " + esc(j.status) + "</div>");
+  });
+  audit.slice(0, 8).forEach(function(a){
+    lines.push('<div><span class="ts">' + esc((a.created_at||"").slice(11,19)) +
+      '</span> <span class="lv I">INFO</span> audit ' + esc(a.action) + " " + esc(a.details || "") + "</div>");
+  });
+  $("logBox").innerHTML = lines.join("") || "no activity yet";
+}
+function renderExt(cfg, audit){
+  $("kvTok").textContent = TOKEN ? TOKEN.slice(0, 4) + "…" + TOKEN.slice(-4) : "(none)";
+  var ext = cfg && cfg.hub_ext_path || "";
+  $("crxLink").href = BASE + "/extension/AdvPrint-Pro.crx";
+  $("updLink").textContent = BASE + "/extension/updates.xml";
+  $("polTxt").textContent = "likldbkamojokkfdlcjibiljpgbbnohc;" +
+    BASE + "/extension/updates.xml";
+  var b = $("extBody"); b.innerHTML = "";
+  audit.filter(function(a){ return /ext|browser|extension/.test(a.actor || a.details || ""); })
+    .slice(0, 6).forEach(function(a){
+      var tr = document.createElement("tr");
+      tr.innerHTML = '<td class="id">' + esc((a.created_at||"").slice(5,19)) + "</td><td>" +
+        esc(a.actor || "chrome-ext") + "</td><td>" + esc(a.action) + "</td><td>" +
+        esc(a.details || "") + "</td>";
+      b.appendChild(tr);
+    });
+  if (!b.innerHTML) b.innerHTML = '<tr><td colspan="4">No extension activity captured yet — print something from Chrome.</td></tr>';
+}
+function renderSettings(cfg){
+  cfgCache = cfg;
+  // hub config defaults (mirror of the hub's CFG defaults) so a key
+  // missing from the payload never renders as OFF and then gets
+  // written back as false by Save
+  var DEF = { share_lan: false, ipp_printer: true, ipp_mdns: true,
+              hold_offline: true, instant_auto_queue: true,
+              debug: false, keep_files: true };
+  [["swLan","share_lan"],["swIpp","ipp_printer"],["swMdns","ipp_mdns"],
+   ["swHold","hold_offline"],["swInstant","instant_auto_queue"],
+   ["swDebug","debug"],["swKeep","keep_files"]].forEach(function(p){
+    var el = $(p[0]);
+    var v = (p[1] in cfg) ? !!cfg[p[1]] : DEF[p[1]];
+    el.classList.toggle("on", v);
+    el.onclick = function(){ el.classList.toggle("on"); };
+  });
+  $("defPrinter").value = cfg.default_printer || "";
+}
+async function saveCfg(){
+  var patch = {};
+  [["swLan","share_lan"],["swIpp","ipp_printer"],["swMdns","ipp_mdns"],
+   ["swHold","hold_offline"],["swInstant","instant_auto_queue"],
+   ["swDebug","debug"],["swKeep","keep_files"]].forEach(function(p){
+    patch[p[1]] = $(p[0]).classList.contains("on"); });
+  var dp = $("defPrinter").value.trim();
+  patch.default_printer = dp;
+  try {
+    await api("/config", { method: "POST", body: patch });
+    $("dashSub").textContent = "settings saved " + new Date().toLocaleTimeString();
+    if (dp) localStorage.setItem("advprintDefPrinter", dp);
+  } catch (e) { $("dashSub").textContent = "save failed: " + e.message; }
+}
+
+/* ---------- poll ---------- */
+var lastHealth = null;
+async function poll(){
+  try {
+    var h = await api("/health");
+    lastHealth = h;
+    var st = await api("/stats");
+    var q = await api("/queue");
+    var pr = await api("/printers");
+    var jobs = (await api("/jobs?limit=80")).jobs || [];
+    var audit = (await api("/audit?limit=40")).audit || auditRows;
+    auditRows = audit;
+    cfgCache = Object.assign(cfgCache, { ipp_mdns: (await api("/config")).ipp_mdns,
+      share_lan: q.lan_active, queue_mode: (await api("/config")).queue_mode });
+    $("offlineCard").style.display = "none";
+    $("hubDot").className = "dot up"; $("sbDot").className = "d2";
+    $("sbHub").textContent = "hub running";
+    $("authLock").className = "lock ok";
+    $("authLock").innerHTML = "&#128274; token ok";
+    $("tVer").textContent = "v" + h.version;
+    $("sbVer").textContent = "v" + h.version;
+    $("tSub").innerHTML = "— Print Hub v" + esc(h.version) + " · THE ONE UI";
+    $("mRight").textContent = "hub · " + BASE.replace(/^http:\/\//, "");
+    $("hubUrl").textContent = BASE + "/ui";
+    $("sbUrl").textContent = BASE.replace(/^http:\/\//, "");
+    $("sbQueue").textContent = "Queue " + q.pending;
+    $("dashSub").textContent = "live · updated " + new Date().toLocaleTimeString();
+    $("kvDefName").textContent = pr.default || pr.printers.filter(function(p){ return p.is_default; })
+      .map(function(p){ return p.name; })[0] || "OS default";
+    var defP = pr.printers.filter(function(p){ return p.name === $("kvDefName").textContent; })[0];
+    $("kvDefSt").innerHTML = defP ? chip(defP.status === "ready" ? "printed" : defP.status) : "—";
+    $("kvIpp").textContent = (pr.ipp_per_printer ?
+      (pr.printers.filter(function(p){ return p.ipp_queue; }).length + " per-printer queues + ") : "") +
+      "central queue";
+    $("ippBody").dataset.central = pr.ipp_central_url || "";
+    renderStats(h, st, q);
+    renderPrinters(pr.printers || []);
+    renderIpp(pr.printers || []);
+    renderJobs(jobs);
+    renderAudit(audit);
+    renderExt(null, audit);
+  } catch (e) {
+    if (e.message === "auth") return;
+    $("offlineCard").style.display = "block";
+    $("hubDot").className = "dot down";
+    $("sbDot").className = "d2 x";
+    $("sbHub").textContent = "hub offline";
+    $("authLock").className = "lock no";
+    $("authLock").innerHTML = "&#128274; unreachable";
+  }
+}
+async function loadLogs(){
+  try {
+    var dbg = await api("/debug");
+    var jobs = (await api("/jobs?limit=20")).jobs || [];
+    renderLogs(dbg, jobs, auditRows);
+  } catch (e) {
+    if (e.message !== "auth")
+      $("logBox").textContent = "log load failed: " + e.message;
+  }
+}
+async function loadSettings(){
+  try { renderSettings(await api("/config")); } catch(_){}
+}
+
+/* ---------- actions ---------- */
+function copyText(t, btn){
+  function done(){ if (btn){ var o = btn.textContent;
+    btn.textContent = "OK \u2713";
+    setTimeout(function(){ btn.textContent = o; }, 900); } }
+  if (navigator.clipboard) navigator.clipboard.writeText(t).then(done, done);
+  else { var ta = document.createElement("textarea");
+    ta.value = t; document.body.appendChild(ta); ta.select();
+    try { document.execCommand("copy"); } catch(_){} document.body.removeChild(ta); done(); }
+}
+document.addEventListener("click", async function(ev){
+  var t = ev.target;
+  var cp = t.getAttribute && t.getAttribute("data-cp");
+  if (cp) return copyText(cp, t);
+  var sd = t.getAttribute && t.getAttribute("data-setdef");
+  if (sd) { try { await api("/config", { method: "POST", body: { default_printer: sd } });
+      poll(); } catch(_){} }
+  var op = t.getAttribute && t.getAttribute("data-open");
+  if (op) window.open(BASE + "/" + op, "_blank");
+  var pn = t.getAttribute && t.getAttribute("data-pnow");
+  if (pn) { try { await api("/jobs/" + pn + "/print-now", { method: "POST" }); poll(); } catch(_){} }
+  var rt = t.getAttribute && t.getAttribute("data-retry");
+  if (rt) { try { await api("/jobs/" + rt + "/retry", { method: "POST" }); poll(); } catch(_){} }
+  var cx = t.getAttribute && t.getAttribute("data-cancel");
+  if (cx) { try { await api("/jobs/" + cx + "/cancel", { method: "POST" }); poll(); } catch(_){} }
+});
+$("bPause").addEventListener("click", async function(){
+  try { await api("/queue/" + ($("pauseLbl").textContent === "Pause" ? "pause" : "resume"),
+        { method: "POST" }); poll(); } catch(_){}
+});
+$("bClearQ").addEventListener("click", async function(){
+  try { await api("/queue/clear", { method: "POST" }); poll(); } catch(_){}
+});
+$("bClearDone").addEventListener("click", async function(){
+  try { await api("/queue/clear", { method: "POST", body: { finished: true } }); poll(); } catch(_){}
+});
+$("bTestPage").addEventListener("click", async function(){
+  try { await api("/print", { method: "POST", body: {
+      title: "AdvPrint Pro - test page", text:
+      "AdvPrint Pro test page\nTHE ONE UI works.\n" +
+      new Date().toISOString() + "\n" } }); poll(); } catch(_){}
+});
+$("bRefresh").addEventListener("click", poll);
+$("bRefresh2").addEventListener("click", poll);
+$("bRetry").addEventListener("click", poll);
+$("bRescan").addEventListener("click", poll);
+$("bLogsRefresh").addEventListener("click", loadLogs);
+$("bSaveCfg").addEventListener("click", saveCfg);
+$("bAuditCsv").addEventListener("click", function(){
+  window.open(BASE + "/export/audit.csv?token=" + encodeURIComponent(TOKEN), "_blank"); });
+$("bTokCopy").addEventListener("click", function(ev){ copyText(TOKEN, ev.target); });
+$("bCrxCopy").addEventListener("click", function(ev){
+  copyText(BASE + "/extension/AdvPrint-Pro.crx", ev.target); });
+$("bDashboard").addEventListener("click", function(){
+  window.open(BASE + "/dashboard?token=" + encodeURIComponent(TOKEN), "_blank"); });
+$("bOpenDash").addEventListener("click", function(){
+  window.open(BASE + "/dashboard?token=" + encodeURIComponent(TOKEN), "_blank"); });
+$("bLan").addEventListener("click", async function(){
+  showTab("settings"); loadSettings(); });
+$("bCopyAll").addEventListener("click", function(){
+  var urls = [];
+  document.querySelectorAll("#ippBody tr").forEach(function(tr){
+    var b = tr.querySelector("[data-cp]");
+    if (b) urls.push(b.getAttribute("data-cp")); });
+  copyText(urls.join("\n"));
+});
+document.querySelectorAll("#jobFilters .fchip").forEach(function(c){
+  c.addEventListener("click", function(){
+    document.querySelectorAll("#jobFilters .fchip").forEach(function(x){
+      x.classList.remove("on"); });
+    c.classList.add("on");
+    jobFilter = c.getAttribute("data-f");
+    poll();
+  });
+});
+
+/* ---------- boot ---------- */
+async function boot(){
+  clearInterval(pollTimer);
+  try {
+    await api("/health");
+    showTokenCard(false);
+    localStorage.setItem("advprintHubToken", TOKEN);
+    pollTimer = setInterval(poll, 3000);
+    await poll();
+    loadSettings();
+    if ($("p-logs").classList.contains("active")) loadLogs();
+  } catch (e) {
+    if (e.message === "auth") return;
+    $("offlineCard").style.display = "block";
+    $("hubDot").className = "dot down";
+    $("sbDot").className = "d2 x";
+    $("sbHub").textContent = "hub offline";
+    pollTimer = setInterval(poll, 3000);
+  }
+}
+var logsObserver = new MutationObserver(function(){
+  if ($("p-logs").classList.contains("active")) loadLogs();
+});
+logsObserver.observe(document.querySelector(".content"), { attributes: true,
+  subtree: true, attributeFilter: ["class"] });
+boot();
+</script>
+</body>
+</html>

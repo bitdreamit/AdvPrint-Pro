@@ -1,36 +1,32 @@
-# v3.0.9 - GitHub release + push steps (5 minutes)
+# v3.1.2 - GitHub release + push steps (5 minutes)
 
-1. Commit the tree and push the tag:
-     git add -A && git commit -m "v3.0.9 - dropdown doubling fix + per-printer IPP queues (central IPP middleware)"
-     git tag v3.0.9 && git push origin main && git push origin v3.0.9
+## 1) Push the source (the commit is already made in this tree)
 
-2. Open https://github.com/bitdreamit/AdvPrint-Pro/releases/new
+    cd AdvPrint-Pro
+    git push origin main        # commit 972810e "PROFESSIONAL IPP PRINTER..."
 
-3. Choose a tag: type  v3.0.9  -> Create new tag on publish (target: main)
+## 2) Publish the release (web UI - as in docs/HOW-TO-RELEASE.md)
 
-4. Title:  v3.0.9 - dropdown doubling fix + per-printer IPP queues
+1. Open https://github.com/bitdreamit/AdvPrint-Pro/releases/new
+2. Choose a tag: type  v3.1.2  -> Create new tag on publish (target: main)
+3. Release title:
+   PREMIUM GRAPHICAL WINDOW + CENTER MODE (THE ONE UI at /ui, gui_app v2 pywebview ladder, child-PC Center Mode, per-printer IPP)
+4. Describe: paste docs/RELEASE-NOTES-v3.1.2.md
+5. Attach binaries - drag & drop from this kit:
+   - AdvPrint-Pro-Setup-3.1.2.exe
+   - advprint-pro_3.1.2_all.deb
+   - AdvPrint-Pro.crx
+   - AdvPrint-Pro-3.1.2-source.zip
+   - SHA256SUMS-3.1.2.txt
+6. Tick "Set as the latest release" -> Publish.
 
-5. Describe: paste docs/RELEASE-NOTES-v3.0.9.md (in this kit)
+## 3) Verify
 
-6. Attach binaries (this kit / download folder):
-   - AdvPrint-Pro-Setup-3.0.9.exe
-   - advprint-pro_3.0.9_all.deb
-   - AdvPrint-Pro.crx            (extension - hub auto-distributes it too)
-   - AdvPrint-Pro-3.0.9-source.zip
-   - SHA256SUMS-3.0.9.txt
-
-7. Tick "Set as the latest release" -> Publish release.
-
-8. Verify:
-   - https://github.com/bitdreamit/AdvPrint-Pro/releases/latest shows v3.0.9
-   - On the Windows PC: run AdvPrint-Pro-Setup-3.0.9.exe over the old
-     install (no uninstall needed) - tray icon shows v3.0.9
-   - Open the extension Options -> Default printer dropdown shows every
-     printer ONCE (no more "NameName")
-   - Settings -> share LAN -> on a phone's print dialog you now see the
-     hub AND every printer of that PC (each prints into its own queue)
-     - /ipp/print/<printer> works: Add printer -> IPP Device -> the URL
-       from Options > LAN tab (each printer row shows its ipp_url)
-
-9. After publishing: the hub silently updates every installed Chrome
-   extension (ExtensionInstallForcelist + updates.xml keep working).
+- https://github.com/bitdreamit/AdvPrint-Pro/releases/latest shows v3.1.2
+- On the Windows PC: run AdvPrint-Pro-Setup-3.1.2.exe over the old
+  install (or /S silent). Chrome updates the force-installed extension
+  by itself on next browser start.
+- Add the printer again: Settings -> Printers -> Add device -> it now
+  APPEARS in the list; or Add manually -> IPP Device ->
+  http://192.168.1.7:9235/ipp/print -> Next -> CONNECTS (fixed).
+- iPhone: Share -> Print -> Select Printer -> "AdvPrint Pro @ <pc>".

@@ -95,8 +95,8 @@ if _HUB_DIR not in sys.path:
     sys.path.insert(0, _HUB_DIR)
 
 
-VERSION = "3.0.9"
-VERSION_NAME = ("v3.0.9 (BUG-FIX RELEASE on the v3.0.8 professional IPP printer: (1) Default-printer dropdown fix - the extension showed every printer name TWICE ('HP Laser 103 107 108HP Laser 103 107 108'); names are now healed at the SOURCE in the hub (list_printers / default_printer / status maps collapse a name that is the same text twice in a row) AND defensively in the options page, plus the dropdown is deduped - the fix covers the dropdown, the rules chips, the status table and every API client at once. (2) PER-PRINTER IPP MIDDLEWARE: every local printer now ALSO has its own ipp://host:9235/ipp/print/<printer> queue - the hub answers Get-Printer-Attributes and prints into THAT printer, announces one mDNS/Bonjour service per printer (rp=ipp/print/<printer>, per-queue stable UUID, ty=printer name), and /printers reports each queue's ipp_url - so phones (AirPrint/Mopria), Macs and other PCs pick ANY printer on this PC by name from the print dialog while LAN sharing is on; the main ipp/print queue keeps meaning the OS default destination. The v3.0.8 RFC 8011 wire engine, self-host extension chain (ExtensionInstallForcelist + signed .crx + updates.xml) and every other endpoint ship unchanged - this is a pure bug-fix release on the 3.0.8 base.")
+VERSION = "3.1.2"
+VERSION_NAME = ("v3.1.2 (PREMIUM GRAPHICAL WINDOW + CENTER MODE: (1) THE ONE UI - console.html, a Windows-IDM style console served by the hub at /ui (Dashboard / Printers / Jobs / Audit / IPP Printer / Extension / Settings / Logs, live 3 s polling, queue pause/resume, job cancel/retry/print-now, per-printer IPP queue URLs with copy, live settings switches) - the SAME page runs in the native window, in Chrome and embedded in the extension options Console tab. (2) gui_app v2 - the native window wraps /ui through a backend ladder: pywebview (WebView2/WebKit) -> Qt WebEngine -> GTK WebKit -> Chrome/Edge --app window -> default browser; PySide6 (241 MB) is GONE, the installer is ~11 MB again; the hub is auto-started and the tray menu gained 'Console (THE ONE UI)'. (3) CENTER MODE - one center PC, many child PCs: a child PC installs ONLY the extension (no tool) and prints through the Center PC's hub (Connections > Center PC / child PC mode: auto / local / center + URL + token, probe-cached 60 s); the popup gained a Console button and options gained the Console tab with offline fallback. All v3.0.9 features ship unchanged - per-printer IPP queues, mDNS per printer, RFC 8011 engine, queue, rules, LAN.")
 FULL_BRAND = ("AdvPrint Pro (Advanced Printer) by "
               "Bit Dream IT - Innovative Healthcare Solutions")
 BRANDING = ("AdvPrint Pro (Advanced Printer) - Version %s - by "
@@ -1008,63 +1008,68 @@ def find_browser():
             return p
     return None
 
-def _heal_doubled_name(n):
-    """v3.0.9 BUG FIX: collapse a name that is the same text twice in a
-    row with no separator ("HP Laser 103 107 108HP Laser 103 107 108" ->
-    "HP Laser 103 107 108"). Doubled names end up in the Default-printer
-    dropdown as "NameName" (the user-visible bug report). The extension
-    shipped a client-side copy of this idea as healPrinterName in
-    v2.6.8 - healing at the SOURCE fixes the dropdown, the rules chips,
-    the status table and every API client at once. Never raises."""
-    s = (n or "").strip()
-    while len(s) >= 4 and len(s) % 2 == 0:   # loop: also un-double X*X*X*X
-        half = s[:len(s) // 2]
-        if half.strip() and s[len(s) // 2:] == half:
-            s = half
-        else:
-            break
-    return s
-
-
-def _dedupe_names(names):
-    """Heal each entry, keep order, drop empties and duplicates
-    (case-insensitive - Windows printer names are not case-stable)."""
-    out, seen = [], set()
-    for n in names:
-        n = _heal_doubled_name(n)
-        if n and n.lower() not in seen:
-            seen.add(n.lower())
-            out.append(n)
-    return out
-
-
 def list_printers():
     """Return list of installed printer names (best effort)."""
-    names = []
     try:
         if IS_WIN:
             ps = "Get-CimInstance Win32_Printer | Select-Object -ExpandProperty Name"
             out = subprocess.run(["powershell", "-NoProfile", "-Command", ps],
                                  capture_output=True, text=True, timeout=10,
                                  creationflags=HIDE)
-            names = [l.strip() for l in (out.stdout or "").splitlines()
-                     if l.strip()]
+            names = [l.strip() for l in (out.stdout or "").splitlines() if l.strip()]
+            return names
         else:
             out = subprocess.run(["lpstat", "-e"], capture_output=True,
                                  text=True, timeout=10)
-            names = [l.strip() for l in (out.stdout or "").splitlines()
-                     if l.strip()]
+            names = [l.strip() for l in (out.stdout or "").splitlines() if l.strip()]
             if not names:  # older CUPS: try -p and strip state
                 out = subprocess.run(["lpstat", "-p"], capture_output=True,
                                      text=True, timeout=10)
                 for l in (out.stdout or "").splitlines():
                     if l.startswith("printer "):
                         names.append(l.split()[1])
+            return names
     except Exception as e:
         log("[WARN] list_printers failed: %s" % e)
         return []
-    # v3.0.9: heal doubled names + dedupe at the source
-    return _dedupe_names(names)
+
+
+# ------------------------------------------------------------
+# v3.0.9 PER-PRINTER IPP QUEUES - every LOCAL printer also gets its
+# own queue on the hub, so ONE center PC serves the whole LAN:
+#     ipp://<lan-ip>:9235/ipp/print/<printer>
+# The hub stays the central IPP middleware: child PCs and phones
+# print to exactly the printer the queue names - no local tool
+# needed on the client. The queue name accepts BOTH the raw
+# Windows printer name (URL-encoded, "HP%20Laser%20103%20107%20108")
+# and a slug form ("HP-Laser-103-107-108") - matching is case-
+# insensitive and ignores spaces/punctuation, so whatever the
+# client typed after Add Printer just works.
+# ------------------------------------------------------------
+def _ipp_queue_slug(name):
+    """URL path form of a printer name ("HP Laser 103" -> hp-laser-103)."""
+    return re.sub(r"[^a-z0-9]+", "-", (name or "").strip().lower()).strip("-") \
+        or "printer"
+
+
+def _ipp_queue_match(name):
+    """Resolve a per-printer queue name (raw, URL-encoded or slug) back to
+    the REAL local printer name. Returns '' (empty string) for no match."""
+    name = urllib.parse.unquote(str(name or "")).strip()
+    want = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+    if not want:
+        return ""
+    for n in list_printers_cached(max_age=30.0):
+        if re.sub(r"[^a-z0-9]+", "-", (n or "").strip().lower()).strip("-") == want:
+            return n
+    return ""
+
+
+def ipp_queue_url(printer):
+    """ipp:// URL a client adds for ONE local printer (per-printer queue)."""
+    ip = lan_ip() if CFG.get("share_lan") else "127.0.0.1"
+    return "ipp://%s:%d/ipp/print/%s" % (ip, int(CFG.get("port", 9235)),
+                                         _ipp_queue_slug(printer))
 
 def default_printer():
     """Return the OS default printer name (best effort)."""
@@ -1075,7 +1080,7 @@ def default_printer():
             out = subprocess.run(["powershell", "-NoProfile", "-Command", ps],
                                  capture_output=True, text=True, timeout=10,
                                  creationflags=HIDE)
-            name = _heal_doubled_name((out.stdout or "").strip())
+            name = (out.stdout or "").strip()
             return name or None
         else:
             out = subprocess.run(["lpstat", "-d"], capture_output=True,
@@ -1106,9 +1111,7 @@ def _printer_status_windows():
         parts = (line or "").strip().split("|")
         if len(parts) != 4 or not parts[0]:
             continue
-        name = _heal_doubled_name(parts[0])
-        if not name:
-            continue
+        name = parts[0]
         try:
             pstat, derr, woff = int(parts[1] or 0), int(parts[2] or 0), int(parts[3] or 0)
         except ValueError:
@@ -1134,10 +1137,7 @@ def _printer_status_unix():
         m = re.match(r"^printer (\S+) (.+)$", line or "")
         if not m:
             continue
-        name = _heal_doubled_name(m.group(1))
-        state = m.group(2)
-        if not name:
-            continue
+        name, state = m.group(1), m.group(2)
         if "disabled" in state:
             res[name] = "offline"
         elif "printing" in state or "idle" in state or "processing" in state:
@@ -4774,6 +4774,69 @@ class Handler(BaseHTTPRequestHandler):
         # /dashboard - browser page with its own early auth so browser
         # users always get the HTML error page (v2.0.2: /audit, /stats
         # and every other GET accept ?token= too - see the generic rule)
+
+        # v3.1.2 THE ONE UI - /ui serves console.html (the Windows-IDM
+        # style console: Dashboard / Printers / Jobs / Audit / IPP
+        # Printer / Extension / Settings / Logs). Same auth as the
+        # classic dashboard (token via ?token=, header or the loopback
+        # redirect). The page is loaded from disk NEXT TO advprint.py
+        # so the installer / deb payload ships it; when the file is
+        # missing the hub serves a small fallback page pointing at the
+        # classic dashboard.
+        if route == "/ui":
+            err = self._auth_error(qt, allow_query=True)
+            if err:
+                if self._loopback_token_redirect(route, q):
+                    return
+                if "text/html" in (self.headers.get("Accept") or ""):
+                    page = dashboard_auth_error_html(err[1]).encode("utf-8")
+                    self.send_response(err[0])
+                    self._cors()
+                    self.send_header("Content-Type", "text/html; charset=utf-8")
+                    self.send_header("Content-Length", str(len(page)))
+                    self.end_headers()
+                    try:
+                        self.wfile.write(page)
+                    except (BrokenPipeError, ConnectionResetError):
+                        pass
+                    return
+                return self._send(err[0], {"ok": False, "error": err[1]})
+            console_path = os.path.join(
+                os.path.dirname(os.path.abspath(__file__)), "console.html")
+            if os.path.exists(console_path):
+                try:
+                    with open(console_path, "rb") as fh:
+                        page = fh.read()
+                except OSError:
+                    page = None
+            else:
+                page = None
+            if page is None:
+                page = ("<!DOCTYPE html><html><head><meta charset='utf-8'>"
+                        "<title>AdvPrint Pro Console</title></head><body"
+                        " style='font:15px/1.6 Segoe UI,system-ui,sans-serif;"
+                        "background:#f5f8fc;color:#0f172a;padding:8vh 24px'>"
+                        "<div style='max-width:560px;margin:0 auto;background:"
+                        "#fff;border:1px solid #e2e8f0;border-radius:14px;"
+                        "padding:24px'><h1 style='color:#1d4ed8;font-size:19px'"
+                        ">AdvPrint Pro Console</h1><p>console.html was not"
+                        " found next to advprint.py on this install.</p><p>"
+                        "Re-install from the v3.1.2 Setup / deb, or open the"
+                        " classic dashboard: <a href='/dashboard?token=%s'>"
+                        "/dashboard</a></p></div></body></html>"
+                        % urllib.parse.quote(qt or "")).encode("utf-8")
+            self.send_response(200)
+            self._cors()
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(page)))
+            self.end_headers()
+            try:
+                self.wfile.write(page)
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+            return
+
         if route == "/dashboard":
             err = self._auth_error(qt, allow_query=True)
             if err:
@@ -4902,28 +4965,70 @@ class Handler(BaseHTTPRequestHandler):
         # v2.9.0: the IPP printer info page answers WITHOUT the token -
         # it is the landing page of the network-printer URL (phones and
         # Windows probe it anonymously; IPP itself is token-free too).
-        if (route in ("/ipp/print", "/ipp", "/ipp/") or
-                route.startswith("/ipp/print/")) and \
+        # v3.0.9: /ipp/print/<printer> gets the SAME landing page for
+        # that ONE per-printer queue (status + exact ipp:// URL).
+        if route.startswith("/ipp/print/"):
+            if not ipp_printer_enabled():
+                return self._send(404, {"ok": False,
+                                        "error": "IPP printer is off"})
+            nm = _ipp_queue_match(
+                urllib.parse.unquote(route[len("/ipp/print/"):]))
+            if not nm:
+                return self._send(404, {
+                    "ok": False,
+                    "error": "unknown per-printer IPP queue - see GET "
+                             "/printers for the ipp:// URL of every "
+                             "local printer"})
+            host = socket.gethostname()
+            q_url = ipp_queue_url(nm)
+            st = printers_status_cached().get(nm, "unknown")
+            return self._send_html(200, """<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport"
+ content="width=device-width,initial-scale=1"><title>AdvPrint Pro - IPP queue %s</title>
+<style>body{font:15px/1.55 "Segoe UI",system-ui,sans-serif;background:#f5f8fc;
+ color:#0f172a;margin:0;padding:24px}.b{max-width:640px;margin:4vh auto;background:#fff;
+ border:1px solid #e2e8f0;border-radius:14px;padding:22px}
+ h1{font-size:19px;margin:0 0 6px}h2{font-size:15px;margin:18px 0 6px;color:#1d4ed8}
+ code{background:#f1f5f9;border:1px solid #e2e8f0;border-radius:4px;padding:1px 6px;
+ font-size:12.5px;word-break:break-all}li{margin:5px 0}
+ .ok{background:#ecfdf5;border:1px solid #a7f3d0;border-radius:10px;padding:10px 14px;
+ margin:14px 0;font-size:13.5px}</style></head><body><div class="b">
+ <h1>AdvPrint Pro - IPP queue &ldquo;%s&rdquo;</h1>
+ <p>This per-printer queue (v3.0.9) prints <b>only on <span>%s</span></b>
+ attached to <span>%s</span>. Add it as a printer - do not open it in a browser:</p>
+ <p style="font-size:16px"><code>%s</code></p>
+ <p>Printer state right now: <b>%s</b>.</p>
+ <h2>Windows 10 / 11</h2>
+ <ul><li>Settings &rarr; Bluetooth &amp; devices &rarr; Printers &amp;
+ scanners &rarr; <b>Add device</b> - the queue announces itself by
+ mDNS while LAN sharing is on - click it.</li>
+ <li>Or: <b>Add manually</b> &rarr; &ldquo;Select a shared printer by
+ name&rdquo; &rarr; paste <code>%s</code>.</li></ul>
+ <h2>Linux / CUPS</h2>
+ <ul><li><code>lpadmin -p advprint-%s -E -v %s -m everywhere</code></li></ul>
+ <div class="ok"><b>The hub is the central IPP middleware</b> - child
+ PCs, phones and tablets print through this ONE center PC without
+ installing anything. 100%% local - powered by AdvPrint Pro %s.</div>
+ </div></body></html>""" % (_html_escape(_ipp_queue_slug(nm)),
+                             _html_escape(nm),
+                             _html_escape(nm),
+                             _html_escape(host),
+                             _html_escape(q_url, quote=True),
+                             _html_escape(st),
+                             _html_escape(q_url, quote=True),
+                             _html_escape(_ipp_queue_slug(nm)),
+                             _html_escape(q_url, quote=True),
+                             VERSION))
+        if route in ("/ipp/print", "/ipp", "/ipp/") and \
                 not ipp_printer_enabled():
             return self._send(404, {"ok": False,
                                     "error": "IPP printer is off"})
-        if route in ("/ipp/print", "/ipp", "/ipp/") or \
-                route.startswith("/ipp/print/"):
+        if route in ("/ipp/print", "/ipp", "/ipp/"):
             # v2.9.0: humans who open the IPP printer URL in a browser
             # get a how-to page (IPP clients POST binary IPP instead).
             # v3.0.8: per-OS cheat sheet for the professional printer.
-            # v3.0.9: /ipp/print/<printer> - ONE QUEUE PER LOCAL PRINTER.
             host = socket.gethostname()
-            printer = _ipp_queue_target(route)
-            ipp_url = _ipp_printer_uris(printer)[1]
-            if printer:
-                qhtml = ('<p>Per-printer queue: jobs printed to this URL'
-                         ' go to <b>%s</b> only. The main queue'
-                         ' <code>ipp/print</code> prints to the OS'
-                         ' default destination.</p>'
-                         % _html_escape(printer))
-            else:
-                qhtml = ""
+            ipp_url = lan_share_url("ipp")
             return self._send_html(200, """<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport"
  content="width=device-width,initial-scale=1"><title>AdvPrint Pro - IPP printer</title>
@@ -4939,7 +5044,6 @@ class Handler(BaseHTTPRequestHandler):
  <p>This URL is the <b>IPP print endpoint of <span>%s</span></b>.
  Add it as a printer - do not open it in a browser:</p>
  <p style="font-size:16px"><code>%s</code></p>
-%s
  <h2>Windows 10 / 11</h2>
  <ul><li>Settings &rarr; Bluetooth &amp; devices &rarr; Printers &amp;
  scanners &rarr; <b>Add device</b>. The printer appears by itself
@@ -4966,7 +5070,6 @@ class Handler(BaseHTTPRequestHandler):
  </div></body></html>""" % (_html_escape(host),
                              _html_escape(ipp_url, quote=True),
                              _html_escape(ipp_url, quote=True),
-                             qhtml,
                              VERSION))
         err = self._auth_error(qt, allow_query=True)   # v2.0.2: every GET
         if err:
@@ -5009,26 +5112,32 @@ class Handler(BaseHTTPRequestHandler):
                               "/diagnostics", "/config (GET/POST)",
                               "/token/rotate (POST)", "/token/current",
                               "/livetest (POST)", "/peers",
+                              "/ui (v3.1.2 THE ONE UI console - the Windows-IDM style dashboard),"
                               "/dropzone (GET) + /dropzone/open (POST),"
                               " /send (GET portal, POST upload),"
                               " /qr (GET QR SVG, kind=send|invite|ipp),"
                               " /connect (GET invite page),"
                               " /peer-connect (POST auto-add peer),"
-                              " /ipp/print + /ipp/print/<printer> (v2.9/v3.0.9"
-                              " IPP network printer queues),"
+                              " /ipp/print (v2.9 IPP network printer),"
                               " /restart (POST) - v2.8/v2.8.1/v2.9"],
             })
         if route == "/printers":
             dp = default_printer_cached()
             st = printers_status_cached()
             groups = CFG.get("printer_groups") or {}
+            # v3.0.9: every local printer also carries its own per-printer
+            # IPP queue URL - ipp://ip:9235/ipp/print/<printer> - so child
+            # PCs / phones can add ONE printer of the center PC directly.
+            per_printer = ipp_printer_enabled()
             items = []
             for n in list_printers_cached():
-                items.append({"name": n, "is_default": n == dp,
-                              "status": st.get(n, "unknown"),
-                              "is_group": False,
-                              # v3.0.9: this printer's own IPP queue URL
-                              "ipp_url": _ipp_printer_uris(n)[1]})
+                item = {"name": n, "is_default": n == dp,
+                        "status": st.get(n, "unknown"),
+                        "is_group": False}
+                if per_printer:
+                    item["ipp_queue"] = ipp_queue_url(n)
+                    item["ipp_path"] = "ipp/print/" + _ipp_queue_slug(n)
+                items.append(item)
             for g in groups:
                 items.append({"name": g, "is_default": False,
                               "status": "group",
@@ -5036,7 +5145,10 @@ class Handler(BaseHTTPRequestHandler):
                               "members": groups[g]})
             return self._send(200, {
                 "ok": True, "printers": items, "default": dp,
-                "groups": groups})
+                "groups": groups,
+                "ipp_per_printer": per_printer,
+                "ipp_central_url": lan_share_url("ipp")
+                                   if per_printer else ""})
         if route.startswith("/printers/") and route.endswith("/capabilities"):
             name = urllib.parse.unquote(
                 route[len("/printers/"):-len("/capabilities")])
@@ -5273,8 +5385,25 @@ class Handler(BaseHTTPRequestHandler):
         # not JSON. IPP is its own protocol (like a physical network
         # printer - no token), guarded by ipp_printer + size limits +
         # audit; see the v2.9.0 NETWORK PRINTER MODE comment block.
-        if route in ("/ipp/print", "/ipp", "/ipp/") or \
-                route.startswith("/ipp/print/"):
+        # v3.0.9 PER-PRINTER QUEUES: /ipp/print/<printer> routes the
+        # job to exactly that local printer (raw name, URL-encoded or
+        # slug - see _ipp_queue_match). Unknown queue -> 404 + audit.
+        ipp_q_printer = ""
+        if route.startswith("/ipp/print/"):
+            ipp_q_printer = _ipp_queue_match(
+                urllib.parse.unquote(route[len("/ipp/print/"):]))
+            if not ipp_q_printer:
+                db_audit("ipp.queue.reject", ip=self._client_ip(),
+                         site="lan",
+                         details="unknown per-printer IPP queue %r"
+                                 % route[:120])
+                return self._send(404, {
+                    "ok": False,
+                    "error": "unknown per-printer IPP queue - see GET "
+                             "/printers for the ipp:// URL of every "
+                             "local printer"})
+            route = "/ipp/print"
+        if route in ("/ipp/print", "/ipp", "/ipp/"):
             if not ipp_printer_enabled():
                 return self._send(404, {"ok": False,
                                         "error": "IPP printer is off"})
@@ -5302,8 +5431,7 @@ class Handler(BaseHTTPRequestHandler):
             if len(data) > MAX_PDF:
                 return self._send(413, {"ok": False,
                                         "error": "IPP request too large"})
-            resp = ipp_handle(data, self._client_ip(),
-                              printer=_ipp_queue_target(route))
+            resp = ipp_handle(data, self._client_ip(), printer=ipp_q_printer)
             self.send_response(200)
             self._cors()
             self.send_header("Content-Type", IPP_MIME)
@@ -8621,46 +8749,35 @@ def _ipp_uri_base():
     ip = lan_ip() if CFG.get("share_lan") else "127.0.0.1"
     return ip, int(CFG.get("port", 9235))
 
-def _ipp_printer_uris(printer=""):
+def _ipp_printer_uris():
     """printer-uri-supported: BOTH schemes, because Windows "Add a
     printer -> IPP Device" speaks http:// (the URI the user typed)
     while macOS/iOS/CUPS speak ipp://. Every client matches its own
-    entry, so both work.
-    v3.0.9: with a per-printer queue name the URIs point at
-    ipp/print/<printer> - one IPP queue per LOCAL printer (the hub is
-    the central IPP middleware for every printer on this PC)."""
+    entry, so both work."""
     ip, port = _ipp_uri_base()
-    q = "/ipp/print"
-    if printer:
-        q = "/ipp/print/" + urllib.parse.quote(printer, safe="")
-    return ["http://%s:%d%s" % (ip, port, q),
-            "ipp://%s:%d%s" % (ip, port, q)]
+    return ["http://%s:%d/ipp/print" % (ip, port),
+            "ipp://%s:%d/ipp/print" % (ip, port)]
 
-def _ipp_printer_uuid(printer=""):
-    """Stable urn:uuid (derived from the hub token + hostname, plus the
-    queue name for per-printer queues) - the same value every response,
-    which iOS/Android use to remember the printer across reboots."""
+def _ipp_printer_uuid():
+    """Stable urn:uuid (derived from the hub token + hostname) - the
+    same value every response, which iOS/Android use to remember the
+    printer across reboots."""
     seed = str(CFG.get("token", "")) + "|" + socket.gethostname()
-    if printer:
-        seed += "|queue|" + printer
     h = hashlib.md5(seed.encode("utf-8")).hexdigest()
     return "urn:uuid:%s-%s-%s-%s-%s" % (h[0:8], h[8:12], h[12:16],
                                         h[16:20], h[20:32])
 
-def _ipp_printer_group(printer=""):
+def _ipp_printer_group():
     """Printer-attributes group for Get-Printer-Attributes - the FULL
     RFC 8011 §4.2.5.2 required set with CORRECT value tags and value
     encodings, plus the job-template defaults the Microsoft IPP Class
-    Driver and phone print services query for.
-    v3.0.9: with a per-printer queue name the attributes describe THAT
-    printer (name/uuid/uris) instead of the virtual hub queue."""
+    Driver and phone print services query for."""
     host = socket.gethostname()
-    pname = printer or host
     try:
         pending = int(db_count_pending())
     except Exception:
         pending = 0
-    uris = _ipp_printer_uris(printer)
+    uris = _ipp_printer_uris()
     ip, port = _ipp_uri_base()
     attrs = [
         # -- printer description (RFC 8011 REQUIRED for every response)
@@ -8694,17 +8811,13 @@ def _ipp_printer_group(printer=""):
         _ipp_attr(V_DATE, "printer-current-time", _ipp_date_bytes()),
         _ipp_attr(V_CHARSET, "charset-configured", "utf-8"),
         _ipp_attr(V_LANG, "natural-language-configured", "en"),
-        _ipp_attr(V_NAME, "printer-name", pname),
-        _ipp_attr(V_NAME, "printer-info",
-                  ("%s via AdvPrint Pro on %s" % (pname, host))
-                  if printer else "AdvPrint Pro on %s" % host),
+        _ipp_attr(V_NAME, "printer-name", host),
+        _ipp_attr(V_NAME, "printer-info", "AdvPrint Pro on %s" % host),
         _ipp_attr(V_NAME, "printer-location", ip),
         _ipp_attr(V_URI, "printer-more-info", "http://%s:%d/" % (ip, port)),
-        _ipp_attr(V_URI, "printer-uuid", _ipp_printer_uuid(printer)),
+        _ipp_attr(V_URI, "printer-uuid", _ipp_printer_uuid()),
         _ipp_attr(V_TEXT, "printer-make-and-model",
-                  ("%s - shared via AdvPrint Pro %s IPP middleware"
-                   % (pname, VERSION)) if printer
-                  else "AdvPrint Pro %s Virtual Printer" % VERSION),
+                  "AdvPrint Pro %s Virtual Printer" % VERSION),
         # -- job template defaults / supported values
         _ipp_range("copies-supported", 1, 99),
         _ipp_int("copies-default", 1),
@@ -8790,7 +8903,7 @@ def _ipp_session_new(title, user, printer=""):
     """Create-Job: register an in-memory multi-document session with a
     guaranteed-unique id (1000000+ - never collides with db ids).
     Abandoned sessions are purged past multiple-operation-time-out.
-    v3.0.9: remembers WHICH per-printer queue created it."""
+    v3.0.9: printer carries the per-printer IPP queue target."""
     with _IPP_JOBS_LOCK:
         for k in [k for k, v in _IPP_JOBS.items()
                   if time.time() - v["created"] > IPP_MULTIDOC_TIMEOUT]:
@@ -8838,51 +8951,17 @@ def _ipp_op_bool(op_raw, name, default=False):
     s = val.decode("utf-8", "replace").strip().lower()
     return s in ("true", "t", "1", "yes")
 
-def _ipp_queue_target(route):
-    """HTTP route -> per-printer queue name ("" = the main /ipp/print
-    queue). '/ipp/print/HP%20Laser 103' -> 'HP Laser 103' (v3.0.9).
-    Everything after '/ipp/print/' is the URL-quoted printer name, so
-    names with spaces or even slashes survive (unquote decodes %2F).
-    The result is healed, so a doubled queue name still matches the
-    healed printer list. Never raises."""
-    if not route or not route.lower().startswith("/ipp/print"):
-        return ""
-    rest = route[len("/ipp/print"):].strip("/")
-    if not rest:
-        return ""
-    try:
-        rest = urllib.parse.unquote(rest)
-    except Exception:
-        pass
-    return _heal_doubled_name(rest)
-
-
-def _ipp_queue_known(printer):
-    """v3.0.9: is /ipp/print/<printer> a printer installed on this PC?
-    Fail-OPEN: an empty or failed enumeration never blocks a queue
-    (a PC where WMI is wedged can still print through the hub)."""
-    if not printer:
-        return True
-    try:
-        names = [n.lower() for n in list_printers_cached()]
-    except Exception:
-        return True
-    if not names:
-        return True
-    return printer.lower() in names
-
-
 def ipp_handle(data, ip, printer=""):
     """Top-level IPP request entry. Returns the IPP response bytes.
     Implements the RFC 8011 operations a desktop OS / phone print
     stack uses to add and drive a network printer:
       Print-Job, Print-URI, Validate-Job, Create-Job, Send-Document,
       Cancel-Job, Get-Job-Attributes, Get-Jobs, Get-Printer-Attributes.
-    printer="" is the main virtual queue (OS default destination);
-    printer="<name>" is the v3.0.9 per-printer queue /ipp/print/<name>
-    - jobs are enqueued for THAT printer only.
     Every accepted document goes through the same pipeline as the
-    Send portal; every request is audited with the source IP."""
+    Send portal; every request is audited with the source IP.
+    v3.0.9: printer names a PER-PRINTER queue (/ipp/print/<printer>)
+    - the document is routed to exactly that local printer instead of
+    the hub's classic destination."""
     try:
         ver, op, rid, op_attrs, op_raw, doc = _ipp_parse(data)
     except Exception as e:
@@ -8892,7 +8971,7 @@ def ipp_handle(data, ip, printer=""):
 
     if op == IPP_OP_GET_PRINTER_ATTR:                  # 0x000B
         return _ipp_response(ver, IPP_STATUS_OK, rid,
-                             [_ipp_printer_group(printer)])
+                             [_ipp_printer_group()])
 
     if op == IPP_OP_VALIDATE_JOB:                      # 0x0004
         # No job is created - successful-ok means "would accept".
@@ -8908,14 +8987,9 @@ def ipp_handle(data, ip, printer=""):
         title = (op_attrs.get("job-name") or
                  op_attrs.get("requesting-user-name") or "IPP job")
         user = op_attrs.get("requesting-user-name") or "ipp"
-        if not _ipp_queue_known(printer):
-            log("[IPP] Print-Job from %s: queue '%s' not on this PC"
-                % (ip, printer))
-            return _ipp_response(ver, IPP_STATUS_NOT_FOUND, rid, [])
         try:
             job_id, kind = route_print_payload(doc, str(title)[:90], ip,
-                                               source="ipp",
-                                               printer=printer)
+                                               source="ipp", printer=printer)
         except ValueError as e:
             log("[IPP] rejected from %s: %s" % (ip, e))
             return _ipp_response(ver, IPP_STATUS_FORMAT_NOT_SUPPORTED,
@@ -8923,14 +8997,12 @@ def ipp_handle(data, ip, printer=""):
         except Exception as e:
             log("[IPP] print failed from %s: %s" % (ip, e))
             return _ipp_response(ver, IPP_STATUS_INTERNAL_ERROR, rid, [])
-        log("[IPP] Print-Job from %s (%d KB, %s, %s) -> db job #%d%s"
-            % (ip, len(doc) // 1024, fmt, kind, job_id,
-               " -> %s" % printer if printer else ""))
+        log("[IPP] Print-Job from %s (%d KB, %s, %s) -> db job #%d"
+            % (ip, len(doc) // 1024, fmt, kind, job_id))
         db_audit("print", job_id=job_id, ip=ip, site="lan",
-                 printer=printer or dest_display(),
-                 details="IPP Print-Job %s (%d KB)%s"
-                         % (fmt, len(doc) // 1024,
-                            " queue=%s" % printer if printer else ""))
+                 printer=(printer or dest_display()),
+                 details="IPP Print-Job %s (%d KB)" % (fmt,
+                                                       len(doc) // 1024))
         return _ipp_response(ver, IPP_STATUS_OK, rid,
                              [_ipp_job_group(job_id, name=title,
                                              user=user,
@@ -8942,10 +9014,6 @@ def ipp_handle(data, ip, printer=""):
             return _ipp_response(ver, IPP_STATUS_BAD_REQUEST, rid, [])
         title = op_attrs.get("job-name") or "IPP URI job"
         user = op_attrs.get("requesting-user-name") or "ipp"
-        if not _ipp_queue_known(printer):
-            log("[IPP] Print-URI from %s: queue '%s' not on this PC"
-                % (ip, printer))
-            return _ipp_response(ver, IPP_STATUS_NOT_FOUND, rid, [])
         try:
             pdf_url_guard(url)               # http/https only, LAN off
             data_bytes, _name = download_pdf(url)
@@ -8956,8 +9024,7 @@ def ipp_handle(data, ip, printer=""):
         try:
             job_id, kind = route_print_payload(data_bytes,
                                                str(title)[:90], ip,
-                                               source="ipp",
-                                               printer=printer)
+                                               source="ipp", printer=printer)
         except ValueError as e:
             return _ipp_response(ver, IPP_STATUS_FORMAT_NOT_SUPPORTED,
                                  rid, [])
@@ -8966,6 +9033,9 @@ def ipp_handle(data, ip, printer=""):
             return _ipp_response(ver, IPP_STATUS_INTERNAL_ERROR, rid, [])
         log("[IPP] Print-URI from %s (%s) -> db job #%d" %
             (ip, url[:60], job_id))
+        db_audit("print", job_id=job_id, ip=ip, site="lan",
+                 printer=(printer or dest_display()),
+                 details="IPP Print-URI (%s)" % url[:80])
         return _ipp_response(ver, IPP_STATUS_OK, rid,
                              [_ipp_job_group(job_id, name=title,
                                              user=user)])
@@ -8973,10 +9043,6 @@ def ipp_handle(data, ip, printer=""):
     if op == IPP_OP_CREATE_JOB:                        # 0x0005
         title = (op_attrs.get("job-name") or "IPP job")
         user = op_attrs.get("requesting-user-name") or "ipp"
-        if not _ipp_queue_known(printer):
-            log("[IPP] Create-Job from %s: queue '%s' not on this PC"
-                % (ip, printer))
-            return _ipp_response(ver, IPP_STATUS_NOT_FOUND, rid, [])
         jid = _ipp_session_new(str(title)[:90], str(user)[:60],
                                printer=printer)
         log("[IPP] Create-Job from %s -> session #%d (%s)" %
@@ -9008,16 +9074,12 @@ def ipp_handle(data, ip, printer=""):
         if not payload:
             _IPP_JOBS.pop(jid, None)
             return _ipp_response(ver, IPP_STATUS_BAD_REQUEST, rid, [])
-        target = printer or sess.get("printer") or ""
-        if not _ipp_queue_known(target):
-            log("[IPP] Send-Document from %s: queue '%s' not on this PC"
-                % (ip, target))
-            return _ipp_response(ver, IPP_STATUS_NOT_FOUND, rid, [])
         try:
             job_id, kind = route_print_payload(payload,
                                                sess["title"] or "IPP job",
                                                ip, source="ipp",
-                                               printer=target)
+                                               printer=(printer or
+                                                        sess.get("printer", "")))
         except ValueError as e:
             log("[IPP] rejected Send-Document from %s: %s" % (ip, e))
             return _ipp_response(ver, IPP_STATUS_FORMAT_NOT_SUPPORTED,
@@ -9026,14 +9088,12 @@ def ipp_handle(data, ip, printer=""):
             log("[IPP] Send-Document failed from %s: %s" % (ip, e))
             return _ipp_response(ver, IPP_STATUS_INTERNAL_ERROR, rid, [])
         sess["db_id"] = job_id
-        log("[IPP] Send-Document #%d from %s (%d KB, %s) -> db job #%d%s"
-            % (jid, ip, len(payload) // 1024, kind, job_id,
-               " -> %s" % target if target else ""))
+        log("[IPP] Send-Document #%d from %s (%d KB, %s) -> db job #%d"
+            % (jid, ip, len(payload) // 1024, kind, job_id))
         db_audit("print", job_id=job_id, ip=ip, site="lan",
-                 printer=target or dest_display(),
-                 details="IPP Send-Document session #%d (%d KB)%s"
-                         % (jid, len(payload) // 1024,
-                            " queue=%s" % target if target else ""))
+                 printer=(printer or sess.get("printer", "") or dest_display()),
+                 details="IPP Send-Document session #%d (%d KB)"
+                         % (jid, len(payload) // 1024))
         return _ipp_response(ver, IPP_STATUS_OK, rid,
                              [_ipp_job_group(job_id, name=sess["title"],
                                              user=sess["user"],
@@ -9147,21 +9207,21 @@ def ipp_handle(data, ip, printer=""):
 
 def route_print_payload(data, title, ip, source="raw9100", printer=""):
     """Shared routing for IPP Print-Job and the RAW 9100 listener.
-    printer="" = the hub destination routing (selected / default / IP
-    printer); printer="<name>" = the v3.0.9 per-printer IPP queue -
-    the job is enqueued FOR that printer only.
-    Returns (job_id, kind). Raises ValueError for unsupported data."""
+    Returns (job_id, kind). Raises ValueError for unsupported data.
+    v3.0.9: printer="" keeps the classic destination (dest_mode /
+    default printer); a per-printer IPP queue passes the REAL local
+    printer name so the job prints on exactly that printer."""
     if not data:
         raise ValueError("empty print payload")
     if len(data) > MAX_PDF:
         raise ValueError("payload too large - the limit is %d MB"
                          % (MAX_PDF // (1024 * 1024)))
+    _dest = printer or ""
     if data.startswith(b"%PDF"):
-        job, dup = enqueue_print("a4", title[:90], data, source=source,
-                                 dedupe=False, origin_ip=ip,
-                                 printer=printer)
+        job, dup = enqueue_print("a4", title[:90], data, printer=_dest,
+                                 source=source, dedupe=False, origin_ip=ip)
         db_audit("print", job_id=job, ip=ip, site="lan",
-                 printer=printer or dest_display(),
+                 printer=(_dest or dest_display()),
                  details="%s PDF payload (%d KB)%s"
                          % (source, len(data) // 1024,
                             " (duplicate held)" if dup else ""))
@@ -9171,11 +9231,10 @@ def route_print_payload(data, title, ip, source="raw9100", printer=""):
             pdf, _name = image_pdf_bytes(data, title=title)
         except Exception as e:
             raise ValueError("bad JPEG: %s" % e)
-        job, dup = enqueue_print("a4", title[:90], pdf, source=source,
-                                 dedupe=False, origin_ip=ip,
-                                 printer=printer)
+        job, dup = enqueue_print("a4", title[:90], pdf, printer=_dest,
+                                 source=source, dedupe=False, origin_ip=ip)
         db_audit("print", job_id=job, ip=ip, site="lan",
-                 printer=printer or dest_display(),
+                 printer=(_dest or dest_display()),
                  details="%s JPEG payload (%d KB)" % (source,
                                                       len(data) // 1024))
         return job, "jpeg"
@@ -9187,16 +9246,15 @@ def route_print_payload(data, title, ip, source="raw9100", printer=""):
     # dest_mode routing (selected/default/IP printer). The old
     # synchronous print_raw() had no history row and audit job_id=0.
     try:
-        job, _dup = enqueue_print("raw", title[:90], data, source=source,
-                                  dedupe=False, origin_ip=ip,
-                                  printer=printer)
+        job, _dup = enqueue_print("raw", title[:90], data, printer=_dest,
+                                  source=source, dedupe=False, origin_ip=ip)
         db_audit("print", job_id=job, ip=ip, site="lan",
-                 printer=printer or dest_display(),
+                 printer=(_dest or dest_display()),
                  details="%s raw passthrough %s (%d KB)"
                          % (source, _sniff_lang(data), len(data) // 1024))
         log("[RAW9100] %s payload from %s (%d KB) -> queued #%d -> %s"
             % (_sniff_lang(data), ip, len(data) // 1024, job,
-               printer or dest_display()))
+               _dest or dest_display()))
     except Exception as e:
         db_audit("print.failed", ip=ip, site="lan",
                  details="%s raw passthrough failed: %s" % (source, e))
@@ -9413,22 +9471,15 @@ def _mdns_encode_name(name):
     return bytes(out)
 
 
-def _mdns_txt_records(printer=""):
-    """TXT records for the main hub queue (printer="") or for one
-    per-printer queue (v3.0.9). rp tells the client WHICH path to
-    submit to - each local printer gets its own
-    ipp/print/<printer> queue with its own UUID."""
-    if printer:
-        rp = "ipp/print/" + urllib.parse.quote(printer, safe="")
-        ty = printer[:60] or "AdvPrint Pro"
-        note = ("AdvPrint Pro hub queue for %s" % printer[:40]).strip()
-    else:
-        rp, ty, note = "ipp/print", "AdvPrint Pro", "AdvPrint Pro print hub"
+def _mdns_txt_records(rp="ipp/print", ty="AdvPrint Pro",
+                      note="AdvPrint Pro print hub"):
+    """AirPrint TXT for one service. v3.0.9: rp/ty/note are per-service
+    so every per-printer queue advertises its own ipp/print/<printer>."""
     kv = [("txtvers", "1"), ("qtotal", "1"), ("rp", rp),
           ("pdl", "application/pdf,image/urf,image/jpeg"),
-          ("ty", ty), ("product", "(%s)" % ty),
+          ("ty", ty), ("product", "(AdvPrint Pro)"),
           ("Note", note),
-          ("UUID", _ipp_printer_uuid(printer).replace("urn:uuid:", "")),
+          ("UUID", _ipp_printer_uuid().replace("urn:uuid:", "")),
           ("URF", "V1.4"), ("Color", "T"), ("Duplex", "F"),
           ("Scan", "F"), ("Sort", "F")]
     out = b""
@@ -9438,28 +9489,23 @@ def _mdns_txt_records(printer=""):
     return out
 
 
-_MDNS_MAX_QUEUES = 12               # keep announce packets well under 9 KB
-
-
-def _mdns_printer_queues():
-    """[(instance_label, printer_name)] for the v3.0.9 per-printer
-    mDNS services: one _ipp._tcp service per LOCAL printer (capped,
-    deduped, dots/slashes made DNS-safe) - never raises."""
+def _mdns_services():
+    """v3.0.9: every advertised service as (instance, rp, ty, note).
+    Service 0 = the classic central queue (ipp/print). Then ONE service
+    per LOCAL printer with rp=ipp/print/<slug>, capped at 12 printers so
+    the UDP announce packet stays far below the 9000 byte mDNS cap."""
+    out = [(_mdns_instance_name(), "ipp/print", "AdvPrint Pro",
+            "AdvPrint Pro print hub")]
     try:
-        names = list_printers_cached()
+        for n in list_printers_cached(max_age=30.0)[:12]:
+            if not n:
+                continue
+            out.append(("%s @ %s" % (n, _mdns_host_target().split(".")[0]),
+                        "ipp/print/%s" % _ipp_queue_slug(n),
+                        n[:60],
+                        "AdvPrint Pro - %s" % n[:60]))
     except Exception:
-        return []
-    out, seen = [], set()
-    for n in names:
-        if len(out) >= _MDNS_MAX_QUEUES:
-            break
-        n = _heal_doubled_name(n)
-        inst = re.sub(r"[^A-Za-z0-9 ()&+,'._-]", "-", n or "")
-        inst = inst.replace(".", "-").strip()[:63]
-        if not inst or inst.lower() in seen:
-            continue
-        seen.add(inst.lower())
-        out.append((inst, n))
+        pass
     return out
 
 
@@ -9473,36 +9519,30 @@ def _mdns_rr(name, rtype, ttl, rdata, flush=False):
 
 
 def _mdns_rrset(ip, ttl=_MDNS_TTL):
-    """All records that describe this hub as an IPP printer: the main
-    hub queue PLUS one service per local printer (v3.0.9 - the hub is
-    the central IPP middleware, so every printer on this PC shows up
-    by ITSELF in phone/PC printer pickers, printing into that printer)."""
-    inst = _mdns_instance_name() + "._ipp._tcp.local"
+    """All records that describe this hub as an IPP printer.
+    v3.0.9: announces the central queue PLUS one service per local
+    printer (per-printer ipp:// queues) - phones and PCs see every
+    printer of the center PC by itself. One shared A record."""
     target = _mdns_host_target()
     port = int(CFG.get("port", 9235))
     srv = ((0).to_bytes(2, "big") + (0).to_bytes(2, "big") +
            port.to_bytes(2, "big") + _mdns_encode_name(target))
-    out = [
-        _mdns_rr(inst, _MDNS_QTYPE_SRV, ttl, srv, flush=True),
-        _mdns_rr(inst, _MDNS_QTYPE_TXT, ttl, _mdns_txt_records(),
-                 flush=True),
-    ]
-    for label, pname in _mdns_printer_queues():
-        pinst = label + "._ipp._tcp.local"
-        out.append(_mdns_rr(pinst, _MDNS_QTYPE_SRV, ttl, srv, flush=True))
-        out.append(_mdns_rr(pinst, _MDNS_QTYPE_TXT, ttl,
-                            _mdns_txt_records(pname), flush=True))
-    # the two PTR browses LAST, once, pointing at every instance
-    for inst_name in [_mdns_instance_name()] + \
-            [label for label, _p in _mdns_printer_queues()]:
-        out.append(_mdns_rr("_ipp._tcp.local", _MDNS_QTYPE_PTR, ttl,
-                            _mdns_encode_name(inst_name + "._ipp._tcp.local")))
-        out.append(_mdns_rr("_universal._sub._ipp._tcp.local",
-                            _MDNS_QTYPE_PTR, ttl,
-                            _mdns_encode_name(inst_name + "._ipp._tcp.local")))
-    out.append(_mdns_rr(target, _MDNS_QTYPE_A, ttl, socket.inet_aton(ip),
-                        flush=True))
-    return out
+    records = []
+    for inst, rp, ty, note in _mdns_services():
+        fq = inst + "._ipp._tcp.local"
+        records.append(
+            _mdns_rr("_ipp._tcp.local", _MDNS_QTYPE_PTR, ttl,
+                     _mdns_encode_name(fq)))
+        records.append(
+            _mdns_rr("_universal._sub._ipp._tcp.local", _MDNS_QTYPE_PTR,
+                     ttl, _mdns_encode_name(fq)))
+        records.append(_mdns_rr(fq, _MDNS_QTYPE_SRV, ttl, srv, flush=True))
+        records.append(_mdns_rr(fq, _MDNS_QTYPE_TXT, ttl,
+                                _mdns_txt_records(rp=rp, ty=ty, note=note),
+                                flush=True))
+    records.append(_mdns_rr(target, _MDNS_QTYPE_A, ttl,
+                            socket.inet_aton(ip), flush=True))
+    return records
 
 
 def _mdns_packet(answers, questions=b"", qdcount=0):
@@ -9655,51 +9695,58 @@ def _mdns_socket_open():
 
 
 def _mdns_answer_query(pkt, addr, ip):
-    """Answer a query with the records that match its questions."""
+    """Answer a query with the records that match its questions.
+    v3.0.9: knows every per-printer service instance, so a client
+    asking for ONE printer's SRV/TXT gets exactly that queue's
+    rp=ipp/print/<printer> answer."""
     sock = _mdns_state["sock"]
     if sock is None or not ip:
         return
     qs = _mdns_parse_questions(pkt)
     if not qs:
         return
-    inst = _mdns_instance_name() + "._ipp._tcp.local"
     target = _mdns_host_target()
     port = int(CFG.get("port", 9235))
-    srv = ((0).to_bytes(2, "big") + (0).to_bytes(2, "big") +
-           port.to_bytes(2, "big") + _mdns_encode_name(target))
     services = {
         "_ipp._tcp.local": True,
         "_universal._sub._ipp._tcp.local": True,
     }
-    # v3.0.9: every per-printer queue answers its OWN SRV/TXT
-    instances = {inst.lower(): _mdns_txt_records()}
-    for label, pname in _mdns_printer_queues():
-        instances[(label + "._ipp._tcp.local").lower()] = \
-            _mdns_txt_records(pname)
+    # instance name -> (rp, ty, note) for per-instance SRV/TXT answers
+    instances = {}
+    for inst, rp, ty, note in _mdns_services():
+        instances[inst.lower() + "._ipp._tcp.local"] = (rp, ty, note)
     answers = []
     echoed = b""
     qdcount = 0
+    full_set_sent = False
     for name, qtype, qclass, raw in qs:
-        lname = name.lower()
         matched = False
         for svc, want in services.items():
-            if lname == svc or lname.endswith("." + svc):
+            if name == svc or name.endswith("." + svc):
                 matched = want
                 break
-        if not matched and lname not in instances and lname != target:
+        if not matched and name not in instances and name != target:
             continue
         qdcount += 1
         echoed += raw
         if qtype in (_MDNS_QTYPE_PTR, _MDNS_QTYPE_ANY):
             answers += [r for r in _mdns_rrset(ip) if r]
-            break               # PTR/ANY -> full record set
-        if qtype == _MDNS_QTYPE_SRV and lname in instances:
+            full_set_sent = True
+            break               # PTR/ANY -> full record set (all queues)
+        if qtype == _MDNS_QTYPE_SRV:
+            srv = ((0).to_bytes(2, "big") + (0).to_bytes(2, "big") +
+                   port.to_bytes(2, "big") + _mdns_encode_name(target))
             answers.append(_mdns_rr(name, _MDNS_QTYPE_SRV, _MDNS_TTL,
                                     srv, flush=True))
-        elif qtype == _MDNS_QTYPE_TXT and lname in instances:
+        elif qtype == _MDNS_QTYPE_TXT:
+            rp, ty, note = instances.get(name, ("ipp/print",
+                                                "AdvPrint Pro",
+                                                "AdvPrint Pro print hub"))
             answers.append(_mdns_rr(name, _MDNS_QTYPE_TXT, _MDNS_TTL,
-                                    instances[lname], flush=True))
-        elif qtype == _MDNS_QTYPE_A and lname == target.lower():
+                                    _mdns_txt_records(rp=rp, ty=ty,
+                                                      note=note),
+                                    flush=True))
+        elif qtype == _MDNS_QTYPE_A and name == target:
             answers.append(_mdns_rr(target, _MDNS_QTYPE_A, _MDNS_TTL,
                                     socket.inet_aton(ip), flush=True))
     if not answers:
@@ -10707,6 +10754,12 @@ def _start_tray(httpd):
         webbrowser.open("http://127.0.0.1:%d/dashboard?token=%s"
                         % (CFG["port"], urllib.parse.quote(CFG["token"])))
 
+    def _open_console():
+        # v3.1.2: the tray opens THE ONE UI - the IDM-style console at
+        # /ui (same page as the gui_app window and the extension).
+        webbrowser.open("http://127.0.0.1:%d/ui?token=%s"
+                        % (CFG["port"], urllib.parse.quote(CFG["token"])))
+
     def _test():
         data, _ = thermal_pdf_bytes(
             "#big AdvPrint Pro TEST PAGE\n\nIf this page printed, the hub works.\n"
@@ -10760,6 +10813,7 @@ def _start_tray(httpd):
                 % (VERSION, CFG["port"]),
         callbacks={
             "on_open": _open_status,
+            "on_console": _open_console,
             "on_test": _test,
             "is_paused": lambda: not RESUME_EVENT.is_set(),
             "on_pause_toggle": _pause_toggle,

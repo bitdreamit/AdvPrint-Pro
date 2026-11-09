@@ -1,6 +1,104 @@
 # Changelog - AdvPrint Pro (Advanced Printer)
 by Bit Dream IT - Innovative Healthcare Solutions
 
+## v3.1.2 - PREMIUM GRAPHICAL WINDOW + CENTER MODE (2026-11-09)
+
+Base: v3.0.9 - every previous feature ships unchanged.
+
+### 1. THE ONE UI - console.html served by the hub at /ui
+
+A full **Windows-IDM style console** (blue gradient title bar, glossy
+toolbar, category sidebar, live status bar) served by the hub at
+`http://127.0.0.1:9235/ui?token=...`:
+
+- 8 tabs: **Dashboard / Printers / Jobs / Audit / IPP Printer /
+  Extension / Settings / Logs**, live 3 s polling.
+- Actions: queue pause/resume/clear, job print-now / retry / cancel,
+  set default printer, test page, copy every per-printer IPP queue
+  URL, export audit CSV, live settings switches (LAN sharing,
+  per-printer IPP, mDNS, queue mode, hold offline, instant fallback,
+  debug mode).
+- Same auth as the dashboard (`?token=`, header, loopback redirect);
+  falls back to a readable page when `console.html` is missing.
+
+### 2. gui_app v2 - the native window wraps THE ONE UI
+
+`gui_app.py` (new) hosts `/ui` through a **backend ladder**:
+`pywebview (WebView2/WebKit) -> Qt WebEngine -> GTK WebKit ->
+Chrome/Edge --app window -> default browser`. The 241 MB PySide6
+bundle is **gone** - the installer is back to ~11 MB. The hub is
+auto-started when the window opens. New `START-CONSOLE.vbs` launcher
++ tray menu item **Console (THE ONE UI)**.
+
+### 3. CENTER MODE - one center PC, many child PCs
+
+A **child PC installs only the extension** (no tool) and prints
+through the Center PC's hub:
+
+- Connections -> **Center PC / child PC mode**: `auto` (local tool
+  when it answers, else Center PC - default) / `local` / `center`,
+  plus Center PC URL + token. The local-hub probe is cached 60 s.
+- The popup gained a **Console** button (opens `/ui` of the ACTIVE
+  hub) and the options page gained the **Console** tab (embeds `/ui`
+  with an offline fallback card).
+- Together with v3.0.9 per-printer IPP queues
+  (`ipp://center-ip:9235/ipp/print/<printer>` + mDNS) a whole LAN
+  prints through ONE center PC - extension and/or IPP, no client
+  tool needed.
+
+### 4. Build everything from source
+
+`scripts/build-all.sh` + repo-relative `installer/setup.nsi` +
+DEB templates under `installer/deb/`: the Setup EXE, the DEB, the
+signed CRX (repo key in `extension-signing/`) and the extension zip
+are built from this tree alone - **no prebuilt binaries needed**.
+See `docs/BUILD-FROM-SOURCE.md`.
+
+---
+
+## v3.0.9 - BUG FIX + PER-PRINTER IPP QUEUES (2026-11-09)
+
+Two changes only - everything from v3.0.8 ships unchanged.
+
+### 1. FIXED: printer names duplicated in the extension Default-printer dropdown
+
+The dropdown showed `"AdvPrint Pro @ AI-LabAdvPrint Pro @ AI-Lab"`,
+`"OneNote (Desktop)OneNote (Desktop)"`, `"Microsoft Print to PDFMicrosoft
+Print to PDF"`, `"HP Laser 103 107 108HP Laser 103 107 108"` - every name
+twice. Root cause: `extension/options.js` built the option label as
+`p.name + (ternary..., p.name)` - one closing paren was missing, so the
+`, p.name` inside the parens parsed as the **comma operator**: the
+decorated label was computed and silently discarded, and the expression
+evaluated to `p.name + p.name`. Fixed by closing the paren; names render
+once again with the `[status]` / `(OS default)` decorations. A regression
+test (`tests/test_printer_label.py`) replays the exact expression.
+
+### 2. NEW: per-printer IPP queues - the hub as central IPP middleware
+
+Every LOCAL printer now also gets its own queue on the hub:
+
+    ipp://<lan-ip>:9235/ipp/print/<printer>
+
+- One center PC serves the whole LAN: child PCs, phones and tablets add
+  ONE printer of the center PC directly - **no AdvPrint tool needed on
+  the client** (the extension or plain IPP is enough).
+- Queue names accept the raw Windows printer name (URL-encoded) or a
+  slug form (`hp-laser-103-107-108`); matching is case-insensitive and
+  ignores spaces/punctuation.
+- mDNS/Bonjour announces **one `_ipp._tcp` service PER printer** (plus
+  the central queue), so Windows 10/11, macOS, iPhone AirPrint and
+  Android Mopria list every printer of the center PC by itself.
+- `GET /printers` answers `ipp_queue` + `ipp_path` per printer and
+  `ipp_central_url` for the classic shared queue.
+- `GET /ipp/print/<printer>` serves a per-queue landing page (URL,
+  live status, add-printer steps for Windows / CUPS).
+- Unknown queue names get a clean `404` + `ipp.queue.reject` audit
+  row; known queues are audited with their real printer name.
+- The IPP job is enqueued with its queue's printer - pause / queue
+  mode / history / reprint all work per printer like every other job.
+
+---
+
 ## v3.0.8 - PROFESSIONAL IPP PRINTER (WINDOWS 10/11 / MACOS / IOS / ANDROID) (2026-11-08)
 
 User report: "http://192.168.1.7:9235/ipp/print - this IPP printer mode

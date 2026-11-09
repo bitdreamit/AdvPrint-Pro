@@ -140,11 +140,12 @@
     <h1>AdvPrint Pro</h1>
     <p>Print from any web page to any printer &middot; silent &middot; 100% local &middot; MIT open source</p>
   </div>
-  <span class="verchip" id="verChip">v3.0.6</span>
+  <span class="verchip" id="verChip">v3.1.2</span>
   <span class="pill" id="hubPill" title="Live hub status (checked automatically)"><i class="pdot" id="pillDot"></i><span id="pillTxt">checking…</span></span>
 </header>
 
 <nav id="tabs">
+  <button data-tab="console" id="tabBtnConsole">Console<span class="tbadge" id="tabConBadge"></span></button>
   <button data-tab="queue" id="tabBtnQueue">Queue<span class="tbadge" id="tabQBadge"></span></button>
   <button data-tab="history">History</button>
   <button data-tab="rules" id="tabBtnRules">Rules</button>
@@ -157,6 +158,32 @@
 </nav>
 
 <main>
+  <!-- ================= CONSOLE (v3.1.2: THE ONE UI) ================= -->
+  <section class="panel" id="panel-console">
+    <h2>Hub Console <span class="sub" style="display:inline">THE ONE UI &middot; served by the hub at /ui</span></h2>
+    <p class="sub">Dashboard / Printers / Jobs / Audit / IPP Printer / Extension / Settings / Logs -
+      the exact same Windows-IDM style page as the desktop window (gui_app) and the popup
+      Console button. One UI, identical everywhere.</p>
+    <div id="consoleFallback" style="display:none; border:1px solid #fdba74; background:#fff7ed;
+         border-radius:10px; padding:14px 16px; margin-bottom:10px">
+      <b style="color:#9a3412">The hub is not reachable right now.</b>
+      <p style="margin:6px 0; font-size:12.5px; color:#7c2d12">The Console is served by the
+        hub - the AdvPrint Pro tool on this PC, or the <b>Center PC</b> in child-PC mode
+        (Connections tab). Start it and retry. Everything else in these options keeps working.</p>
+      <div class="row" style="margin:0">
+        <button class="mini primary" id="bConsoleRetry">Retry now</button>
+        <button class="mini" id="bConsoleNewTab">Open Console in new tab</button>
+      </div>
+    </div>
+    <iframe id="consoleFrame" title="AdvPrint Pro Console"
+      style="width:100%; height:620px; border:1px solid var(--line);
+             border-radius:10px; background:#f5f8fc; display:none"></iframe>
+    <div class="row" style="margin-top:8px">
+      <button class="mini" id="bConsoleReload">Reload console</button>
+      <span class="note" style="margin:0">Tip: changes apply live - the console talks straight to the hub.</span>
+    </div>
+  </section>
+
   <!-- ================= QUEUE ================= -->
   <section class="panel" id="panel-queue">
     <h2>Live queue</h2>
@@ -542,6 +569,38 @@
         <button id="bDashboard" data-i18n="optDashboard" title="Open THIS PC's hub dashboard (http://127.0.0.1:9235/dashboard)">Open dashboard - Self PC</button>
         <button id="bAudit" data-i18n="optAudit" title="Open THIS PC's hub audit log">Open audit log - Self PC</button>
       </div>
+    </section>
+
+    <section id="center-settings" style="border:none;padding:0;margin-top:18px">
+      <h2>Center PC / child PC mode (v3.1.2) - many PCs, ONE printing PC</h2>
+      <p class="sub">This child PC needs NO AdvPrint tool: the extension prints through the
+        <b>Center PC's</b> hub (or its per-printer IPP queues). The tool on THIS PC is used
+        automatically whenever it is installed and running.</p>
+      <div class="row">
+        <label>Mode</label>
+        <select id="hubMode">
+          <option value="auto">Auto (recommended) - local tool if present, else Center PC</option>
+          <option value="local">This PC only (local tool)</option>
+          <option value="center">Center PC only (pure child PC)</option>
+        </select>
+      </div>
+      <div class="row">
+        <label>Center PC hub URL</label>
+        <input type="text" id="centerUrl" placeholder="http://192.168.1.50:9235">
+      </div>
+      <div class="row">
+        <label>Center PC token</label>
+        <input type="password" id="centerToken" placeholder="the Center PC's hub token">
+      </div>
+      <div class="row">
+        <span class="mono" id="centerState" style="font-size:12px"></span>
+        <button class="mini" id="bCenterCheck">Check now</button>
+      </div>
+      <div class="note">Child PC setup in 3 steps: 1) install this extension, 2) put the Center
+        PC's URL + token here, 3) done - or add its printers directly as IPP queues
+        (<span class="mono">ipp://CENTER-IP:9235/ipp/print/&lt;printer&gt;</span>, announced by mDNS).
+        All existing features (queue mode, rules, LAN profile, history) keep working against
+        whichever hub is active.</div>
     </section>
 
     <section id="lan-settings" style="border:none;padding:0;margin-top:18px">

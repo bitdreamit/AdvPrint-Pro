@@ -1,0 +1,10 @@
+#!/bin/sh
+systemctl --user stop advprint.service >/dev/null 2>&1 || true
+systemctl --user disable advprint.service >/dev/null 2>&1 || true
+# v3.0.7: removing the policy auto-uninstalls the force-installed
+# extension at the browser's next start
+rm -f /etc/opt/chrome/policies/managed/advprint-pro.json \
+      /etc/chromium/policies/managed/advprint-pro.json \
+      /etc/opt/edge/policies/managed/advprint-pro.json \
+      /etc/brave/policies/managed/advprint-pro.json
+exit 0

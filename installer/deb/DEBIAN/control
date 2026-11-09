@@ -1,0 +1,12 @@
+Package: advprint-pro
+Version: 3.0.9
+Section: utils
+Priority: optional
+Architecture: all
+Depends: python3
+Recommends: cups-client, curl
+Maintainer: Bit Dream IT <bitdreamit@users.noreply.github.com>
+Description: AdvPrint Pro (Advanced Printer) - silent
+ printing hub for any web page, PDF or application.
+ 100% local, by Bit Dream IT - Innovative Healthcare
+ Solutions.

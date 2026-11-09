@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>AdvPrint Pro 3.1.2 — Build &amp; Deploy — Step by Step</title>
+<style>
+@page{size:A4;margin:16mm 14mm}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font:11pt/1.55 'Segoe UI',system-ui,sans-serif;color:#0f172a}
+.cover{page-break-after:always;padding-top:60px}
+.cover .brand{font-size:10pt;color:#64748b;letter-spacing:1px;text-transform:uppercase}
+.cover h1{font-size:30pt;color:#1e3a8a;margin:10px 0 4px}
+.cover h2{font-size:15pt;color:#1d4ed8;font-weight:600;margin-bottom:26px}
+.cover .logo{width:64px;height:64px;border-radius:14px;background:linear-gradient(135deg,#1e3a8a,#1d4ed8);
+  color:#fff;font-size:30px;font-weight:800;display:flex;align-items:center;justify-content:center;margin-bottom:18px}
+.cover table{border-collapse:collapse;width:100%;margin-top:14px}
+.cover td{border:1px solid #e2e8f0;padding:8px 10px;font-size:10.5pt}
+.cover td:first-child{background:#eff6ff;font-weight:700;width:230px;color:#1e40af}
+.cover .foot{margin-top:40px;color:#94a3b8;font-size:9.5pt}
+h2.sec{font-size:17pt;color:#1e3a8a;border-bottom:3px solid #1d4ed8;padding-bottom:6px;
+  margin:22px 0 12px;page-break-after:avoid}
+h3{font-size:12.5pt;color:#1e40af;margin:16px 0 7px;page-break-after:avoid}
+p{margin:7px 0}
+ol,ul{margin:7px 0 7px 22px}
+li{margin:4px 0}
+code{font:9.5pt/1.5 Consolas,'Cascadia Mono',monospace;background:#f1f5f9;
+  border:1px solid #e2e8f0;border-radius:4px;padding:1px 5px;word-break:break-all}
+pre{font:9.5pt/1.55 Consolas,monospace;background:#0d1731;color:#dbeafe;border-radius:8px;
+  padding:11px 13px;margin:9px 0;white-space:pre-wrap;page-break-inside:avoid}
+pre b{color:#4ade80}
+table.t{border-collapse:collapse;width:100%;margin:9px 0;font-size:10pt;page-break-inside:avoid}
+table.t th{background:#1e40af;color:#fff;text-align:left;padding:6px 9px;font-size:9.5pt}
+table.t td{border:1px solid #e2e8f0;padding:6px 9px;vertical-align:top}
+table.t tr:nth-child(even) td{background:#f8fafc}
+.note{background:#eff6ff;border:1px solid #bfdbfe;border-left:4px solid #1d4ed8;color:#1e40af;
+  border-radius:6px;padding:9px 12px;margin:10px 0;font-size:10pt;page-break-inside:avoid}
+.warn{background:#fff7ed;border:1px solid #fdba74;border-left:4px solid #f97316;color:#9a3412;
+  border-radius:6px;padding:9px 12px;margin:10px 0;font-size:10pt;page-break-inside:avoid}
+.ok{background:#ecfdf5;border:1px solid #a7f3d0;border-left:4px solid #10b981;color:#065f46;
+  border-radius:6px;padding:9px 12px;margin:10px 0;font-size:10pt;page-break-inside:avoid}
+.secnum{display:inline-block;background:#1d4ed8;color:#fff;font-weight:800;border-radius:6px;
+  width:26px;height:26px;text-align:center;line-height:26px;margin-right:9px;font-size:13pt}
+.pb{page-break-before:always}
+</style>
+</head>
+<body>
+
+<!-- ============ COVER ============ -->
+<div class="cover">
+  <div class="logo">A</div>
+  <div class="brand">AdvPrint Pro (Advanced Printer) · by Bit Dream IT — Innovative Healthcare Solutions</div>
+  <h1>v3.1.2 Build &amp; Deploy Guide</h1>
+  <h2>Premium Graphical Window · THE ONE UI · Center Mode · step by step</h2>
+  <table>
+    <tr><td>Base</td><td>v3.0.9 (dropdown fix + per-printer IPP queues) → this release adds the UI, the window and Center Mode. Every previous feature ships unchanged.</td></tr>
+    <tr><td>THE ONE UI</td><td>The hub serves <code>console.html</code> at <code>http://127.0.0.1:9235/ui?token=…</code> — same page in the native window (gui_app v2), in Chrome and embedded in the extension options Console tab.</td></tr>
+    <tr><td>Center Mode</td><td>One center PC runs the tool; child PCs install ONLY the extension (or use plain IPP queues) and print through the center PC.</td></tr>
+    <tr><td>Build</td><td><code>scripts/build-all.sh</code> builds CRX + extension zip + Setup EXE + DEB + SHA256SUMS from source alone (signing key in <code>extension-signing/</code>).</td></tr>
+    <tr><td>Tests</td><td><code>python3 -m pytest tests/ -q</code> → 280 passed, 1 skipped.</td></tr>
+    <tr><td>Git</td><td>Tags <code>v3.0.9</code> and <code>v3.1.2</code> committed locally — push with <code>git push origin main --tags</code>.</td></tr>
+  </table>
+  <div class="foot">MIT license · 100% local · no cloud · no subscription<br>
+  This kit: source zip + CRX + extension zip + Setup EXE + DEB + SHA256SUMS + release notes.</div>
+</div>
+
+<!-- ============ 1. WHAT YOU GOT ============ -->
+<h2 class="sec"><span class="secnum">1</span>What you got (the release kit)</h2>
+<table class="t">
+  <tr><th>File</th><th>What it is</th><th>Use it on</th></tr>
+  <tr><td><code>AdvPrint-Pro-Setup-3.1.2.exe</code> (≈10 MB)</td><td>Windows installer: hub + bundled Python runtime + CRX + START-CONSOLE window launcher + silent-extension policy + firewall rules.</td><td>Center PC (Windows)</td></tr>
+  <tr><td><code>advprint-pro_3.1.2_all.deb</code></td><td>Linux package: <code>/opt/advprint/hub/</code> (advprint.py, console.html, gui_app.py, CRX), systemd user service, autostart, policy.</td><td>Center PC (Linux)</td></tr>
+  <tr><td><code>AdvPrint-Pro.crx</code> (signed)</td><td>CRX3 extension, id <code>likldbkamojokkfdlcjibiljpgbbnohc</code>, v3.1.2 — served by the hub itself for silent install/auto-update.</td><td>Any Chrome/Edge/Brave</td></tr>
+  <tr><td><code>AdvPrint-Pro-Extension-3.1.2.zip</code></td><td>Unpacked extension for Web-store upload / Load-unpacked dev installs.</td><td>Dev / store</td></tr>
+  <tr><td><code>SHA256SUMS-3.1.2.txt</code></td><td>Checksums — verify with <code>sha256sum -c SHA256SUMS-3.1.2.txt</code>.</td><td>Everywhere</td></tr>
+  <tr><td><code>AdvPrint-Pro-3.1.2-source.zip</code></td><td>Full source tree (both hub copies identical, extension, installers, docs, tests, build scripts, signing key).</td><td>Build everything yourself</td></tr>
+</table>
+<div class="ok"><b>v3.0.9 fixes included:</b> the Default-printer dropdown no longer shows doubled names
+("HP Laser 103 107 108HP Laser 103 107 108") — one missing paren in <code>options.js</code> made the
+label evaluate to <code>name+name</code>; fixed + regression-tested.
+<b>v3.0.9 feature included:</b> every local printer gets its own queue
+<code>ipp://ip:9235/ipp/print/&lt;printer&gt;</code> + one mDNS service per printer.</div>
+
+<!-- ============ 2. BUILD ============ -->
+<h2 class="sec"><span class="secnum">2</span>Build everything from source — step by step</h2>
+<h3>2.1 Requirements</h3>
+<table class="t">
+  <tr><th>Tool</th><th>Needed for</th><th>Install</th></tr>
+  <tr><td>python3 ≥ 3.9</td><td>hub, tests, CRX3 packer</td><td>preinstalled on Linux / python.org on Windows</td></tr>
+  <tr><td>zip</td><td>extension zip</td><td><code>sudo apt-get install zip</code></td></tr>
+  <tr><td>dpkg-deb</td><td>DEB package</td><td>preinstalled on Debian/Ubuntu</td></tr>
+  <tr><td>NSIS 3.x (makensis)</td><td>Setup EXE</td><td><code>sudo apt-get install nsis</code></td></tr>
+  <tr><td>Node.js (optional)</td><td>one dropdown regression test</td><td>the test skips cleanly without it</td></tr>
+</table>
+
+<h3>2.2 Run the tests first</h3>
+<pre>cd AdvPrint-Pro
+python3 -m pytest tests/ -q
+<b># → 280 passed, 1 skipped</b></pre>
+
+<h3>2.3 One command — all artifacts</h3>
+<pre>bash scripts/build-all.sh
+<b># dist/AdvPrint-Pro.crx
+# dist/AdvPrint-Pro-Extension-&lt;V&gt;.zip
+# dist/advprint-pro_&lt;V&gt;_all.deb
+# dist/AdvPrint-Pro-Setup-&lt;V&gt;.exe        (needs makensis)
+# dist/SHA256SUMS-&lt;V&gt;.txt</b></pre>
+<p>The script stages the hub files, the installers, the bundled Python runtime and the docs into
+<code>installer/stage/</code>, packs the CRX with the repo key, builds the DEB, runs makensis and writes checksums.</p>
+
+<h3>2.4 Setup EXE only (rebuild without rebuilding the rest)</h3>
+<pre>cd installer &amp;&amp; makensis -V2 setup.nsi</pre>
+<div class="note"><b>No sudo? NSIS local-prefix recipe (used for this very release):</b>
+<pre>apt-get download nsis nsis-common
+dpkg -x nsis_*.deb ~/nsis-root &amp;&amp; dpkg -x nsis-common_*.deb ~/nsis-root
+cd installer &amp;&amp; NSISDIR=$HOME/nsis-root/usr/share/nsis \
+  LD_LIBRARY_PATH=$HOME/nsis-root/usr/lib/x86_64-linux-gnu \
+  $HOME/nsis-root/usr/bin/makensis -V2 setup.nsi</pre></div>
+
+<h3>2.5 CRX / extension only</h3>
+<pre>python3 tool/crx3.py pack extension \
+        extension-signing/advprint-printer.pem dist/AdvPrint-Pro.crx
+python3 tool/crx3.py info dist/AdvPrint-Pro.crx     <b># verify id + version</b>
+cd extension &amp;&amp; zip -r ../dist/AdvPrint-Pro-Extension.zip .</pre>
+<p>The key ships in the tree, so the extension id stays
+<code>likldbkamojokkfdlcjibiljpgbbnohc</code> — Chrome keeps auto-updating the
+force-installed extension from YOUR hub (<code>/extension/updates.xml</code>).</p>
+
+<h3>2.6 DEB only</h3>
+<pre>sudo dpkg -i dist/advprint-pro_&lt;V&gt;_all.deb        <b># install</b>
+sudo dpkg -r advprint-pro                          <b># uninstall</b></pre>
+
+<!-- ============ 3. CENTER PC ============ -->
+<h2 class="sec pb"><span class="secnum">3</span>Set up the CENTER PC (the one printing PC)</h2>
+<ol>
+  <li>Install the tool: run <code>AdvPrint-Pro-Setup-3.1.2.exe</code> (Windows) or
+      <code>sudo dpkg -i advprint-pro_3.1.2_all.deb</code> (Linux). The hub starts at
+      <code>http://127.0.0.1:9235</code> (tray icon / systemd user service).</li>
+  <li>Open <b>THE ONE UI</b>: tray menu → <b>Console (THE ONE UI)</b>, or
+      <code>START-CONSOLE.vbs</code>, or a browser on
+      <code>http://127.0.0.1:9235/ui?token=&lt;token&gt;</code>. The native window opens the
+      same page (pywebview → Qt → GTK → Chrome app window → browser ladder — no PySide6,
+      installer ≈10&nbsp;MB).</li>
+  <li>Console → <b>Settings</b> tab: turn <b>LAN sharing ON</b> (or tray → Allow LAN in
+      firewall). Keep <b>Per-printer IPP queues</b> ON and <b>mDNS</b> ON. Save &amp; Apply.</li>
+  <li>Console → <b>Extension</b> tab: copy the <b>token</b> — child PCs need it.</li>
+  <li>Verify: Console → <b>Printers</b> shows every printer with its own
+      <code>ipp://…:9235/ipp/print/&lt;printer&gt;</code> queue; press <b>Test page</b>.</li>
+</ol>
+<div class="warn"><b>Firewall (Windows):</b> inbound <b>TCP 9235</b> (printing) + <b>UDP 5353</b>
+(mDNS discovery). The Setup EXE adds both; tray → "Allow LAN in firewall" re-adds TCP any time.</div>
+
+<!-- ============ 4. CHILD PCS ============ -->
+<h2 class="sec"><span class="secnum">4</span>Set up the CHILD PCs (extension and/or IPP — no tool)</h2>
+
+<h3>Way A — extension only (silent browser printing with rules)</h3>
+<ol>
+  <li>Install the extension on the child PC: load <code>AdvPrint-Pro.crx</code> / the zip
+      (chrome://extensions → Developer mode → Load unpacked), or let the center PC's
+      force-install policy install it silently (domain PCs).</li>
+  <li>Extension → Options → <b>Connections</b> → <b>Center PC / child PC mode</b>:
+      <ul>
+        <li><b>Mode</b>: <code>Auto (recommended)</code> — uses a local tool when present,
+            otherwise the Center PC. Choose <code>Center PC only</code> for a pure child PC.</li>
+        <li><b>Center PC hub URL</b>: <code>http://CENTER-IP:9235</code></li>
+        <li><b>Center PC token</b>: the token from step 4 above → <b>Save settings</b>.</li>
+      </ul></li>
+  <li>The status line proves it:
+      <code>[auto] local tool NOT running → printing on CENTER PC: http://…</code>.
+      Popup → <b>Console</b> opens the center's THE ONE UI.</li>
+</ol>
+
+<h3>Way B — per-printer IPP queues (no extension at all)</h3>
+<ol>
+  <li><b>Windows 10/11</b>: Settings → Printers → Add device — the center's printers appear
+      by themselves (mDNS). Or Add manually → "Select a shared printer by name" →
+      <code>ipp://CENTER-IP:9235/ipp/print/&lt;printer&gt;</code>.</li>
+  <li><b>Linux/CUPS</b>: <code>lpadmin -p advprint-hp -E -v ipp://CENTER-IP:9235/ipp/print/HP-Laser-103-107-108 -m everywhere</code></li>
+  <li><b>macOS / iPhone / Android</b>: discovered automatically (Bonjour / AirPrint / Mopria).</li>
+  <li>Queue names accept the raw Windows name (URL-encoded) or the slug form — both work.
+      The Console → <b>IPP Printer</b> tab lists every URL with a Copy button.</li>
+</ol>
+<div class="ok"><b>Both ways combined is fine:</b> extension for silent browser printing + rules,
+IPP queues so ANY application on the child PC prints on the center PC too. Many child PCs can
+connect to one center PC at the same time. Full details: <code>docs/CENTER-CHILD-PCS.md</code>.</div>
+
+<!-- ============ 5. VERIFY ============ -->
+<h2 class="sec"><span class="secnum">5</span>Verify everything (10-minute checklist)</h2>
+<table class="t">
+  <tr><th>#</th><th>Check</th><th>Expected</th></tr>
+  <tr><td>1</td><td>Console: <code>http://127.0.0.1:9235/ui?token=…</code></td><td>IDM console, 8 tabs live, status bar "hub running · v3.1.2"</td></tr>
+  <tr><td>2</td><td>Console → Test page (Dashboard)</td><td>paper comes out; job shows PRINTING → PRINTED</td></tr>
+  <tr><td>3</td><td>Extension Default-printer dropdown</td><td><b>every name exactly ONCE</b> (v3.0.9 fix) with [status] / (OS default)</td></tr>
+  <tr><td>4</td><td>Console → IPP Printer tab</td><td>every printer has <code>ipp://…/ipp/print/&lt;printer&gt;</code></td></tr>
+  <tr><td>5</td><td>Child PC print (extension)</td><td>job lands in the CENTER PC's queue + history</td></tr>
+  <tr><td>6</td><td>Child PC IPP queue</td><td>appears in Windows printer list; prints on the center</td></tr>
+  <tr><td>7</td><td>Native window: START-CONSOLE.vbs / tray</td><td>pywebview window opens /ui (or falls down the ladder)</td></tr>
+  <tr><td>8</td><td><code>sha256sum -c SHA256SUMS-3.1.2.txt</code></td><td>all OK</td></tr>
+</table>
+
+<!-- ============ 6. PUBLISH ============ -->
+<h2 class="sec"><span class="secnum">6</span>Publish to GitHub (release process)</h2>
+<ol>
+  <li>The tags are already committed locally:
+      <code>git tag -l</code> → v3.0.9, v3.1.2. Push:
+      <pre>git push origin main --tags</pre></li>
+  <li>GitHub → Releases → <b>Draft a new release</b> → choose tag <code>v3.1.2</code>.</li>
+  <li>Title: <b>PREMIUM GRAPHICAL WINDOW + CENTER MODE</b>.
+      Description: paste <code>docs/RELEASE-NOTES-v3.1.2.md</code>
+      (v3.0.9: paste <code>docs/RELEASE-NOTES-v3.0.9.md</code>).</li>
+  <li>Attach the 5 files from <code>dist/</code> (CRX, zip, EXE, DEB, SHA256SUMS)
+      + the source zip → <b>Publish</b>.</li>
+  <li>Chrome auto-updates the force-installed extension on every child PC at next browser
+      start (the hub serves <code>/extension/updates.xml</code>).</li>
+</ol>
+
+<h3>Bumping the version next time (touch every anchor together)</h3>
+<ul>
+  <li><code>tool/unix/hub/advprint.py</code> AND <code>tool/windows/portable/hub/advprint.py</code>:
+      <code>VERSION</code>, <code>VERSION_NAME</code> (keep both copies byte-identical — copy unix → windows).</li>
+  <li><code>extension/manifest.json</code>, <code>popup.html</code> (ver chip),
+      <code>content/api.js</code> (fallback), <code>options.html</code> (verchip).</li>
+  <li><code>VERSION.txt</code>, <code>installer/setup.nsi</code> (OutFile, VIProductVersion,
+      DisplayVersion), <code>installer/deb/DEBIAN/control</code>.</li>
+  <li><code>tests/test_hub_v2.py</code> version anchors + the release notes doc
+      <code>docs/RELEASE-NOTES-v&lt;V&gt;.md</code>.</li>
+</ul>
+
+<!-- ============ 7. TROUBLESHOOTING ============ -->
+<h2 class="sec"><span class="secnum">7</span>Troubleshooting</h2>
+<table class="t">
+  <tr><th>Symptom</th><th>Cause → Fix</th></tr>
+  <tr><td>Child PC cannot reach the hub</td><td>LAN sharing OFF → Console → Settings → LAN sharing ON, restart; firewall → tray "Allow LAN in firewall"; wrong token → copy from Console → Extension.</td></tr>
+  <tr><td>Printer not discovered on phones</td><td>mDNS OFF or firewall UDP 5353 → Settings → mDNS ON; the center must be ON the same LAN (no VPN).</td></tr>
+  <tr><td>IPP queue unknown (404)</td><td>Typo in the queue name — copy the exact URL from Console → IPP Printer. Names are case/punctuation-insensitive.</td></tr>
+  <tr><td>Console shows offline card</td><td>Hub not running → start AdvPrint Pro (tray / START-CONSOLE.vbs); extension Console tab → Retry now.</td></tr>
+  <tr><td>Native window falls back to browser</td><td>No GUI backend found — <code>pip install pywebview</code> for the WebView2/WebKit window (the ladder also uses an existing Chrome/Edge automatically).</td></tr>
+  <tr><td>makensis not found</td><td>Use the local-prefix recipe in §2.4, or <code>sudo apt-get install nsis</code>.</td></tr>
+  <tr><td>Extension still shows old version</td><td>Force-installed from the hub → restart Chrome; manual install → chrome://extensions → Update.</td></tr>
+</table>
+
+<div class="note"><b>Where everything lives in the source tree:</b>
+hub = <code>tool/unix/hub/advprint.py</code> + <code>console.html</code> + <code>gui_app.py</code>
+(identical copies under <code>tool/windows/portable/hub/</code>) · extension = <code>extension/</code> ·
+installer = <code>installer/setup.nsi</code> + <code>installer/deb/</code> · build =
+<code>scripts/build-all.sh</code> · tests = <code>tests/</code> (280 passed) ·
+docs = <code>docs/</code> (BUILD-FROM-SOURCE, CENTER-CHILD-PCS, IPP-GUIDE, MULTI-PRINTER).</div>
+
+</body>
+</html>
