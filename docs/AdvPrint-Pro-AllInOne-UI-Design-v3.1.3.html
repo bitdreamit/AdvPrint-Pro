@@ -1,0 +1,1963 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AdvPrint Pro — Printing Hub · ALL-IN-ONE Console v3.1.3 — UI Design (IDM Style)</title>
+<style>
+/* ============================================================
+   AdvPrint Pro v3.1.3 — ALL-IN-ONE CONSOLE · FIRST UI DESIGN
+   ONE Windows-IDM window manages EVERYTHING:
+   dashboard + printers + jobs/history + LAN sharing + DropZone
+   + rules + extension switches + debug + audit + logs + settings
+   Style: Windows IDM desktop classic (approved design language)
+   Real install data: AI-Lab · 10.26.94.206:9235 · token auth ON
+   ============================================================ */
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --navy:#1e3a8a; --blue:#1d4ed8; --blue-deep:#1e40af; --blue-soft:#eff6ff;
+  --blue-line:#bfdbfe; --line:#e2e8f0; --ink:#0f172a; --ink-2:#475569;
+  --muted:#94a3b8; --bg:#f5f8fc; --panel:#ffffff;
+  --ok:#16a34a; --ok-bg:#dcfce7; --warn:#d97706; --warn-bg:#fef9c3;
+  --err:#dc2626; --err-bg:#fee2e2; --purple:#5b21b6; --purple-bg:#ede9fe;
+  --mono:'Cascadia Mono','Consolas','JetBrains Mono',monospace;
+}
+html,body{height:100%}
+body{font-family:'Segoe UI',system-ui,-apple-system,Roboto,'Noto Sans SC',sans-serif;
+  background:linear-gradient(160deg,#0b1633 0%,#12275c 45%,#0b1633 100%);
+  color:var(--ink);overflow:hidden}
+.desktop{height:100vh;padding:16px;display:flex;flex-direction:column}
+.window{flex:1;min-height:0;max-width:1400px;width:100%;margin:0 auto;display:flex;
+  flex-direction:column;border-radius:10px;overflow:hidden;border:1px solid #16307a;
+  box-shadow:0 30px 80px rgba(2,8,35,.65),0 2px 8px rgba(2,8,35,.5);background:var(--bg)}
+/* ---------- title bar ---------- */
+.titlebar{height:38px;flex:0 0 38px;display:flex;align-items:center;
+  background:linear-gradient(135deg,#1e3a8a,#1d4ed8);color:#fff;padding-left:10px;user-select:none}
+.titlebar .logo{width:22px;height:22px;border-radius:5px;background:#fff;color:var(--blue);
+  display:flex;align-items:center;justify-content:center;font-weight:800;font-size:11px;margin-right:9px;
+  box-shadow:inset 0 0 0 1px #ffffff55}
+.titlebar .t-main{font-size:12.5px;font-weight:600;letter-spacing:.2px}
+.titlebar .t-main small{font-weight:400;opacity:.75;margin-left:8px;font-size:11px}
+.titlebar .spacer{flex:1}
+.winbtn{width:44px;height:38px;border:none;background:transparent;color:#fff;font-family:inherit;
+  font-size:12px;cursor:default;display:flex;align-items:center;justify-content:center}
+.winbtn:hover{background:rgba(255,255,255,.18)}
+.winbtn.close:hover{background:#dc2626}
+/* ---------- menu bar ---------- */
+.menubar{height:26px;flex:0 0 26px;display:flex;align-items:center;gap:2px;
+  background:linear-gradient(#f8fafc,#eef3fa);border-bottom:1px solid var(--line);padding:0 6px;user-select:none}
+.menu-item{font-size:12px;color:var(--ink);padding:3px 9px;border-radius:3px;cursor:default}
+.menu-item:hover{background:var(--blue-soft);color:var(--blue-deep)}
+.menubar .m-right{margin-left:auto;font-size:11px;color:var(--muted);padding-right:8px}
+/* ---------- toolbar ---------- */
+.toolbar{flex:0 0 auto;display:flex;align-items:stretch;gap:2px;
+  background:linear-gradient(#f2f6fc,#e2eaf5);border-bottom:1px solid #c9d6ea;
+  padding:5px 8px;user-select:none;overflow-x:auto}
+.tbtn{border:1px solid transparent;background:transparent;border-radius:5px;min-width:64px;
+  padding:5px 10px 4px;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;font-family:inherit}
+.tbtn .ic{width:26px;height:26px;border-radius:6px;display:flex;align-items:center;justify-content:center;
+  background:linear-gradient(#ffffff,#e7eefb);border:1px solid #c4d4ec;box-shadow:inset 0 1px 0 #fff}
+.tbtn .ic svg{width:15px;height:15px}
+.tbtn span{font-size:10.5px;color:var(--ink-2);font-weight:600;white-space:nowrap}
+.tbtn:hover{background:linear-gradient(#eaf3ff,#d3e6ff);border-color:var(--blue);
+  box-shadow:0 0 0 1px #bfdbfe,0 2px 6px rgba(29,78,216,.25)}
+.tbtn:hover span{color:var(--blue-deep)}
+.tbtn.primary .ic{background:linear-gradient(135deg,#1e40af,#1d4ed8);border-color:#16307a}
+.tbtn.danger .ic{color:var(--err)}
+.tsep{width:1px;background:#c9d6ea;margin:4px 5px}
+.tspacer{flex:1}
+/* ---------- address bar ---------- */
+.addrbar{flex:0 0 auto;display:flex;align-items:center;gap:8px;background:#fff;
+  border-bottom:1px solid var(--line);padding:7px 10px}
+.addrbar .fld{flex:1;display:flex;align-items:center;gap:8px;height:28px;border:1px solid #c4d4ec;
+  border-radius:5px;background:var(--blue-soft);padding:0 10px}
+.addrbar .fld .dot{width:8px;height:8px;border-radius:50%;background:#22c55e;box-shadow:0 0 6px #22c55e}
+.addrbar .fld .url{font-family:var(--mono);font-size:12px;color:var(--blue-deep);font-weight:600;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.addrbar .fld .lock{margin-left:auto;font-size:10px;color:var(--ok);background:var(--ok-bg);
+  border:1px solid #86efac;border-radius:10px;padding:1px 8px;font-weight:700;white-space:nowrap}
+.pill-btn{height:28px;padding:0 12px;border-radius:5px;border:1px solid #c4d4ec;
+  background:linear-gradient(#fff,#eef3fb);font-size:11.5px;font-weight:700;color:var(--ink-2);
+  cursor:pointer;font-family:inherit;white-space:nowrap}
+.pill-btn.blue{background:linear-gradient(135deg,#1e40af,#1d4ed8);color:#fff;border-color:#16307a}
+.pill-btn:hover{border-color:var(--blue)}
+/* ---------- body split ---------- */
+.body{flex:1;min-height:0;display:flex}
+.sidebar{width:218px;flex:0 0 218px;background:#f0f5fb;border-right:1px solid #d5dfef;
+  padding:10px 8px;overflow-y:auto;user-select:none}
+.sb-group{font-size:9.5px;font-weight:800;letter-spacing:1.2px;color:var(--muted);
+  padding:10px 10px 5px;text-transform:uppercase}
+.sb-item{display:flex;align-items:center;gap:9px;padding:7px 10px;border-radius:6px;cursor:pointer;
+  font-size:12.5px;color:var(--ink-2);border:1px solid transparent;margin-bottom:1px}
+.sb-item svg{width:15px;height:15px;stroke:currentColor;flex:0 0 15px}
+.sb-item .cnt{margin-left:auto;font-size:10px;font-weight:800;background:#dbe6f6;color:#3b5ea8;
+  border-radius:9px;padding:1px 7px}
+.sb-item .cnt.red{background:var(--err-bg);color:var(--err)}
+.sb-item .cnt.grn{background:var(--ok-bg);color:var(--ok)}
+.sb-item:hover{background:#e3edfb;color:var(--blue-deep)}
+.sb-item.active{background:linear-gradient(135deg,#1e40af,#1d4ed8);color:#fff;font-weight:600;
+  box-shadow:0 2px 8px rgba(29,78,216,.35)}
+.sb-item.active .cnt{background:#ffffff2e;color:#fff}
+.sb-note{margin:14px 10px;padding:9px 10px;border:1px dashed #b6c8e0;border-radius:7px;
+  font-size:10.5px;color:var(--ink-2);line-height:1.5;background:#fff}
+.sb-note b{color:var(--blue-deep)}
+.content{flex:1;min-width:0;overflow-y:auto;padding:16px 18px 22px;background:var(--bg)}
+.panel{display:none;animation:fadein .18s ease}
+.panel.active{display:block}
+@keyframes fadein{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.p-head{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+.p-head h2{font-size:17px;font-weight:700;color:var(--ink)}
+.p-head .sub{font-size:11.5px;color:var(--muted)}
+.p-head .right{margin-left:auto;display:flex;gap:8px}
+/* ---------- generic ---------- */
+.card{background:var(--panel);border:1px solid var(--line);border-radius:9px;
+  box-shadow:0 1px 2px rgba(15,23,42,.04);margin-bottom:14px}
+.card .card-h{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--line);
+  font-size:12.5px;font-weight:700;color:var(--ink-2);flex-wrap:wrap}
+.card .card-h .r{margin-left:auto;font-weight:500;font-size:11px;color:var(--muted)}
+.card .card-b{padding:13px 14px}
+.btn{height:28px;padding:0 12px;border-radius:5px;border:1px solid #c4d4ec;cursor:pointer;
+  background:linear-gradient(#ffffff,#eef3fb);font-size:11.5px;font-weight:700;color:var(--ink-2);
+  font-family:inherit;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:var(--blue);color:var(--blue-deep)}
+.btn.blue{background:linear-gradient(135deg,#1e40af,#1d4ed8);color:#fff;border-color:#16307a}
+.btn.blue:hover{filter:brightness(1.08);color:#fff}
+.btn.danger{color:var(--err)} .btn.danger:hover{border-color:var(--err);color:var(--err)}
+.btn.small{height:24px;padding:0 9px;font-size:10.5px}
+.chip{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:700;
+  border-radius:10px;padding:2px 9px;border:1px solid}
+.chip.ok{color:var(--ok);background:var(--ok-bg);border-color:#86efac}
+.chip.err{color:var(--err);background:var(--err-bg);border-color:#fca5a5}
+.chip.warn{color:var(--warn);background:var(--warn-bg);border-color:#fcd34d}
+.chip.info{color:var(--blue-deep);background:var(--blue-soft);border-color:var(--blue-line)}
+.chip.gray{color:#475569;background:#e2e8f0;border-color:#cbd5e1}
+.chip.purple{color:var(--purple);background:var(--purple-bg);border-color:#c4b5fd}
+.chip.orange{color:#9a3412;background:#ffedd5;border-color:#fdba74}
+.chip .d{width:6px;height:6px;border-radius:50%;background:currentColor}
+.mono{font-family:var(--mono)}
+.note{background:var(--blue-soft);border:1px solid var(--blue-line);color:var(--blue-deep);
+  border-radius:8px;padding:10px 12px;font-size:11.5px;line-height:1.6;margin-top:12px}
+.note.orange{background:#fff7ed;border-color:#fdba74;color:#9a3412}
+.note.amber{background:var(--warn-bg);border-color:#fcd34d;color:#854d0e}
+.note.grn{background:var(--ok-bg);border-color:#86efac;color:#166534}
+/* ---------- dashboard stats ---------- */
+.stats{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:14px}
+.stat{background:#fff;border:1px solid var(--line);border-radius:9px;padding:13px 15px;position:relative;overflow:hidden}
+.stat::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--blue)}
+.stat.g::before{background:var(--ok)} .stat.r::before{background:var(--err)} .stat.w::before{background:var(--warn)}
+.stat .v{font-size:22px;font-weight:800;color:var(--ink)}
+.stat .l{font-size:10.5px;color:var(--ink-2);margin-top:2px;font-weight:600}
+.stat .d{position:absolute;right:12px;top:12px;font-size:10px;color:var(--muted)}
+.dash-row{display:grid;grid-template-columns:1.4fr 1fr;gap:12px;margin-bottom:14px}
+.kv{display:grid;grid-template-columns:120px 1fr;row-gap:7px;column-gap:10px;font-size:12px;padding:4px 14px 12px}
+.kv .k{color:var(--muted);font-weight:600}
+.kv .v{color:var(--ink);font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.kv .v .chip{margin-left:6px}
+/* ---------- LAN rows ---------- */
+.lrow{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px dashed #eef2f8;flex-wrap:wrap}
+.lrow:last-child{border-bottom:none}
+.lrow .lk{min-width:210px;font-size:12.5px;font-weight:700;color:var(--ink)}
+.lrow .lk small{display:block;font-size:10px;color:var(--muted);font-weight:600;margin-top:1px}
+.lrow .lv{font-family:var(--mono);font-size:11px;color:var(--blue-deep);background:var(--blue-soft);
+  border:1px solid var(--blue-line);border-radius:6px;padding:5px 9px;max-width:400px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lrow .lv.plain{background:#fff;color:var(--ink-2);border-color:var(--line);max-width:340px;white-space:normal;line-height:1.45}
+.lrow .sp{flex:1}
+.lrow .ops{display:flex;gap:6px;margin-left:auto}
+/* ---------- forms ---------- */
+.frow{display:flex;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
+.frow label{font-weight:700;font-size:12px;color:var(--ink-2);min-width:150px}
+.inp,select.inp{height:30px;border:1px solid #c4d4ec;border-radius:6px;padding:0 10px;
+  font-size:12px;font-family:inherit;color:var(--ink);background:#fff;outline:none;min-width:220px}
+.inp:focus{border-color:var(--blue);box-shadow:0 0 0 2px #bfdbfe}
+.inp.narrow{min-width:90px;max-width:130px}
+.form{display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:4px 0 14px}
+.f-row{background:#fff;border:1px solid var(--line);border-radius:8px;padding:11px 14px}
+.f-row label{display:block;font-size:11px;font-weight:800;color:var(--ink-2);margin-bottom:6px}
+.f-row .inp,.f-row select{width:100%;height:30px;border:1px solid #c4d4ec;border-radius:6px;
+  padding:0 10px;font-size:12px;font-family:inherit;color:var(--ink);background:#fff;outline:none}
+.f-row .hint{font-size:10px;color:var(--muted);margin-top:5px}
+.radio{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border:1px solid #c4d4ec;
+  border-radius:8px;background:#fff;cursor:pointer;font-size:12px;font-weight:600;color:var(--ink-2)}
+.radio.on{border-color:var(--blue);background:var(--blue-soft);color:var(--blue-deep);box-shadow:0 0 0 1px var(--blue-line)}
+.radio .rdot{width:14px;height:14px;border-radius:50%;border:2px solid #94a3b8;position:relative;flex:0 0 14px}
+.radio.on .rdot{border-color:var(--blue)}
+.radio.on .rdot::after{content:'';position:absolute;inset:2px;border-radius:50%;background:var(--blue)}
+/* ---------- toggle rows ---------- */
+.tgl{display:flex;gap:12px;align-items:flex-start;padding:9px 0;border-bottom:1px dashed #eef2f8}
+.tgl:last-child{border-bottom:none}
+.tgl .sw{flex:0 0 40px;padding-top:2px}
+.switch{position:relative;display:inline-block;width:40px;height:20px;border-radius:10px;background:#cbd5e1;
+  cursor:pointer;transition:.15s;vertical-align:middle}
+.switch::after{content:'';position:absolute;left:2px;top:2px;width:16px;height:16px;border-radius:50%;
+  background:#fff;transition:.15s;box-shadow:0 1px 3px rgba(0,0,0,.25)}
+.switch.on{background:var(--blue)}
+.switch.on::after{left:22px}
+.switch.green.on{background:var(--ok)}
+.tgl b{font-size:12.5px;color:var(--ink)}
+.tgl p{font-size:11px;color:var(--muted);line-height:1.5;margin-top:2px;max-width:640px}
+/* ---------- tables ---------- */
+table.tbl{width:100%;border-collapse:collapse;font-size:12px}
+.tbl th{text-align:left;font-size:10px;letter-spacing:.8px;text-transform:uppercase;color:var(--muted);
+  padding:8px 10px;border-bottom:1px solid var(--line);background:#f8fafc;font-weight:800;white-space:nowrap}
+.tbl td{padding:7px 10px;border-bottom:1px solid #eef2f8;color:var(--ink-2);vertical-align:middle}
+.tbl tr:last-child td{border-bottom:none}
+.tbl tr:hover td{background:var(--blue-soft)}
+.tbl .doc{color:var(--ink);font-weight:600;max-width:210px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tbl .id{font-family:var(--mono);color:var(--muted);font-size:11px}
+.filters{display:flex;gap:7px;margin-bottom:12px;align-items:center;flex-wrap:wrap}
+.fchip{font-size:11px;font-weight:700;padding:4px 12px;border-radius:14px;border:1px solid #c4d4ec;
+  background:#fff;color:var(--ink-2);cursor:pointer}
+.fchip.on{background:linear-gradient(135deg,#1e40af,#1d4ed8);color:#fff;border-color:#16307a}
+.fchip .n{opacity:.75;font-weight:800;margin-left:3px}
+/* ---------- progress ---------- */
+.prog{width:130px;height:12px;border:1px solid #b6c8e0;border-radius:7px;background:#eef2f8;overflow:hidden;position:relative}
+.prog i{display:block;height:100%;background:linear-gradient(90deg,#1d4ed8,#3b82f6);border-radius:6px;position:relative}
+.prog i::after{content:'';position:absolute;inset:0;
+  background:repeating-linear-gradient(45deg,rgba(255,255,255,.28) 0 6px,transparent 6px 12px);
+  animation:crawl 1s linear infinite}
+.prog.done i{background:linear-gradient(90deg,#16a34a,#22c55e)}.prog.done i::after{display:none}
+.prog.fail i{background:#ef4444}.prog.fail i::after{display:none}
+@keyframes crawl{from{background-position:0 0}to{background-position:17px 0}}
+/* ---------- printers ---------- */
+.pgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.pcard{background:#fff;border:1px solid var(--line);border-radius:9px;padding:13px 15px;position:relative}
+.pcard .top{display:flex;align-items:center;gap:10px}
+.pcard .picon{width:38px;height:38px;border-radius:8px;background:var(--blue-soft);border:1px solid var(--blue-line);
+  display:flex;align-items:center;justify-content:center;flex:0 0 38px}
+.pcard .picon svg{width:19px;height:19px;stroke:var(--blue-deep)}
+.pcard .nm{font-size:13.5px;font-weight:700;color:var(--ink)}
+.pcard .mdl{font-size:11px;color:var(--muted);margin-top:1px}
+.pcard .badge{position:absolute;top:12px;right:12px;font-size:9.5px;font-weight:800;letter-spacing:.6px;
+  background:linear-gradient(135deg,#1e40af,#1d4ed8);color:#fff;border-radius:9px;padding:2px 9px}
+.pcard .st{margin:10px 0;display:flex;gap:14px;font-size:11px;color:var(--ink-2);flex-wrap:wrap}
+.pcard .st b{color:var(--ink)}
+.pcard .url{font-family:var(--mono);font-size:10.5px;color:var(--blue-deep);background:var(--blue-soft);
+  border:1px solid var(--blue-line);border-radius:6px;padding:6px 9px;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap;display:flex;align-items:center;gap:8px}
+.pcard .url .cp{margin-left:auto;border:none;background:none;cursor:pointer;color:var(--blue-deep);
+  font-size:10px;font-weight:800;font-family:inherit}
+.pcard .ops{display:flex;gap:7px;margin-top:11px;flex-wrap:wrap}
+.pcard.off{opacity:.82}
+/* ---------- logs ---------- */
+.logbox{background:#0d1731;border:1px solid #16307a;border-radius:9px;padding:12px 14px;
+  font-family:var(--mono);font-size:11.5px;line-height:1.75;color:#c7d6f5;max-height:430px;overflow:auto}
+.logbox .ts{color:#5b6f9e}
+.logbox .lv{font-weight:800;display:inline-block;width:52px}
+.logbox .lv.I{color:#4ade80}.logbox .lv.W{color:#fbbf24}.logbox .lv.E{color:#f87171}
+.logbox .hl{color:#7cb1ff}
+/* ---------- kpi row + section headings (Options design family) ---------- */
+.kpi{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.kpi .kc{flex:1;min-width:130px;background:#fff;border:1px solid var(--line);border-radius:9px;
+  padding:11px 14px;position:relative;overflow:hidden}
+.kpi .kc::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--blue)}
+.kpi .kc.g::before{background:var(--ok)}.kpi .kc.r::before{background:var(--err)}.kpi .kc.w::before{background:var(--warn)}
+.kpi .kc b{font-size:19px;color:var(--ink)}
+.kpi .kc small{display:block;font-size:9.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;font-weight:800;margin-top:2px}
+.kpi .kc .chip{position:absolute;right:10px;top:10px}
+.h3sec{font-size:12.5px;font-weight:800;color:var(--blue-deep);margin:16px 0 8px;
+  padding-bottom:5px;border-bottom:1px dashed var(--blue-line)}
+/* ---------- status bar ---------- */
+.statusbar{flex:0 0 auto;height:24px;display:flex;align-items:stretch;gap:1px;
+  background:linear-gradient(#eef3fb,#dde7f5);border-top:1px solid #b6c8e0;padding:0 6px;user-select:none;overflow:hidden}
+.sb-pane{display:flex;align-items:center;gap:6px;padding:0 11px;font-size:10.5px;color:var(--ink-2);
+  border-right:1px solid #c4d2e8;font-weight:600;white-space:nowrap}
+.sb-pane .dot{width:7px;height:7px;border-radius:50%;background:#22c55e;box-shadow:0 0 5px #22c55e}
+.sb-pane.grow{flex:1;border-right:none;color:var(--muted);font-weight:500}
+.sb-pane b{color:var(--ink)}
+/* ---------- menubar dropdowns ---------- */
+.menubar{position:relative;z-index:50}
+.menu{position:relative;height:100%;display:flex;align-items:center}
+.menu-label{font-size:12px;color:var(--ink);padding:3px 9px;border-radius:3px;cursor:default;white-space:nowrap}
+.menu:hover .menu-label{background:var(--blue-soft);color:var(--blue-deep)}
+.menu.open .menu-label{background:linear-gradient(135deg,#1e40af,#1d4ed8);color:#fff}
+.dd{display:none;position:absolute;top:25px;left:0;min-width:252px;background:#fff;
+  border:1px solid #c4d4ec;border-radius:6px;box-shadow:0 14px 34px rgba(15,23,42,.24);
+  padding:5px;z-index:900}
+.menu.open .dd{display:block;animation:fadein .12s ease}
+.dd-it{display:flex;align-items:center;gap:9px;padding:6px 10px;font-size:12px;color:var(--ink);
+  border-radius:4px;cursor:pointer;white-space:nowrap}
+.dd-it .ic{width:17px;text-align:center;flex:0 0 17px;font-size:12.5px}
+.dd-it .sc{margin-left:auto;font-size:10.5px;color:var(--muted);padding-left:18px}
+.dd-it:hover{background:var(--blue-soft);color:var(--blue-deep)}
+.dd-it.dis{color:var(--muted);pointer-events:none}
+.dd-it.chk::after{content:'\2713';color:var(--blue);font-weight:800;margin-left:auto;font-size:11px}
+.dd-it.chk:hover::after{color:var(--blue-deep)}
+.dd-sep{height:1px;background:var(--line);margin:4px 6px}
+.dd-title{font-size:9.5px;font-weight:800;letter-spacing:1px;color:var(--muted);
+  text-transform:uppercase;padding:5px 10px 3px}
+/* ---------- QR tiles ---------- */
+.qr-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.qr-tile{background:#fff;border:1px solid var(--line);border-radius:9px;padding:12px;text-align:center;
+  cursor:zoom-in;position:relative}
+.qr-tile:hover{border-color:var(--blue);box-shadow:0 4px 14px rgba(29,78,216,.18)}
+.qr-tile .qbox{width:116px;height:116px;margin:0 auto;background:#fff;border:1px solid var(--line);
+  border-radius:6px;padding:6px}
+.qr-tile .qbox svg{width:100%;height:100%;display:block}
+.qr-tile b{display:block;font-size:12px;color:var(--ink);margin-top:8px}
+.qr-tile small{display:block;font-size:10px;color:var(--muted);margin-top:3px;line-height:1.45}
+.qr-tile .zoom{position:absolute;top:8px;right:8px;font-size:9.5px;color:var(--blue-deep);
+  background:var(--blue-soft);border:1px solid var(--blue-line);border-radius:9px;
+  padding:1px 7px;font-weight:800}
+/* ---------- modal ---------- */
+.modal-back{position:fixed;inset:0;background:rgba(4,10,30,.55);display:none;
+  align-items:center;justify-content:center;z-index:1000}
+.modal-back.show{display:flex;animation:fadein .15s ease}
+.modal{background:#fff;border-radius:12px;box-shadow:0 40px 90px rgba(2,8,35,.5);
+  width:min(460px,92vw);overflow:hidden;border:1px solid #16307a;max-height:88vh;overflow-y:auto}
+.modal.wide{width:min(740px,94vw)}
+.modal .re-step{display:flex;align-items:center;gap:8px;margin:14px 0 8px}
+.modal .re-step:first-child{margin-top:0}
+.modal .re-step .n{width:20px;height:20px;flex:0 0 20px;border-radius:50%;background:linear-gradient(135deg,#1e40af,#1d4ed8);
+  color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center}
+.modal .re-step b{font-size:12px;color:var(--blue-deep);letter-spacing:.4px;text-transform:uppercase}
+.modal .re-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.modal .re-grid .full{grid-column:1/-1}
+.modal label.rl{display:block;font-size:10px;font-weight:800;color:var(--ink-2);margin-bottom:4px;letter-spacing:.4px}
+.modal .inp2{width:100%;height:29px;border:1px solid #c4d4ec;border-radius:6px;padding:0 9px;font-size:11.5px;
+  font-family:inherit;color:var(--ink);background:#fff;outline:none}
+.modal .inp2:focus{border-color:var(--blue);box-shadow:0 0 0 2px #bfdbfe}
+.modal .hint2{font-size:9.5px;color:var(--muted);margin-top:3px;line-height:1.4}
+.pattern-chip{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10.5px;
+  color:var(--blue-deep);background:var(--blue-soft);border:1px solid var(--blue-line);border-radius:6px;
+  padding:4px 9px;cursor:pointer;margin:0 6px 6px 0}
+.pattern-chip small{font-family:'Segoe UI',sans-serif;color:var(--muted);font-size:9.5px}
+.pattern-chip:hover{border-color:var(--blue);background:#dbeafe}
+.pattern-chip .use{font-size:9px;font-weight:800;color:#fff;background:var(--blue);border-radius:4px;padding:1px 6px}
+.modal .m-h{height:38px;flex:0 0 38px;background:linear-gradient(135deg,#1e3a8a,#1d4ed8);color:#fff;
+  display:flex;align-items:center;padding:0 14px;font-size:13px;font-weight:700;gap:8px;position:sticky;top:0}
+.modal .m-h .x{margin-left:auto;width:26px;height:26px;border:none;background:transparent;color:#fff;
+  font-size:14px;cursor:pointer;border-radius:5px;font-family:inherit}
+.modal .m-h .x:hover{background:#dc2626}
+.modal .m-b{padding:16px;text-align:center}
+.modal .m-b .mq{width:232px;height:232px;margin:0 auto;border:1px solid var(--line);
+  border-radius:8px;padding:10px;background:#fff}
+.modal .m-b .mq svg{width:100%;height:100%;display:block}
+.modal .m-b .murl{font-family:var(--mono);font-size:11px;color:var(--blue-deep);background:var(--blue-soft);
+  border:1px solid var(--blue-line);border-radius:7px;padding:8px 10px;margin-top:12px;
+  word-break:break-all;line-height:1.5;text-align:left}
+.modal .m-b .mops{display:flex;gap:8px;justify-content:center;margin-top:12px}
+.modal .m-b .mnote{font-size:10.5px;color:var(--muted);margin-top:10px;line-height:1.5}
+.mtable{width:100%;border-collapse:collapse;font-size:12px;text-align:left;margin-top:4px}
+.mtable td{padding:6px 8px;border-bottom:1px dashed #eef2f8;color:var(--ink-2)}
+.mtable td:first-child{font-family:var(--mono);color:var(--blue-deep);font-weight:700;white-space:nowrap;width:130px}
+/* ---------- toasts ---------- */
+#toasts{position:fixed;right:18px;bottom:34px;z-index:1200;display:flex;flex-direction:column;gap:8px}
+.toast{background:#0f172a;color:#e2e8f0;font-size:12px;padding:9px 14px;border-radius:8px;
+  box-shadow:0 10px 26px rgba(2,8,35,.4);border-left:3px solid var(--blue);max-width:360px;
+  animation:fadein .18s ease;line-height:1.45}
+.toast.ok{border-left-color:var(--ok)} .toast.warn{border-left-color:var(--warn)}
+.design-note{position:fixed;right:20px;bottom:8px;color:#5b74b8;font-size:10.5px;letter-spacing:.4px;z-index:99}
+@media (max-width:1100px){
+  .stats{grid-template-columns:repeat(2,1fr)}
+  .pgrid{grid-template-columns:1fr}
+  .dash-row{grid-template-columns:1fr}
+  .form{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="desktop">
+  <div class="window">
+
+    <!-- ================= TITLE BAR ================= -->
+    <div class="titlebar">
+      <div class="logo">AP</div>
+      <div class="t-main">AdvPrint Pro — Printing Hub <small>· All-in-One Console v3.1.3 · AI-Lab · THE ONE UI</small></div>
+      <div class="spacer"></div>
+      <button class="winbtn">&#x2500;</button>
+      <button class="winbtn">&#x25A1;</button>
+      <button class="winbtn close">&#x2715;</button>
+    </div>
+
+    <!-- ================= MENU BAR (working dropdowns) ================= -->
+    <div class="menubar">
+      <div class="menu">
+        <span class="menu-label">File</span>
+        <div class="dd">
+          <div class="dd-it" data-goto="queue"><span class="ic">&#9889;</span>New print job&#8230;<span class="sc">Ctrl+N</span></div>
+          <div class="dd-it" data-goto="dropzone"><span class="ic">&#128449;</span>Open DropZone folder<span class="sc">Ctrl+D</span></div>
+          <div class="dd-it" data-goto="rules"><span class="ic">&#128196;</span>Import auto-print rules&#8230;</div>
+          <div class="dd-it" data-goto="hub"><span class="ic">&#11015;</span>Export settings (config.json)</div>
+          <div class="dd-sep"></div>
+          <div class="dd-it" data-goto="debug"><span class="ic">&#128424;</span>Print test page<span class="sc">Ctrl+T</span></div>
+          <div class="dd-it" data-toast="Demo: opens the phone Send portal QR in the real app"><span class="ic">&#128241;</span>Share Send portal&#8230;</div>
+          <div class="dd-sep"></div>
+          <div class="dd-it dis"><span class="ic">&#128682;</span>Exit hub (stops printing)<span class="sc">Alt+F4</span></div>
+        </div>
+      </div>
+      <div class="menu">
+        <span class="menu-label">View</span>
+        <div class="dd">
+          <div class="dd-title">Tabs — the one UI</div>
+          <div class="dd-it" data-goto="dashboard"><span class="ic">&#9635;</span>Dashboard<span class="sc">Ctrl+1</span></div>
+          <div class="dd-it" data-goto="queue"><span class="ic">&#9776;</span>Queue<span class="sc">Ctrl+2</span></div>
+          <div class="dd-it" data-goto="history"><span class="ic">&#128218;</span>History<span class="sc">Ctrl+3</span></div>
+          <div class="dd-it" data-goto="printers"><span class="ic">&#128424;</span>Printers<span class="sc">Ctrl+4</span></div>
+          <div class="dd-it" data-goto="lan"><span class="ic">&#127760;</span>LAN Sharing<span class="sc">Ctrl+5</span></div>
+          <div class="dd-it" data-goto="dropzone"><span class="ic">&#128449;</span>DropZone<span class="sc">Ctrl+6</span></div>
+          <div class="dd-it" data-goto="connections"><span class="ic">&#128279;</span>Connections<span class="sc">Ctrl+7</span></div>
+          <div class="dd-it" data-goto="hub"><span class="ic">&#9881;</span>Hub<span class="sc">Ctrl+8</span></div>
+          <div class="dd-sep"></div>
+          <div class="dd-it" data-goto="rules"><span class="ic">&#9878;</span>Rules</div>
+          <div class="dd-it" data-goto="power"><span class="ic">&#9889;</span>Power Switches</div>
+          <div class="dd-it" data-goto="debug"><span class="ic">&#128295;</span>Debug &amp; Tools</div>
+          <div class="dd-it" data-goto="audit"><span class="ic">&#128220;</span>Audit trail</div>
+          <div class="dd-it" data-goto="logs"><span class="ic">&#128220;</span>Logs</div>
+          <div class="dd-it" data-goto="settings"><span class="ic">&#9881;</span>Settings</div>
+          <div class="dd-it" data-goto="about"><span class="ic">&#8505;</span>About</div>
+          <div class="dd-sep"></div>
+          <div class="dd-it chk" data-chk="1"><span class="ic">&#9635;</span>Status bar<span class="sc">F5</span></div>
+          <div class="dd-it" data-toast="Demo: full-screen hides the desktop backdrop"><span class="ic">&#9974;</span>Full screen<span class="sc">F11</span></div>
+        </div>
+      </div>
+      <div class="menu">
+        <span class="menu-label">Queue</span>
+        <div class="dd">
+          <div class="dd-it" data-toast="Queue PAUSED — new jobs wait until resumed" data-ttype="warn"><span class="ic">&#9208;</span>Pause queue</div>
+          <div class="dd-it" data-toast="Queue RESUMED — held jobs start printing" data-ttype="ok"><span class="ic">&#9654;</span>Resume queue</div>
+          <div class="dd-sep"></div>
+          <div class="dd-it" data-goto="history"><span class="ic">&#8635;</span>Reprint last job</div>
+          <div class="dd-it" data-goto="debug" data-toast="ALL held jobs released to their printers" data-ttype="ok"><span class="ic">&#10006;</span>Release ALL held jobs</div>
+          <div class="dd-it" data-goto="history"><span class="ic">&#129529;</span>Clear finished jobs</div>
+          <div class="dd-sep"></div>
+          <div class="dd-it" data-goto="queue"><span class="ic">&#8594;</span>Open Queue tab<span class="sc">Ctrl+2</span></div>
+        </div>
+      </div>
+      <div class="menu">
+        <span class="menu-label">History</span>
+        <div class="dd">
+          <div class="dd-it" data-goto="history"><span class="ic">&#8635;</span>Reprint selected jobs</div>
+          <div class="dd-it" data-goto="audit" data-toast="history.csv exported to Downloads" data-ttype="ok"><span class="ic">&#11015;</span>Export CSV&#8230;</div>
+          <div class="dd-it" data-goto="history" data-toast="Finished jobs cleared — waiting jobs untouched" data-ttype="warn"><span class="ic">&#128465;</span>Clear ALL finished jobs&#8230;</div>
+          <div class="dd-sep"></div>
+          <div class="dd-it" data-goto="history"><span class="ic">&#8594;</span>Open History tab<span class="sc">Ctrl+3</span></div>
+        </div>
+      </div>
+      <div class="menu">
+        <span class="menu-label">Printers</span>
+        <div class="dd">
+          <div class="dd-it" data-goto="printers"><span class="ic">&#128424;</span>Printers tab<span class="sc">Ctrl+4</span></div>
+          <div class="dd-it" data-goto="printers" data-toast="Windows printer picker opens (demo)"><span class="ic">&#10133;</span>Add IP printer&#8230;</div>
+          <div class="dd-it" data-goto="printers"><span class="ic">&#9733;</span>Set default printer</div>
+          <div class="dd-it" data-goto="printers"><span class="ic">&#9208;</span>Printer status hold</div>
+          <div class="dd-sep"></div>
+          <div class="dd-it" data-goto="debug"><span class="ic">&#128424;</span>Print test page<span class="sc">Ctrl+T</span></div>
+        </div>
+      </div>
+      <div class="menu">
+        <span class="menu-label">Network</span>
+        <div class="dd">
+          <div class="dd-it" data-goto="connections"><span class="ic">&#128279;</span>Connections tab<span class="sc">Ctrl+7</span></div>
+          <div class="dd-sep"></div>
+          <div class="dd-it" data-qr="send"><span class="ic">&#128241;</span>Send portal QR&#8230;</div>
+          <div class="dd-it" data-qr="invite"><span class="ic">&#128101;</span>Invite another PC (QR)&#8230;</div>
+          <div class="dd-it" data-qr="ipp"><span class="ic">&#128424;</span>IPP printer URL (QR)&#8230;</div>
+          <div class="dd-it" data-qr="hub"><span class="ic">&#9635;</span>Hub console QR&#8230;</div>
+          <div class="dd-sep"></div>
+          <div class="dd-it" data-toast="Hub URL copied — http://10.26.94.206:9235" data-ttype="ok"><span class="ic">&#128203;</span>Copy hub URL</div>
+          <div class="dd-it" data-toast="Firewall rule present: inbound TCP 9235 ALLOWED" data-ttype="ok"><span class="ic">&#128293;</span>Allow TCP 9235 in firewall</div>
+          <div class="dd-it" data-toast="LAN test OK — hub answered in 12 ms" data-ttype="ok"><span class="ic">&#128246;</span>Test LAN</div>
+        </div>
+      </div>
+      <div class="menu">
+        <span class="menu-label">Hub</span>
+        <div class="dd">
+          <div class="dd-it" data-goto="hub"><span class="ic">&#9881;</span>Hub settings tab<span class="sc">Ctrl+8</span></div>
+          <div class="dd-it" data-toast="Hub restart queued — printing resumes automatically" data-ttype="warn"><span class="ic">&#128260;</span>Restart hub</div>
+          <div class="dd-it" data-goto="hub" data-toast="Token rotated — re-pair the extension once" data-ttype="warn"><span class="ic">&#128273;</span>Rotate token&#8230;</div>
+          <div class="dd-it" data-goto="hub"><span class="ic">&#128295;</span>Install as Windows service</div>
+          <div class="dd-sep"></div>
+          <div class="dd-it" data-toast="v3.1.3 is up to date" data-ttype="ok"><span class="ic">&#11014;</span>Check for updates</div>
+          <div class="dd-it" data-goto="hub"><span class="ic">&#8594;</span>Open Hub tab</div>
+        </div>
+      </div>
+      <div class="menu">
+        <span class="menu-label">Tools</span>
+        <div class="dd">
+          <div class="dd-it" data-toast="REAL test page sent to HP Laser 103 (demo)" data-ttype="ok"><span class="ic">&#9889;</span>REAL test print<span class="sc">Ctrl+T</span></div>
+          <div class="dd-it" data-goto="debug"><span class="ic">&#129514;</span>Full self-test</div>
+          <div class="dd-it" data-goto="debug"><span class="ic">&#128027;</span>Debug mode</div>
+          <div class="dd-sep"></div>
+          <div class="dd-it" data-goto="logs"><span class="ic">&#128220;</span>Open Logs</div>
+          <div class="dd-it" data-goto="audit"><span class="ic">&#128220;</span>Open Audit trail</div>
+          <div class="dd-it" data-goto="hub"><span class="ic">&#128193;</span>Open config.json</div>
+          <div class="dd-sep"></div>
+          <div class="dd-it" data-goto="extension"><span class="ic">&#128279;</span>Extension pairing</div>
+        </div>
+      </div>
+      <div class="menu">
+        <span class="menu-label">Help</span>
+        <div class="dd">
+          <div class="dd-it" data-toast="Quick start guide opens in the browser (demo)"><span class="ic">&#10067;</span>Quick start guide</div>
+          <div class="dd-it" data-modal="keys"><span class="ic">&#9000;</span>Keyboard shortcuts</div>
+          <div class="dd-it" data-toast="GitHub: github.com/bitdreamit/AdvPrint-Pro (demo)"><span class="ic">&#127760;</span>GitHub repository</div>
+          <div class="dd-sep"></div>
+          <div class="dd-it" data-goto="about"><span class="ic">&#8505;</span>About AdvPrint Pro<span class="sc">F1</span></div>
+        </div>
+      </div>
+      <span class="m-right"><b>AdvPrint Pro Printing Hub</b> · 10.26.94.206:9235 · token auth ON</span>
+    </div>
+
+    <!-- ================= TOOLBAR ================= -->
+    <div class="toolbar">
+      <button class="tbtn primary" data-tab="queue">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></span><span>New Job</span>
+      </button>
+      <button class="tbtn" data-tab="printers">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#1e40af" stroke-width="2"><path d="M6 9V3h12v6M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg></span><span>Test Page</span>
+      </button>
+      <button class="tbtn" data-tab="queue">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2"><rect x="6" y="5" width="4" height="14" rx="1" fill="#d97706"/><rect x="14" y="5" width="4" height="14" rx="1" fill="#d97706"/></svg></span><span>Pause Queue</span>
+      </button>
+      <button class="tbtn" data-tab="history">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#1e40af" stroke-width="2"><path d="M21 12a9 9 0 11-2.6-6.4"/><path d="M21 3v6h-6"/></svg></span><span>History</span>
+      </button>
+      <button class="tbtn" data-tab="debug">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2"><polygon points="7 4 19 12 7 20" fill="#16a34a"/></svg></span><span>Release ALL</span>
+      </button>
+      <div class="tsep"></div>
+      <button class="tbtn" data-tab="lan">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#1e40af" stroke-width="2"><path d="M10 14a5 5 0 007.07 0l3.18-3.18a5 5 0 00-7.07-7.07L11.7 5.23"/><path d="M14 10a5 5 0 00-7.07 0L3.75 13.18a5 5 0 007.07 7.07l1.47-1.47"/></svg></span><span>LAN Sharing</span>
+      </button>
+      <button class="tbtn" data-tab="dropzone">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#1e40af" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/><path d="M12 11v6M9 14l3 3 3-3"/></svg></span><span>DropZone</span>
+      </button>
+      <div class="tsep"></div>
+      <button class="tbtn" data-tab="connections">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#1e40af" stroke-width="2"><path d="M10 14a5 5 0 007.07 0l3.18-3.18a5 5 0 00-7.07-7.07L11.7 5.23"/><path d="M14 10a5 5 0 00-7.07 0L3.75 13.18a5 5 0 007.07 7.07l1.47-1.47"/></svg></span><span>Connections</span>
+      </button>
+      <button class="tbtn" data-tab="hub">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#1e40af" stroke-width="2"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 8h.01M7 17h.01"/></svg></span><span>Hub</span>
+      </button>
+      <div class="tsep"></div>
+      <button class="tbtn" data-tab="rules">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#1e40af" stroke-width="2"><path d="M13 3l-2 6H7l4 5-1 7 6-8h4l-3-6h-2l2-4z"/></svg></span><span>Rules</span>
+      </button>
+      <button class="tbtn" data-tab="power">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#1e40af" stroke-width="2"><path d="M13 2L4 14h6l-1 8 9-12h-6z"/></svg></span><span>Power</span>
+      </button>
+      <div class="tsep"></div>
+      <button class="tbtn" data-tab="debug">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#1e40af" stroke-width="2"><circle cx="12" cy="13" r="5"/><path d="M12 8V4M9 9L6 6M15 9l3-3M7 13H3M18 13h3M9 17l-3 3M15 17l3 3"/></svg></span><span>Debug</span>
+      </button>
+      <button class="tbtn" data-tab="settings">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#1e40af" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 00-.1-1.2l2-1.6-2-3.4-2.4 1a7 7 0 00-2-1.2L14 3h-4l-.5 2.6a7 7 0 00-2 1.2l-2.4-1-2 3.4 2 1.6a7 7 0 000 2.4l-2 1.6 2 3.4 2.4-1a7 7 0 002 1.2L10 21h4l.5-2.6a7 7 0 002-1.2l2.4 1 2-3.4-2-1.6c.06-.4.1-.8.1-1.2z"/></svg></span><span>Settings</span>
+      </button>
+      <div class="tspacer"></div>
+      <button class="tbtn" data-tab="about">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#1e40af" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M12 11v6"/></svg></span><span>About</span>
+      </button>
+    </div>
+
+    <!-- ================= ADDRESS BAR ================= -->
+    <div class="addrbar">
+      <div class="fld">
+        <span class="dot"></span>
+        <span class="url">http://10.26.94.206:9235/ui — AdvPrint Printing Hub · ALL-IN-ONE</span>
+        <span class="lock">&#128274; token ok</span>
+      </div>
+      <button class="pill-btn" data-qr="hub">&#128241; QR codes</button>
+      <button class="pill-btn" data-tab="lan">&#128241; Send Portal</button>
+      <button class="pill-btn" data-tab="connections">&#128279; Connections</button>
+      <button class="pill-btn" data-tab="dropzone">&#128449; DropZone</button>
+      <button class="pill-btn blue" data-tab="dashboard">&#9635; THE ONE UI</button>
+    </div>
+
+    <!-- ================= BODY ================= -->
+    <div class="body">
+
+      <!-- -------- SIDEBAR TREE -------- -->
+      <aside class="sidebar">
+        <div class="sb-group">Overview</div>
+        <div class="sb-item active" data-tab="dashboard">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg>
+          Dashboard
+        </div>
+        <div class="sb-item" data-tab="queue">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg>
+          Queue <span class="cnt">4</span>
+        </div>
+        <div class="sb-item" data-tab="history">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+          History <span class="cnt">12</span>
+        </div>
+        <div class="sb-group">Devices</div>
+        <div class="sb-item" data-tab="printers">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M6 9V3h12v6M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>
+          Printers <span class="cnt">4</span>
+        </div>
+        <div class="sb-item" data-tab="lan">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M10 14a5 5 0 007.07 0l3.18-3.18a5 5 0 00-7.07-7.07L11.7 5.23"/><path d="M14 10a5 5 0 00-7.07 0L3.75 13.18a5 5 0 007.07 7.07l1.47-1.47"/></svg>
+          LAN Sharing <span class="cnt grn">ON</span>
+        </div>
+        <div class="sb-item" data-tab="dropzone">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/><path d="M12 11v6M9 14l3 3 3-3"/></svg>
+          DropZone <span class="cnt">0</span>
+        </div>
+        <div class="sb-group">Network</div>
+        <div class="sb-item" data-tab="connections">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M10 14a5 5 0 007.07 0l3.18-3.18a5 5 0 00-7.07-7.07L11.7 5.23"/><path d="M14 10a5 5 0 00-7.07 0L3.75 13.18a5 5 0 007.07 7.07l1.47-1.47"/></svg>
+          Connections <span class="cnt">2</span>
+        </div>
+        <div class="sb-item" data-tab="hub">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 8h.01M7 17h.01"/></svg>
+          Hub
+        </div>
+        <div class="sb-group">Automation</div>
+        <div class="sb-item" data-tab="rules">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M13 3l-2 6H7l4 5-1 7 6-8h4l-3-6h-2l2-4z"/></svg>
+          Rules <span class="cnt">6</span>
+        </div>
+        <div class="sb-group">Extension</div>
+        <div class="sb-item" data-tab="power">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M13 2L4 14h6l-1 8 9-12h-6z"/></svg>
+          Power Switches
+        </div>
+        <div class="sb-item" data-tab="browser">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.6 3 14.4 0 18M12 3c-3 3.6-3 14.4 0 18"/></svg>
+          Browser
+        </div>
+        <div class="sb-item" data-tab="extension">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M14 7V3h-4v4H6v4h4v4h4v-4h4V7z"/></svg>
+          Extension <span class="cnt">2</span>
+        </div>
+        <div class="sb-group">System</div>
+        <div class="sb-item" data-tab="debug">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="12" cy="13" r="5"/><path d="M12 8V4M9 9L6 6M15 9l3-3M7 13H3M18 13h3M9 17l-3 3M15 17l3 3"/></svg>
+          Debug <span class="cnt red">1</span>
+        </div>
+        <div class="sb-item" data-tab="audit">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg>
+          Audit
+        </div>
+        <div class="sb-item" data-tab="logs">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M4 17l5-5-5-5M12 19h8"/></svg>
+          Logs
+        </div>
+        <div class="sb-item" data-tab="settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 00-.1-1.2l2-1.6-2-3.4-2.4 1a7 7 0 00-2-1.2L14 3h-4l-.5 2.6a7 7 0 00-2 1.2l-2.4-1-2 3.4 2 1.6a7 7 0 000 2.4l-2 1.6 2 3.4 2.4-1a7 7 0 002 1.2L10 21h4l.5-2.6a7 7 0 002-1.2l2.4 1 2-3.4-2-1.6c.06-.4.1-.8.1-1.2z"/></svg>
+          Settings
+        </div>
+        <div class="sb-item" data-tab="about">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M12 11v6"/></svg>
+          About
+        </div>
+        <div class="sb-note">
+          <b>THE ONE UI — EVERYTHING</b><br>
+          ONE window manages EVERYTHING. Queue &amp; History are <b>separate tabs</b>;
+          Connections &amp; Hub are first-class. The old dashboard cards, the extension
+          options, LAN sharing and DropZone are all here now.
+          Served by the hub at <span class="mono" style="font-size:10px">/ui</span> —
+          same UI in the native window, Chrome, and the extension.
+        </div>
+      </aside>
+
+      <!-- -------- CONTENT -------- -->
+      <main class="content">
+
+        <!-- ============ DASHBOARD ============ -->
+        <section class="panel active" id="p-dashboard">
+          <div class="p-head">
+            <h2>Dashboard</h2><span class="sub">AI-Lab · live · every feature in ONE window</span>
+            <div class="right"><button class="btn blue">&#8635; Refresh</button><button class="btn">&#128424; Test Page</button></div>
+          </div>
+
+          <div class="stats">
+            <div class="stat"><div class="d">today</div><div class="v">38</div><div class="l">Jobs Today</div></div>
+            <div class="stat g"><div class="d">7 days</div><div class="v">94.7%</div><div class="l">Success Rate</div></div>
+            <div class="stat w"><div class="d">live</div><div class="v">4</div><div class="l">In Queue</div></div>
+            <div class="stat r"><div class="d">1 offline</div><div class="v">3/4</div><div class="l">Printers Ready</div></div>
+            <div class="stat"><div class="d">hub</div><div class="v">v3.1.3</div><div class="l">Version</div></div>
+          </div>
+
+          <div class="card">
+            <div class="card-h">&#9889; Quick actions <span class="r">the most-used buttons from every old card — now one strip</span></div>
+            <div class="card-b" style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn blue">&#128424; REAL test print</button>
+              <button class="btn" data-tab="dropzone">&#128449; Open DropZone</button>
+              <button class="btn" data-tab="lan">&#128241; Send portal QR</button>
+              <button class="btn" data-tab="lan">&#128279; Copy invite link</button>
+              <button class="btn" data-tab="debug">&#9889; Release ALL held</button>
+              <button class="btn" data-tab="debug">&#128300; Full self-test</button>
+              <button class="btn" data-tab="queue">&#9776; Open Queue</button>
+              <button class="btn" data-tab="history">&#128218; History &amp; Reprint</button>
+              <button class="btn" data-tab="connections">&#128279; Connections</button>
+              <button class="btn" data-tab="hub">&#9881; Hub settings</button>
+            </div>
+          </div>
+
+          <div class="dash-row">
+            <div class="card">
+              <div class="card-h">&#9889; Print Hub Status <span class="r">uptime 04:12:37</span></div>
+              <div class="kv">
+                <span class="k">Service</span><span class="v">Running <span class="chip ok"><span class="d"></span>HEALTHY</span></span>
+                <span class="k">Listen</span><span class="v mono">0.0.0.0:9235</span>
+                <span class="k">LAN sharing</span><span class="v"><span class="chip ok">ON</span> <span class="mono" style="font-size:11px">http://10.26.94.206:9235</span></span>
+                <span class="k">IPP printer</span><span class="v"><span class="chip ok">READY</span> <span class="mono" style="font-size:11px">/ipp/print</span></span>
+                <span class="k">RAW port</span><span class="v"><span class="chip ok">LISTENING</span> <span class="mono" style="font-size:11px">10.26.94.206:9100</span></span>
+                <span class="k">DropZone</span><span class="v"><span class="chip ok">ON</span> watching 1 folder</span>
+                <span class="k">Connections</span><span class="v"><span class="chip info">2 PCs</span> <span class="chip info">2 peers</span> see Connections tab</span>
+                <span class="k">Token</span><span class="v mono">mPz5&#8230;nXs <span class="chip info">auth on</span></span>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-h">&#128424; Default Printer</div>
+              <div class="kv">
+                <span class="k">Name</span><span class="v">HP Laser 103 107 108</span>
+                <span class="k">Status</span><span class="v"><span class="chip err"><span class="d"></span>OFFLINE</span></span>
+                <span class="k">Hold</span><span class="v">jobs wait while printer is offline <span class="chip info">status hold ON</span></span>
+              </div>
+              <div style="padding:0 14px 13px;display:flex;gap:7px;flex-wrap:wrap">
+                <button class="btn blue">Test Page</button>
+                <button class="btn" data-tab="printers">Open Printers</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-h">&#128203; Recent Jobs <span class="r">last 6 of 38 today</span></div>
+            <table class="tbl">
+              <tr><th>ID</th><th>Document</th><th>Printer</th><th>Pages</th><th>Status</th><th style="width:150px">Progress</th><th>Time</th></tr>
+              <tr><td class="id">#2047</td><td class="doc">lab-report-nov.pdf</td><td>HP Laser 103 107 108</td><td>12</td><td><span class="chip info"><span class="d"></span>PRINTING</span></td><td><div class="prog"><i style="width:64%"></i></div></td><td>14:22:08</td></tr>
+              <tr><td class="id">#2046</td><td class="doc">invoice-2026-11.pdf</td><td>Microsoft Print to PDF</td><td>2</td><td><span class="chip ok"><span class="d"></span>DONE</span></td><td><div class="prog done"><i style="width:100%"></i></div></td><td>14:19:41</td></tr>
+              <tr><td class="id">#2045</td><td class="doc">scanned-pp.oxps</td><td>AdvPrint Pro @ AI-Lab</td><td>4</td><td><span class="chip warn"><span class="d"></span>QUEUED</span></td><td><div class="prog"><i style="width:0%"></i></div></td><td>14:19:02</td></tr>
+              <tr><td class="id">#2044</td><td class="doc">presentation.pptx</td><td>OneNote (Desktop)</td><td>18</td><td><span class="chip ok"><span class="d"></span>DONE</span></td><td><div class="prog done"><i style="width:100%"></i></div></td><td>14:11:55</td></tr>
+              <tr><td class="id">#2043</td><td class="doc">manual-de.pdf</td><td>HP Laser 103 107 108</td><td>64</td><td><span class="chip err"><span class="d"></span>FAILED</span></td><td><div class="prog fail"><i style="width:31%"></i></div></td><td>13:58:12</td></tr>
+              <tr><td class="id">#2042</td><td class="doc">receipt.html</td><td>HP Laser 103 107 108</td><td>1</td><td><span class="chip ok"><span class="d"></span>DONE</span></td><td><div class="prog done"><i style="width:100%"></i></div></td><td>13:55:30</td></tr>
+            </table>
+          </div>
+        </section>
+
+        <!-- ============ QUEUE (separate tab) ============ -->
+        <section class="panel" id="p-queue">
+          <div class="p-head">
+            <h2>Live Queue</h2><span class="sub">what the Printing Hub is printing right now · auto-refresh 3 s · held jobs wait here</span>
+            <div class="right"><button class="btn">&#8635; Refresh now</button><button class="btn">&#9724; Pause queue</button><button class="btn danger">&#128465; Clear queue</button></div>
+          </div>
+          <div class="kpi">
+            <div class="kc w"><b>1</b><small>Printing</small><span class="chip warn">QUEUE ON</span></div>
+            <div class="kc"><b>1</b><small>Queued</small></div>
+            <div class="kc r"><b>2</b><small>Held · printer offline</small></div>
+            <div class="kc g"><b>9</b><small>Done today</small></div>
+          </div>
+          <div class="filters">
+            <span class="fchip on">All <span class="n">13</span></span>
+            <span class="fchip">Printing <span class="n">1</span></span>
+            <span class="fchip">Queued <span class="n">1</span></span>
+            <span class="fchip">Held <span class="n">2</span></span>
+            <span class="fchip">Completed <span class="n">9</span></span>
+            <span class="fchip">Saved <span class="n">7</span></span>
+            <span class="fchip">Failed <span class="n">1</span></span>
+          </div>
+          <div class="card">
+            <div class="card-h"><span class="chip ok"><span class="d"></span>RUNNING</span> Queue mode <b>ON</b> — jobs print in order (Pause holds them back) <span class="r">hub #2047 in progress</span></div>
+            <table class="tbl">
+              <tr><th>ID</th><th>Document</th><th>Printer</th><th>Kind</th><th>Status</th><th style="width:150px">Progress</th><th></th></tr>
+              <tr><td class="id">#2047</td><td class="doc">lab-report-nov.pdf</td><td>HP Laser 103 107 108</td><td><span class="chip info">PDF</span></td><td><span class="chip info"><span class="d"></span>PRINTING</span></td><td><div class="prog"><i style="width:64%"></i></div></td><td><button class="btn small danger">Cancel</button></td></tr>
+              <tr><td class="id">#2045</td><td class="doc">scanned-pp.oxps</td><td>AdvPrint Pro @ AI-Lab</td><td><span class="chip gray">XPS</span></td><td><span class="chip gray"><span class="d"></span>QUEUED</span></td><td><div class="prog"><i style="width:0%"></i></div></td><td><button class="btn small danger">Cancel</button></td></tr>
+              <tr><td class="id">#2042</td><td class="doc">discharge-summary.pdf</td><td>HP Laser 103 107 108</td><td><span class="chip info">PDF</span></td><td><span class="chip warn"><span class="d"></span>HELD · OFFLINE</span></td><td><div class="prog"><i style="width:0%"></i></div></td><td><button class="btn small">&#9889; Release</button></td></tr>
+              <tr><td class="id">#2041</td><td class="doc">label-4711.zpl</td><td>AdvPrint Pro @ AI-Lab</td><td><span class="chip purple">ZPL</span></td><td><span class="chip warn"><span class="d"></span>HELD · OFFLINE</span></td><td><div class="prog"><i style="width:0%"></i></div></td><td><button class="btn small">&#9889; Release</button></td></tr>
+              <tr><td class="id">#2046</td><td class="doc">invoice-2026-11.pdf</td><td>Microsoft Print to PDF</td><td><span class="chip info">PDF</span></td><td><span class="chip ok"><span class="d"></span>DONE</span></td><td><div class="prog done"><i style="width:100%"></i></div></td><td><button class="btn small">&#8635; Reprint</button></td></tr>
+              <tr><td class="id">#2044</td><td class="doc">presentation.pptx</td><td>OneNote (Desktop)</td><td><span class="chip gray">DOC</span></td><td><span class="chip ok"><span class="d"></span>DONE</span></td><td><div class="prog done"><i style="width:100%"></i></div></td><td><button class="btn small">&#8635; Reprint</button></td></tr>
+              <tr><td class="id">#2043</td><td class="doc">manual-de.pdf</td><td>HP Laser 103 107 108</td><td><span class="chip info">PDF</span></td><td><span class="chip err"><span class="d"></span>FAILED</span></td><td><div class="prog fail"><i style="width:31%"></i></div></td><td><button class="btn small">&#8635; Retry</button></td></tr>
+            </table>
+          </div>
+          <div class="note">Queue mode is switched in <b>Power Switches</b> or directly in the popup:
+            <b>ON</b> = jobs print in order (Pause holds them back); <b>OFF</b> = instant print — every job goes straight to the printer.
+            If no printer is active the job is auto-queued instead of failing. Release ALL held jobs: <b>Debug &amp; Tools</b> or the toolbar button.</div>
+        </section>
+
+        <!-- ============ HISTORY (separate tab) ============ -->
+        <section class="panel" id="p-history">
+          <div class="p-head">
+            <h2>Job History</h2><span class="sub">hub SQLite · bulk reprint manager · waiting jobs are never touched</span>
+            <div class="right"><button class="btn blue">&#8635; Reprint selected</button><button class="btn">&#8635; Reprint non-printed</button><button class="btn danger">Clear ALL history</button></div>
+          </div>
+          <div class="card">
+            <div class="card-h">&#128218; Saved history <span class="r">last 12 of 1 284 · reprint needs the original file on disk (Hub &#8594; Keep printed files)</span></div>
+            <div class="card-b" style="padding-bottom:4px">
+              <div class="frow" style="margin-bottom:4px">
+                <select class="inp" style="min-width:150px"><option>All statuses</option><option>Printed</option><option>Queued</option><option>Saved (file)</option><option>Failed</option><option>Canceled</option></select>
+                <input class="inp" type="text" placeholder="Search title / printer / #id" style="min-width:210px">
+                <select class="inp" style="min-width:130px"><option>load last 100</option><option>last 50</option><option>last 300</option></select>
+                <span style="flex:1"></span>
+                <button class="btn blue small">&#8635; Reprint selected</button>
+                <button class="btn small">Export CSV</button>
+              </div>
+            </div>
+            <table class="tbl">
+              <tr><th style="width:30px"><input type="checkbox" checked></th><th>#</th><th>Time</th><th>Title</th><th>Printer</th><th>Kind</th><th>Status</th><th></th></tr>
+              <tr><td><input type="checkbox" checked></td><td class="id">#2046</td><td class="id">14:19:41</td><td class="doc">invoice-2026-11.pdf</td><td>Microsoft Print to PDF</td><td><span class="chip info">PDF</span></td><td><span class="chip ok">PRINTED</span></td><td><button class="btn small">&#8635; Reprint</button></td></tr>
+              <tr><td><input type="checkbox" checked></td><td class="id">#2044</td><td class="id">14:11:55</td><td class="doc">presentation.pptx</td><td>OneNote (Desktop)</td><td><span class="chip gray">DOC</span></td><td><span class="chip ok">PRINTED</span></td><td><button class="btn small">&#8635; Reprint</button></td></tr>
+              <tr><td><input type="checkbox"></td><td class="id">#2043</td><td class="id">13:58:12</td><td class="doc">manual-de.pdf</td><td>HP Laser 103 107 108</td><td><span class="chip info">PDF</span></td><td><span class="chip err">FAILED</span></td><td><button class="btn small">&#8635; Reprint</button></td></tr>
+              <tr><td><input type="checkbox"></td><td class="id">#2040</td><td class="id">13:40:27</td><td class="doc">receipt-881.pdf</td><td>Microsoft Print to PDF</td><td><span class="chip info">PDF</span></td><td><span class="chip warn">SAVED (file)</span></td><td><button class="btn small">Open file</button></td></tr>
+              <tr><td><input type="checkbox"></td><td class="id">#2039</td><td class="id">13:38:10</td><td class="doc">scan-batch.pdf</td><td>—</td><td><span class="chip info">PDF</span></td><td><span class="chip warn">SCHEDULED 15:00</span></td><td><button class="btn small">Edit</button></td></tr>
+              <tr><td><input type="checkbox"></td><td class="id">#2038</td><td class="id">13:12:44</td><td class="doc">lab-request-form.pdf</td><td>HP Laser 103 107 108</td><td><span class="chip info">PDF</span></td><td><span class="chip purple">DROPZONE</span></td><td><button class="btn small">&#8635; Reprint</button></td></tr>
+              <tr><td><input type="checkbox"></td><td class="id">#2037</td><td class="id">12:41:19</td><td class="doc">receipt-scan.pdf</td><td>Microsoft Print to PDF</td><td><span class="chip info">PDF</span></td><td><span class="chip ok">PRINTED</span></td><td><button class="btn small">&#8635; Reprint</button></td></tr>
+            </table>
+          </div>
+          <div class="note"><b>Tick rows</b> and reprint in bulk — or clear the whole finished history.
+            Waiting jobs (queued / held) are never touched by Clear. Reprinted copies can carry a visible REPRINT stamp (Hub tab &#8594; Reprint &amp; audit).</div>
+        </section>
+
+        <!-- ============ PRINTERS ============ -->
+        <section class="panel" id="p-printers">
+          <div class="p-head">
+            <h2>Printers</h2><span class="sub">destination, default options, PDF engine — all printer settings in one tab</span>
+            <div class="right"><button class="btn">&#128269; Re-scan</button></div>
+          </div>
+
+          <div class="card">
+            <div class="card-h">&#127919; Print destination <span class="r">where jobs go when no rule matches · per-job printer always wins</span></div>
+            <div class="card-b">
+              <div class="frow" style="margin-bottom:8px">
+                <span class="radio on"><span class="rdot"></span>Default printer</span>
+                <span class="radio"><span class="rdot"></span>Selected printer</span>
+                <span class="radio"><span class="rdot"></span>IP printer (IPP)</span>
+              </div>
+              <div class="frow" style="margin-bottom:0">
+                <label>Default printer</label>
+                <select class="inp" style="min-width:300px">
+                  <option>OS default — HP Laser 103 107 108</option>
+                  <option>AdvPrint Pro @ AI-Lab</option>
+                  <option>Microsoft Print to PDF</option>
+                  <option>OneNote (Desktop)</option>
+                </select>
+                <button class="btn small">&#8632; Reload list</button>
+                <span class="chip err"><span class="d"></span>HP Laser offline — 2 jobs held</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="pgrid">
+            <div class="pcard">
+              <span class="badge">DEFAULT</span>
+              <div class="top">
+                <div class="picon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M6 9V3h12v6M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg></div>
+                <div><div class="nm">HP Laser 103 107 108</div><div class="mdl">HP Laser MFP · USB · driver: hp-laser</div></div>
+              </div>
+              <div class="st"><span>State <b>Offline</b></span><span>Jobs <b>31</b></span><span><span class="chip err"><span class="d"></span>OFFLINE</span></span></div>
+              <div class="url mono">10.26.94.206:9235/ipp/print/HP-Laser<button class="cp">COPY</button></div>
+              <div class="ops"><button class="btn blue">Test Page</button><button class="btn">Set Default</button><button class="btn">Wake / Check</button></div>
+            </div>
+            <div class="pcard">
+              <div class="top">
+                <div class="picon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M6 9V3h12v6M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg></div>
+                <div><div class="nm">AdvPrint Pro @ AI-Lab</div><div class="mdl">Virtual PDF printer · port: ADVPRINT</div></div>
+              </div>
+              <div class="st"><span>State <b>Ready</b></span><span>Jobs <b>142</b></span><span><span class="chip ok"><span class="d"></span>ONLINE</span></span></div>
+              <div class="url mono">10.26.94.206:9235/ipp/print/AI-Lab<button class="cp">COPY</button></div>
+              <div class="ops"><button class="btn blue">Test Page</button><button class="btn">Set Default</button><button class="btn">Details</button></div>
+            </div>
+            <div class="pcard">
+              <div class="top">
+                <div class="picon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M6 9V3h12v6M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg></div>
+                <div><div class="nm">Microsoft Print to PDF</div><div class="mdl">Virtual · saves PDF to hub output</div></div>
+              </div>
+              <div class="st"><span>State <b>Ready</b></span><span>Jobs <b>9</b></span><span><span class="chip ok"><span class="d"></span>ONLINE</span></span></div>
+              <div class="url mono">10.26.94.206:9235/ipp/print/Print-to-PDF<button class="cp">COPY</button></div>
+              <div class="ops"><button class="btn blue">Test Page</button><button class="btn">Set Default</button><button class="btn">Details</button></div>
+            </div>
+            <div class="pcard off">
+              <div class="top">
+                <div class="picon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M6 9V3h12v6M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg></div>
+                <div><div class="nm">OneNote (Desktop)</div><div class="mdl">Virtual · sends to OneNote</div></div>
+              </div>
+              <div class="st"><span>State <b>Idle</b></span><span>Jobs <b>4</b></span><span><span class="chip warn"><span class="d"></span>BUSY</span></span></div>
+              <div class="url mono">10.26.94.206:9235/ipp/print/OneNote<button class="cp">COPY</button></div>
+              <div class="ops"><button class="btn blue">Test Page</button><button class="btn">Set Default</button><button class="btn">Details</button></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-h">&#128196; PDF engine — SumatraPDF override <span class="r">fallback renderer when a driver fails</span></div>
+            <div class="card-b">
+              <div class="frow" style="margin-bottom:0">
+                <label>SumatraPDF.exe</label>
+                <input class="inp mono" style="flex:1;min-width:280px;font-size:11px" value="C:\Program Files\SumatraPDF\SumatraPDF.exe">
+                <span class="chip ok">DETECTED</span>
+                <button class="btn small">Browse&#8230;</button>
+                <button class="btn small">Reset</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-h">&#9881; Default print options <span class="r">sent with EVERY job · popup, rules &amp; page scripts can override</span></div>
+            <div class="card-b">
+              <div class="frow"><label>Copies</label><input class="inp narrow" value="1">
+                <label style="min-width:auto">Pages</label><select class="inp" style="min-width:150px"><option>All pages</option><option>Odd pages only</option><option>Even pages only</option><option>Custom range&#8230;</option></select>
+                <input class="inp narrow" placeholder="1-3,5"></div>
+              <div class="frow"><label>Quality</label><select class="inp" style="min-width:170px"><option>Printer default</option><option>Draft</option><option>Normal</option><option>High / Best</option><option>300 dpi</option><option>600 dpi</option></select>
+                <label style="min-width:auto">Per sheet (n-up)</label><select class="inp" style="min-width:120px"><option>1 per sheet</option><option>2</option><option>4</option><option>6</option></select></div>
+              <div class="frow"><label>Duplex (two sides)</label><select class="inp" style="min-width:170px"><option>Printer default</option><option>One side (simplex)</option><option>Two sides, long edge</option><option>Two sides, short edge</option></select>
+                <label style="min-width:auto">Layout</label><select class="inp" style="min-width:130px"><option>Auto (portrait)</option><option>Portrait</option><option>Landscape</option></select></div>
+              <div class="frow" style="margin-bottom:0"><label>Scale %</label><input class="inp narrow" placeholder="100">
+                <label style="min-width:auto">Paper</label><select class="inp" style="min-width:130px"><option>Printer default</option><option>A4</option><option>A5</option><option>A3</option><option>Letter</option><option>Legal</option></select></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============ LAN SHARING ============ -->
+        <section class="panel" id="p-lan">
+          <div class="p-head">
+            <h2>LAN Sharing &amp; Other PCs</h2><span class="sub">v2.2 · share this printer over the network · shift jobs to another PC</span>
+            <div class="right"><button class="btn">Disable</button><button class="btn blue">Copy URL</button></div>
+          </div>
+
+          <div class="card">
+            <div class="card-h">&#127760; Sharing status <span class="r">every row is one old dashboard card — same words, one place</span></div>
+            <div class="lrow"><span class="lk">LAN sharing <small>share this hub with LAN PCs</small></span><span class="chip ok">ON</span><span class="lv">http://10.26.94.206:9235</span><span class="sp"></span><span class="ops"><button class="btn small">Disable</button><button class="btn small blue">Copy URL</button></span></div>
+            <div class="lrow"><span class="lk">Send portal (phones) <small>print from any phone browser</small></span><span class="chip ok">QR READY</span><span class="lv">http://10.26.94.206:9235/send?token=mPz5&#8230;nXs</span><span class="sp"></span><span class="ops"><button class="btn small blue">Copy send URL</button><button class="btn small" data-qr="send">QR code</button></span></div>
+            <div class="lrow"><span class="lk">Connect another PC <small>1-click invite, connects itself</small></span><span class="chip ok">1-CLICK</span><span class="lv">http://10.26.94.206:9235/connect?t=mPz5&#8230;nXs&amp;n=AI-Lab</span><span class="sp"></span><span class="ops"><button class="btn small blue">Copy invite link</button><button class="btn small" data-qr="invite">QR</button></span></div>
+            <div class="lrow"><span class="lk">IP Printer mode <small>this PC becomes a network printer</small></span><span class="chip info">ACTIVE</span><span class="lv plain">every PC or phone adds this PC as their network printer &#8594; jobs print to (default printer)</span><span class="sp"></span><span class="ops"><button class="btn small" data-qr="ipp">QR</button></span></div>
+            <div class="lrow"><span class="lk">Network printer (IPP) <small>built-in IPP Class Driver, no tools</small></span><span class="chip ok">READY</span><span class="lv">http://10.26.94.206:9235/ipp/print</span><span class="sp"></span><span class="ops"><button class="btn small blue">Copy printer URL</button><button class="btn small" data-qr="ipp">QR</button></span></div>
+            <div class="lrow"><span class="lk">RAW printer port <small>JetDirect, port 9100</small></span><span class="chip ok">LISTENING</span><span class="lv">10.26.94.206:9100</span><span class="sp"></span><span class="ops"><button class="btn small">How to add</button></span></div>
+            <div class="lrow"><span class="lk">Windows firewall <small>inbound rule for LAN PCs</small></span><span class="chip ok">ALLOWED</span><span class="lv plain">inbound TCP 9235 allowed for LAN PCs</span><span class="sp"></span><span class="ops"><button class="btn small">Test LAN</button></span></div>
+            <div class="lrow"><span class="lk">Printer status hold <small>pause jobs while a printer is offline</small></span><span class="chip ok">ON</span><span class="lv plain">jobs wait while the printer reports offline</span><span class="sp"></span><span class="ops"><button class="btn small">Disable</button></span></div>
+          </div>
+
+          <div class="card">
+            <div class="card-h">&#128241; Scan &amp; connect <span class="r">live hub QRs — click any code to enlarge · printed also on hub start</span></div>
+            <div class="card-b">
+              <div class="qr-grid">
+                <div class="qr-tile" data-qr="send"><span class="zoom">&#10538; enlarge</span><div class="qbox" data-qr-draw="send"></div><b>Send portal — phones</b><small>scan &#8594; open the send page in any phone browser &#8594; print here. No app needed.</small></div>
+                <div class="qr-tile" data-qr="invite"><span class="zoom">&#10538; enlarge</span><div class="qbox" data-qr-draw="invite"></div><b>Invite — another PC</b><small>scan/open on the other PC &#8594; it configures itself and connects to this hub.</small></div>
+                <div class="qr-tile" data-qr="ipp"><span class="zoom">&#10538; enlarge</span><div class="qbox" data-qr-draw="ipp"></div><b>IPP printer URL</b><small>add once as a network printer (Windows IPP Class Driver, Android print service).</small></div>
+              </div>
+              <div class="note">QRs are generated by the hub from the <b>real URLs + current token</b> — regenerating after <b>Rotate token</b> invalidates old codes automatically. Enlarged view shows the raw link + a Copy button for devices without a camera.</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-h">&#128421; Add this PC as a printer <span class="r">(like Windows adds a network device)</span></div>
+            <div class="card-b" style="font-size:11.5px;color:var(--ink-2);line-height:1.7">
+              On the <b>other PC</b>: Settings &#8594; Printers &#8594; Add device &#8594; Add manually &#8594; <b>Add a printer using TCP/IP address</b> &#8594; IP <span class="mono">10.26.94.206</span>, port <span class="mono">9100</span>, device type <b>Generic Network Card (RAW)</b>.
+              Or add by URL: <span class="mono" style="color:var(--blue-deep)">http://10.26.94.206:9235/ipp/print</span> — Windows 10/11 installs it with the built-in <b>IPP Class Driver</b>.
+              <b>Phones:</b> use the Send portal QR above, or a print service that accepts a manual IPP address.
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-h">&#128279; Peer PCs <span class="r">fixed hub-to-hub peers</span></div>
+            <div class="card-b" style="font-size:11.5px;color:var(--ink-2);line-height:1.7">
+              <b>Easiest:</b> press <b>Copy invite link</b> above and open it on the other PC — it connects itself.
+              <b>Advanced:</b> add fixed peer PCs (<span class="mono">"peer_hubs"</span>) in <span class="mono">config.json</span> — see Docs.
+              <div class="note" style="margin-top:10px;margin-bottom:0">No fixed peers yet — every connection so far came from invite links. Fixed peers survive hub restarts without re-inviting.</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============ CONNECTIONS (from Options design v3.1.2) ============ -->
+        <section class="panel" id="p-connections">
+          <div class="p-head">
+            <h2>Connections</h2><span class="sub">this PC · other PCs · website API permissions — the old options tab, now in the ONE UI</span>
+            <div class="right"><button class="btn blue">&#128190; Save settings</button></div>
+          </div>
+          <div class="card">
+            <div class="card-h">&#128421; This PC (Self PC) — the main Printing Hub <span class="r"><span class="chip ok"><span class="d"></span>CONNECTED · 12 ms</span></span></div>
+            <div class="card-b">
+              <div class="frow"><label>Hub URL</label><input class="inp mono" value="http://127.0.0.1:9235"></div>
+              <div class="frow" style="margin-bottom:4px"><label>Token</label><input class="inp mono" type="password" value="mPz5HFOsB9xaJ36isQ7kDfjaaNrERnXs" style="min-width:260px">
+                <button class="btn blue">Connect</button><button class="btn">Detect token</button></div>
+              <div class="note" style="margin-bottom:0">New installs get a <b>private random token</b> — read it with
+                <span class="mono">python advprint.py token</span> or in this console. <b>Detect token</b> fills the current token
+                automatically from the running hub (one-click fix). Same profile is used by every tab in this console.</div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-h">&#128444; Another PC (LAN PC) — print over the network <span class="r"><span class="chip ok"><span class="d"></span>CONNECTED</span></span></div>
+            <div class="card-b">
+              <div class="frow"><label>LAN PC hub URL</label><input class="inp mono" value="http://10.26.94.77:9235"></div>
+              <div class="frow" style="margin-bottom:4px"><label>LAN PC token</label><input class="inp mono" type="password" value="&#183;&#183;&#183;&#183;&#183;&#183;&#183;&#183;&#183;&#183;&#183;&#183;" style="min-width:170px">
+                <button class="btn blue">Connect</button><button class="btn danger">Clear</button></div>
+              <div class="note" style="margin-bottom:0">Turning <b>Share Send Mode</b> ON in the popup sends every print job to that PC.
+                OFF (default) prints on the Self PC above. Receiving is the OTHER PC's switch (Share Receive Mode).</div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-h">&#127760; LAN sharing — let other PCs &amp; phones print through this one
+              <span class="r" style="display:flex;gap:8px"><span class="chip ok"><span class="d"></span>ON</span>
+              <button class="btn small">Disable</button><button class="btn small">Copy URL</button></span></div>
+            <div class="card-b">
+              <div class="frow" style="margin-bottom:6px"><span class="mono" style="font-size:12px;color:var(--blue-deep);font-weight:700">http://10.26.94.206:9235 · 4 per-printer IPP queues announced (mDNS)</span></div>
+              <div class="note" style="margin-bottom:0">After enabling: <b>restart the hub</b> (tray &#8594; Exit, start AdvPrint Pro again) and allow the port once:<br>
+                <span class="mono" style="font-size:10.5px">netsh advfirewall firewall add rule name="AdvPrint Pro" dir=in action=allow protocol=TCP localport=9235</span></div>
+              <div class="h3sec">Other PCs (peers)</div>
+              <table class="tbl" style="font-size:11.5px">
+                <tr><th>PC (hub URL)</th><th>Status</th><th>Version</th><th style="width:160px"></th></tr>
+                <tr><td class="mono doc" style="max-width:230px;font-size:10.5px">http://10.26.94.77:9235 · Storage-Room-PC</td><td><span class="chip ok"><span class="d"></span>ONLINE</span></td><td>v3.1.2</td><td><button class="btn small">&#8646; Shift queue</button></td></tr>
+                <tr><td class="mono doc" style="max-width:230px;font-size:10.5px">http://10.26.94.71:9235 · SHOP-PC</td><td><span class="chip err"><span class="d"></span>OFFLINE</span></td><td>v3.0.8</td><td><button class="btn small" disabled style="opacity:.5">Shift queue</button></td></tr>
+              </table>
+              <div class="frow" style="margin:10px 0 0"><label style="min-width:auto">Shift whole queue to</label>
+                <input class="inp mono" style="min-width:200px;font-size:11px" value="http://10.26.94.77:9235">
+                <button class="btn blue">Shift all waiting</button></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-h">&#128274; Website API permission — which sites may print <span class="r"><span class="chip info">2 patterns</span></span></div>
+            <div class="card-b">
+              <textarea class="inp mono" rows="3" style="width:100%;min-width:0;font-size:11.5px;padding:8px">*://www.htncr.org/*
+https://reports.example.com/*</textarea>
+              <div class="frow" style="margin:8px 0 0"><button class="btn blue small">Save site list</button>
+                <span style="font-size:11px;color:var(--muted)">Empty list = the page API is OFF for every website. The extension's own pages are always allowed.</span></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============ HUB (from Options design v3.1.2) ============ -->
+        <section class="panel" id="p-hub">
+          <div class="p-head">
+            <h2>Hub</h2><span class="sub">the Printing Hub engine's own settings — same as config.json · apply live</span>
+            <div class="right"><button class="btn blue">Apply hub settings</button><button class="btn">&#8635; Reload from hub</button></div>
+          </div>
+          <div class="card">
+            <div class="card-b">
+              <div class="h3sec" style="margin-top:0">Queue &amp; retries</div>
+              <div class="frow"><label style="min-width:190px">Retry attempts (0 = off)</label><input class="inp narrow" value="2">
+                <label style="min-width:auto">First retry after (seconds)</label><input class="inp narrow" value="30"></div>
+              <div class="frow"><label style="min-width:190px">Duplicate block window (minutes)</label><input class="inp narrow" value="5"></div>
+              <div class="tgl"><span class="sw"><span class="switch on"></span></span>
+                <div><b>Hold jobs while the printer reports offline</b><p>Jobs wait (status "held") until the printer is ready again — nothing is lost.</p></div></div>
+              <div class="tgl"><span class="sw"><span class="switch on"></span></span>
+                <div><b>Instant print fallback to queue</b><p>Queue mode OFF + printer not active: the job is auto-queued instead of failing.</p></div></div>
+
+              <div class="h3sec">Security</div>
+              <div class="frow"><label style="min-width:190px">Failed tokens before lockout</label><input class="inp narrow" value="10">
+                <label style="min-width:auto">Lockout minutes</label><input class="inp narrow" value="5"></div>
+              <div class="tgl"><span class="sw"><span class="switch on"></span></span>
+                <div><b>Strict token mode (header only)</b><p>ON = mutating calls (POST) must send the token in the X-PrintHub-Token header (the extension does this anyway).</p></div></div>
+              <div class="tgl"><span class="sw"><span class="switch on" style="opacity:.55;pointer-events:none"></span></span>
+                <div><b>Never lock out this PC (127.0.0.1)</b><p>ALWAYS ON since v2.6.4 — built into the hub, cannot be switched off.</p></div></div>
+              <div class="frow" style="margin-top:8px"><label>Allowed origins</label><input class="inp" placeholder="(empty = all websites may print) e.g. https://www.htncr.org"></div>
+
+              <div class="h3sec">Reprint &amp; audit</div>
+              <div class="tgl"><span class="sw"><span class="switch on"></span></span>
+                <div><b>Stamp REPRINT on reprinted pages</b><p>Reprinted copies carry a visible REPRINT mark — nobody mistakes them for originals.</p></div></div>
+              <div class="tgl"><span class="sw"><span class="switch"></span></span>
+                <div><b>Require a reason for reprints</b><p>Every reprint asks for a reason that is written to the audit log (compliance).</p></div></div>
+              <div class="tgl"><span class="sw"><span class="switch on"></span></span>
+                <div><b>Audit trail</b><p>Log every print / who / what to the audit log (view: Audit tab).</p></div></div>
+
+              <div class="h3sec">Thermal / raw text printing</div>
+              <div class="frow"><label style="min-width:190px">Non-Latin text engine</label><select class="inp" style="min-width:200px"><option>Auto (recommended)</option><option>Built-in only (fast, Latin scripts)</option><option>Browser render (Bangla &amp; complex scripts)</option></select>
+                <label style="min-width:auto">ESC/POS codepage</label><select class="inp" style="min-width:120px"><option>cp437</option><option>cp850</option><option>cp866</option><option>cp1251</option><option>cp1252</option></select></div>
+
+              <div class="h3sec">Save-as-PDF destination &amp; files</div>
+              <div class="frow"><label style="min-width:190px">Folder (empty = Downloads/AdvPrint)</label><input class="inp mono" value="C:\Users\Admin\Documents\Reports" style="min-width:260px;font-size:11px"></div>
+              <div class="tgl"><span class="sw"><span class="switch on"></span></span>
+                <div><b>Keep printed files (needed for Reprint)</b><p>Every job's file stays on disk so it can be re-printed from the History tab.</p></div></div>
+
+              <div class="h3sec">Windows print engine</div>
+              <div class="frow" style="margin-bottom:0"><label style="min-width:190px">SumatraPDF.exe path</label><input class="inp mono" placeholder="(empty = auto-find)" style="min-width:260px;font-size:11px" value="C:\Program Files\SumatraPDF\SumatraPDF.exe">
+                <span class="chip ok">DETECTED</span></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============ DROPZONE ============ -->
+        <section class="panel" id="p-dropzone">
+          <div class="p-head">
+            <h2>DropZone</h2><span class="sub">v2.8 · print WITHOUT the extension — save a PDF into the folder, AdvPrint prints it (works from any Windows app, MS Word style)</span>
+            <div class="right"><button class="btn blue">&#128193; Open folder</button><button class="btn">Disable</button></div>
+          </div>
+
+          <div class="stats" style="grid-template-columns:repeat(4,1fr)">
+            <div class="stat g"><div class="d">done\</div><div class="v">0</div><div class="l">Printed (done folder)</div></div>
+            <div class="stat"><div class="d">watching</div><div class="v">1</div><div class="l">Folder Watched</div></div>
+            <div class="stat w"><div class="d">after print</div><div class="v">move</div><div class="l">Delete-After-Print OFF</div></div>
+            <div class="stat"><div class="d">privacy</div><div class="v">100%</div><div class="l">Local — no cloud</div></div>
+          </div>
+
+          <div class="card">
+            <div class="card-h">&#128449; Folder settings <span class="r">watched folder · done folder · delete-after-print</span></div>
+            <div class="card-b">
+              <div class="frow"><label style="min-width:210px">DropZone folder</label>
+                <input class="inp mono" style="flex:1;min-width:280px;font-size:11px" value="C:\Users\Admin\.advprint\DropZone" readonly>
+                <button class="btn small">&#128193; Open folder</button></div>
+              <div class="frow"><label style="min-width:210px">Watched folder <span style="color:var(--muted);font-weight:500">(empty = data folder + DropZone)</span></label>
+                <input class="inp mono" style="flex:1;min-width:280px;font-size:11px" value="C:\Users\you\Desktop\DropZone">
+                <button class="btn small blue">Save</button></div>
+              <div class="frow" style="margin-bottom:0"><label style="min-width:210px">After printing</label>
+                <span class="tgl" style="padding:0;border:none;flex:1">
+                  <span class="sw"><span class="switch on green"></span></span>
+                  <span style="font-size:12px;color:var(--ink-2)"><b>delete the PDF after printing</b> — otherwise it is moved to <span class="mono">done\</span></span>
+                </span></div>
+            </div>
+          </div>
+
+          <div class="note">
+            <b>Print from ANY app without the extension:</b> Print &#8594; choose <b>Microsoft Print to PDF</b> &#8594; save the PDF into the DropZone folder.
+            AdvPrint Pro prints it seconds later (the file moves to <span class="mono">done\</span>).
+            Phones/tablets print through the <b>Send portal</b> button above (or <span class="mono">/send</span>) — also 100% local.
+          </div>
+
+          <div class="card">
+            <div class="card-h">&#128203; Recent DropZone prints <span class="r">files that came in through the folder</span></div>
+            <table class="tbl">
+              <tr><th>File</th><th>Printer</th><th>Result</th><th>Time</th></tr>
+              <tr><td class="doc">lab-request-form.pdf</td><td>HP Laser 103 107 108</td><td><span class="chip ok">PRINTED</span></td><td class="id">13:12:44</td></tr>
+              <tr><td class="doc"> discharge-summary.pdf</td><td>HP Laser 103 107 108</td><td><span class="chip warn">HELD — printer offline</span></td><td class="id">13:09:01</td></tr>
+              <tr><td class="doc">receipt-scan.pdf</td><td>Microsoft Print to PDF</td><td><span class="chip ok">PRINTED</span></td><td class="id">12:41:19</td></tr>
+            </table>
+          </div>
+        </section>
+
+        <!-- ============ RULES ============ -->
+        <section class="panel" id="p-rules">
+          <div class="p-head">
+            <h2>Auto-Print Rules</h2><span class="sub">the multi-printer control center · hidden silent printing, fully managed</span>
+            <div class="right"><button class="btn blue" data-new-rule>&#43; New rule</button><button class="btn">Save rules</button></div>
+          </div>
+
+          <!-- HOW A RULE IS SET -->
+          <div class="card">
+            <div class="card-h">&#128218; How you set which rule for which <span class="r">3 steps, one dialog — press New rule or Edit on any row</span></div>
+            <div class="card-b" style="font-size:11.5px;color:var(--ink-2);line-height:1.65">
+              <b style="color:var(--blue-deep)">1. Match by</b> — <b>URL / address filter</b> (Chrome match pattern, e.g. <span class="mono">*://www.htncr.org/lab/*</span>),
+              optional <b>page content</b> (text the page must contain, e.g. <span class="mono">ZPL</span> or <span class="mono">Patient Report</span>) and
+              <b>URL type</b> (any / PDF link / web page / plain text). All conditions must pass.
+              <b style="color:var(--blue-deep);margin-left:6px">2. Then print</b> — pick the <b>printer</b>, <b>what to print</b> (whole page, linked PDF, raw stream, selected element),
+              <b>copies</b> and <b>paper</b>. <b style="color:var(--blue-deep);margin-left:6px">3. When</b> — <b>On</b> enables the rule,
+              <b>Auto</b> prints silently without any dialog; optional schedule (e.g. evenings only). Rules run <b>top to bottom</b> —
+              first match wins, drag rows to re-order. Every firing is logged in the activity log below.
+            </div>
+          </div>
+
+          <!-- SUGGESTED URL / ADDRESS FILTERS -->
+          <div class="card">
+            <div class="card-h">&#128161; Suggested URL / address filters <span class="r">click a chip &#8594; opens the rule editor with the pattern filled in</span></div>
+            <div class="card-b">
+              <span class="pattern-chip" data-use-url="*://www.htncr.org/lab/*"><span class="use">USE</span>*://www.htncr.org/lab/*<small>lab section only</small></span>
+              <span class="pattern-chip" data-use-url="*://*.htncr.org/*"><span class="use">USE</span>*://*.htncr.org/*<small>whole site, all subdomains</small></span>
+              <span class="pattern-chip" data-use-url="*://*/*.pdf"><span class="use">USE</span>*://*/*.pdf<small>any PDF link anywhere</small></span>
+              <span class="pattern-chip" data-use-url="*://billing.local/pos/*"><span class="use">USE</span>*://billing.local/pos/*<small>POS screens</small></span>
+              <span class="pattern-chip" data-use-url="*://intranet/certificates/*"><span class="use">USE</span>*://intranet/certificates/*<small>certificate pages</small></span>
+              <span class="pattern-chip" data-use-url="https://reports.example.com/invoice-*"><span class="use">USE</span>https://reports.example.com/invoice-*<small>prefix match</small></span>
+              <div class="note" style="margin-bottom:0"><b>Syntax</b> = Chrome match patterns: <span class="mono">scheme://host/path</span> with <span class="mono">*</span> wildcards
+                (<span class="mono">*</span> = any scheme, <span class="mono">*.host</span> = subdomains, trailing <span class="mono">*</span> = any path).
+                <b>Learned from History</b> (top printed this week): <span class="mono">www.htncr.org/lab/&#8230;</span> 47 jobs ·
+                <span class="mono">billing.local/pos/&#8230;</span> 23 · <span class="mono">intranet/certificates/&#8230;</span> 9 — press a chip above to turn one into a rule.</div>
+            </div>
+          </div>
+
+          <!-- TEST BOX -->
+          <div class="card">
+            <div class="card-h">&#128269; Test which rule fires <span class="r">prints nothing — safe</span></div>
+            <div class="card-b">
+              <div class="frow" style="margin-bottom:6px">
+                <label style="min-width:auto">Test a URL</label>
+                <input class="inp mono" style="flex:1;min-width:260px;font-size:11px" value="https://www.htncr.org/lab/medical_reports/pdf/4711">
+                <button class="btn blue">Which rule fires?</button>
+              </div>
+              <div class="frow" style="margin-bottom:0">
+                <label style="min-width:auto">Test label / receipt text</label>
+                <input class="inp mono" style="flex:1;min-width:260px;font-size:11px" value="^XA^LL200^FO30^FDLAB-4711^FS^XZ">
+                <button class="btn blue">Which rule fires?</button>
+              </div>
+              <div class="note" style="margin-top:10px;margin-bottom:0">&#128269; URL test result: fires <b>Rule 1 "Lab PDF reports"</b> &#8594; printer <b>HP Laser 103 107 108</b>, action <b>PDF</b>, paper <b>A5</b>, 1 copy. The URL was fetched once (with your login) — content type detected: <span class="mono">application/pdf</span>. Nothing was printed.</div>
+            </div>
+          </div>
+
+          <!-- RULES TABLE -->
+          <div class="card">
+            <div class="card-h">&#9881; Rules <span class="r">run top to bottom · first match wins · per-job printer always wins over the Print destination card</span></div>
+            <table class="tbl" style="font-size:10px">
+              <tr><th style="width:20px">#</th><th style="min-width:84px">Rule</th><th style="min-width:110px">URL / address filter</th><th>Match by</th><th>Page content</th><th>URL type</th><th style="min-width:90px">Printer</th><th>What to print</th><th style="width:30px">Cpl</th><th style="width:40px">Paper</th><th style="width:30px">On</th><th style="width:34px">Auto</th><th style="width:58px">Runs</th><th style="width:86px"></th></tr>
+              <tr>
+                <td class="id">&#9776; 1</td><td class="doc"><b>Lab PDF reports</b></td><td class="mono doc" style="max-width:112px;font-size:9.5px">*://www.htncr.org/lab/*</td><td><span class="chip info">URL</span></td><td>&mdash;</td><td>PDF</td>
+                <td><b>HP Laser 103 107 108</b></td><td>Auto (PDF)</td><td>1</td><td>A5</td>
+                <td><span class="switch on"></span></td><td><span class="switch on"></span></td>
+                <td class="id">128 runs<br>last 14:22</td>
+                <td><button class="btn small blue" data-edit-rule="0">Edit</button> <button class="btn small danger" data-del-rule="0">Del</button></td>
+              </tr>
+              <tr>
+                <td class="id">&#9776; 2</td><td class="doc"><b>Zebra labels</b></td><td class="mono doc" style="font-size:9.5px">(any page)</td><td><span class="chip purple">CONTENT</span></td><td><span class="chip purple">ZPL label</span></td><td>any</td>
+                <td><b>Zebra GK420d</b></td><td>Raw ZPL/ESC-POS</td><td>2</td><td>4&times;6&Prime;</td>
+                <td><span class="switch on"></span></td><td><span class="switch on"></span></td>
+                <td class="id">86 runs<br>last 14:18</td>
+                <td><button class="btn small blue" data-edit-rule="1">Edit</button> <button class="btn small danger" data-del-rule="1">Del</button></td>
+              </tr>
+              <tr>
+                <td class="id">&#9776; 3</td><td class="doc"><b>POS receipts</b></td><td class="mono doc" style="max-width:112px;font-size:9.5px">*://billing.local/pos/*</td><td><span class="chip purple">CONTENT</span></td><td><span class="chip warn">Receipt</span></td><td>text</td>
+                <td><b>XP-58 Thermal</b></td><td>ESC-POS receipt</td><td>1</td><td>58mm</td>
+                <td><span class="switch on"></span></td><td><span class="switch"></span></td>
+                <td class="id">41 runs<br>last 14:12</td>
+                <td><button class="btn small blue" data-edit-rule="2">Edit</button> <button class="btn small danger" data-del-rule="2">Del</button></td>
+              </tr>
+              <tr>
+                <td class="id">&#9776; 4</td><td class="doc"><b>Certificates</b></td><td class="mono doc" style="max-width:112px;font-size:9.5px">*://intranet/certificates/*</td><td><span class="chip info">URL</span></td><td>&mdash;</td><td>Web</td>
+                <td><b>AdvPrint Pro @ AI-Lab</b></td><td>Web page</td><td>1</td><td>A4</td>
+                <td><span class="switch"></span></td><td><span class="switch on"></span></td>
+                <td class="id">12 runs<br>last 11:02</td>
+                <td><button class="btn small blue" data-edit-rule="3">Edit</button> <button class="btn small danger" data-del-rule="3">Del</button></td>
+              </tr>
+              <tr>
+                <td class="id">&#9776; 5</td><td class="doc"><b>Invoices &#8594; PDF</b></td><td class="mono doc" style="max-width:112px;font-size:9.5px">https://reports.example.com/invoice-*</td><td><span class="chip info">URL</span></td><td>&mdash;</td><td>PDF</td>
+                <td><b>Microsoft Print to PDF</b></td><td>PDF (save)</td><td>1</td><td>A4</td>
+                <td><span class="switch on"></span></td><td><span class="switch on"></span></td>
+                <td class="id">7 runs<br>last 09:44</td>
+                <td><button class="btn small blue" data-edit-rule="4">Edit</button> <button class="btn small danger" data-del-rule="4">Del</button></td>
+              </tr>
+              <tr>
+                <td class="id">&#9776; 6</td><td class="doc"><b>Night reports</b></td><td class="mono doc" style="font-size:9.5px">(any page)</td><td><span class="chip purple">CONTENT</span> <span class="chip info">URL</span></td><td><span class="chip purple">Patient Report</span></td><td>Web</td>
+                <td><b>HP Laser 103 107 108</b></td><td>Web page</td><td>2</td><td>A4</td>
+                <td><span class="switch on"></span></td><td><span class="switch on"></span></td>
+                <td class="id">3 runs<br>18&#8211;08h</td>
+                <td><button class="btn small blue" data-edit-rule="5">Edit</button> <button class="btn small danger" data-del-rule="5">Del</button></td>
+              </tr>
+            </table>
+            <div class="note" style="margin:0 14px 12px">Every row is fully editable: <b>Edit</b> opens the 3-step rule editor pre-filled, <b>Del</b> asks twice then removes,
+              the <b>On</b> switch pauses a rule without deleting, and <b>Auto</b> decides silent vs. one confirm dialog. Drag <span class="mono">&#9776;</span> to change priority.</div>
+          </div>
+
+          <div class="card">
+            <div class="card-h">&#128203; Rule activity log <span class="r">sent / FAILED + why</span>
+              <span class="r" style="margin-left:12px"><button class="btn small">&#8635; Refresh</button> <button class="btn small danger">Clear log</button></span></div>
+            <table class="tbl">
+              <tr><th style="width:110px">Time</th><th style="width:26%">Rule</th><th style="width:110px">Action</th><th style="width:20%">Printer</th><th>Page / result</th></tr>
+              <tr><td class="id">14:22:08</td><td class="doc">Lab PDF reports (URL)</td><td><span class="chip info">PDF</span></td><td>HP Laser 103 107 108</td><td><span class="chip ok">SENT</span> lab-report-nov.pdf · A5</td></tr>
+              <tr><td class="id">14:18:45</td><td class="doc">Zebra labels (content)</td><td><span class="chip purple">ZPL</span></td><td>Zebra GK420d</td><td><span class="chip ok">SENT</span> raw 212 B · ^XA&#8230;^XZ byte-for-byte</td></tr>
+              <tr><td class="id">14:12:31</td><td class="doc">POS receipts (content)</td><td><span class="chip warn">ESC-POS</span></td><td>XP-58 Thermal</td><td><span class="chip ok">SENT</span> receipt + auto cut</td></tr>
+              <tr><td class="id">13:58:12</td><td class="doc">Lab PDF reports (URL)</td><td><span class="chip info">PDF</span></td><td>HP Laser 103 107 108</td><td><span class="chip err">FAILED</span> media-out · retried 1/2</td></tr>
+            </table>
+          </div>
+        </section>
+
+        <!-- ============ POWER SWITCHES ============ -->
+        <section class="panel" id="p-power">
+          <div class="p-head">
+            <h2>Power Switches</h2><span class="sub">every silent / background behavior of the extension — one switch each, managed from here</span>
+            <div class="right"><button class="btn blue">&#128190; Save &amp; push to browsers</button></div>
+          </div>
+          <div class="card">
+            <div class="card-h">&#9889; Power switches <span class="r">same switches as the extension options — now in the ONE UI</span></div>
+            <div class="card-b">
+              <div class="tgl"><span class="sw"><span class="switch on"></span></span>
+                <div><b>AdvPrint enabled (master switch)</b><p>OFF = the extension stops completely: no printing, no auto-print, no window.print() hook, no page API, no context menu. A gray OFF badge shows on the toolbar icon.</p></div></div>
+              <div class="tgl"><span class="sw"><span class="switch on"></span></span>
+                <div><b>Queue mode (jobs wait in order)</b><p>ON = every job goes through the hub queue in order (Pause/Resume works, big jobs line up). OFF = instant print. If no printer is active the job is auto-queued instead of failing.</p></div></div>
+              <div class="tgl"><span class="sw"><span class="switch on"></span></span>
+                <div><b>Auto-print rules (silent background printing)</b><p>The power switch for every rule in the Rules tab. OFF (paused) = NO rule auto-prints; manual prints keep working.</p></div></div>
+              <div class="tgl"><span class="sw"><span class="switch on"></span></span>
+                <div><b>Intercept window.print() (web app prints go silent)</b><p>Web apps (Odoo, POS, dashboards) that call window.print() print silently through the hub instead of opening the dialog. Also intercepts Ctrl+P / Cmd+P.</p></div></div>
+              <div class="tgl"><span class="sw"><span class="switch"></span></span>
+                <div><b>Debug mode — find problems fast</b><p>ON = the extension reports every error to the hub and the hub logs verbosely. Open the Debug tab to see WHEN / WHY / WHERE printing fails.</p></div></div>
+              <div class="tgl"><span class="sw"><span class="switch on"></span></span>
+                <div><b>Retry when the hub comes back</b><p>If the hub is offline, jobs are kept in the browser and sent automatically as soon as the hub answers again (checked every minute).</p></div></div>
+              <div class="tgl"><span class="sw"><select class="inp" style="min-width:110px"><option>Automatic</option><option>English</option><option>&#2476;&#2494;&#2434;&#2455;&#2509;&#2482;&#2494;</option></select></span>
+                <div><b>UI language</b><p>English or &#2476;&#2494;&#2434;&#2455;&#2509;&#2482;&#2494; for the popup and the extension pages. "Automatic" follows the browser language.</p></div></div>
+            </div>
+          </div>
+          <div class="note">These switches live in the paired browsers. Press <b>Save &amp; push to browsers</b> and every paired Chrome/Edge gets the new settings within a minute — no need to open the extension options page anymore.</div>
+        </section>
+
+        <!-- ============ BROWSER BEHAVIOR ============ -->
+        <section class="panel" id="p-browser">
+          <div class="p-head">
+            <h2>Browser Behavior</h2><span class="sub">what happens around the printing — tabs, menus, badges</span>
+            <div class="right"><button class="btn blue">&#128190; Save &amp; push to browsers</button></div>
+          </div>
+          <div class="card">
+            <div class="card-h">&#127760; Browser behavior</div>
+            <div class="card-b">
+              <div class="tgl"><span class="sw"><span class="switch"></span></span>
+                <div><b>Print every PDF opened in the browser (simple mode)</b><p>ANY PDF you open is printed silently and its tab closes. No dialog, no rules needed.</p></div></div>
+              <div class="tgl"><span class="sw"><span class="switch"></span></span>
+                <div><b>Close tab after auto-print (default OFF)</b><p>ON: when a rule auto-prints an opened URL, the tab closes right after the job is queued — zero browser view, the paper just comes out.</p></div></div>
+              <div class="tgl"><span class="sw"><select class="inp" style="min-width:170px"><option>Open the URL in a new tab</option><option>Stay silent (no tab)</option></select></span>
+                <div><b>When a page print call fails</b><p>Controls the automatic fallback: open the URL in a normal tab so the browser prints it the default way, or stay completely silent.</p></div></div>
+              <div class="tgl"><span class="sw"><span class="switch on"></span></span>
+                <div><b>Right-click menu</b><p>Adds "AdvPrint Pro" to the right-click menu: print page / print selection / print linked PDF / print screenshot.</p></div></div>
+              <div class="tgl"><span class="sw"><span class="switch on"></span></span>
+                <div><b>Toolbar badge (green OK / red !)</b><p>Shows OK or ! on the extension icon for a few seconds after every job.</p></div></div>
+            </div>
+          </div>
+          <div class="note">Context-menu and badge changes apply to new pages immediately; the PDF simple-mode switch re-checks open PDF tabs on the next navigation.</div>
+        </section>
+
+        <!-- ============ EXTENSION ============ -->
+        <section class="panel" id="p-extension">
+          <div class="p-head">
+            <h2>Extension</h2><span class="sub">paired browsers, silent install, hub token</span>
+            <div class="right"><button class="btn">&#128273; New Token</button></div>
+          </div>
+          <div class="dash-row">
+            <div class="card">
+              <div class="card-h">&#128274; Paired Browsers <span class="r">2 connected</span></div>
+              <table class="tbl">
+                <tr><th>Client</th><th>Extension</th><th>Last seen</th><th>Status</th></tr>
+                <tr><td><b>AI-Lab-PC · Chrome</b></td><td>v3.1.3</td><td>just now</td><td><span class="chip ok"><span class="d"></span>PAIRED</span></td></tr>
+                <tr><td><b>client-laptop · Edge</b></td><td>v3.1.3</td><td>2 min ago</td><td><span class="chip ok"><span class="d"></span>PAIRED</span></td></tr>
+              </table>
+              <div class="note orange" style="margin:10px 14px 12px">
+                <b style="display:block;margin-bottom:3px">&#9888; Two extension installs detected on this PC</b>
+                Policy CRX <span class="mono">likldbk&#8230;bbnohc</span> and a dev/unpacked copy <span class="mono">honpjjb&#8230;mjbjo</span> are both loaded.
+                Disable one in <span class="mono">chrome://extensions</span> to avoid double jobs.
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-h">&#128273; Hub Token</div>
+              <div class="kv">
+                <span class="k">Token</span><span class="v mono">mPz5HFOsB9xaJ36isQ7kDfjaaNrERnXs</span>
+                <span class="k">Auth</span><span class="v"><span class="chip ok"><span class="d"></span>X-PrintHub-Token</span></span>
+                <span class="k">Rotate</span><span class="v" style="color:var(--warn);font-weight:700">&#9888; rotating token un-pairs browsers</span>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-h">&#128231; Silent install — deploy the CRX to every PC without Chrome Web Store <span class="r">works on every Chromium browser</span></div>
+            <div class="card-b">
+              <div class="frow" style="margin-bottom:8px">
+                <span class="chip ok"><span class="d"></span>CRX v3.1.3 INSTALLED</span>
+                <span class="mono" style="font-size:11px;color:var(--blue-deep)">AdvPrint-Pro.crx</span>
+                <span style="flex:1"></span>
+                <button class="btn small">Download CRX</button>
+              </div>
+              <div class="frow" style="margin-bottom:6px">
+                <label style="min-width:150px">Forcelist value</label>
+                <span class="mono" style="font-size:10.5px;color:var(--blue-deep);background:var(--blue-soft);border:1px solid var(--blue-line);border-radius:6px;padding:5px 9px">kppjdmdbbnaaibjjbbnohcjkabmifana;http://10.26.94.206:9235/updates.xml</span>
+                <button class="btn small">Copy value</button>
+              </div>
+              <div class="frow" style="margin-bottom:0">
+                <label style="min-width:150px">Updates XML</label>
+                <span class="mono" style="font-size:10.5px;color:var(--blue-deep)">http://10.26.94.206:9235/updates.xml</span>
+                <button class="btn small">Copy URL</button>
+                <span style="font-size:10.5px;color:var(--muted)">served by this hub — CRX auto-updates even without the Web Store</span>
+              </div>
+            </div>
+            <table class="tbl" style="font-size:10.5px">
+              <tr><th style="min-width:120px">Browser (Chromium)</th><th>Policy registry path — same value, one row per browser</th><th style="width:120px">Status</th><th style="width:150px"></th></tr>
+              <tr>
+                <td><b>Google Chrome</b></td>
+                <td class="mono doc" style="font-size:9.5px">HKLM\SOFTWARE\Policies\Google\Chrome\ExtensionInstallForcelist</td>
+                <td><span class="chip ok"><span class="d"></span>INSTALLED</span></td>
+                <td><button class="btn small">Apply HKLM</button> <button class="btn small">Apply HKCU</button></td>
+              </tr>
+              <tr>
+                <td><b>Microsoft Edge</b></td>
+                <td class="mono doc" style="font-size:9.5px">HKLM\SOFTWARE\Policies\Microsoft\Edge\ExtensionInstallForcelist</td>
+                <td><span class="chip ok"><span class="d"></span>INSTALLED</span></td>
+                <td><button class="btn small">Apply HKLM</button> <button class="btn small">Apply HKCU</button></td>
+              </tr>
+              <tr>
+                <td><b>Brave</b></td>
+                <td class="mono doc" style="font-size:9.5px">HKLM\SOFTWARE\Policies\BraveSoftware\Brave\ExtensionInstallForcelist</td>
+                <td><span class="chip warn">NOT SET</span></td>
+                <td><button class="btn small">Apply HKLM</button> <button class="btn small">Apply HKCU</button></td>
+              </tr>
+              <tr>
+                <td><b>Vivaldi</b></td>
+                <td class="mono doc" style="font-size:9.5px">HKLM\SOFTWARE\Policies\Vivaldi\ExtensionInstallForcelist</td>
+                <td><span class="chip info">SUPPORTED</span></td>
+                <td><button class="btn small">Apply HKLM</button> <button class="btn small">Apply HKCU</button></td>
+              </tr>
+              <tr>
+                <td><b>Chromium</b></td>
+                <td class="mono doc" style="font-size:9.5px">HKLM\SOFTWARE\Policies\Chromium\ExtensionInstallForcelist</td>
+                <td><span class="chip info">SUPPORTED</span></td>
+                <td><button class="btn small">Apply HKLM</button> <button class="btn small">Apply HKCU</button></td>
+              </tr>
+              <tr>
+                <td><b>Opera / others</b></td>
+                <td class="mono doc" style="font-size:9.5px">HKLM\SOFTWARE\Policies\Opera Software\Opera\ExtensionInstallForcelist <span style="color:var(--muted)">(verify once — some builds ignore forcelist)</span></td>
+                <td><span class="chip gray">TEST</span></td>
+                <td><button class="btn small">Apply HKLM</button> <button class="btn small">Apply HKCU</button></td>
+              </tr>
+            </table>
+            <div class="card-b" style="padding-top:10px">
+              <div class="note" style="margin-bottom:10px"><b>One CRX, every Chromium browser.</b> The same <span class="mono">AdvPrint-Pro.crx</span> installs into Chrome, Edge, Brave, Vivaldi, Chromium and Opera —
+                only the policy key path differs (table above). <b>Apply HKLM</b> = machine-wide for every user of this PC (needs admin);
+                <b>Apply HKCU</b> = only the current user. The browser force-installs the CRX silently on next start and keeps it
+                auto-updated from <span class="mono">/updates.xml</span> served by this hub — <b>no drag &amp; drop, no Web Store, no developer mode</b>.</div>
+              <div class="note orange" style="margin-bottom:0"><b>Not Chromium browsers:</b> Firefox uses the same WebExtension codebase packaged as <span class="mono">.xpi</span>
+                (deploy with the Firefox enterprise policy <span class="mono">HKLM\SOFTWARE\Policies\Mozilla\Firefox\Extensions</span> or install manually);
+                Safari is not supported. If a Chromium fork ignores forcelist, drag-install the CRX on that browser once — pairing still works.</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-h">&#9888; Chrome message: "This extension is not listed in the Chrome Web Store and may have been added without your knowledge" <span class="r">expected — explained</span></div>
+            <div class="card-b">
+              <div style="background:#fff7ed;border:1px solid #fdba74;border-radius:8px;padding:9px 12px;font-size:11.5px;color:#9a3412;line-height:1.5;margin-bottom:10px">
+                &#9888; This extension is not listed in the Chrome Web Store and may have been added without your knowledge.
+              </div>
+              <div style="font-size:11.5px;color:var(--ink-2);line-height:1.65">
+                <b>What it means:</b> the browser shows this banner for <b>any extension installed outside the Web Store</b> — your own
+                <span class="mono">AdvPrint-Pro.crx</span> deployed by policy or drag &amp; drop. <b>It is not a virus warning and printing is not affected.</b><br>
+                <b>Why you see it:</b> AdvPrint Pro is a private, self-hosted extension for this organisation — it is intentionally not on the Web Store.
+                The banner disappears when a Web Store listing is published.<br>
+                <b>What to do:</b> nothing — keep it, or make the banner vanish by installing the CRX through the
+                <b>policy table above</b> (policy-installed extensions show as "Installed by your administrator" instead of the warning).
+                Check <span class="mono">chrome://extensions</span> — the extension ID must match the forcelist value above.
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============ DEBUG ============ -->
+        <section class="panel" id="p-debug">
+          <div class="p-head">
+            <h2>Debug &amp; Tools</h2><span class="sub">find out WHEN / WHY / WHERE printing fails</span>
+            <div class="right"><span class="chip warn">DEBUG MODE OFF</span><button class="btn">Enable debug</button></div>
+          </div>
+
+          <div class="card">
+            <div class="card-h">&#9888; Service check <span class="r">Windows service state</span></div>
+            <div class="card-b" style="font-size:12px;color:var(--ink-2)">
+              Windows service <b>'AdvPrint'</b> is <span class="chip warn">START PENDING</span>
+              — a stale state from an old install. The hub itself is healthy (running in tray mode).
+              <div style="display:flex;gap:8px;margin-top:10px">
+                <button class="btn small blue">Run service-remove</button>
+                <button class="btn small">Re-check</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-h">&#128220; Client error reports <span class="r">sent by the extension when a job fails</span></div>
+            <table class="tbl">
+              <tr><th>Time</th><th>Source</th><th>Problem</th><th></th></tr>
+              <tr><td class="id">14:05:22</td><td><span class="chip info">chrome-ext</span></td><td class="doc">job #11 — save-as-PDF failed: PDF still locked by antivirus/another process</td><td><button class="btn small blue">Retry now</button> <button class="btn small">Open spool</button></td></tr>
+              <tr><td class="id">13:58:12</td><td><span class="chip info">hub</span></td><td class="doc">job #2043 — printer HP Laser offline (status hold kept the job)</td><td><button class="btn small">Release</button></td></tr>
+            </table>
+          </div>
+
+          <div class="card">
+            <div class="card-h">&#128300; Live debug &amp; test tool <span class="r">v3.1.3 · runs on this PC immediately</span></div>
+            <div class="card-b" style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn blue">&#128424; REAL test print</button>
+              <button class="btn">&#9889; Release ALL held</button>
+              <button class="btn">&#128300; Full self-test</button>
+              <button class="btn">&#128196; Open spool folder</button>
+              <button class="btn">&#128220; Export debug bundle</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-h">&#9881; Debug switches</div>
+            <div class="card-b">
+              <div class="tgl"><span class="sw"><span class="switch"></span></span>
+                <div><b>Debug mode</b><p>Verbose hub logging + the extension reports every error here. Leave OFF in normal use.</p></div></div>
+              <div class="tgl"><span class="sw"><span class="switch on"></span></span>
+                <div><b>Client error reports</b><p>Paired browsers may attach a short report (page URL, error text) when a job fails — no document content is sent.</p></div></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============ AUDIT ============ -->
+        <section class="panel" id="p-audit">
+          <div class="p-head">
+            <h2>Audit</h2><span class="sub">who printed what — full trail</span>
+            <div class="right"><button class="btn">&#8632; Export CSV</button><button class="btn danger">Clear audit</button></div>
+          </div>
+          <div class="card">
+            <table class="tbl">
+              <tr><th>Time</th><th>Actor</th><th>Action</th><th>Target</th><th>Result</th></tr>
+              <tr><td class="id">14:22:08</td><td><span class="chip info">chrome-ext</span></td><td>job.submit</td><td class="doc">lab-report-nov.pdf &#8594; HP Laser</td><td><span class="chip ok">ACCEPTED</span></td></tr>
+              <tr><td class="id">14:19:41</td><td><span class="chip info">chrome-ext</span></td><td>job.complete</td><td class="doc">invoice-2026-11.pdf</td><td><span class="chip ok">DONE</span></td></tr>
+              <tr><td class="id">14:12:30</td><td><span class="chip info">ipp-client</span></td><td>ipp.create-job</td><td class="mono doc">/ipp/print/HP-Laser</td><td><span class="chip ok">OK</span></td></tr>
+              <tr><td class="id">14:08:11</td><td><span class="chip info">dropzone</span></td><td>dropzone.print</td><td class="doc">lab-request-form.pdf</td><td><span class="chip ok">DONE</span></td></tr>
+              <tr><td class="id">14:05:22</td><td><span class="chip info">chrome-ext</span></td><td>ext.error-report</td><td class="doc">job #11 · PDF locked by antivirus</td><td><span class="chip warn">REPORTED</span></td></tr>
+              <tr><td class="id">13:58:12</td><td><span class="chip info">hub</span></td><td>job.failed</td><td class="doc">manual-de.pdf · media-out</td><td><span class="chip err">ERROR</span></td></tr>
+              <tr><td class="id">13:41:02</td><td><span class="chip info">hub</span></td><td>auth.reject</td><td class="mono doc">wrong token from 10.26.94.77</td><td><span class="chip warn">DENIED</span></td></tr>
+              <tr><td class="id">13:12:02</td><td><span class="chip info">hub</span></td><td>settings.lan</td><td class="mono doc">lan_sharing = on</td><td><span class="chip ok">OK</span></td></tr>
+            </table>
+          </div>
+        </section>
+
+        <!-- ============ LOGS ============ -->
+        <section class="panel" id="p-logs">
+          <div class="p-head">
+            <h2>Logs</h2><span class="sub">hub log tail · live</span>
+            <div class="right">
+              <span class="fchip on">ALL</span><span class="fchip">INFO</span><span class="fchip">WARN</span><span class="fchip">ERROR</span>
+              <button class="btn small" style="margin-left:6px">&#128190; Save log</button>
+            </div>
+          </div>
+          <div class="logbox">
+            <div><span class="ts">14:22:08.412</span> <span class="lv I">INFO </span> job #2047 submitted by <span class="hl">chrome-ext</span> &#8594; printer <span class="hl">HP Laser 103 107 108</span> (12 pages)</div>
+            <div><span class="ts">14:22:08.470</span> <span class="lv I">INFO </span> IPP Create-Job ok · job-id=2047 uri=<span class="hl">/ipp/print/HP-Laser</span></div>
+            <div><span class="ts">14:22:08.518</span> <span class="lv I">INFO </span> Send-Document chunk 1/3 (786 KB) spool &#8594; C:\Users\Admin\.advprint\spool\2047.pdf</div>
+            <div><span class="ts">14:19:41.882</span> <span class="lv I">INFO </span> job #2046 completed · PDF saved &#8594; D:\PDF\invoice-2026-11.pdf</div>
+            <div><span class="ts">14:08:11.774</span> <span class="lv W">WARN </span> DropZone: discharge-summary.pdf waiting — printer <span class="hl">HP Laser</span> offline (status hold)</div>
+            <div><span class="ts">14:05:22.010</span> <span class="lv E">ERROR</span> ext report: job #11 save-as-PDF failed — PDF still locked by antivirus/another process</div>
+            <div><span class="ts">13:58:12.905</span> <span class="lv E">ERROR</span> job #2043 failed · media-out · retried 1/2</div>
+            <div><span class="ts">13:41:02.336</span> <span class="lv W">WARN </span> auth rejected from 10.26.94.77 (bad token)</div>
+            <div><span class="ts">13:12:00.100</span> <span class="lv I">INFO </span> RAW JetDirect listening on <span class="hl">10.26.94.206:9100</span></div>
+            <div><span class="ts">10:00:01.002</span> <span class="lv I">INFO </span> AdvPrint Pro hub v3.1.3 started · 4 printers · LAN ON · DropZone ON · tray ON</div>
+          </div>
+        </section>
+
+        <!-- ============ SETTINGS ============ -->
+        <section class="panel" id="p-settings">
+          <div class="p-head">
+            <h2>Settings</h2><span class="sub">stored in hub config · applied live</span>
+          </div>
+          <div class="form">
+            <div class="f-row"><label>HUB PORT</label><input class="inp" value="9235"><div class="hint">Default 9235 · restart required</div></div>
+            <div class="f-row"><label>AUTH TOKEN</label><input class="inp mono" value="mPz5HFOsB9xaJ36isQ7kDfjaaNrERnXs"><div class="hint">Sent as X-PrintHub-Token header · <button class="btn small" style="height:20px">Rotate token</button></div></div>
+            <div class="f-row"><label>START WITH WINDOWS</label><div style="display:flex;align-items:center;gap:10px"><span class="switch on"></span><span style="font-size:11.5px;color:var(--ink-2)">Auto-start hub at login (tray mode)</span></div></div>
+            <div class="f-row"><label>MINIMIZE TO TRAY</label><div style="display:flex;align-items:center;gap:10px"><span class="switch on"></span><span style="font-size:11.5px;color:var(--ink-2)">Close button hides the window</span></div></div>
+            <div class="f-row"><label>LAN SHARING</label><div style="display:flex;align-items:center;gap:10px"><span class="switch on green"></span><span style="font-size:11.5px;color:var(--ink-2)">http://10.26.94.206:9235 · see LAN tab</span></div></div>
+            <div class="f-row"><label>PRINTER STATUS HOLD</label><div style="display:flex;align-items:center;gap:10px"><span class="switch on"></span><span style="font-size:11.5px;color:var(--ink-2)">Jobs wait while a printer reports offline</span></div></div>
+            <div class="f-row"><label>KEEP JOBS (DAYS)</label><input class="inp" value="30"><div class="hint">History older than this is cleaned up</div></div>
+            <div class="f-row"><label>LOG LEVEL</label><select><option>INFO</option><option>DEBUG</option><option>WARN</option><option>ERROR</option></select></div>
+            <div class="f-row"><label>THEME</label><select><option>Windows IDM (Blue)</option><option>Light</option><option>Dark</option></select></div>
+            <div class="f-row"><label>DATA FOLDER</label><div class="hint" style="font-size:11px"><span class="mono">C:\Users\Admin\.advprint</span> · <button class="btn small" style="height:20px">Open data folder</button></div></div>
+          </div>
+          <div style="display:flex;gap:8px"><button class="btn blue">&#128190; Save &amp; Apply</button><button class="btn">Restore Defaults</button><button class="btn">&#128260; Restart hub</button></div>
+        </section>
+
+        <!-- ============ ABOUT ============ -->
+        <section class="panel" id="p-about">
+          <div class="p-head">
+            <h2>About</h2><span class="sub">version, brand, THE ONE UI statement</span>
+            <div class="right"><button class="btn blue">&#128230; Check for updates</button></div>
+          </div>
+          <div class="card">
+            <div class="card-b" style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap">
+              <div style="width:64px;height:64px;border-radius:12px;background:linear-gradient(135deg,#1e40af,#1d4ed8);color:#fff;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:800;box-shadow:0 8px 22px rgba(29,78,216,.35)">AP</div>
+              <div style="flex:1;min-width:260px">
+                <div style="font-size:17px;font-weight:800;color:var(--ink)">AdvPrint Pro — Printing Hub <span class="chip ok" style="margin-left:8px">v3.1.3 · UP TO DATE</span></div>
+                <div style="font-size:12px;color:var(--ink-2);margin-top:4px">by <b>Bit Dream IT — Innovative Healthcare Solutions</b></div>
+                <div style="font-size:11.5px;color:var(--muted);margin-top:2px">Chrome silent-print extension + local print hub · port 9235 · 100% local, no cloud</div>
+                <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+                  <button class="btn small">GitHub repo</button>
+                  <button class="btn small">Releases</button>
+                  <button class="btn small">Docs</button>
+                  <button class="btn small">Release notes</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-h">&#9635; THE ONE UI</div>
+            <div class="card-b" style="font-size:12px;color:var(--ink-2);line-height:1.75">
+              This console is the <b>only</b> management interface of AdvPrint Pro. The old scattered areas are now tabs here:
+              the classic dashboard cards &#8594; <b>Dashboard / Printers / LAN / DropZone</b>,
+              the old Jobs page &#8594; <b>separate Queue and History tabs</b>,
+              the extension options switches &#8594; <b>Power Switches / Browser / Rules / Connections / Hub</b>,
+              and the debug cards &#8594; <b>Debug &amp; Tools</b>.
+              It is served by the hub at <span class="mono">/ui</span> with <b>zero external files</b> (the v3.1.2 "console.html was not found" error can never happen again),
+              opens identically in the native window, in Chrome, and inside the extension options tab.
+            </div>
+          </div>
+        </section>
+
+      </main>
+    </div>
+
+    <!-- ================= STATUS BAR ================= -->
+    <div class="statusbar">
+      <span class="sb-pane"><span class="dot"></span> Hub Running</span>
+      <span class="sb-pane mono">10.26.94.206:9235</span>
+      <span class="sb-pane">Printers <b>4</b> · Ready <b>3</b></span>
+      <span class="sb-pane">Queue <b>4</b></span>
+      <span class="sb-pane">History <b>12</b></span>
+      <span class="sb-pane">LAN <b>ON</b></span>
+      <span class="sb-pane">DropZone <b>ON</b></span>
+      <span class="sb-pane grow"></span>
+      <span class="sb-pane">Uptime 04:12:37</span>
+      <span class="sb-pane"><b>Printing Hub v3.1.3</b> · Bit Dream IT</span>
+    </div>
+
+  </div>
+</div>
+<div class="design-note">AdvPrint Pro — Printing Hub · ALL-IN-ONE Console v3.1.3 rev 4 — rule editor (match by URL/content/type → printer/copies/paper → on/auto/runs) · edit + delete on every rule · suggested URL filters · silent CRX install for Chrome/Edge/Brave/Vivaldi/Chromium · Web Store warning explained · working menus · QR tiles + modal · served by hub at /ui</div>
+
+<!-- ================= QR ENLARGE MODAL ================= -->
+<div class="modal-back" id="qrmodal">
+  <div class="modal">
+    <div class="m-h"><span id="qr-title">QR code</span><button class="x" data-close>&#x2715;</button></div>
+    <div class="m-b">
+      <div class="mq" id="qr-box"></div>
+      <div class="murl" id="qr-url"></div>
+      <div class="mops"><button class="btn blue" id="qr-copy">&#128203; Copy link</button><button class="btn" data-close>Close</button></div>
+      <div class="mnote" id="qr-note"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= KEYBOARD SHORTCUTS MODAL ================= -->
+<div class="modal-back" id="keysmodal">
+  <div class="modal">
+    <div class="m-h"><span>Keyboard shortcuts</span><button class="x" data-close>&#x2715;</button></div>
+    <div class="m-b" style="text-align:left">
+      <table class="mtable">
+        <tr><td>Ctrl+1 … Ctrl+8</td><td>Dashboard · Queue · History · Printers · LAN · DropZone · Connections · Hub</td></tr>
+        <tr><td>Ctrl+N</td><td>New print job (opens Queue)</td></tr>
+        <tr><td>Ctrl+D</td><td>Open DropZone folder</td></tr>
+        <tr><td>Ctrl+T</td><td>REAL test print page</td></tr>
+        <tr><td>F1</td><td>About AdvPrint Pro</td></tr>
+        <tr><td>F5</td><td>Show / hide the status bar</td></tr>
+        <tr><td>F11</td><td>Full screen</td></tr>
+        <tr><td>Esc</td><td>Close menu · close dialog</td></tr>
+        <tr><td>Alt+F4</td><td>Exit hub (stops printing — jobs already queued are kept)</td></tr>
+      </table>
+      <div class="mnote" style="text-align:center">Shortcuts work in the native window and in the browser at /ui. The extension adds its own page-level shortcuts.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= RULE EDITOR MODAL ================= -->
+<div class="modal-back" id="rulemodal">
+  <div class="modal wide">
+    <div class="m-h"><span id="re-title">Edit rule — Lab PDF reports</span><button class="x" data-close>&#x2715;</button></div>
+    <div class="m-b" style="text-align:left;padding:14px 18px 16px">
+
+      <div class="re-step"><span class="n">1</span><b>Match by — which pages does this rule catch?</b></div>
+      <div class="re-grid">
+        <div class="full">
+          <label class="rl">URL / ADDRESS FILTER (chrome match pattern)</label>
+          <input class="inp2 mono" id="re-url" value="*://www.htncr.org/lab/*">
+          <div class="hint2">Suggested: <span class="pattern-chip" data-fill-url="*://*.htncr.org/*" style="margin:0 4px 0 0">*://*.htncr.org/*</span>
+            <span class="pattern-chip" data-fill-url="*://*/*.pdf" style="margin:0 4px 0 0">*://*/*.pdf</span>
+            <span class="pattern-chip" data-fill-url="*://intranet/certificates/*" style="margin:0">*://intranet/certificates/*</span> — click to fill</div>
+        </div>
+        <div>
+          <label class="rl">PAGE CONTENT MUST CONTAIN (optional)</label>
+          <input class="inp2" id="re-content" placeholder="e.g. Patient Report, ZPL, invoice number…">
+          <div class="hint2">Leave empty = any page content.</div>
+        </div>
+        <div>
+          <label class="rl">URL TYPE</label>
+          <select class="inp2" id="re-type"><option selected>PDF link</option><option>Web page</option><option>Plain text / stream</option><option>Any</option></select>
+          <div class="hint2">PDF link = the job is the .pdf file itself.</div>
+        </div>
+        <div class="full">
+          <div class="note" style="margin:0;font-size:10.5px">&#128269; Live test: <span class="mono">https://www.htncr.org/lab/medical_reports/pdf/4711</span> &#8594; <b style="color:var(--ok)">matches</b> this rule (scheme &#10003; host &#10003; path &#10003; content-type application/pdf).</div>
+        </div>
+      </div>
+
+      <div class="re-step"><span class="n">2</span><b>Then print — where and how</b></div>
+      <div class="re-grid">
+        <div>
+          <label class="rl">PRINTER</label>
+          <select class="inp2" id="re-printer"><option selected>HP Laser 103 107 108</option><option>Microsoft Print to PDF</option><option>OneNote</option><option>Zebra GK420d</option><option>XP-58 Thermal</option><option>AdvPrint Pro @ AI-Lab (IPP virtual)</option></select>
+        </div>
+        <div>
+          <label class="rl">WHAT TO PRINT</label>
+          <select class="inp2" id="re-what"><option selected>Auto (PDF as-is)</option><option>Entire web page</option><option>Selected element only</option><option>Raw text / ZPL / ESC-POS stream</option><option>Linked PDF only</option></select>
+        </div>
+        <div>
+          <label class="rl">COPIES</label>
+          <input class="inp2" id="re-copies" type="number" min="1" max="99" value="1">
+        </div>
+        <div>
+          <label class="rl">PAPER</label>
+          <select class="inp2" id="re-paper"><option>A4</option><option selected>A5</option><option>Letter</option><option>Legal</option><option>4&times;6&Prime; label</option><option>58mm receipt</option><option>Driver default</option></select>
+        </div>
+        <div>
+          <label class="rl">COLOR</label>
+          <select class="inp2"><option>Driver default</option><option>Black &amp; white</option><option>Color</option></select>
+        </div>
+        <div>
+          <label class="rl">DUPLEX</label>
+          <select class="inp2"><option selected>Simplex</option><option>Long-edge duplex</option><option>Short-edge duplex</option></select>
+        </div>
+      </div>
+
+      <div class="re-step"><span class="n">3</span><b>When — how the rule runs</b></div>
+      <div class="re-grid">
+        <div>
+          <label class="rl">RULE ON?</label>
+          <div style="display:flex;align-items:center;gap:10px;height:29px"><span class="switch on" id="re-on"></span><span style="font-size:11px;color:var(--ink-2)">enabled</span></div>
+        </div>
+        <div>
+          <label class="rl">AUTO (SILENT — NO DIALOG)?</label>
+          <div style="display:flex;align-items:center;gap:10px;height:29px"><span class="switch on" id="re-auto"></span><span style="font-size:11px;color:var(--ink-2)">auto — prints without asking</span></div>
+        </div>
+        <div>
+          <label class="rl">SCHEDULE (OPTIONAL)</label>
+          <select class="inp2" id="re-sched"><option selected>Always</option><option>Working hours 08:00&ndash;18:00</option><option>Nights 18:00&ndash;08:00</option><option>Weekends only</option></select>
+        </div>
+        <div>
+          <label class="rl">PRIORITY</label>
+          <input class="inp2" id="re-priority" type="number" min="1" max="99" value="1">
+          <div class="hint2">Lower number = checked first. First match wins.</div>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:8px;margin-top:16px;align-items:center">
+        <button class="btn blue" id="re-save">&#128190; Save rule</button>
+        <button class="btn" data-close>Cancel</button>
+        <span style="flex:1"></span>
+        <button class="btn danger" id="re-delete">&#128465; Delete rule</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= TOASTS ================= -->
+<div id="toasts"></div>
+
+<script>
+// ---- sidebar + toolbar + address-bar tab switching ----
+function showTab(name){
+  document.querySelectorAll('.panel').forEach(function(p){p.classList.remove('active');});
+  var el=document.getElementById('p-'+name);
+  if(el) el.classList.add('active');
+  document.querySelectorAll('.sb-item').forEach(function(i){
+    i.classList.toggle('active', i.dataset.tab===name);
+  });
+  var c=document.querySelector('.content');
+  if(c) c.scrollTop=0;
+  if(window.__onTab) window.__onTab(name);
+}
+document.querySelectorAll('[data-tab]').forEach(function(el){
+  el.addEventListener('click',function(){ showTab(el.dataset.tab); });
+});
+// deep-link: #tab=lan  (design preview aid)
+(function(){
+  var m=location.hash.match(/tab=([a-z]+)/);
+  if(m) showTab(m[1]);
+})();
+// ---- filter chips ----
+document.querySelectorAll('.filters, .p-head .right').forEach(function(group){
+  group.querySelectorAll('.fchip').forEach(function(ch){
+    ch.addEventListener('click',function(){
+      group.querySelectorAll('.fchip').forEach(function(x){x.classList.remove('on');});
+      ch.classList.add('on');
+    });
+  });
+});
+// ---- switches ----
+document.querySelectorAll('.switch').forEach(function(s){
+  s.addEventListener('click',function(){ s.classList.toggle('on'); });
+});
+// ---- print-destination radios ----
+document.querySelectorAll('#p-printers .radio').forEach(function(r){
+  r.addEventListener('click',function(){
+    document.querySelectorAll('#p-printers .radio').forEach(function(x){x.classList.remove('on');});
+    r.classList.add('on');
+  });
+});
+// ---- copy buttons ----
+function copyTxt(t){
+  try{ if(navigator.clipboard) navigator.clipboard.writeText(t); }catch(_){}
+}
+document.querySelectorAll('.pcard .cp').forEach(function(b){
+  b.addEventListener('click',function(){
+    var url=b.parentElement.textContent.replace('COPY','').trim();
+    copyTxt(url);
+    b.textContent='OK \u2713'; setTimeout(function(){b.textContent='COPY';},900);
+  });
+});
+
+// ================= MENUBAR DROPDOWNS =================
+function closeMenus(){ document.querySelectorAll('.menu.open').forEach(function(m){m.classList.remove('open');}); }
+document.querySelectorAll('.menubar .menu').forEach(function(m){
+  m.querySelector('.menu-label').addEventListener('click',function(e){
+    e.stopPropagation();
+    var was=m.classList.contains('open');
+    closeMenus();
+    if(!was) m.classList.add('open');
+  });
+  m.addEventListener('mouseenter',function(){
+    if(document.querySelector('.menu.open') && !m.classList.contains('open')){
+      closeMenus(); m.classList.add('open');
+    }
+  });
+});
+document.addEventListener('click',function(e){
+  if(!e.target.closest('.menubar')) closeMenus();
+});
+// one delegated handler for ALL dropdown items
+document.querySelector('.menubar').addEventListener('click',function(e){
+  var it=e.target.closest('.dd-it');
+  if(!it || it.classList.contains('dis')) return;
+  closeMenus();
+  if(it.dataset.goto) showTab(it.dataset.goto);
+  if(it.dataset.qr)   openQR(it.dataset.qr);
+  if(it.dataset.modal==='keys') openModal('keysmodal');
+  if(it.dataset.toast) toast(it.dataset.toast, it.dataset.ttype);
+  if(it.dataset.chk!==undefined) it.classList.toggle('chk');
+});
+
+// ================= TOASTS =================
+function toast(msg,type){
+  var box=document.getElementById('toasts');
+  var t=document.createElement('div');
+  t.className='toast '+(type||'');
+  t.innerHTML=msg;
+  box.appendChild(t);
+  while(box.children.length>4) box.removeChild(box.firstChild);
+  setTimeout(function(){ t.style.transition='opacity .3s'; t.style.opacity='0';
+    setTimeout(function(){ t.remove(); },320); },2800);
+}
+
+// ================= QR CODES (design mock generated by the hub) =================
+var QR_DATA={
+  hub:   {t:'AdvPrint Pro — hub console (THE ONE UI)',
+          u:'http://10.26.94.206:9235/ui?token=mPz5HFOsB9xaJ36isQ7kDfjaaNrERnXs',
+          n:'Open on any PC or phone — the same console, zero install. Token is embedded, so the link works until you rotate it.'},
+  send:  {t:'Send portal — print from phones',
+          u:'http://10.26.94.206:9235/send?token=mPz5HFOsB9xaJ36isQ7kDfjaaNrERnXs',
+          n:'Scan with the phone camera \u2192 the send page opens \u2192 paste text or upload a PDF \u2192 it prints here. No app, no account.'},
+  invite:{t:'Invite — connect another PC',
+          u:'http://10.26.94.206:9235/connect?t=mPz5HFOsB9xaJ36isQ7kDfjaaNrERnXs&n=AI-Lab',
+          n:'Open on the other PC \u2192 it fills in hub URL + token itself and appears under Connections. Works across the LAN only.'},
+  ipp:   {t:'IPP printer URL',
+          u:'http://10.26.94.206:9235/ipp/print',
+          n:'Add once as a network printer: Windows 10/11 uses the built-in IPP Class Driver; Android uses any IPP print service. Jobs then print to your default printer.'}
+};
+function qrMatrix(text){
+  var N=29,m=[],i,j,seed=7;
+  for(i=0;i<text.length;i++){ seed=(seed*31+text.charCodeAt(i))>>>0; }
+  function rnd(){ seed=(seed*1103515245+12345)>>>0; return (seed>>>9)/8388608; }
+  for(i=0;i<N;i++){ m.push([]); for(j=0;j<N;j++) m[i].push(0); }
+  function finder(fx,fy){
+    for(var dy=0;dy<7;dy++)for(var dx=0;dx<7;dx++){
+      var d=Math.max(Math.abs(dx-3),Math.abs(dy-3));
+      m[fy+dy][fx+dx]=(d===3||d<=1)?1:0;
+    }
+  }
+  finder(0,0); finder(N-7,0); finder(0,N-7);
+  for(i=8;i<N-8;i++){ m[6][i]=i%2===0?1:0; m[i][6]=i%2===0?1:0; }
+  var ax=N-9, ay=N-9;
+  for(i=-2;i<=2;i++)for(j=-2;j<=2;j++){ var d=Math.max(Math.abs(i),Math.abs(j)); m[ay+i][ax+j]=(d===2||d===0)?1:0; }
+  function reserved(x,y){
+    if(x<8&&y<8) return true;
+    if(x>=N-8&&y<8) return true;
+    if(x<8&&y>=N-8) return true;
+    if(x===6||y===6) return true;
+    if(x>=ax-2&&x<=ax+2&&y>=ay-2&&y<=ay+2) return true;
+    return false;
+  }
+  for(i=0;i<N;i++)for(j=0;j<N;j++) if(!reserved(j,i)) m[i][j]=rnd()>0.5?1:0;
+  return m;
+}
+function qrSVG(text){
+  var m=qrMatrix(text), N=m.length, c='';
+  for(var y=0;y<N;y++)for(var x=0;x<N;x++)
+    if(m[y][x]) c+='<rect x="'+x+'" y="'+y+'" width="1" height="1"/>';
+  return '<svg viewBox="-2 -2 '+(N+4)+' '+(N+4)+'" shape-rendering="crispEdges" fill="#0f172a">'+c+'</svg>';
+}
+// draw the three inline tiles on load
+document.querySelectorAll('[data-qr-draw]').forEach(function(box){
+  var d=QR_DATA[box.dataset.qrDraw];
+  if(d) box.innerHTML=qrSVG(d.u);
+});
+// open the enlarge modal
+function openQR(kind){
+  var d=QR_DATA[kind]; if(!d) return;
+  document.getElementById('qr-title').textContent=d.t;
+  document.getElementById('qr-box').innerHTML=qrSVG(d.u);
+  document.getElementById('qr-url').textContent=d.u;
+  document.getElementById('qr-note').textContent=d.n;
+  document.getElementById('qr-copy').onclick=function(){ copyTxt(d.u); toast('Link copied \u2014 '+d.u,'ok'); };
+  openModal('qrmodal');
+}
+// QR triggers anywhere (tiles, row buttons, address bar, menus)
+document.addEventListener('click',function(e){
+  var el=e.target.closest('[data-qr]');
+  if(el) openQR(el.dataset.qr);
+});
+
+// ================= MODALS =================
+function openModal(id){ document.getElementById(id).classList.add('show'); }
+function closeModal(){
+  document.querySelectorAll('.modal-back.show').forEach(function(m){m.classList.remove('show');});
+}
+document.querySelectorAll('.modal-back').forEach(function(back){
+  back.addEventListener('click',function(e){
+    if(e.target===back || e.target.closest('[data-close]')) closeModal();
+  });
+});
+
+// ================= GENERIC BUTTON FEEDBACK (every button responds) =================
+document.querySelectorAll('.content .btn, .addrbar .pill-btn').forEach(function(b){
+  if(b.dataset.tab!==undefined || b.dataset.qr!==undefined || b.closest('.dd') || b.closest('.modal')) return;
+  if(b.dataset.editRule!==undefined || b.dataset.delRule!==undefined || b.dataset.newRule!==undefined) return;
+  b.addEventListener('click',function(){
+    var label=b.textContent.trim().replace(/\s+/g,' ');
+    if(/^copy/i.test(label)){
+      var row=b.closest('.lrow,.card,.frow,.pcard,.mops');
+      var src=row?row.querySelector('.lv:not(.plain),.url,input.inp'):null;
+      var val=src?(src.value!==undefined?src.value:src.textContent):'';
+      copyTxt(val);
+      toast('<b>'+label+'</b> \u2713 copied'+(val?' \u2014 '+val:''),'ok');
+    } else if(/^disable$/i.test(label)){
+      toast('<b>'+label+'</b> \u2014 feature switched OFF (demo)','warn');
+    } else if(/apply/i.test(label)){
+      toast('<b>'+label+'</b> \u2713 policy key written \u2014 restart that browser to force-install','ok');
+    } else if(/save|export|release all|reprint|test page|self-test|rotate|restart|check for updates/i.test(label)){
+      toast('<b>'+label+'</b> \u2713 hub command sent','ok');
+    } else {
+      toast('<b>'+label+'</b> \u2014 demo action (wired to the hub API at implementation)');
+    }
+  });
+});
+
+// ================= KEYBOARD SHORTCUTS =================
+document.addEventListener('keydown',function(e){
+  if(e.key==='Escape'){ closeMenus(); closeModal(); return; }
+  if(e.ctrlKey&&!e.shiftKey&&!e.altKey){
+    var map={'1':'dashboard','2':'queue','3':'history','4':'printers','5':'lan',
+             '6':'dropzone','7':'connections','8':'hub'};
+    if(map[e.key]){ e.preventDefault(); showTab(map[e.key]); return; }
+    if(e.key==='n'){ e.preventDefault(); showTab('queue'); toast('New print job \u2014 drop a file on Queue','ok'); return; }
+    if(e.key==='d'){ e.preventDefault(); showTab('dropzone'); return; }
+    if(e.key==='t'){ e.preventDefault(); toast('REAL test page sent to HP Laser 103','ok'); return; }
+  }
+  if(e.key==='F1'){ e.preventDefault(); showTab('about'); }
+  if(e.key==='F5'){ e.preventDefault();
+    var sb=document.querySelector('.statusbar');
+    sb.style.display=sb.style.display==='none'?'flex':'none';
+  }
+});
+
+// ================= RULE EDITOR (Rules tab) =================
+var RULES=[
+  {name:'Lab PDF reports',   url:'*://www.htncr.org/lab/*',                content:'',             type:'PDF link',            printer:'HP Laser 103 107 108', what:'Auto (PDF as-is)',              copies:1, paper:'A5',         on:1, auto:1, sched:'Always',   prio:1},
+  {name:'Zebra labels',      url:'(any page)',                             content:'ZPL label text',type:'Any',                printer:'Zebra GK420d',         what:'Raw text / ZPL / ESC-POS stream',copies:2, paper:'4\u00d76\u2033 label',on:1, auto:1, sched:'Always',   prio:2},
+  {name:'POS receipts',      url:'*://billing.local/pos/*',                content:'Receipt text', type:'Plain text / stream', printer:'XP-58 Thermal',        what:'Raw text / ZPL / ESC-POS stream',copies:1, paper:'58mm receipt',on:1, auto:0, sched:'Always',   prio:3},
+  {name:'Certificates',      url:'*://intranet/certificates/*',            content:'',             type:'Web page',            printer:'AdvPrint Pro @ AI-Lab (IPP virtual)', what:'Entire web page', copies:1, paper:'A4',  on:0, auto:1, sched:'Always',   prio:4},
+  {name:'Invoices \u2192 PDF',url:'https://reports.example.com/invoice-*',  content:'',             type:'PDF link',            printer:'Microsoft Print to PDF', what:'Auto (PDF as-is)',            copies:1, paper:'A4',         on:1, auto:1, sched:'Always',   prio:5},
+  {name:'Night reports',     url:'(any page)',                             content:'Patient Report',type:'Web page',            printer:'HP Laser 103 107 108', what:'Entire web page',               copies:2, paper:'A4',         on:1, auto:1, sched:'Nights 18:00\u201308:00', prio:6}
+];
+var ruleNames=RULES.map(function(r){return r.name;});
+function openRuleEditor(i){
+  var r=(typeof i==='number'&&RULES[i])?RULES[i]:{name:'',url:'',content:'',type:'Any',printer:'HP Laser 103 107 108',
+        what:'Auto (PDF as-is)',copies:1,paper:'A4',on:1,auto:1,sched:'Always',prio:RULES.length+1,isNew:true};
+  document.getElementById('re-title').textContent=r.isNew?'New rule \u2014 step 1: match by':'Edit rule \u2014 '+r.name;
+  document.getElementById('re-url').value=r.url;
+  document.getElementById('re-content').value=r.content;
+  document.getElementById('re-type').value=r.type;
+  document.getElementById('re-printer').value=r.printer;
+  document.getElementById('re-what').value=r.what;
+  document.getElementById('re-copies').value=r.copies;
+  document.getElementById('re-paper').value=r.paper;
+  document.getElementById('re-sched').value=r.sched;
+  document.getElementById('re-priority').value=r.prio;
+  document.getElementById('re-on').classList.toggle('on',!!r.on);
+  document.getElementById('re-auto').classList.toggle('on',!!r.auto);
+  document.getElementById('re-delete').style.display=r.isNew?'none':'inline-flex';
+  document.getElementById('re-save').onclick=function(){
+    closeModal(); toast('Rule <b>'+((r.isNew?'New rule':r.name))+'</b> saved \u2014 active top-to-bottom','ok');
+  };
+  document.getElementById('re-delete').onclick=function(){
+    closeModal(); toast('Rule <b>'+r.name+'</b> deleted \u2014 demo','warn');
+  };
+  openModal('rulemodal');
+}
+// toolbar / row / suggestion triggers
+document.addEventListener('click',function(e){
+  var t;
+  if((t=e.target.closest('[data-edit-rule]')))  { openRuleEditor(+t.dataset.editRule); return; }
+  if(e.target.closest('[data-new-rule]'))       { openRuleEditor(-1); return; }
+  if((t=e.target.closest('[data-use-url]')))    { showTab('rules'); openRuleEditor(-1);
+      document.getElementById('re-url').value=t.dataset.useUrl; return; }
+  if((t=e.target.closest('[data-fill-url]')))   { document.getElementById('re-url').value=t.dataset.fillUrl; return; }
+  if((t=e.target.closest('[data-del-rule]'))){
+    if(t.dataset.armed){ toast('Rule <b>'+ruleNames[+t.dataset.delRule]+'</b> deleted \u2014 demo','warn');
+      delete t.dataset.armed; t.textContent='Delete'; return; }
+    t.dataset.armed='1'; t.textContent='Sure?';
+    setTimeout(function(){ if(!t.isConnected)return; delete t.dataset.armed; t.textContent='Delete'; },2600);
+  }
+});
+</script>
+</body>
+</html>

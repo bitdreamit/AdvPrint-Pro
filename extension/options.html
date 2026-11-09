@@ -395,7 +395,7 @@ main .card-b{padding:12px 14px}
       <div class="logo">A</div>
       <div class="t-main">AdvPrint Pro — Extension Options <small>· THE ONE UI family</small></div>
       <div class="spacer"></div>
-      <span class="verchip" id="verChip">v3.1.3</span>
+      <span class="verchip" id="verChip">v3.2.0</span>
       <button class="winbtn">&#x2500;</button>
       <button class="winbtn">&#x25A1;</button>
       <button class="winbtn close" title="Close options">&#x2715;</button>
@@ -523,10 +523,10 @@ main .card-b{padding:12px 14px}
 
   <!-- ================= CONSOLE (v3.1.2: THE ONE UI) ================= -->
   <section class="panel" id="panel-console">
-    <h2>Hub Console <span class="sub" style="display:inline">THE ONE UI &middot; served by the hub at /ui</span></h2>
-    <p class="sub">Dashboard / Printers / Jobs / Audit / IPP Printer / Extension / Settings / Logs -
-      the exact same Windows-IDM style page as the desktop window (gui_app) and the popup
-      Console button. One UI, identical everywhere.</p>
+    <h2>Hub Console <span class="sub" style="display:inline">THE ONE UI &middot; served by the hub at /ui (also at / and /dashboard - v3.2.0)</span></h2>
+    <p class="sub">Dashboard / Queue / History / Printers / LAN / DropZone / Connections / Hub /
+      Rules / Power / Tools (14) / Extension / Debug / Audit / Logs / Settings / About - the
+      complete All-in-One console, identical in the desktop window, the browser and here.</p>
     <div id="consoleFallback" style="display:none; border:1px solid #fdba74; background:#fff7ed;
          border-radius:10px; padding:14px 16px; margin-bottom:10px">
       <b style="color:#9a3412">The hub is not reachable right now.</b>
@@ -1027,12 +1027,14 @@ main .card-b{padding:12px 14px}
 
     <section id="api-settings" style="border:none;padding:0;margin-top:18px">
       <div id="api" style="margin-top:-70px;padding-top:70px"></div>
-      <h2>Website API permission (which sites may print)</h2>
+      <h2>Website API permission - website whitelist (which sites may print)</h2>
       <p class="sub">Sites allowed to call <b>window.advprint</b> / <b>printPdfLink</b> (the page developer API).
         One pattern per line - e.g. <span class="mono">*://www.htncr.org/*</span> or
         <span class="mono">https://reports.example.com/*</span> (<span class="mono">*.example.org</span> matches subdomains).
-        <b>Empty list = the page API is OFF for every website</b> - pages can no longer drive your printers
-        just because you have them open. The extension's own pages are always allowed.</p>
+        <b>v3.2.0 default: <span class="mono">*</span> - ALL websites are whitelisted</b>, so every page can print
+        out of the box. Replace the <span class="mono">*</span> below with specific patterns to restrict the page
+        API (the auto-print rules and the extension's own pages always keep working). This list is mirrored
+        to the hub console (ONE UI &#8594; Rules / Extension panels) automatically.</p>
       <textarea id="apiSites" rows="4" spellcheck="false" style="width:100%;max-width:640px;
         font:12.5px/1.5 Consolas,monospace;border:1px solid var(--line);border-radius:7px;padding:8px"></textarea>
       <div class="row" style="margin-top:8px">
@@ -1257,7 +1259,7 @@ main .card-b{padding:12px 14px}
       <span class="sb-pane">THE ONE UI family</span>
       <span class="sb-pane" id="sbHubState">hub: checking…</span>
       <span class="sb-pane grow"></span>
-      <span class="sb-pane">v3.1.3</span>
+      <span class="sb-pane">v3.2.0</span>
       <span class="sb-pane">Bit Dream IT</span>
     </div>
 

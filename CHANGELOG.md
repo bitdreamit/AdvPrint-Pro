@@ -1,6 +1,77 @@
 # Changelog - AdvPrint Pro (Advanced Printer)
 by Bit Dream IT - Innovative Healthcare Solutions
 
+## v3.2.0 - THE ONE ALL-IN-ONE UI EVERYWHERE (2026-11-09)
+
+Base: v3.1.3 - every previous feature ships unchanged. This release
+makes ONE approved IDM window manage EVERYTHING, on EVERY URL, for
+EVERY PC - and bumps the whole product to 3.2.0.
+
+### 1. One UI, no separate URLs
+
+- `/` (browser), `/ui` and `/dashboard` all serve the SAME approved
+  All-in-One console.html. The classic dashboard stays in the code
+  (dashboard_html()) but is no longer the browser answer.
+- 17 live panels: Dashboard / Queue / History / Printers / LAN Sharing
+  / DropZone / Connections / Hub / Rules / Power Switches / Tools (14)
+  / Extension / Debug / Audit / Logs / Settings / About.
+- 9 working menus, glossy toolbar, address bar with live hub dot +
+  token badge, 218px sidebar tree, real QR codes (hub /qr endpoint),
+  QR enlarge modal, keyboard shortcuts, toasts on every action.
+
+### 2. SELF PC vs CENTER PC view (who opened the page decides)
+
+- The hub injects boot JSON into the page: the owner on 127.0.0.1 gets
+  the SELF PC UI (full control), a LAN PC opening the share URL gets
+  the CENTER PC UI (amber banner "you are viewing the CENTER printing
+  PC <host>" - live queue/jobs/history/rules/IPP + test print; the 14
+  system tools stay on the center PC itself).
+- `?view=self|center` forces a view (previews / screenshots).
+
+### 3. Tools (14) - the desktop tool menu inside the UI
+
+- New POST /tool API (loopback + token only) exposes tool.py's whole
+  menu: [1] start [2] stop [3] status [4] test page [5] service install
+  [6] service remove [7] autostart toggle [8] GitHub update check
+  [9] recent jobs [10] uninstall [11] LIVE TEST A-to-Z [12] open
+  dashboard [13] diagnose & fix [14] restart - nothing extra, nothing
+  missing. The console Tools panel renders exactly these 14 rows.
+
+### 4. Central rule manager (hub <-> extension two-way sync)
+
+- New config keys rules_mirror / ext_api_sites / ext_sync_at; POST
+  /config validates rule dicts (id, name, URL/address filter pattern,
+  match by URL or page content, what to print, printer, copies, paper,
+  on/auto, runs).
+- The console Rules panel is a full editor: New / Edit / Duplicate /
+  Delete, URL filter with quick-fill patterns, match by URL type or
+  page content (ZPL / text / PDF / image / HTML), printer picker,
+  copies, paper, on-auto toggle, runs counter.
+- The extension pushes its rules (with live runs from ruleStats) to
+  the hub and adopts hub rules on a 5-min alarm ONLY when the local
+  rules are unchanged - local edits always win.
+
+### 5. Website whitelist defaults to * (ALL domains)
+
+- extension DEFAULTS.apiSites = ["*"]: every website may print out of
+  the box (window.advprint / printPdfLink). Restrict in Options >
+  Website API permission; the live list is mirrored to the ONE UI
+  (Rules + Extension panels). Old installs without a list migrate to
+  ["*"].
+
+### 6. Extension options = same theme, same console
+
+- Options > Console tab shows the complete 17-panel ONE UI in an
+  iframe (fallback + retry kept). Version chips bumped to v3.2.0.
+
+### 7. Small
+
+- /health host, LAN IP, port and version are injected into the page
+  (boot JSON) - title bar shows PC name + view.
+- Silent-install story per browser (Chrome / Edge / Brave / Chromium /
+  Vivaldi ExtensionInstallForcelist paths) in the Extension panel.
+- tests/test_one_ui_v320.py - 10 new tests (290 total, all green).
+
 ## v3.1.3 - THE ONE UI SKIN (2026-11-09)
 
 Base: v3.1.2 - every previous feature ships unchanged, zero behavior

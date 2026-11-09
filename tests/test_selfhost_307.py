@@ -206,12 +206,15 @@ def test_health_carries_extension_block(hub, served_crx):
 
 
 def test_dashboard_has_extension_card(hub):
+    # v3.2.0 THE ONE UI: /dashboard serves the approved All-in-One
+    # console (same page as /ui). Its Extension panel carries the silent
+    # install story (CRX + updates.xml + Forcelist policies) in place of
+    # the classic dashboard's extInfo() card.
     code, body = hub.get("/dashboard")
     assert code == 200
     html = body.decode("utf-8")
-    for marker in ("Browser extension - silent install", "extId",
-                   "extPolicyInstall", "extPolicyRemove",
-                   "extPolicyStatus", "extCopyUrl", "extInfo();"):
+    for marker in ("Silent install", "ExtensionInstallForcelist",
+                   "updates.xml", "AdvPrint-Pro.crx", "THE ONE UI"):
         assert marker in html, marker
 
 

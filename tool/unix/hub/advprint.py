@@ -95,8 +95,8 @@ if _HUB_DIR not in sys.path:
     sys.path.insert(0, _HUB_DIR)
 
 
-VERSION = "3.1.3"
-VERSION_NAME = ("v3.1.3 (THE ONE UI SKIN - THE APPROVED IDM DESIGN SHIPPED FOR REAL: (1) hub console.html now renders the exact approved Design-1 mockup - real window frame (blue gradient title bar with AP logo + live hub version + PC name, menu bar, glossy SVG toolbar: New Job / Pause-Resume / Clear / Printers / IPP Queue / Refresh / Extension / Settings / Audit / Dashboard, address bar with live hub dot + token badge, 218px category tree with count badges, KPI stat cards, IDM striped progress bars, chip status badges, dark #0d1731 log terminal, 24px pane status bar) - same live API wiring, zero behavior change. (2) extension options.html now renders the exact approved Design-2 mockup - the same IDM window chrome with a sidebar category tree (Overview / Automation / Settings / System) carrying all 10 tabs (Console / Queue / History / Rules / General / Printing / Connections / Hub / Debug / About), an IDM toolbar whose buttons DO the real actions (Save Settings / Test Page / Connect Hub / New Rule / Reprint / Pause Queue / Self-Test / Hub Config / Console / About), a live hub status pill in the address bar and an IDM status bar - every input id, save button and settings flow untouched. (3) /health gained a 'host' key - the console title bar now shows the PC name like the mockup. All v3.0.9 + v3.1.2 features ship unchanged - per-printer IPP queues, mDNS, gui_app v2 ladder, CENTER MODE, queue, rules, LAN, history.")
+VERSION = "3.2.0"
+VERSION_NAME = ("v3.2.0 (THE ONE ALL-IN-ONE UI EVERYWHERE - one window manages everything, on every URL and every PC: (1) /, /ui and /dashboard all serve the SAME approved IDM console.html - no separate URLs any more; the classic dashboard stays in the code but the routes answer with the ONE UI. (2) SELF PC vs CENTER PC: the hub detects WHO opened the page - the owner on 127.0.0.1 gets the SELF PC UI (full control), a LAN PC gets the CENTER PC UI (amber banner 'you are viewing the CENTER printing PC' - live queue, jobs, history, rules, IPP + test print, system tools stay on the center PC). (3) Tools (14): the desktop tool's whole menu (start/stop/status/testpage/service install/remove/autostart/update-check/recent jobs/uninstall/livetest/open-dashboard/diagnose/restart) is now a console panel backed by the new POST /tool API - loopback + token only - so the command-line tool is no longer needed. (4) Central rule manager: rules_mirror config key - the console edits rules (URL/address filter, match by URL or page content, what to print, printer, copies, paper, on/auto, runs) and installed extensions adopt hub rules automatically (local edits always win). (5) Website whitelist defaults to '*' - ALL websites may print out of the box (extension apiSites default '*' + hub mirror). (6) Real QR codes on the LAN tab served by /qr; DropZone, Connections, Power switches, Debug, Audit, Logs, Settings panels all live. Same token auth, same audit trail, all v3.0.x-v3.1.3 features unchanged.)")
 FULL_BRAND = ("AdvPrint Pro (Advanced Printer) by "
               "Bit Dream IT - Innovative Healthcare Solutions")
 BRANDING = ("AdvPrint Pro (Advanced Printer) - Version %s - by "
@@ -260,6 +260,19 @@ CFG = {
                                       #  <data dir>/DropZone)
     "drop_delete": False,             # True = delete the PDF after pickup,
                                       #  False = move it into DropZone/done
+
+    # ---- v3.2.0 THE ONE UI - central rule manager + extension mirror ----
+    "rules_mirror": [],               # central auto-print rules edited in the
+                                      #  ONE UI (Rules panel) and adopted by
+                                      #  the browser extension automatically;
+                                      #  the extension pushes its local rules
+                                      #  back here on every save. Entries:
+                                      #  {id,name,pattern,match,kind,printer,
+                                      #   action,copies,paper,on,runs}
+    "ext_api_sites": [],              # mirror of the extension's Website API
+                                      #  whitelist (default ["*"] = ALL
+                                      #  domains) - shown live in the ONE UI
+    "ext_sync_at": "",                # ISO stamp of the last extension sync
 }
 
 # env overrides that win over config.json (back-compat for 1.x users)
@@ -278,7 +291,10 @@ CONFIG_KEYS = ("token", "token_header_only", "allowed_origins",
                "printer", "file_dir", "sumatra_path",
                "dest_mode", "ip_printer_host", "ip_printer_port",
                "ip_printer_proto",
-               "drop_enabled", "drop_dir", "drop_delete")
+               "keep_files",           # v3.2.0 gap fix: the ONE UI
+                                       #  switch writes it back now
+               "drop_enabled", "drop_dir", "drop_delete",
+               "rules_mirror", "ext_api_sites", "ext_sync_at")
 CONFIG_TYPES = {"token_header_only": bool, "allowed_origins": list,
                 "pdf_url_allowed_hosts": list, "max_auth_failures": int,
                 "lockout_minutes": int, "lockout_exempt_loopback": bool,
@@ -297,7 +313,11 @@ CONFIG_TYPES = {"token_header_only": bool, "allowed_origins": list,
                 "dest_mode": str, "ip_printer_host": str,
                 "ip_printer_port": int, "ip_printer_proto": str,
                 "drop_enabled": bool, "drop_dir": str,
-                "drop_delete": bool}   # v2.8 DropZone settings
+                "drop_delete": bool,   # v2.8 DropZone settings
+                "rules_mirror": list, "ext_api_sites": list,
+                "ext_sync_at": str,    # v3.2.0 ONE UI mirrors
+                "printer": str,        # v3.2.0: default printer via /config
+                "keep_files": bool}
 
 DEFAULT_TOKEN_WARNING = False   # True while the legacy default token is active
 BOUND_LAN = False               # True once the listener actually bound 0.0.0.0
@@ -4802,16 +4822,13 @@ class Handler(BaseHTTPRequestHandler):
                         pass
                     return
                 return self._send(err[0], {"ok": False, "error": err[1]})
-            console_path = os.path.join(
-                os.path.dirname(os.path.abspath(__file__)), "console.html")
-            if os.path.exists(console_path):
-                try:
-                    with open(console_path, "rb") as fh:
-                        page = fh.read()
-                except OSError:
-                    page = None
-            else:
-                page = None
+            # v3.2.0: SELF PC UI for the owner (loopback), CENTER PC UI
+            # for every LAN PC that opens the share URL. ?view=self|center
+            # overrides (useful for previews / screenshots).
+            view = (q.get("view") or [""])[0].lower()
+            if view not in ("self", "center"):
+                view = "self" if self._is_loopback() else "center"
+            page = console_page_bytes(view)
             if page is None:
                 page = ("<!DOCTYPE html><html><head><meta charset='utf-8'>"
                         "<title>AdvPrint Pro Console</title></head><body"
@@ -4822,7 +4839,7 @@ class Handler(BaseHTTPRequestHandler):
                         "padding:24px'><h1 style='color:#1d4ed8;font-size:19px'"
                         ">AdvPrint Pro Console</h1><p>console.html was not"
                         " found next to advprint.py on this install.</p><p>"
-                        "Re-install from the v3.1.2 Setup / deb, or open the"
+                        "Re-install from the v3.2.0 Setup / deb, or open the"
                         " classic dashboard: <a href='/dashboard?token=%s'>"
                         "/dashboard</a></p></div></body></html>"
                         % urllib.parse.quote(qt or "")).encode("utf-8")
@@ -4860,7 +4877,17 @@ class Handler(BaseHTTPRequestHandler):
                         pass
                     return
                 return self._send(err[0], {"ok": False, "error": err[1]})
-            html = dashboard_html(u.query).encode("utf-8")
+            # v3.2.0 THE ONE UI: /dashboard answers with the SAME approved
+            # console.html as /ui (self view for the owner, center view for
+            # LAN PCs). The classic dashboard page stays in the code
+            # (dashboard_html()) for tests / embedding but is no longer the
+            # browser answer - ONE UI, no separate URLs.
+            view = (q.get("view") or [""])[0].lower()
+            if view not in ("self", "center"):
+                view = "self" if self._is_loopback() else "center"
+            html = console_page_bytes(view)
+            if html is None:
+                html = dashboard_html(u.query).encode("utf-8")
             self.send_response(200)
             self._cors()
             self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -5094,6 +5121,43 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(err[0], {"ok": False, "error": err[1]})
 
         if route == "/":
+            # v3.2.0 THE ONE UI: a BROWSER opening the hub root gets the
+            # same All-in-One console (self view on the hub PC, center view
+            # from the LAN) - no separate URL to remember. API clients
+            # (no Accept: text/html) still get the JSON endpoint index.
+            if "text/html" in (self.headers.get("Accept") or ""):
+                err = self._auth_error(qt, allow_query=True)
+                if err:
+                    if self._loopback_token_redirect(route, q):
+                        return
+                    page = dashboard_auth_error_html(err[1]).encode("utf-8")
+                    self.send_response(err[0])
+                    self._cors()
+                    self.send_header("Content-Type", "text/html; charset=utf-8")
+                    self.send_header("Content-Length", str(len(page)))
+                    self.end_headers()
+                    try:
+                        self.wfile.write(page)
+                    except (BrokenPipeError, ConnectionResetError):
+                        pass
+                    return
+                view = (q.get("view") or [""])[0].lower()
+                if view not in ("self", "center"):
+                    view = "self" if self._is_loopback() else "center"
+                html = console_page_bytes(view)
+                if html is None:
+                    html = dashboard_html(u.query).encode("utf-8")
+                self.send_response(200)
+                self._cors()
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Content-Length", str(len(html)))
+                self.end_headers()
+                try:
+                    self.wfile.write(html)
+                except (BrokenPipeError, ConnectionResetError):
+                    pass
+                return
             return self._send(200, {
                 "app": APP_NAME, "version": VERSION, "by": VENDOR,
                 "branding": BRANDING,
@@ -5113,7 +5177,7 @@ class Handler(BaseHTTPRequestHandler):
                               "/diagnostics", "/config (GET/POST)",
                               "/token/rotate (POST)", "/token/current",
                               "/livetest (POST)", "/peers",
-                              "/ui (v3.1.2 THE ONE UI console - the Windows-IDM style dashboard),"
+                              "/ui (v3.2.0 THE ONE UI - the approved IDM All-in-One console; / and /dashboard serve the SAME page),"
                               "/dropzone (GET) + /dropzone/open (POST),"
                               " /send (GET portal, POST upload),"
                               " /qr (GET QR SVG, kind=send|invite|ipp),"
@@ -5628,6 +5692,161 @@ class Handler(BaseHTTPRequestHandler):
         # POST /restart - v2.8: relaunch the hub as a NEW process and exit
         # this one (same as the tray menu Restart). The new process waits
         # for this one to release the port (ADVPRINT_RESTART=1).
+        # POST /tool - v3.2.0 THE ONE UI: the desktop tool's WHOLE menu
+        # (tool.py [1]..[14]) exposed over HTTP so the console Tools panel
+        # replaces the command-line tool completely. Loopback + token only
+        # (a LAN PC gets the CENTER view where these buttons are hidden).
+        if route == "/tool":
+            if not self._is_loopback():
+                return self._send(403, {"ok": False, "error":
+                    "the 14 tools run on the hub PC itself (loopback only)"})
+            action = str(body.get("action") or "").strip()
+            db_audit("tool." + (action or "?"), actor="console", site=site,
+                     ip=ip, details="tool action from the ONE UI")
+            res = {"ok": True, "message": "", "result": None}
+
+            def _safe(fn, fallback):
+                try:
+                    return fn()
+                except Exception as e:                    # noqa: BLE001
+                    return fallback + (": %s" % e)
+
+            if action == "start":
+                res["message"] = ("the hub is already running - you are "
+                                  "using it right now (tool [1] done)")
+            elif action == "stop":
+                # same clean exit the tray menu uses (os._exit after the
+                # answer is flushed; the OS releases the port)
+                log("[TOOL] stop requested from the ONE UI console")
+                db_audit("hub.stop", actor="console", site=site, ip=ip,
+                         details="tool [2] stop from the ONE UI")
+                threading.Timer(0.8, os._exit, args=(0,)).start()
+                res["message"] = "stopping the hub now - start it again with tool [1]"
+            elif action == "status":
+                res["result"] = {
+                    "version": VERSION,
+                    "service": _safe(service_state, {}),
+                    "autostart": bool(_safe(autostart_enabled, False)),
+                    "firewall": bool(_safe(firewall_rule_ok, False)),
+                    "data_dir": CFG["data_dir"],
+                    "config_file": config_path(),
+                    "queue": _safe(lambda: {
+                        "pending": db_count_pending(),
+                        "held": db_count_held(),
+                        "paused": not RESUME_EVENT.is_set(),
+                    }, {}),
+                }
+            elif action == "testprint":
+                data, _ = thermal_pdf_bytes(
+                    "#big AdvPrint Pro - A4 TEST\n\nIf this page came out "
+                    "of your printer,\nthe hub is working perfectly."
+                    "\n\nTime: %s\n" % datetime.now().strftime(
+                        "%Y-%m-%d %H:%M:%S"),
+                    "testprint", paper="a4")
+                job, _dup = enqueue_print("a4", "test-a4", data,
+                                          dedupe=False,
+                                          origin_ip=self._client_ip(),
+                                          site=self._request_site())
+                res["message"] = "test page queued (job #%s)" % job["id"]
+                res["result"] = {"job_id": job["id"]}
+            elif action in ("service-install", "service-remove"):
+                # UAC prompt on Windows; PowerShell decides the outcome.
+                threading.Thread(
+                    target=_safe,
+                    args=(lambda: cmd_service(
+                        "install" if action == "service-install"
+                        else "remove"), ""),
+                    daemon=True).start()
+                res["message"] = (
+                    "Windows service %s requested - approve the UAC prompt "
+                    "(takes a few seconds)" % ("install" if
+                    action == "service-install" else "removal"))
+            elif action == "autorun-toggle":
+                state = autostart_set(not bool(_safe(autostart_enabled,
+                                                     False)))
+                res["enabled"] = bool(state)
+                res["message"] = "start at logon: %s" % ("ON" if state
+                                                         else "OFF")
+            elif action == "check-update":
+                import urllib.request as _ur
+                try:
+                    req = _ur.Request(
+                        "https://api.github.com/repos/bitdreamit/"
+                        "AdvPrint-Pro/releases/latest",
+                        headers={"User-Agent": "AdvPrintPro/%s" % VERSION})
+                    with _ur.urlopen(req, timeout=6) as r:
+                        rel = json.loads(r.read().decode("utf-8", "replace"))
+                    tag = str(rel.get("tag_name") or "")
+                    latest = tag.lstrip("vV")
+                    res["result"] = {
+                        "current": VERSION, "latest_tag": tag or "(unknown)",
+                        "up_to_date": (not latest) or latest <= VERSION,
+                        "url": rel.get("html_url") or
+                        "https://github.com/bitdreamit/AdvPrint-Pro/releases",
+                    }
+                except Exception as e:                    # noqa: BLE001
+                    res["result"] = {"current": VERSION,
+                                     "latest_tag": "(unreachable)",
+                                     "up_to_date": True,
+                                     "note": "offline - %s" % e}
+            elif action == "recent-jobs":
+                db_init()
+                res["result"] = {"jobs": [
+                    {k: r[k] for k in ("id", "created_at", "status",
+                                       "printer", "title")}
+                    for r in db_list(15)]}
+            elif action == "uninstall":
+                _safe(lambda: autostart_set(False), "")
+                svc = _safe(service_state, {}) or {}
+                if svc.get("installed"):
+                    threading.Thread(
+                        target=_safe, args=(lambda: cmd_service("remove"),
+                                            ""), daemon=True).start()
+                res["message"] = (
+                    "autostart removed%s - program files stay: uninstall "
+                    "via Windows Settings > Apps > AdvPrint Pro; print "
+                    "history is kept in %s"
+                    % (" + service removal requested" if svc.get("installed")
+                       else "", CFG["data_dir"]))
+            elif action == "livetest":
+                db_init()
+                init_config()
+                res["result"] = run_livetest(do_print=False)
+            elif action == "open-dashboard":
+                url = "http://127.0.0.1:%d/ui" % CFG["port"]
+                threading.Thread(target=_safe,
+                                 args=(lambda: webbrowser.open(url), ""),
+                                 daemon=True).start()
+                res["message"] = "opening %s in the default browser" % url
+            elif action == "diagnose":
+                dbg = _safe(build_debug_report, {"problems": []}) or {}
+                res["result"] = {
+                    "service": _safe(service_state, {}),
+                    "autostart": bool(_safe(autostart_enabled, False)),
+                    "firewall": bool(_safe(firewall_rule_ok, False)),
+                    "problems": (dbg.get("problems") or [])[:12],
+                }
+            elif action == "fw-allow":
+                threading.Thread(target=_safe, args=(firewall_allow, ""),
+                                 daemon=True).start()
+                res["message"] = ("firewall rule requested - approve the "
+                                  "UAC prompt (TCP %d + %d)"
+                                  % (CFG["port"], CFG["raw_printer_port"]))
+            elif action == "restart":
+                db_audit("hub.restart", actor="console", site=site, ip=ip,
+                         details="tool [14] restart from the ONE UI")
+                log("[RESTART] tool [14] restart requested from the console")
+                threading.Timer(0.7, _restart_and_exit).start()
+                res["message"] = ("restarting - the hub is back in a few "
+                                  "seconds")
+            else:
+                return self._send(400, {"ok": False, "error":
+                    "unknown tool action '%s' (use start/stop/status/"
+                    "testprint/service-install/service-remove/autorun-"
+                    "toggle/check-update/recent-jobs/uninstall/livetest/"
+                    "open-dashboard/diagnose/fw-allow/restart)" % action})
+            return self._send(200, res)
+
         if route == "/restart":
             db_audit("hub.restart", actor="api", site=site, ip=ip,
                      details="restart requested (dashboard/API)")
@@ -5860,6 +6079,10 @@ class Handler(BaseHTTPRequestHandler):
             # validated into `updates` FIRST and applied in one shot.
             updates = {}
             for key, val in (body or {}).items():
+                if key == "default_printer":
+                    # v3.2.0: the ONE UI (and the old console) say
+                    # default_printer - the config key is "printer"
+                    key = "printer"
                 if key == "token":
                     return self._send(400, {
                         "ok": False,
@@ -5908,6 +6131,30 @@ class Handler(BaseHTTPRequestHandler):
                                 else:
                                     raise ValueError(
                                         "peer_hubs entries must be objects")
+                            val = cleaned
+                        elif key == "rules_mirror":
+                            # v3.2.0 ONE UI: central rule manager entries
+                            # are DICTS - a generic [str(x)] would corrupt
+                            # them into repr strings. Clean with defaults.
+                            cleaned = []
+                            for x in val:
+                                if isinstance(x, dict):
+                                    cleaned.append({
+                                        "id": x.get("id"),
+                                        "name": str(x.get("name") or "")[:80],
+                                        "pattern": str(x.get("pattern") or "*")[:300],
+                                        "match": "content" if x.get("match") == "content" else "url",
+                                        "kind": str(x.get("kind") or "")[:12],
+                                        "printer": str(x.get("printer") or "")[:120],
+                                        "action": str(x.get("action") or "auto")[:12],
+                                        "copies": max(1, min(99, int(x.get("copies") or 1))),
+                                        "paper": str(x.get("paper") or "")[:24],
+                                        "on": bool(x.get("on", True)),
+                                        "runs": max(0, int(x.get("runs") or 0)),
+                                    })
+                                else:
+                                    raise ValueError(
+                                        "rules_mirror entries must be objects")
                             val = cleaned
                         else:
                             val = [str(x) for x in val]
@@ -6745,6 +6992,38 @@ def build_debug_report():
         "problems": _debug_problems(),
         "client_reports": list(_DBG_REPORTS[-50:]),
     }
+
+def console_page_bytes(view="self"):
+    """v3.2.0 THE ONE UI - read console.html (the approved IDM All-in-One
+    design) and inject the boot JSON: WHO opened the page (self = the hub
+    PC's owner on loopback, center = a LAN PC connected to this center PC),
+    the PC name, LAN IP, port and version. Every route that serves a page
+    to a browser (/, /ui, /dashboard) answers with THIS one UI - no
+    separate URLs any more."""
+    console_path = os.path.join(_HUB_DIR, "console.html")
+    page = None
+    if os.path.exists(console_path):
+        try:
+            with open(console_path, "r", encoding="utf-8") as fh:
+                page = fh.read()
+        except OSError:
+            page = None
+    if page is None:
+        return None
+    boot = {
+        "view": "center" if view == "center" else "self",
+        "host": (socket.gethostname() or "this PC"),
+        "lan_ip": lan_ip(),
+        "port": CFG["port"],
+        "version": VERSION,
+    }
+    try:
+        page = page.replace("__ADVPRINT_BOOT_JSON__",
+                            json.dumps(boot).replace("</", "<\\/"))
+    except Exception:
+        pass
+    return page.encode("utf-8")
+
 
 def dashboard_html(query=""):
     """The built-in web dashboard (v2.0): success rate, queue size,

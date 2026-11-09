@@ -13,23 +13,34 @@ Web page ──► Chrome extension ──► AdvPrint Pro hub (localhost:9235) 
 
 ---
 
-## What's new in v3.1.3 (THE ONE UI SKIN - the approved design, for real)
+## What's new in v3.2.0 (THE ONE ALL-IN-ONE UI EVERYWHERE)
 
-v3.1.2 shipped all the functionality behind a plain utility skin.
-v3.1.3 makes the product LOOK like the approved IDM design mockups:
+v3.2.0 makes ONE approved IDM window manage EVERYTHING, on EVERY URL,
+for EVERY PC:
 
-- **Hub console (/ui)**: real window chrome (blue gradient title bar
-  with live hub version + PC name, menu bar, address bar with token
-  badge), glossy SVG toolbar, 218px category tree with count badges,
-  KPI stat cards, striped progress bars, dark log terminal, status bar.
-- **Extension options**: the same IDM chrome around all 10 tabs -
-  sidebar category tree, a toolbar whose buttons DO the real actions,
-  live hub status pill in the address bar - and **Console is now the
-  landing tab**, embedding the live /ui console.
-- **Fixed**: the Console tab could never be opened in v3.1.2
-  ("console" was missing from the TABS list in options.js).
-- Zero behavior change: every v3.1.2 feature, endpoint and setting id
-  is untouched.
+- **One UI, no separate URLs** — `/`, `/ui` and `/dashboard` all serve
+  the same approved All-in-One console. 17 live panels incl. LAN,
+  DropZone, Connections, Rules, Power, Extension, Audit, Logs.
+- **SELF PC UI vs CENTER PC UI** — the owner (127.0.0.1) gets full
+  control; a LAN PC opening the share URL sees the CENTER PC UI (amber
+  banner, live print features, system tools stay on the center PC).
+- **Tools (14)** — the desktop tool's whole menu ([1] start … [14]
+  restart) is now a console panel backed by the new POST /tool API.
+  Nothing extra shown, nothing missing.
+- **Central rule manager** — the Rules panel edits URL/address filter,
+  match by (URL / page content), what to print, printer, copies, paper,
+  on/auto and the runs counter; installed extensions sync two-way with
+  the hub (local edits always win).
+- **Website whitelist defaults to `*`** — ALL websites may print out of
+  the box (extension apiSites = ["*"], mirrored live to the console).
+- **Silent install per browser** — Chrome / Edge / Brave / Chromium /
+  Vivaldi ExtensionInstallForcelist values in the Extension panel with
+  one-click copy (no Chrome Web Store warning on policy installs).
+
+See `docs/RELEASE-NOTES-v3.2.0.md` and
+`docs/AdvPrint-Pro-v3.2.0-A-to-Z-DEV-GUIDE.md` (full development +
+build process).
+
 
 ## What's new in v3.1.2 (premium graphical window + center mode)
 
@@ -177,7 +188,7 @@ The ten most-requested features, all in one release:
 - **DropZone + Send portal — printing WITHOUT the extension.** The hub watches a folder: in Word/Excel/ANY app choose *Microsoft Print to PDF* and save into the DropZone — the page prints seconds later (dashboard → DropZone card; `POST /dropzone/open` opens the folder). Phones/tablets/other PCs print through the built-in **Send portal** (`/send`, token-protected, same as every endpoint).
 - **Restart hub** — in the tray menu, AdvPrint Tool [14] and the dashboard button: the hub relaunches itself cleanly (new process waits for the port; queued jobs, settings and history are kept).
 - **Bullet-proof upgrade & uninstall.** The setup now runs `hub-stop.ps1` BEFORE touching files: stops the optional *AdvPrint* service (wait + PID kill), **deletes the service registration** (reinstalled fresh when ticked — upgrades keep it automatically), kills every process under the install folder and frees TCP 9235. Old program folders are wiped, so no stale file can abort an install any more; the uninstaller retries the folder sweep and reports leftovers honestly.
-- **Silent install** `AdvPrint-Pro-Setup-3.1.3.exe /S` — elevation is requested by the exe manifest itself ("auto permission" on any PC), the hub auto-starts after a silent install, and the firewall rule for LAN sharing (TCP 9235) is added automatically (removed on uninstall).
+- **Silent install** `AdvPrint-Pro-Setup-3.2.0.exe /S` — elevation is requested by the exe manifest itself ("auto permission" on any PC), the hub auto-starts after a silent install, and the firewall rule for LAN sharing (TCP 9235) is added automatically (removed on uninstall).
 - **New A + printer logo** — the letter A drawn as a printer: the crossbar is the output slot and a printed page slides out of it. Same mark in the extension, popup, dashboard, tray icon, installer and docs.
 
 Nothing removed: every v2.7.0 feature (history manager, share toggles, live test tool) is unchanged.

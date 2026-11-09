@@ -57,14 +57,14 @@ const DEFAULTS = {
                             // "Default print options" (copies, pages mode,
                             // quality draft/normal/high/DPI, per_sheet,
                             // duplex, scale, margins, paper, orientation)
-  apiSites: [],             // v2.9.1 (audit H3 fix): WEBSITE API allowlist.
-                            // Only these sites may call window.advprint /
-                            // printPdfLink. Empty = the page API is OFF
-                            // (any website could otherwise drive the
-                            // user's printers). One pattern per line, e.g.
+  apiSites: ["*"],          // v3.2.0 WEBSITE API WHITELIST - DEFAULT "*":
+                            //  ALL websites may call window.advprint /
+                            //  printPdfLink out of the box (the ONE UI
+                            //  Rules panel shows this live). One pattern
+                            //  per line to restrict, e.g.
                             //   *://www.htncr.org/*
                             //   https://reports.example.com/*
-                            // The extension's own pages are always allowed.
+                            //  The extension's own pages are always allowed.
   rulesPaused: false,       // v3.0.5 RULE MANAGER: pause ALL auto-print
                             // rules with ONE switch. v3.0.6: the switch
                             // lives in the OPTIONS page only (Rules tab
@@ -664,6 +664,7 @@ async function bumpRuleStats(rule, info = {}) {
     });
     await chrome.storage.local.set({ ruleStats: stats,
                                      ruleLog: log.slice(0, 100) });
+    scheduleRulesPush(6000);   // v3.2.0: runs counter reaches the ONE UI
   } catch (_) { /* bookkeeping must never break a print job */ }
 }
 
@@ -2186,6 +2187,140 @@ chrome.commands.onCommand.addListener(async (command) => {
   }
 });
 
+/* ---------------- v3.2.0: ONE UI central rule manager ----------------
+ * The hub console (/ui Rules panel) edits rules_mirror on the hub; this
+ * extension keeps itself in sync BOTH ways:
+ *   - local rules changed (Options save / rule fired)  -> PUSH to the hub
+ *     (with the live runs counter merged in from ruleStats)
+ *   - alarm tick (every 5 min)                          -> PULL from the hub
+ *     ADOPTED only when the local rules are unchanged since the last sync
+ *     (local edits always win - no silent overwrite of user work).
+ * The Website API whitelist (apiSites) is pushed too, so the ONE UI
+ * Extension panel shows the live "*" / restricted list.
+ * Every call targets the SELF PC hub (management lane, never the LAN/center
+ * profile) and never throws - printing must not depend on bookkeeping. */
+const HUB_SYNC_ALARM = "advprintHubSync";
+let _rulesPushTimer = null;
+let _adoptingHubRules = false;
+
+function rulesHash(rules) {
+  try { return btoa(unescape(encodeURIComponent(JSON.stringify(rules))))
+    .slice(-32); } catch (_) { return ""; }
+}
+
+async function rulesWithRuns(rules) {
+  const cfg = await loadCfg();
+  let stats = {};
+  try { stats = (await chrome.storage.local.get({ ruleStats: {} })).ruleStats
+    || {}; } catch (_) {}
+  return (rules || []).map((r) => {
+    const s = stats[ruleKey(r)];
+    return Object.assign({}, r,
+      { runs: Math.max(r.runs || 0, (s && s.runs) || 0) });
+  });
+}
+
+async function hubRulesSyncBase() {
+  const cfg = await loadCfg();
+  const base = (cfg.hubUrl || DEFAULTS.hubUrl).replace(/\/+$/, "");
+  return { base, token: cfg.token || "" };
+}
+
+async function pushRulesToHub(rules, why) {
+  try {
+    const { base, token } = await hubRulesSyncBase();
+    const payload = await rulesWithRuns(rules || []);
+    await fetch(base + "/config", {
+      method: "POST",
+      headers: { "X-AdvPrint-Token": token,
+                 "Content-Type": "application/json" },
+      body: JSON.stringify({ rules_mirror: payload,
+                             ext_sync_at: new Date().toISOString() }),
+    });
+    const st = await chrome.storage.local.get({ rulesSyncHash: "" });
+    const h = rulesHash(payload);
+    if (st.rulesSyncHash !== h) {
+      await chrome.storage.local.set({ rulesSyncHash: h });
+    }
+  } catch (_) { /* hub may be offline - retried on the next alarm tick */ }
+}
+
+async function pushSitesToHub(sites) {
+  try {
+    const { base, token } = await hubRulesSyncBase();
+    await fetch(base + "/config", {
+      method: "POST",
+      headers: { "X-AdvPrint-Token": token,
+                 "Content-Type": "application/json" },
+      body: JSON.stringify({ ext_api_sites: sites || ["*"] }),
+    });
+  } catch (_) { /* best effort */ }
+}
+
+async function pullRulesFromHub() {
+  try {
+    const { base, token } = await hubRulesSyncBase();
+    const r = await fetch(base + "/config", {
+      headers: { "X-AdvPrint-Token": token } });
+    if (!r.ok) return;
+    const cfgHub = await r.json();
+    const mirror = Array.isArray(cfgHub.rules_mirror) ? cfgHub.rules_mirror
+      : null;
+    if (mirror === null) return;
+    const st = await chrome.storage.local.get({ rulesSyncHash: "",
+                                                rules: null });
+    invalidateCfg();
+    const localRules = st.rules || (await loadCfg()).rules || [];
+    const mirrorHash = rulesHash(await rulesWithRuns(mirror));
+    if (mirrorHash === st.rulesSyncHash) return;        // nothing new
+    if (rulesHash(await rulesWithRuns(localRules)) === st.rulesSyncHash) {
+      // local rules untouched since the last sync -> ADOPT hub rules
+      _adoptingHubRules = true;
+      try {
+        await chrome.storage.local.set({
+          rules: mirror.map((x) => Object.assign({}, x)),
+          rulesSyncHash: mirrorHash });
+      } finally { _adoptingHubRules = false; }
+    } else {
+      // local rules were edited - local WINS, push them back
+      await pushRulesToHub(localRules, "local-wins");
+    }
+  } catch (_) { /* hub offline */ }
+}
+
+function scheduleRulesPush(delayMs = 2500) {
+  if (_rulesPushTimer) return;
+  _rulesPushTimer = setTimeout(async () => {
+    _rulesPushTimer = null;
+    try {
+      const st = await chrome.storage.local.get({ rules: null });
+      invalidateCfg();
+      const rules = st.rules || (await loadCfg()).rules || [];
+      await pushRulesToHub(rules, "changed");
+    } catch (_) {}
+  }, delayMs);
+}
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm && alarm.name === HUB_SYNC_ALARM) {
+    pullRulesFromHub();            // v3.2.0 ONE UI central rule manager
+  }
+});
+try { chrome.alarms.create(HUB_SYNC_ALARM, { periodInMinutes: 5 }); }
+catch (_) {}                             // alarms API differences - ignore
+chrome.runtime.onStartup.addListener(() => {
+  try { chrome.alarms.create(HUB_SYNC_ALARM, { periodInMinutes: 5 }); }
+  catch (_) {}
+});
+
+/* the ONE UI mirror: rules / whitelist edited anywhere are pushed */
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== "local" || _adoptingHubRules) return;
+  if (changes.rules) { invalidateCfg(); scheduleRulesPush(); }
+  if (changes.apiSites) { invalidateCfg();
+    pushSitesToHub(changes.apiSites.newValue || ["*"]); }
+});
+
 /* ---------------- icon click (no popup case) ---------------- */
 chrome.action.onClicked?.addListener?.(async () => { /* popup handles it */ });
 
@@ -2196,23 +2331,13 @@ chrome.runtime.onInstalled.addListener(async () => {
     // seed defaults once so Options shows the htncr.org example rule
     await chrome.storage.local.set(Object.assign({}, DEFAULTS, { initialized: true }));
   } else {
-    // v2.9.1 (audit H3 fix): ONE-TIME migration for installs that
-    // predate the Website API allowlist. Their existing auto-print rules
-    // (including the htncr.org lab integration) decide which sites keep
-    // window.advprint access, so the lab's printPdfLink calls keep
-    // working after the update. Fresh installs (empty apiSites) start
-    // with the API OFF until a site is added in Options.
+    // v2.9.1 -> v3.2.0: ONE-TIME migration for installs that predate the
+    // Website API allowlist. From v3.2.0 the product default is "*"
+    // (ALL websites may print - the ONE UI Rules panel shows the live
+    // list); users who restrict it keep their list untouched.
     const cur = await chrome.storage.local.get({ apiSites: null });
     if (cur.apiSites === null) {
-      const hosts = new Set();
-      const rs = await chrome.storage.local.get({ rules: [] });
-      (rs.rules || []).forEach((r) => {
-        const p = String((r && r.pattern) || "");
-        const m = p.match(/^[a-z*]+:\/\/([^/]+)\//);
-        if (m && !m[1].startsWith("*")) hosts.add("*://" + m[1] + "/*");
-      });
-      hosts.add("*://www.htncr.org/*");      // the shipped example rule
-      await chrome.storage.local.set({ apiSites: [...hosts] });
+      await chrome.storage.local.set({ apiSites: ["*"] });
     }
   }
   await applyEnabledBadge();
