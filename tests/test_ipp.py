@@ -551,3 +551,66 @@ def test_ipp_info_page(hub):
 
 def _port(hub):
     return urllib.parse.urlparse(hub.base).port
+
+
+# ---------------------------------------------------------------
+# v3.2.2 ALL IPP PATTERNS - the ROOT form (ipp://ip:9235 /
+# http://ip:9235 with NO path - what Windows "Add a printer -> IPP
+# Device", macOS IP printing and CUPS send when the user typed just
+# the address) and the phone-sized (>1 MB) Print-Job.
+# ---------------------------------------------------------------
+def test_root_pattern_get_printer_attributes(hub):
+    """v3.2.1 routed POST / with application/ipp into the token API
+    (400 JSON 'bad request body') - the bare-address form could NOT be
+    added. v3.2.2 answers the IPP engine on the root path too."""
+    port = _port(hub)
+    code, raw = hub.req("POST", "/", raw=_req(0x000B, port=port),
+                        token=None,
+                        headers={"Content-Type": "application/ipp"})
+    assert code == 200
+    status, groups = _strict_parse(raw)
+    assert status == 0x0000
+    tag, val = _val(groups, 1, "printer-name")
+    assert tag in (V_NAME, V_TEXT) and val
+
+
+def test_root_pattern_print_job_over_1mb(hub, clean_queue):
+    """A phone's photo/policy PDF easily exceeds the 1 MB preauth
+    threshold - the v2.9.1 gate used to 401 unauthenticated IPP
+    Print-Jobs before the engine saw them. IPP is token-free BY DESIGN
+    (a physical network printer has no token either) and stays bounded
+    by its own MAX_PDF limit."""
+    port = _port(hub)
+    pdf = b"%PDF-1.4\n%" + b"A" * (1024 * 1024 + 4096) + b"\n%%EOF\n"
+    req = _req(0x0002, doc=pdf, port=port,
+               extra=[_kw("document-format", "application/pdf"),
+                      _attr(V_NAME, "job-name", "big phone job")])
+    code, raw = hub.req("POST", "/", raw=req, token=None,
+                        headers={"Content-Type": "application/ipp"})
+    assert code == 200
+    status, groups = _strict_parse(raw)
+    assert status == 0x0000
+
+
+def test_bare_ipp_path_pattern(hub):
+    """/ipp (and /ipp/) keep answering - the URL forms v2.9 advertised."""
+    port = _port(hub)
+    code, raw = hub.req("POST", "/ipp", raw=_req(0x000B, port=port),
+                        token=None,
+                        headers={"Content-Type": "application/ipp"})
+    assert code == 200
+    status, groups = _strict_parse(raw)
+    assert status == 0x0000
+
+
+def test_howto_page_documents_every_url_form(hub):
+    """The browser how-to page (the text the user pasted into the bug
+    report) must mention the standard ipp:// URL AND the short root
+    form, so 'all IPP patterns' are discoverable from the hub itself."""
+    code, body = hub.get("/ipp/print", token=None)
+    assert code == 200
+    html = body.decode("utf-8", "replace") if isinstance(body, bytes) \
+        else str(body)
+    assert "Short forms also work" in html
+    assert "ipp://" in html
+    assert "bare address" in html

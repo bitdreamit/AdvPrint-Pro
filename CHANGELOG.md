@@ -1,6 +1,37 @@
 # Changelog - AdvPrint Pro (Advanced Printer)
 by Bit Dream IT - Innovative Healthcare Solutions
 
+## v3.2.2 - ALL IPP PATTERNS BACK + INSTANT DISCOVERY + ONE TOOLBAR (2026-11-09)
+
+Base: v3.2.1 - the embedded approved ONE UI and every feature unchanged.
+
+- IPP: ANY POST with Content-Type application/ipp goes to the IPP
+  engine on every path - the ROOT form ipp://<ip>:9235 /
+  http://<ip>:9235 (no path; Windows "IPP Device", macOS IP printing,
+  CUPS) is served again alongside /ipp/print, /ipp and the per-printer
+  queues; phone-sized (>1 MB) Print-Jobs no longer 401 at the preauth
+  gate (IPP is token-free by design, still MAX_PDF-capped, Origin-
+  refused for browsers, audited per IP).
+- Discovery: the mDNS/AirPrint responder answers every query
+  back-to-back (the old loop answered one packet then slept 3 s, so
+  Android Default Print Service / iOS AirPrint / Windows scans kept
+  missing the hub), double-announces at startup (RFC 6762 §8.3),
+  refuses to claim other printers' instances (multi-hub record
+  poisoning), and the one-click firewall repair also restores the
+  UDP 5353 rule.
+- THE ONE UI: toolbar reduced to real actions (New Job, Pause/Resume
+  with honest label, Release ALL, Test Page) + live LAN/IPP chips -
+  the ten tab shortcuts duplicating the sidebar are gone; address bar
+  keeps the two QR pills; the LAN tab gained the STANDARD ipp:// URL
+  row, the short-root row, the live AirPrint discovery (mDNS) row and
+  a per-OS add guide (Windows 10/11, macOS, iPhone/iPad, Android);
+  Network menu gained "Copy IPP printer URL (ipp://...)"; the IPP QR
+  modal lists all three URL forms.
+- API: POST /print (instant mode) answers auto_queued as a real
+  boolean (previously the held_reason string leaked into the field).
+- Tests: 312 passed - new root-IPP conformance tests (>1 MB Print-Job
+  on /) and a full mDNS suite (tests/test_mdns_v322.py).
+
 ## v3.2.1 - THE APPROVED UI IS NOW THE PRODUCT (2026-11-09)
 
 Base: v3.2.0 - every feature unchanged. The customer-approved rev-4

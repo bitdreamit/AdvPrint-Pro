@@ -13,6 +13,24 @@ Web page ──► Chrome extension ──► AdvPrint Pro hub (localhost:9235) 
 
 ---
 
+## What's new in v3.2.2 (ALL IPP PATTERNS BACK + INSTANT DISCOVERY)
+
+- **Every IPP URL pattern answers**: `ipp://<ip>:9235/ipp/print`,
+  `http://<ip>:9235/ipp/print`, `/ipp`, per-printer
+  `ipp://<ip>:9235/ipp/print/<printer>` AND the bare root
+  `ipp://<ip>:9235` (Windows "IPP Device" / macOS IP printing / CUPS
+  form). Phone-sized (>1 MB) IPP Print-Jobs are accepted again.
+- **Instant mDNS discovery**: the responder answers every query
+  back-to-back, double-announces at startup (RFC 6762) and no longer
+  claims other printers' instances on a multi-hub LAN; the firewall
+  repair button also restores UDP 5353. Android Default Print Service
+  and iOS AirPrint find the hub while LAN sharing is ON.
+- **Leaner ONE UI**: toolbar = real actions + LAN/IPP status chips;
+  LAN tab shows the standard ipp:// URL, the short root form, the live
+  mDNS state and a per-OS add guide.
+- Details: `docs/RELEASE-NOTES-v3.2.2.md`,
+  `docs/AdvPrint-Pro-v3.2.2-A-to-Z-DEV-GUIDE.md`.
+
 ## What's new in v3.2.1 (THE APPROVED UI IS NOW THE PRODUCT)
 
 The customer-approved rev-4 All-in-One design is now the shipped UI -
@@ -203,7 +221,7 @@ The ten most-requested features, all in one release:
 - **DropZone + Send portal — printing WITHOUT the extension.** The hub watches a folder: in Word/Excel/ANY app choose *Microsoft Print to PDF* and save into the DropZone — the page prints seconds later (dashboard → DropZone card; `POST /dropzone/open` opens the folder). Phones/tablets/other PCs print through the built-in **Send portal** (`/send`, token-protected, same as every endpoint).
 - **Restart hub** — in the tray menu, AdvPrint Tool [14] and the dashboard button: the hub relaunches itself cleanly (new process waits for the port; queued jobs, settings and history are kept).
 - **Bullet-proof upgrade & uninstall.** The setup now runs `hub-stop.ps1` BEFORE touching files: stops the optional *AdvPrint* service (wait + PID kill), **deletes the service registration** (reinstalled fresh when ticked — upgrades keep it automatically), kills every process under the install folder and frees TCP 9235. Old program folders are wiped, so no stale file can abort an install any more; the uninstaller retries the folder sweep and reports leftovers honestly.
-- **Silent install** `AdvPrint-Pro-Setup-3.2.1.exe /S` — elevation is requested by the exe manifest itself ("auto permission" on any PC), the hub auto-starts after a silent install, and the firewall rule for LAN sharing (TCP 9235) is added automatically (removed on uninstall).
+- **Silent install** `AdvPrint-Pro-Setup-3.2.2.exe /S` — elevation is requested by the exe manifest itself ("auto permission" on any PC), the hub auto-starts after a silent install, and the firewall rule for LAN sharing (TCP 9235) is added automatically (removed on uninstall).
 - **New A + printer logo** — the letter A drawn as a printer: the crossbar is the output slot and a printed page slides out of it. Same mark in the extension, popup, dashboard, tray icon, installer and docs.
 
 Nothing removed: every v2.7.0 feature (history manager, share toggles, live test tool) is unchanged.

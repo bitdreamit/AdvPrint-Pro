@@ -1,4 +1,4 @@
-"""v3.2.1 - THE ONE UI is the approved rev-4 All-in-One design.
+"""v3.2.2 - THE ONE UI is the approved rev-4 All-in-One design.
 
 The rev-4 markup (title bar + 9 working menus + 218px sidebar + 17 tabs
 + rule editor modal + QR tiles + status bar) ships byte-for-byte as
@@ -102,7 +102,7 @@ def test_boot_json_view_detection(hub):
     end = html.find("</script>", start)
     boot = json.loads(html[start:end])
     assert boot["view"] == "self"      # loopback = owner = SELF PC UI
-    assert boot["version"] == "3.2.1"
+    assert boot["version"] == "3.2.2"
     assert boot["port"] == 9235 or "port" in boot
 
 
@@ -174,6 +174,6 @@ def test_extension_options_opens_the_hub():
     opts = open(os.path.join(ext, "options.html"), encoding="utf-8").read()
     ojs = open(os.path.join(ext, "options.js"), encoding="utf-8").read()
     man = json.load(open(os.path.join(ext, "manifest.json")))
-    assert man["version"] == "3.2.1"
+    assert man["version"] == "3.2.2"
     assert "http://127.0.0.1:9235" in ojs
     assert "ONE UI" in opts

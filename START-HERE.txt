@@ -1,6 +1,32 @@
-AdvPrint Pro (Advanced Printer) v3.2.1 - START HERE
+AdvPrint Pro (Advanced Printer) v3.2.2 - START HERE
 ====================================================
 by Bit Dream IT - Innovative Healthcare Solutions
+
+WHAT IS NEW IN v3.2.2 - ALL IPP PATTERNS BACK + FAST DISCOVERY
+---------------------------------------------------------------
+1) EVERY IPP printer URL pattern answers again: the standard
+   ipp://<pc-ip>:9235/ipp/print, the Windows add-by-URL form
+   http://<pc-ip>:9235/ipp/print, /ipp, the per-printer queues
+   ipp://<pc-ip>:9235/ipp/print/<printer> AND the short ROOT form
+   ipp://<pc-ip>:9235 (just the address, no path) - the form Windows
+   "Add a printer -> IPP Device", macOS IP printing and CUPS send.
+2) Phone-sized IPP jobs (>1 MB photo/policy PDFs) are accepted - the
+   big-body guard no longer 401s native IPP (token-free by design,
+   still size-capped and audited).
+3) INSTANT discovery for phones: the mDNS/AirPrint responder answers
+   every query back-to-back (it used to nap 3 s between answers, so
+   Android Default Print Service / iOS AirPrint scans kept missing the
+   hub), announces twice at startup, no longer answers for OTHER
+   printers on the LAN, and the one-click firewall repair now also
+   restores the UDP 5353 rule.
+4) THE ONE UI got leaner: the toolbar keeps only real actions (New
+   Job, Pause/Resume, Release ALL, Test Page) + live LAN/IPP chips -
+   the tab shortcuts that duplicated the sidebar are gone. The LAN tab
+   now shows the STANDARD ipp:// URL, the short root form, the live
+   mDNS state and a per-OS add guide (Windows / macOS / iPhone /
+   Android).
+5) Everything else from v3.2.1 (the embedded ONE UI, 17 tabs, SELF vs
+   CENTER view, 14 tools, rules manager) is unchanged.
 
 WHAT IS NEW IN v3.2.1 - THE ONE ALL-IN-ONE UI EVERYWHERE
 ----------------------------------------------------------

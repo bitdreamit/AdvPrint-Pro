@@ -70,7 +70,7 @@ def test_console_ships_one_ui_markers():
                    "ExtensionInstallForcelist", "Brave",
                    "/tool", "/qr", "/dropzone", "/peers",
                    "X-AdvPrint-Token", "success_rate",
-                   # v3.2.1 rev-4 ONE UI markers
+                   # v3.2.2 rev-4 ONE UI markers
                    'id="p-rules"', 'id="rulemodal"', 'id="qrmodal"',
                    'id="bootjson"', "ExtensionInstallForcelist"):
         assert marker in src, "console.html must contain " + marker

@@ -23,7 +23,10 @@ AdvPrint Pro hub  ──►  the REAL printer connected to this PC
 
 | What | Value |
 | --- | --- |
-| IPP URL | `http://<this-PC-LAN-IP>:9235/ipp/print` |
+| Standard IPP URL (recommended) | `ipp://<this-PC-LAN-IP>:9235/ipp/print` |
+| Windows add-by-URL form | `http://<this-PC-LAN-IP>:9235/ipp/print` |
+| Short ROOT form (no path) | `ipp://<this-PC-LAN-IP>:9235` - what Windows "IPP Device", macOS IP printing and CUPS send when you type just the address |
+| Per-printer queues | `ipp://<this-PC-LAN-IP>:9235/ipp/print/<printer>` |
 | RAW JetDirect port | `9235` (v2.9 style) and `<LAN-IP>:9100` |
 | Discovery | automatic via mDNS while LAN sharing is ON |
 | Auth | none (like a physical network printer) - the endpoint only accepts print data, is size-capped, audited per IP and can be turned off with `"ipp_printer": false` |
