@@ -2264,6 +2264,7 @@ async function pullRulesFromHub() {
       headers: { "X-AdvPrint-Token": token } });
     if (!r.ok) return;
     const cfgHub = await r.json();
+    await adoptHubExtPrefs(cfgHub);          // v3.2.1 ONE UI power switches
     const mirror = Array.isArray(cfgHub.rules_mirror) ? cfgHub.rules_mirror
       : null;
     if (mirror === null) return;
@@ -2286,6 +2287,42 @@ async function pullRulesFromHub() {
       await pushRulesToHub(localRules, "local-wins");
     }
   } catch (_) { /* hub offline */ }
+}
+
+/* v3.2.1 ONE UI: the hub console's Power Switches / Browser Behavior /
+   Printers "Default print options" panels are the MASTER of these keys.
+   The hub stores them under ext_prefs using the SAME key names as this
+   extension's storage, so adoption is 1:1. Applied on every hub sync
+   (5-minute alarm + startup) - the ONE UI wins, exactly like rules. */
+async function adoptHubExtPrefs(cfgHub) {
+  const prefs = cfgHub && cfgHub.ext_prefs;
+  if (!prefs || typeof prefs !== "object") return;
+  const allowed = ["enabled", "queueMode", "rulesPaused", "hookPrint",
+    "debugMode", "retryOffline", "lang", "autoPrintAllPdfs",
+    "closeAfterPrint", "failFallback", "contextMenu", "badge"];
+  const patch = {};
+  let any = false;
+  for (const k of allowed) {
+    if (prefs[k] === undefined || prefs[k] === null) continue;
+    patch[k] = prefs[k];
+    any = true;
+  }
+  if (prefs.print_defaults && typeof prefs.print_defaults === "object" &&
+      Object.keys(prefs.print_defaults).length) {
+    patch.printDefaults = prefs.print_defaults;
+    any = true;
+  }
+  if (!any) return;
+  const cur = await chrome.storage.local.get(patch);
+  const diff = Object.keys(patch).filter((k) => cur[k] !== patch[k]);
+  if (!diff.length) return;
+  _adoptingHubRules = true;         // suppress the push-back loop
+  try {
+    await chrome.storage.local.set(patch);
+    invalidateCfg();
+  } finally {
+    _adoptingHubRules = false;
+  }
 }
 
 function scheduleRulesPush(delayMs = 2500) {

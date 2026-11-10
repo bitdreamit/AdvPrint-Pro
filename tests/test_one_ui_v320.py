@@ -33,7 +33,7 @@ def test_ui_and_dashboard_and_root_all_serve_one_ui(hub):
         assert code == 200, path
         pages[path] = body.decode("utf-8")
     for path, html in pages.items():
-        assert "AdvPrint Pro Console" in html, path
+        assert "Printing Hub" in html, path
         assert "THE ONE UI" in html, path
         # the boot placeholder must be REPLACED with real JSON
         assert "__ADVPRINT_BOOT_JSON__" not in html, path
@@ -66,10 +66,13 @@ def test_console_ships_one_ui_markers():
     p = os.path.join(os.path.dirname(advprint.__file__), "console.html")
     src = open(p, encoding="utf-8").read()
     for marker in ("Tools", "data-tool", "rules_mirror",
-                   "Website whitelist", "CENTER PC UI",
+                   "Website API permission", "CENTER PC UI",
                    "ExtensionInstallForcelist", "Brave",
                    "/tool", "/qr", "/dropzone", "/peers",
-                   "X-AdvPrint-Token", "success rate"):
+                   "X-AdvPrint-Token", "success_rate",
+                   # v3.2.1 rev-4 ONE UI markers
+                   'id="p-rules"', 'id="rulemodal"', 'id="qrmodal"',
+                   'id="bootjson"', "ExtensionInstallForcelist"):
         assert marker in src, "console.html must contain " + marker
 
 

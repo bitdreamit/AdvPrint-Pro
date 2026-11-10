@@ -1,6 +1,33 @@
 # Changelog - AdvPrint Pro (Advanced Printer)
 by Bit Dream IT - Innovative Healthcare Solutions
 
+## v3.2.1 - THE APPROVED UI IS NOW THE PRODUCT (2026-11-09)
+
+Base: v3.2.0 - every feature unchanged. The customer-approved rev-4
+All-in-One design (AdvPrint-Pro-AllInOne-UI-Design-v3.1.3-4.html)
+replaces the v3.2.0 console face, byte-for-byte:
+
+- console.html = rev-4 markup/CSS untouched (title bar, 9 menus, 218px
+  sidebar, 17 tabs, rule editor modal, QR tiles, status bar); the demo
+  script was swapped for the production wiring so every value is live
+  hub data (3 s poll) and every button talks to the real hub API.
+- ONE endpoint: /, /ui and /dashboard serve the SAME page; the
+  extension Options opens http://127.0.0.1:9235 directly.
+- SELF PC UI (loopback owner) vs CENTER PC UI (LAN, amber banner) in
+  the new face.
+- Rule editor live: match by URL/content/type, printer from the LIVE
+  list, what-to-print, copies, paper, color, duplex, schedule,
+  priority, On/Auto, runs; hub rules_mirror keeps all rev-4 fields.
+- Extension tab: silent CRX install table for Chrome/Edge/Brave/
+  Vivaldi/Chromium/Opera + POST /tool policy-install (HKCU/HKLM);
+  Web Store banner explained in-UI.
+- The 14 desktop tools exist as one grid in Debug & Tools (no extra
+  tools shown); every menu item is wired to the hub API.
+- Real QR codes incl. kind=hub; whitelist defaults to * (ALL sites).
+- Fixed with the old options UI: duplicate Default-printer entries.
+- 301 pytest tests green (test_one_ui_v321.py locks the rev-4 UI).
+
+
 ## v3.2.0 - THE ONE ALL-IN-ONE UI EVERYWHERE (2026-11-09)
 
 Base: v3.1.3 - every previous feature ships unchanged. This release

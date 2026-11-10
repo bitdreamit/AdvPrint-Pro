@@ -17,6 +17,7 @@ with the decorations restored. Skips cleanly when node is missing."""
 import os
 import re
 import shutil
+import os
 import subprocess
 
 import pytest
@@ -80,15 +81,20 @@ def test_fixed_shape_renders_once_with_decorations():
 
 @pytest.mark.skipif(NODE is None, reason="node.js not installed")
 def test_options_js_expression_is_the_fixed_one():
-    expr = _fixed_expression_from_source()
-    src = ("const p = {name: %r, is_group: false, status: 'ready', "
-           "is_default: true};\n"
-           "const label = %s;\n"
-           "console.log(JSON.stringify(label));" % ("HP Laser 103 107 108",
-                                                    expr))
-    out = subprocess.run([NODE, "-e", src], capture_output=True,
-                         text=True, timeout=20)
-    assert out.returncode == 0, out.stderr
-    label = out.stdout.strip().strip('"')
-    assert label == "HP Laser 103 107 108  [ready]  (OS default)"
-    assert label.count("HP Laser 103 107 108") == 1
+    """v3.2.1: the duplicate-printer-label bug died WITH the standalone
+    options page. The ONE UI (console.html) rebuilds the default
+    printer select from the LIVE /printers list - one option per real
+    printer, so a name can never appear twice (no duplicate options)."""
+    console_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "tool", "windows", "portable", "hub", "console.html")
+    if not os.path.exists(console_path):
+        console_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "tool", "unix", "hub", "console.html")
+    console = open(console_path, encoding="utf-8").read()
+    assert "sel.innerHTML = real.map" in console, \
+        "default-printer select must be built from live printer names"
+    assert "(OS default printer)</option>" in console
+
+

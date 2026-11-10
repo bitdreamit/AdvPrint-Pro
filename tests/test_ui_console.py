@@ -1,12 +1,14 @@
-"""v3.1.3 THE ONE UI - the hub serves the IDM-style console at /ui.
+"""v3.2.1 THE ONE UI - the hub serves the approved rev-4 All-in-One
+console at /ui, / and /dashboard.
 
-- GET /ui?token=... answers with console.html from disk (next to
-  advprint.py) - Cache-Control: no-store, text/html.
+- The console UI is EMBEDDED in advprint.py itself (CONSOLE_HTML):
+  the UI can never go missing on an install, whatever files exist.
+- GET /ui?token=... answers with the embedded UI - Cache-Control:
+  no-store, text/html.
 - WITHOUT a valid token: 401 (+ the readable HTML auth error page for
   browsers, JSON for API clients) - same auth model as /dashboard.
-- When console.html is MISSING next to advprint.py the hub answers
-  with a small fallback page that points at the classic dashboard
-  (never a crash, never a blank page).
+- console.html also ships next to advprint.py so the on-disk layout
+  matches the docs; the embedded copy is always authoritative.
 - /ui is listed in the /docs route table."""
 import os
 
@@ -25,8 +27,9 @@ def test_ui_serves_console_html(hub):
     code, page = hub.get("/ui")
     assert code == 200
     html = page.decode("utf-8") if isinstance(page, bytes) else str(page)
-    assert "AdvPrint Pro Console" in html
+    assert "Printing Hub" in html
     assert "THE ONE UI" in html
+    assert 'id="p-dashboard"' in html
 
 
 def test_ui_no_token_is_rejected(hub):
@@ -53,11 +56,15 @@ def test_ui_browser_gets_html_auth_error(hub):
         (code == 401 and "html" in body.lower())
 
 
-def test_ui_fallback_page_when_console_missing(hub, monkeypatch):
+def test_ui_embedded_survives_missing_console_file(hub, monkeypatch):
+    # v3.2.1: the UI lives INSIDE advprint.py (CONSOLE_HTML). Even when
+    # console.html cannot be found on disk - a damaged install, a broken
+    # copy step - the hub STILL serves the full approved All-in-One UI.
+    # (The v3.2.0 build served the old dashboard here; that class of
+    # bug is impossible with the embedded UI.)
     real = os.path.join
 
     def fake_join(*parts):
-        # make EVERY path look like it does not contain console.html
         r = real(*parts)
         if r.endswith(CONSOLE_NAME):
             return r + ".definitely-missing"
@@ -67,7 +74,21 @@ def test_ui_fallback_page_when_console_missing(hub, monkeypatch):
     code, page = hub.get("/ui")
     assert code == 200
     html = page.decode("utf-8") if isinstance(page, bytes) else str(page)
-    assert "console.html" in html and "/dashboard" in html
+    assert 'id="p-dashboard"' in html and "Printing Hub" in html
+
+
+def test_console_html_embedded_in_hub_source():
+    # v3.2.1: CONSOLE_HTML must be a module constant with the full
+    # rev-4 markup - this is what makes the UI un-missable.
+    src = open(os.path.join(_console_dir(), "advprint.py"),
+               encoding="utf-8").read()
+    assert "CONSOLE_HTML = r" in src
+    assert 'page = CONSOLE_HTML' in src
+    for pid in ("dashboard queue history printers lan connections hub "
+                "dropzone rules power browser extension debug audit logs "
+                "settings about").split():
+        assert f'id="p-{pid}"' in src, f"panel {pid} missing from CONSOLE_HTML"
+    assert "__ADVPRINT_BOOT_JSON__" in src
 
 
 def test_ui_listed_in_docs(hub):

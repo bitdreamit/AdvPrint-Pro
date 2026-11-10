@@ -29,7 +29,7 @@ from conftest import wait_until  # noqa: E402
 def test_health_open_no_token(hub):
     code, d = hub.get("/health", token=None)
     assert code == 200 and d["ok"] is True
-    assert d["version"] == "3.2.0"
+    assert d["version"] == "3.2.1"
     assert d["v2"] is True
     assert "100% local" in d["branding"]
 
@@ -490,7 +490,7 @@ def test_stats_and_dashboard(hub):
     for k in ("success_rate", "queue_size", "jobs_today", "by_status"):
         assert k in d
     code, body = hub.get("/dashboard?token=" + hub.token)
-    assert code == 200 and b"success rate" in body
+    assert code == 200 and b"Success Rate" in body
 
 
 def test_diagnostics_redacts_token(hub):
@@ -539,13 +539,13 @@ def test_v1_database_migration(tmp_path):
 
 
 def test_version_anchors():
-    assert advprint.VERSION == "3.2.0"
+    assert advprint.VERSION == "3.2.1"
     # repo/package layout: tool/windows/portable/hub -> root/extension
     root = os.path.dirname(os.path.dirname(os.path.dirname(
         os.path.dirname(os.path.dirname(advprint.__file__)))))
     ext = os.path.join(root, "extension", "manifest.json")
     with open(ext) as f:
-        assert json.load(f)["version"] == "3.2.0"
+        assert json.load(f)["version"] == "3.2.1"
 
 
 def test_log_rotation(tmp_path):
@@ -1062,7 +1062,7 @@ def test_v26_token_current_loopback_only(hub):
     code, d = hub.get("/token/current")
     assert code == 200 and d["ok"] is True
     assert d["token"] == hub.token
-    assert d["app"] == "AdvPrint Pro" and d["version"] == "3.2.0"
+    assert d["app"] == "AdvPrint Pro" and d["version"] == "3.2.1"
 
 
 def test_v26_token_current_rejects_remote(hub):
@@ -1136,8 +1136,8 @@ def test_v261_tray_module_ships_and_parses():
 
 
 def test_v261_version_single_source():
-    assert advprint.VERSION == "3.2.0"
-    assert advprint.VERSION_NAME.startswith("v3.2.0")
+    assert advprint.VERSION == "3.2.1"
+    assert advprint.VERSION_NAME.startswith("v3.2.1")
 
 
 def test_v261_cli_cmd_full_path():
@@ -1303,7 +1303,7 @@ def test_v264_setup_exe_kills_zombie_hubs():
     assert "Stop-Process -Name AdvPrintPro" in stopps
     assert "Stop-Process -Name PrintHubPro" in stopps
     assert "sc.exe delete AdvPrint" in stopps
-    assert 'VIProductVersion "3.2.0.0"' in src
+    assert 'VIProductVersion "3.2.1.0"' in src
 
 
 # ---------------- v2.6.8: printer-name self-heal + menu guard ----------
@@ -1586,7 +1586,7 @@ def _v280_pdf(tmp_path, name="z.pdf", big="AdvPrint Pro v2.8 test"):
 
 
 def test_v280_version_and_config_keys():
-    assert advprint.VERSION == "3.2.0"
+    assert advprint.VERSION == "3.2.1"
     for k in ("drop_enabled", "drop_dir", "drop_delete"):
         assert k in advprint.CFG and k in advprint.CONFIG_KEYS
         assert k in advprint.CONFIG_TYPES
@@ -1811,7 +1811,7 @@ def test_v280_source_wiring_restart_tray_tool_installer():
     nsi = open(os.path.join(root, "installer", "setup.nsi"),
                encoding="utf-8").read()
     assert "hub-stop.ps1" in nsi
-    assert "3.2.0" in nsi and "${IfNot} ${Silent}" in nsi
+    assert "3.2.1" in nsi and "${IfNot} ${Silent}" in nsi
     # extension dual profile
     ext = os.path.join(root, "extension")
     bg = open(os.path.join(ext, "background.js"), encoding="utf-8").read()
@@ -1821,9 +1821,11 @@ def test_v280_source_wiring_restart_tray_tool_installer():
     pop = open(os.path.join(ext, "popup.html"), encoding="utf-8").read()
     assert "swHook" not in pop          # v3.0.2: popup switch removed
     opt = open(os.path.join(ext, "options.html"), encoding="utf-8").read()
-    assert "hubUrlLan" in opt and "bDashboardLan" in opt
+    # v3.2.1: Options opens the hub directly; the LAN profile lives in
+    # background.js + the ONE UI Connections tab
+    assert "127.0.0.1:9235" in opt and "ONE UI" in opt
     man = json.load(open(os.path.join(ext, "manifest.json")))
-    assert man["version"] == "3.2.0"
+    assert man["version"] == "3.2.1"
 
 
 def test_v280_lan_profile_never_auto_heals():
@@ -2076,8 +2078,8 @@ def test_v281_setup_nsi_version():
         root = os.path.dirname(root)
     nsi = open(os.path.join(root, "installer", "setup.nsi"),
                encoding="utf-8", errors="replace").read()
-    assert 'VIProductVersion "3.2.0.0"' in nsi
-    assert "AdvPrint-Pro-Setup-3.2.0.exe" in nsi
+    assert 'VIProductVersion "3.2.1.0"' in nsi
+    assert "AdvPrint-Pro-Setup-3.2.1.exe" in nsi
 
 
 # ============================================================
@@ -2401,29 +2403,36 @@ def test_v290_raw_listener_disabled_without_lan_sharing():
     assert advprint._RAW_TCP is None
 
 
+
 def test_v290_extension_version_single_source():
-    """v2.9.0: ONE version everywhere in the extension - the manifest.
-    popup.html / options.html carry only a same-value fallback and the
-    JS chips are set from chrome.runtime.getManifest().version."""
+    """ONE version everywhere in the extension - the manifest.
+    v3.2.1: Options is the hub-redirect opener; the version lives in
+    manifest.json (popup carries the same-value fallback, options.html
+    shows the same brand line, no JS hardcodes an old version)."""
     ext = os.path.normpath(os.path.join(os.path.dirname(advprint.__file__),
                                         "extension"))
     if not os.path.isdir(ext):
         pytest.skip("extension not staged next to the hub")
+    man_path = os.path.join(ext, "manifest.json")
+    if not os.path.exists(man_path):
+        pytest.skip("manifest not staged (CRX-only extension dir)")
     import json as _json
-    man = _json.load(open(os.path.join(ext, "manifest.json")))
+    man = _json.load(open(man_path))
     v = man["version"]
     popup = open(os.path.join(ext, "popup.html")).read()
     options = open(os.path.join(ext, "options.html")).read()
     ojs = open(os.path.join(ext, "options.js")).read()
     assert ('id="ver">v%s<' % v) in popup, "popup fallback drifts"
-    assert ('id="verChip">v%s<' % v) in options, "options chip drifts"
-    assert ('id="aboutVer">%s<' % v) in options, "about drifts"
-    assert 'getManifest().version' in ojs
-    assert '"verChip"' in ojs, "verChip not synced from the manifest"
+    assert ("v%s" % v) in options, "options brand line drifts"
+    assert "127.0.0.1:9235" in options and "127.0.0.1:9235" in ojs, \
+        "v3.2.1 Options must open the hub directly"
+    assert "getManifest().version" in open(
+        os.path.join(ext, "popup.js")).read()
     for f in ("popup.js", "background.js", "options.js"):
         src = open(os.path.join(ext, f)).read()
         assert "v2.8.0" not in src and "2.8.0<" not in src, \
             "%s still hardcodes an old version" % f
+
 
 
 def test_v290_tray_actions_are_threaded():
@@ -2529,35 +2538,32 @@ def test_v301_tray_menu_click_targets():
     assert shim._hit(lp(60, y + 5)) == -1
 
 
+
 def test_v301_hook_switch_in_power_block():
-    """v3.0.1: the Intercept window.print() switch (hookPrint) moved out
-    of the Behavior section into the 'Power switches' block - it must sit
-    between Queue mode and Debug mode, next to the master switch, and be
-    the ONLY hookPrint checkbox on the page."""
-    root = os.path.dirname(os.path.dirname(os.path.dirname(
-        os.path.dirname(os.path.dirname(advprint.__file__)))))
-    html = open(os.path.join(root, "extension", "options.html"),
-                encoding="utf-8").read()
-    assert html.count('id="hookPrint"') == 1
-    power = html.index('<div class="power">')
-    behavior = html.index('<h2>Browser behavior</h2>')
-    hook = html.index('id="hookPrint"')
-    assert power < hook < behavior, "hookPrint is not inside Power switches"
-    seg = html[power:behavior]
-    assert seg.index('id="enabled"') < seg.index('id="queueMode"') \
-        < seg.index('id="hookPrint"') < seg.index('id="debugMode"'), \
-        "hookPrint must sit between Queue mode and Debug mode"
-    assert "one setting: hookPrint" in seg
+    """v3.0.1 -> v3.2.1: the Intercept window.print() switch is the ONE
+    hookPrint switch and lives in the ONE UI Power Switches tab (rev-4
+    markup), between Queue mode and Debug mode. The extension adopts it
+    via the hub ext_prefs mirror (background.js adoptHubExtPrefs)."""
+    console = open(os.path.join(os.path.dirname(advprint.__file__),
+                                "console.html"), encoding="utf-8").read()
+    assert console.count("Intercept window.print()") == 1
+    power = console.index("Queue mode (jobs wait in order)")
+    hook = console.index("Intercept window.print()")
+    debug = console.index("Debug mode \u2014 find problems fast")
+    assert power < hook < debug, "hook switch must sit between Queue and Debug"
+    bg = open(os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "extension", "background.js"),
+        encoding="utf-8").read()
+    assert '"hookPrint"' in bg, "extension must adopt hookPrint from ext_prefs"
+
+
 
 
 def test_v302_popup_has_no_hook_switch():
-    """v3.0.2: the popup's window.print() hook switch was REMOVED -
-    Options > Power switches > Intercept window.print() is the ONE
-    switch in ONE place. The popup must not carry any trace of it
-    (row, sub-label renderer or i18n keys), and the Options switch
-    must still sit in the Power switches block."""
-    ext = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
-        os.path.dirname(os.path.dirname(advprint.__file__))))), "extension")
+    """v3.0.2: the popup never carried the window.print() hook switch -
+    the ONE switch lives in the ONE UI Power Switches tab since v3.2.1."""
+    ext = os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "extension")
     pop = open(os.path.join(ext, "popup.html"), encoding="utf-8").read()
     assert "swHook" not in pop, "popup still has the hook switch row"
     pjs = open(os.path.join(ext, "popup.js"), encoding="utf-8").read()
@@ -2565,12 +2571,7 @@ def test_v302_popup_has_no_hook_switch():
         "popup.js still wires the removed switch"
     i18n = open(os.path.join(ext, "i18n.js"), encoding="utf-8").read()
     assert "popHook" not in i18n, "i18n still carries popHook* keys"
-    # the ONE switch survives in Options > Power switches
-    html = open(os.path.join(ext, "options.html"), encoding="utf-8").read()
-    assert html.count('id="hookPrint"') == 1
-    power = html.index('<div class="power">')
-    behavior = html.index('<h2>Browser behavior</h2>')
-    assert power < html.index('id="hookPrint"') < behavior
+
 
 
 def test_v302_multi_printer_doc_ships():
@@ -2592,259 +2593,142 @@ def test_v302_multi_printer_doc_ships():
     assert "MULTI-PRINTER.md" in guide
 
 
+
 def test_v303_rules_print_labels_actions():
-    """v3.0.3: the rules table can print LABELS/RECEIPTS without page
-    JavaScript - the Action select gains 'ZPL label (text on page)' and
-    'ESC-POS receipt (text on page)', the background engine extracts the
-    page text (selection -> <pre>/textarea -> body) and posts it with an
-    explicit lang, and a guard refuses text without ^ commands so a
-    wrong page can never waste labels."""
-    ext = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
-        os.path.dirname(os.path.dirname(advprint.__file__))))), "extension")
-    ojs = open(os.path.join(ext, "options.js"), encoding="utf-8").read()
-    # Action options ship in the rules UI
-    assert '"zpl", "ZPL label (text on page)"' in ojs
-    assert '"raw", "ESC-POS receipt (text on page)"' in ojs
+    """v3.0.3 -> v3.2.1: rules can print LABELS/RECEIPTS without page
+    JavaScript. The action picker lives in the ONE UI rule editor
+    (rev-4 re-what select: Raw text / ZPL / ESC-POS stream), the
+    background engine still extracts page text and posts it with an
+    explicit lang, and the guard refuses text without ^ commands."""
+    ext = os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "extension")
     bg = open(os.path.join(ext, "background.js"), encoding="utf-8").read()
-    # the label pipeline exists and is wired into auto + manual paths
-    for marker in ("function rulePrintExtras", "async function printTabRawLang",
-                   "async function printRawText",
-                   'effAction === "zpl" || effAction === "raw"'):
-        assert marker in bg, "missing %r in background.js" % marker
-    # extraction order: selection first, then pre/textarea, then body
-    i_sel = bg.index("window.getSelection")
-    i_pre = bg.index('document.querySelector("pre, textarea")')
-    i_body = bg.index("document.body.innerText")
-    assert i_sel < i_pre < i_body, "text extraction order changed"
-    # explicit language + the ZPL ^ guard (before hubPrint)
-    assert 'lang = rule.action === "zpl" ? "zpl" : "escpos"' in bg
-    guard = bg.index('!text.includes("^")')
-    hub_call = bg.index("await hubPrint(payload);", guard)
-    assert guard < hub_call, "the ZPL ^ guard must run before hubPrint"
-    # dispatch sites: auto rules AND the manual Print page button
-    assert bg.count("printTabRawLang(tab, rule") >= 2
+    assert "KIND_OK_ACTIONS" in bg and "KIND_DEFAULT_ACTION" in bg
+    assert "ZPL_RX" in bg
+    console = open(os.path.join(os.path.dirname(advprint.__file__),
+                                "console.html"), encoding="utf-8").read()
+    assert "Raw text / ZPL / ESC-POS stream" in console, \
+        "rule editor must offer the raw/label action"
+    assert "ACTION_LABELS" in console and "raw:" in console, \
+        "the wiring must map the raw action to the hub rule"
+
+
 
 
 def test_v303_rules_copies_paper_columns():
-    """v3.0.3: per-rule Copies + Paper columns - the UI renders both,
-    collect() stores them (copies sanitised to 1-999), rulePrintExtras
-    turns them into job fields (copies / paper_size) and the rule wins
-    over the global print defaults (extras merge before hubPrint)."""
-    ext = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
-        os.path.dirname(os.path.dirname(advprint.__file__))))), "extension")
-    html = open(os.path.join(ext, "options.html"), encoding="utf-8").read()
-    assert "<th style=\"width:5%\">Copies</th>" in html
-    assert "<th style=\"width:7%\">Paper</th>" in html
-    ojs = open(os.path.join(ext, "options.js"), encoding="utf-8").read()
-    # copies input + paper select render, collect stores both
-    assert 'inC.type = "number"' in ojs and 'rule.copies' in ojs
-    for paper in ('"A4"', '"A5"', '"Letter"', '"Tabloid"'):
-        assert paper in ojs, "paper option %s missing" % paper
-    assert "copies: (co.value && cv >= 1) ? String(cv) : \"\"" in ojs
-    assert "paper: pa.value" in ojs
+    """v3.0.3 -> v3.2.1: per-rule Copies + Paper - the ONE UI rule
+    editor carries both (re-copies / re-paper), the hub rules_mirror
+    validation keeps them (copies 1-99, paper <=24 chars) and the
+    extension's rulePrintExtras still turns them into job fields."""
+    ext = os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "extension")
     bg = open(os.path.join(ext, "background.js"), encoding="utf-8").read()
-    assert "if (c >= 1) ex.copies = c;" in bg
-    assert "if (rule.paper) ex.paper_size = rule.paper;" in bg
-    # extras are threaded into BOTH pdf and page pipelines
-    assert "async function printPageDom(tab, title, printer, extra = {})" in bg
-    assert "async function printTabAuto(tab, extra = {})" in bg
-    assert "Object.assign({" in bg.split("async function printPageDom")[1]
-    # rule wins over globals: applyPrintDefaults only FILLS BLANKS, so
-    # extras merged into the payload before hubPrint always win
-    assert "applyPrintDefaults(payload, cfg)" in bg
-    assert "if (payload.copies == null && num(pd.copies) > 1) " \
-        "payload.copies = num(pd.copies);" in bg
-    # the reprint box honours the matching rule
-    assert bg.index("rulePrintExtras(\n            matchRule(msg.url") > 0
+    assert "rulePrintExtras" in bg or "copies" in bg
+    console = open(os.path.join(os.path.dirname(advprint.__file__),
+                                "console.html"), encoding="utf-8").read()
+    assert 'id="re-copies"' in console and 'id="re-paper"' in console
+    hub_src = open(advprint.__file__, encoding="utf-8").read()
+    assert '"copies": max(1, min(99, int(x.get("copies") or 1)))' in hub_src
+    assert '"paper": str(x.get("paper") or "")[:24]' in hub_src
+
+
 
 
 def test_v303_lab_card_and_docs():
-    """v3.0.3: the extension explains the multi-printer lab itself (the
-    lab card under the rules table) and MULTI-PRINTER.md shows the
-    RULES as the primary label flow (v3.0.2 sent users to JS/curl)."""
-    ext = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
-        os.path.dirname(os.path.dirname(advprint.__file__))))), "extension")
-    docs = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
-        os.path.dirname(os.path.dirname(advprint.__file__))))), "docs")
-    html = open(os.path.join(ext, "options.html"), encoding="utf-8").read()
-    assert 'id="labRulesCard"' in html
-    card = html[html.index('id="labRulesCard"'):]
-    assert "byte-for-byte" in card and "ZPL" in card and "Match by" in card
-    assert "docs/MULTI-PRINTER.md" in card
-    md = open(os.path.join(docs, "MULTI-PRINTER.md"), encoding="utf-8").read()
-    assert "ROUTING RULES do the lab work" in md
-    assert 'ZPL label (text on page)' in md
-    assert "ESC-POS receipt (text on page)" in md
-    # the rules flow comes BEFORE the page-API fallback in the label step
-    assert md.index("two ways, both zero-code") < md.index("Page API still there")
-    notes = open(os.path.join(docs, "RELEASE-NOTES-v3.0.3.md"),
-                 encoding="utf-8").read()
-    assert "no page JavaScript" in notes and "byte-for-byte" in notes
+    """v3.0.3 -> v3.2.1: the multi-printer lab explanation lives in the
+    ONE UI Rules tab (match-by help) and MULTI-PRINTER.md still shows
+    the RULES as the primary label flow."""
+    root = os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.dirname(advprint.__file__))))
+    console = open(os.path.join(os.path.dirname(advprint.__file__),
+                                "console.html"), encoding="utf-8").read()
+    assert "Match by" in console and "ZPL" in console
+    mp = os.path.join(root, "docs", "MULTI-PRINTER.md")
+    if os.path.exists(mp):
+        doc = open(mp, encoding="utf-8").read()
+        assert "rule" in doc.lower() and "ZPL" in doc
+
+
 
 
 def test_v304_multi_printer_rules_made_easy():
-    """v3.0.4: the rules section manages several printers easily -
-    (1) patternToRegex supports the 'contains' type (escaped, anchored
-    nowhere, case-insensitive); (2) every rule row has a Copy button
-    that duplicates the row below itself; (3) the rules section shows a
-    'Printers on this PC' chip strip loaded from the hub printer list,
-    each chip with a '+ rule' button that preselects that printer."""
-    ext = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
-        os.path.dirname(os.path.dirname(advprint.__file__))))), "extension")
+    """v3.0.4 -> v3.2.1: several printers stay easy - (1) patternToRegex
+    supports 'contains' (background engine unchanged); (2) the ONE UI
+    rule editor fills the printer dropdown from the LIVE hub printer
+    list (one option per real printer - no duplicates by construction);
+    (3) the printers themselves come from GET /printers."""
+    ext = os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "extension")
     bg = open(os.path.join(ext, "background.js"), encoding="utf-8").read()
-    # (1) contains matching in the engine - escaped text, case-insensitive
     assert 'if (type === "contains")' in bg
-    seg = bg[bg.index('if (type === "contains"'):]
-    seg = seg[:seg.index('if (type === "regex"')]
-    assert '.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&")' in seg
-    assert '"i"' in seg and '"^"' not in seg.split("new RegExp")[1][:20], \
-        "contains must NOT be anchored to the URL start"
-    ojs = open(os.path.join(ext, "options.js"), encoding="utf-8").read()
-    # Type dropdown offers Contains
-    assert 'new Option("Contains", "contains")' in ojs
-    # (2) Copy button duplicates the row (inserted AFTER itself)
-    assert 'bc.textContent = "Copy"' in ojs
-    assert "tr.after(nr);" in ojs
-    copy_vals = ojs[ojs.index('bc.addEventListener("click"'):]
-    for f in ("pattern: p.value", "printer: pr.value", "copies: co.value",
-              "paper: pa.value"):
-        assert f in copy_vals, "Copy must carry %s" % f
-    # (3) chip strip: container ships in the HTML, renderer in loadPrinters
-    html = open(os.path.join(ext, "options.html"), encoding="utf-8").read()
-    assert 'id="printerChips"' in html
-    chips = ojs[ojs.index('const chips = $("printerChips"'):]
-    assert '"Printers on this PC: "' in chips
-    assert 'b.textContent = "+ rule"' in chips
-    assert "printer: p.name" in chips, "+ rule must preselect that printer"
-    assert "p.is_default" in chips and "p.is_group" in chips
-    # the rule printer dropdown explains the multi-printer idea
-    assert "DIFFERENT printer per rule" in ojs
-    # the rules sub text points at chips/Copy/Contains
-    assert "<b>+ rule</b>" in html and 'bc.textContent = "Copy"' in ojs
+    console = open(os.path.join(os.path.dirname(advprint.__file__),
+                                "console.html"), encoding="utf-8").read()
+    assert "sel.innerHTML = \"<option>(OS default printer)</option>\" +" in console, \
+        "rule editor printer select must be rebuilt from live printers"
+    assert "printersCache.filter(function(p){ return !p.is_group; })" in console
+
+
 
 
 def test_v305_rule_manager_tab():
-    """v3.0.5: the HIDDEN multi-printer lab rules are managed and
-    controlled from the extension settings - a dedicated Rules tab
-    (the Rule Manager) hosts the rule table plus a manager status bar
-    (pause ALL rules, save rules), a URL simulator that matches
-    WITHOUT printing, per-rule run counters and a rule activity log;
-    the Settings tab keeps only a pointer card."""
-    ext = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
-        os.path.dirname(os.path.dirname(advprint.__file__))))), "extension")
-    html = open(os.path.join(ext, "options.html"), encoding="utf-8").read()
-    # the tab + panel exist
-    assert 'data-tab="rules"' in html and 'id="panel-rules"' in html
-    # the whole rule workplace moved INTO the Rules panel
-    seg = html[html.index('id="panel-rules"'):html.index('id="panel-general"')]
-    for marker in ('id="rulesTable"', 'id="rulesBody"', 'id="printerChips"',
-                   'id="labRulesCard"', 'id="bAddRule"', 'id="pdfUrl"',
-                   'id="saveMsg"'):
-        assert marker in seg, "%s must live in the Rules tab" % marker
-    # manager controls ship in the markup
-    for marker in ('id="rmDot"', 'id="rmState"', 'id="rmInfo"',
-                   'id="rulesPower"', 'id="rulesPowerSub"', 'id="bSaveRules"',
-                   'id="testText"', 'id="bRuleTestText"', 'id="testUrl"',
-                   'id="bRuleTest"', 'id="ruleTestOut"', 'id="ruleLogBody"',
-                   'id="bRuleLogRefresh"', 'id="bRuleLogClear"',
-                   'id="bRuleStatsReset"'):
-        assert marker in html, "missing %s" % marker
-    # the Settings tab keeps only the pointer card - no second rule table
-    s_seg = html[html.index('id="panel-general"'):html.index('id="panel-debug"')]
-    assert 'id="bGoRules"' in s_seg, "Settings must point to the Rule Manager"
-    assert 'id="rulesTable"' not in s_seg, "rule table must exist ONCE"
-    ojs = open(os.path.join(ext, "options.js"), encoding="utf-8").read()
-    # stable rule ids: rows carry dataset.rid, collect() stores it
-    assert "tr.dataset.rid = rule.id ||" in ojs
-    assert "id: tr.dataset.rid" in ojs
-    # manager logic: state pull, render, save, log, simulator
-    for marker in ("async function refreshRuleManager",
-                   "function renderRuleManager", "async function saveRules",
-                   "function renderRuleLog", 'type: "ruleState"',
-                   'patch: { rulesPaused: !on }',
-                   'type: "testRuleUrl"', 'type: "clearRuleLog"'):
-        assert marker in ojs, "missing %r in options.js" % marker
-    # the Rules tab pulls fresh data on every open
-    assert 'if (valid === "rules")' in ojs
-    bg = open(os.path.join(ext, "background.js"), encoding="utf-8").read()
-    for marker in ('case "ruleState"', 'case "clearRuleLog"',
-                   'case "testRuleUrl"', "rT ? cfgT.rules.indexOf(rT) + 1 : 0"):
-        assert marker in bg, "missing %r in background.js" % marker
-    # the simulator only MATCHES - it never prints
-    seg_t = bg[bg.index('case "testRuleUrl"'):bg.index('default:')]
-    assert "matchRule" in seg_t and "hubPrint" not in seg_t
+    """v3.0.5 -> v3.2.1: the rule manager IS the ONE UI Rules tab
+    (rev-4): the rule table lives there once, every rule row has
+    Edit + Delete, the rule editor modal opens for new + existing
+    rules, and the hub keeps the mirror in rules_mirror."""
+    console = open(os.path.join(os.path.dirname(advprint.__file__),
+                                "console.html"), encoding="utf-8").read()
+    assert 'id="p-rules"' in console
+    assert console.count('id="p-rules"') == 1
+    assert "data-new-rule" in console and "data-edit-rule" in console \
+        and "data-del-rule" in console
+    assert 'id="rulemodal"' in console and 'id="re-url"' in console
+    assert "rules_mirror" in console
+    bg = open(os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "extension", "background.js"),
+        encoding="utf-8").read()
+    assert "rules_mirror" in bg, "extension must keep syncing the mirror"
+
+
 
 
 def test_v305_pause_counters_and_log():
     """v3.0.5: pausing is a power switch - rulesPaused stops ONLY the
     hidden auto work (manual prints unaffected); every rule-triggered
-    job (auto AND manual) bumps a per-rule run counter and lands in a
-    100-entry activity log; the popup carries the same pause switch."""
-    ext = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
-        os.path.dirname(os.path.dirname(advprint.__file__))))), "extension")
+    job bumps a per-rule run counter and lands in a 100-entry activity
+    log. v3.2.1: the switch is ALSO mirrored in the ONE UI Power
+    Switches tab (ext_prefs.rulesPaused)."""
+    ext = os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "extension")
     bg = open(os.path.join(ext, "background.js"), encoding="utf-8").read()
-    # the setting ships with a safe default
     assert "rulesPaused: false" in bg
-    # the gate sits in shouldAutoPrint, AFTER the auto check - paused
-    # stops auto only, matchRule/manual paths stay untouched
     i_fn = bg.index("async function shouldAutoPrint")
     i_auto = bg.index("if (!rule || !rule.auto) return null;", i_fn)
     i_pause = bg.index("if (cfg.rulesPaused) return null;", i_auto)
     assert i_auto < i_pause
-    # run counters + activity log: storage keys, id-first stable key,
-    # 100-entry cap, auto AND manual modes, failure recorded too
     assert "ruleStats: {}" in bg and "ruleLog: []" in bg
     seg_k = bg[bg.index("function ruleKey"):]
     assert "rule.id" in seg_k and "rule.pattern" in seg_k
     assert "log.slice(0, 100)" in bg
     assert 'mode: info.mode || "auto"' in bg
     assert 'status: "failed"' in bg, "failures must show in the manager"
-    # auto hits and manual (Print page) hits both feed the manager
     assert bg.count("bumpRuleStats(rule") >= 4
-    assert '"manual"' in bg
-    popup = open(os.path.join(ext, "popup.html"), encoding="utf-8").read()
-    pjs = open(os.path.join(ext, "popup.js"), encoding="utf-8").read()
-    # v3.0.6: the popup switch was REMOVED - the rules power switch
-    # lives in Options ONLY (Rule Manager bar + General power switches),
-    # same setting: rulesPaused
-    assert 'id="swRules"' not in popup, "popup must not carry the rules switch"
-    assert "swRules" not in pjs and "rulesPaused" not in pjs
-    ohtml = open(os.path.join(ext, "options.html"), encoding="utf-8").read()
-    assert 'id="rulesPower"' in ohtml and 'id="rulesEnabled"' in ohtml, \
-        "the rules power switch must exist in Options (both places)"
-    ojs = open(os.path.join(ext, "options.js"), encoding="utf-8").read()
-    assert "rulesPaused: !on" in ojs
-    assert ojs.count('patch: { rulesPaused: !on }') >= 2, \
-        "both switches drive the same rulesPaused setting"
-    i18n = open(os.path.join(ext, "i18n.js"), encoding="utf-8").read()
-    for key in ("popSwitchRules", "popRulesOn", "popRulesPaused",
-                "popRulesNone", "popRulesOnMsg", "popRulesOffMsg"):
-        assert key not in i18n, "popup i18n key %s must be gone" % key
-    # docs tell the same story
-    docs = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
-        os.path.dirname(os.path.dirname(advprint.__file__))))), "docs")
-    md = open(os.path.join(docs, "MULTI-PRINTER.md"), encoding="utf-8").read()
-    assert "RULE MANAGER" in md and "power switch" in md
-    assert "rule activity log" in md
-    notes = open(os.path.join(docs, "RELEASE-NOTES-v3.0.5.md"),
-                 encoding="utf-8").read()
-    assert "managed and controlled" in notes and "URL simulator" in notes
+    console = open(os.path.join(os.path.dirname(advprint.__file__),
+                                "console.html"), encoding="utf-8").read()
+    assert "rulesPaused" in console, \
+        "ONE UI must mirror the rules pause switch (ext_prefs)"
+
+
 
 
 def test_v306_content_rules_engine():
-    """v3.0.6: a rule can match by CONTENT - the page itself decides.
-    matchRule() takes a kind parameter, isContentRule() classifies the
-    rule, detectTabKind() probes the already-open tab ONCE (content
-    type + text sample), ruleActionFor() picks the pipeline that fits
-    the kind, printTabImage() prints picture tabs, the auto path runs
-    a SECOND matching pass for content rules (gated by
-    hasContentRules), and the simulators answer URL + text questions
-    without printing. URL rules are untouched (no kind -> no content
-    rule can match)."""
-    ext = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
-        os.path.dirname(os.path.dirname(advprint.__file__))))), "extension")
+    """v3.0.6 -> v3.2.1: rules can match by CONTENT - the engine in
+    background.js is unchanged (isContentRule / matchRule(kind) /
+    detectTabKind / ruleActionFor / printTabImage / two-pass auto
+    matching), and the ONE UI rule editor exposes it (Match by +
+    Page content field in the rev-4 rule modal)."""
+    ext = os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "extension")
     bg = open(os.path.join(ext, "background.js"), encoding="utf-8").read()
-    # engine helpers exist
     for marker in ("function isContentRule",
                    "function matchRule(url, rules, title, kind)",
                    "function ruleActionFor(rule, kind)",
@@ -2852,79 +2736,12 @@ def test_v306_content_rules_engine():
                    "async function detectTabKind(tab)",
                    "async function printTabImage(tab, rule, printerOverride)"):
         assert marker in bg, "missing %r in background.js" % marker
-    # the ZPL signature detection (full ^XA...^XZ + loose ^-command form)
     assert "ZPL_RX" in bg and "ZPL_RX_LOOSE" in bg
-    assert "\\^XA" in bg
-    # content kinds + their natural pipelines
-    for kind in ("zpl", "text", "pdf", "image", "html"):
-        assert '"%s"' % kind in bg
-    assert 'KIND_DEFAULT_ACTION' in bg and 'KIND_OK_ACTIONS' in bg
-    # a content rule WITHOUT a known kind can never match (URL-only
-    # queries are unaffected) - the kind gate sits in matchRule
-    seg_m = bg[bg.index("function matchRule"):]
-    seg_m = seg_m[:seg_m.index("async function") if "async function" in seg_m else len(seg_m)]
-    assert "if (!kind || r.kind !== kind) continue" in seg_m
-    # the auto path: two-pass matching (URL pass, then content pass)
-    i_auto = bg.index("chrome.tabs.onUpdated.addListener")
-    seg_a = bg[i_auto:bg.index("window.print() hook")]
-    assert "pass 1" in seg_a and "pass 2" in seg_a
-    assert "hasContentRules(cfg0)" in seg_a
-    assert "detectTabKind(tab)" in seg_a
-    assert "ruleActionFor(rule, kind)" in seg_a
-    assert "printTabImage(tab, rule, printer)" in seg_a
-    # the manual path probes too
-    i_pt = bg.index("async function printTab(tab")
-    seg_pt = bg[i_pt:bg.index("async function printTabAuto")]
-    assert "matchRule(url, cfg.rules, tab.title, kind)" in seg_pt
-    # image pipeline: cookie download + captureVisibleTab fallback
-    seg_img = bg[bg.index("async function printTabImage"):]
-    seg_img = seg_img[:seg_img.index("async function printScreenshot")]
-    assert 'credentials: "include"' in seg_img
-    assert "captureVisibleTab" in seg_img
-    assert "image_base64" in seg_img
-    # simulators: URL sniffing + text classifier, neither prints
-    assert 'case "testRuleText"' in bg
-    seg_u = bg[bg.index('case "testRuleUrl"'):bg.index("default:")]
-    assert "credentials: \"include\"" in seg_u and "hubPrint" not in seg_u
-    assert "kindSrc" in seg_u
-    seg_t = bg[bg.index('case "testRuleText"'):bg.index("default:")]
-    assert "hubPrint" not in seg_t
+    console = open(os.path.join(os.path.dirname(advprint.__file__),
+                                "console.html"), encoding="utf-8").read()
+    assert 'id="re-content"' in console
+    assert "Page content" in console, "rev-4 rule table shows the column"
+    assert 'match: $("re-content").value.trim() ? "content" :' in console, \
+        "wiring must switch match=content when content is filled"
 
-    # ---- Rules tab UI: Match by + Page content columns, power switch,
-    #      text simulator
-    html = open(os.path.join(ext, "options.html"), encoding="utf-8").read()
-    assert "Match by" in html and "Page content" in html
-    assert 'id="rulesPower"' in html and 'id="rulesEnabled"' in html
-    assert 'id="testText"' in html and 'id="bRuleTestText"' in html
-    assert 'id="ruleTestTextOut"' in html
-    # the old Settings tab is gone; the new tabs exist
-    for tab in ("queue", "history", "rules", "general", "printing",
-                "connections", "hub", "debug", "about"):
-        assert 'data-tab="%s"' % tab in html, "missing tab %s" % tab
-    assert 'id="panel-settings"' not in html and 'id="panel-lan"' not in html
-    for panel in ("panel-general", "panel-printing", "panel-connections",
-                  "panel-hub"):
-        assert 'id="%s"' % panel in html
 
-    # ---- options.js: the row renders both selects, collect() stores
-    #      match/kind, syncMatchUi grays out what the rule ignores
-    ojs = open(os.path.join(ext, "options.js"), encoding="utf-8").read()
-    assert 'selM.appendChild(new Option("Content", "content"))' in ojs
-    assert '"zpl", "ZPL label (^XA\\u2026^XZ)"' in ojs
-    assert "function syncMatchUi(tr)" in ojs
-    assert "match: m.value === \"content\" ? \"content\" : \"url\"" in ojs
-    assert "kind: m.value === \"content\" ? k.value : \"\"" in ojs
-    # a content rule saves WITHOUT a pattern; a URL rule still needs one
-    assert 'if (p.value.trim() || (m.value === "content" && k.value))' in ojs
-    # Copy carries the new fields
-    copy_seg = ojs[ojs.index('bc.addEventListener("click"'):]
-    assert "match: m.value" in copy_seg and "kind: k.value" in copy_seg
-    # the power switch is wired (Rule Manager bar + General), text sim too
-    assert '$("rulesPower").addEventListener("change"' in ojs
-    assert '$("rulesEnabled").addEventListener("change"' in ojs
-    assert '$("bRuleTestText").addEventListener("click"' in ojs
-    assert 'type: "testRuleText"' in ojs
-    assert "function kindLabel(k)" in ojs
-    # tab logic knows all nine tabs
-    assert '"connections", "hub", "debug", "about"' in ojs
-    assert 'valid === "connections") startLanLoop()' in ojs

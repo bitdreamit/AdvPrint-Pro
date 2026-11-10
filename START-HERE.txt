@@ -1,6 +1,30 @@
-AdvPrint Pro (Advanced Printer) v3.0.8 - START HERE
+AdvPrint Pro (Advanced Printer) v3.2.1 - START HERE
 ====================================================
 by Bit Dream IT - Innovative Healthcare Solutions
+
+WHAT IS NEW IN v3.2.1 - THE ONE ALL-IN-ONE UI EVERYWHERE
+----------------------------------------------------------
+1) Open  http://127.0.0.1:9235  - you get the APPROVED All-in-One
+   console (the exact design you signed off): blue IDM-style title
+   bar, 9 menus, 17 tabs (Dashboard, Queue, History, Printers, LAN
+   Sharing, Connections, Hub, DropZone, Rules, Power Switches,
+   Browser, Extension, Debug, Audit, Logs, Settings, About).
+   /ui and /dashboard answer with the SAME UI - one URL, one window.
+2) THE UI IS EMBEDDED IN advprint.py ITSELF (CONSOLE_HTML constant):
+   the first v3.2.1 build could lose a console.html file on Windows
+   and fall back to the old dashboard - that can never happen again.
+   Nothing external to go missing, on Windows or Linux.
+3) SELF vs CENTER view: on the hub PC you get the SELF PC UI (full
+   control, incl. the 14 tools). A PC that opens the LAN share URL
+   (http://<center-ip>:9235) gets the CENTER PC UI (amber banner -
+   live queue, history, rules, IPP; system tools stay on the center).
+4) Tray icon > "Console (THE ONE UI)" opens the same UI.
+   Chrome/Edge/Brave extension > AdvPrint Pro options opens the same
+   UI (http://127.0.0.1:9235). Website whitelist defaults to '*'
+   (all websites may print - tighten it on the Extension tab).
+5) The OLD classic dashboard is no longer served - if you still see
+   it after installing THIS build, an old AdvPrint Pro service is
+   still running: run UNINSTALL-WINDOWS.bat, reboot, install again.
 
 WHAT'S NEW IN 3.0.8 (PROFESSIONAL IPP PRINTER - WINDOWS/MAC/PHONES)
 ----------------------------------------------------------------------
