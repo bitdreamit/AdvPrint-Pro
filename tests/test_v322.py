@@ -214,14 +214,17 @@ def test_v322_settings_tray_switches_refuse():
 # ------------------------------------------------------------
 
 def test_v322_extension_has_no_popup():
+    # v3.2.4: the POPUP IS BACK (default_popup again) - the state lock
+    # now asserts the CURRENT reality; see tests/test_v324.py for the
+    # full popup contract.
     ext = os.path.join(ROOT, "extension")
-    assert not os.path.exists(os.path.join(ext, "popup.html"))
-    assert not os.path.exists(os.path.join(ext, "popup.js"))
+    assert os.path.exists(os.path.join(ext, "popup.html"))
+    assert os.path.exists(os.path.join(ext, "popup.js"))
     man = json.load(open(os.path.join(ext, "manifest.json"),
                          encoding="utf-8"))
-    assert "default_popup" not in man.get("action", {})
+    assert man.get("action", {}).get("default_popup") == "popup.html"
     bg = open(os.path.join(ext, "background.js"), encoding="utf-8").read()
-    assert "chrome.action.onClicked" in bg
+    assert "chrome.action.onClicked" in bg   # stays as the no-popup fallback
     assert "/ui" in bg
 
 
@@ -259,9 +262,9 @@ def test_v322_lan_tab_carries_platform_guide():
 
 
 def test_v322_version_strings_agree():
-    assert advprint.VERSION == "3.2.3"
+    assert advprint.VERSION == "3.2.4"
     vt = open(os.path.join(ROOT, "VERSION.txt"), encoding="utf-8").read()
-    assert "3.2.3" in vt
+    assert "3.2.4" in vt
     man = json.load(open(os.path.join(ROOT, "extension", "manifest.json"),
                          encoding="utf-8"))
-    assert man["version"] == "3.2.3"
+    assert man["version"] == "3.2.4"

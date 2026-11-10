@@ -1549,7 +1549,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
           // window.print() was called on a page -> print that page silently
           const hcfg = await loadCfg();
           if (hcfg.enabled === false) {
-            reply({ ok: false, error: "AdvPrint is disabled - enable it in the Console (click the toolbar icon)" });
+            reply({ ok: false, error: "AdvPrint is disabled - enable it in the popup (click the toolbar icon)" });
             break;
           }
           if (!hcfg.hookPrint) {
@@ -1573,7 +1573,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
         }
         case "printTab": {
           if ((await loadCfg()).enabled === false) {
-            reply({ ok: false, error: "AdvPrint is disabled - enable it in the Console" });
+            reply({ ok: false, error: "AdvPrint is disabled - enable it in the popup (toolbar icon)" });
             break;
           }
           const tab = (await chrome.tabs.query({ active: true, currentWindow: true }))[0];
@@ -1584,7 +1584,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
         }
         case "printPdfUrl": {
           if ((await loadCfg()).enabled === false) {
-            reply({ ok: false, error: "AdvPrint is disabled - enable it in the Console" });
+            reply({ ok: false, error: "AdvPrint is disabled - enable it in the popup (toolbar icon)" });
             break;
           }
           const printer = await resolvePrinter(msg.url, msg.title);
@@ -1599,14 +1599,14 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
         }
         case "printSelection":
           if ((await loadCfg()).enabled === false) {
-            reply({ ok: false, error: "AdvPrint is disabled - enable it in the Console" });
+            reply({ ok: false, error: "AdvPrint is disabled - enable it in the popup (toolbar icon)" });
             break;
           }
           reply({ ok: true, ...(await printSelection(msg.text, msg.title)) });
           break;
         case "printScreenshot": {
           if ((await loadCfg()).enabled === false) {
-            reply({ ok: false, error: "AdvPrint is disabled - enable it in the Console" });
+            reply({ ok: false, error: "AdvPrint is disabled - enable it in the popup (toolbar icon)" });
             break;
           }
           const win = await chrome.windows.getCurrent();
@@ -2358,12 +2358,14 @@ chrome.storage.onChanged.addListener((changes, area) => {
     pushSitesToHub(changes.apiSites.newValue || ["*"]); }
 });
 
-/* ---------------- icon click = THE ONE UI console (v3.2.2) ----------------
-   The popup is GONE as of v3.2.2 - it was a second, weaker copy of the
-   same console. Clicking the toolbar icon now opens the hub console
-   (http://127.0.0.1:9235/ui) with the paired token so the owner lands
-   straight in the full UI. If the hub is not running, the browser
-   shows its own error page - the tray icon is the fix then. */
+/* ---------------- icon click = the POPUP (v3.2.4) ----------------
+   v3.2.2 removed the popup; v3.2.4 brings it BACK by popular demand:
+   the toolbar icon opens the quick popup again (master switches, queue,
+   recent jobs + the Options button) while EVERY advanced option still
+   lives in THE ONE UI console. The popup opens the console whenever
+   deeper work is needed - one product, two depths.
+   The onClicked listener below stays as a built-in fallback: it only
+   fires if a future build ships without default_popup again. */
 chrome.action.onClicked?.addListener?.(async () => {
   try {
     const st = await chrome.storage.local.get({ hubUrl: "", token: "" });

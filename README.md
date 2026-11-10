@@ -13,7 +13,30 @@ Web page ──► Chrome extension ──► AdvPrint Pro hub (localhost:9235) 
 
 ---
 
-## What's new in v3.2.3 (EVERY IPP PATTERN + WORKING SWITCHES + NO POPUP)
+## What's new in v3.2.4 (THE TOOLBAR POPUP IS BACK)
+
+One change, exactly as requested: the quick toolbar **popup is back**.
+
+1. **The popup is back.** Clicking the toolbar icon opens the 340px
+   quick popup again — master switches (AdvPrint enabled, Queue mode,
+   Share Receive / Share Send), the five action buttons (**Print this
+   page · Save as PDF · Print screenshot · Test page · Options**), live
+   queue state with Pause/Resume and the eight most recent jobs with a
+   one-click **Print now** for stuck ones, plus the offline /
+   default-token / held-jobs banners with the one-click **Fix token**.
+   The footer is **branding only**: *100% local · no cloud. By Bit Dream
+   IT - Innovative Healthcare Solutions.* The disabled-state error
+   messages point at the popup again, and every popup string exists in
+   both UI languages (English + Bangla).
+2. **One product, two depths.** The popup is the quick depth; THE ONE UI
+   console stays the single place for every advanced option. The
+   **Options** button (popup and options page) opens the brand card,
+   which opens the console itself.
+
+All v3.2.3 fixes are unchanged (Hub-switch save bug, ONE UI ONE BUTTON,
+Allowed IPs, branding-only options page).
+
+## What was new in v3.2.3 (EVERY IPP PATTERN + WORKING SWITCHES + CLEAN UI)
 
 The three reported v3.2.1 defects are fixed:
 
@@ -35,8 +58,8 @@ The three reported v3.2.1 defects are fixed:
    actions; duplicate buttons removed; the LAN tab shows live IPP URLs
    and the per-platform add-printer guide.
 
-See `docs/RELEASE-NOTES-v3.2.3.md` and
-`docs/AdvPrint-Pro-v3.2.3-A-to-Z-DEV-GUIDE.md`.
+See `docs/RELEASE-NOTES-v3.2.4.md` and
+`docs/AdvPrint-Pro-v3.2.4-A-to-Z-DEV-GUIDE.md`.
 
 ## What was new in v3.2.1 (THE APPROVED UI IS NOW THE PRODUCT)
 
@@ -225,7 +248,7 @@ The ten most-requested features, all in one release:
 - **DropZone + Send portal — printing WITHOUT the extension.** The hub watches a folder: in Word/Excel/ANY app choose *Microsoft Print to PDF* and save into the DropZone — the page prints seconds later (dashboard → DropZone card; `POST /dropzone/open` opens the folder). Phones/tablets/other PCs print through the built-in **Send portal** (`/send`, token-protected, same as every endpoint).
 - **Restart hub** — in the tray menu, AdvPrint Tool [14] and the dashboard button: the hub relaunches itself cleanly (new process waits for the port; queued jobs, settings and history are kept).
 - **Bullet-proof upgrade & uninstall.** The setup now runs `hub-stop.ps1` BEFORE touching files: stops the optional *AdvPrint* service (wait + PID kill), **deletes the service registration** (reinstalled fresh when ticked — upgrades keep it automatically), kills every process under the install folder and frees TCP 9235. Old program folders are wiped, so no stale file can abort an install any more; the uninstaller retries the folder sweep and reports leftovers honestly.
-- **Silent install** `AdvPrint-Pro-Setup-3.2.3.exe /S` — elevation is requested by the exe manifest itself ("auto permission" on any PC), the hub auto-starts after a silent install, and the firewall rule for LAN sharing (TCP 9235) is added automatically (removed on uninstall).
+- **Silent install** `AdvPrint-Pro-Setup-3.2.4.exe /S` — elevation is requested by the exe manifest itself ("auto permission" on any PC), the hub auto-starts after a silent install, and the firewall rule for LAN sharing (TCP 9235) is added automatically (removed on uninstall).
 - **New A + printer logo** — the letter A drawn as a printer: the crossbar is the output slot and a printed page slides out of it. Same mark in the extension, popup, dashboard, tray icon, installer and docs.
 
 Nothing removed: every v2.7.0 feature (history manager, share toggles, live test tool) is unchanged.

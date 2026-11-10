@@ -29,7 +29,7 @@ from conftest import wait_until  # noqa: E402
 def test_health_open_no_token(hub):
     code, d = hub.get("/health", token=None)
     assert code == 200 and d["ok"] is True
-    assert d["version"] == "3.2.3"
+    assert d["version"] == "3.2.4"
     assert d["v2"] is True
     assert "100% local" in d["branding"]
 
@@ -539,13 +539,13 @@ def test_v1_database_migration(tmp_path):
 
 
 def test_version_anchors():
-    assert advprint.VERSION == "3.2.3"
+    assert advprint.VERSION == "3.2.4"
     # repo/package layout: tool/windows/portable/hub -> root/extension
     root = os.path.dirname(os.path.dirname(os.path.dirname(
         os.path.dirname(os.path.dirname(advprint.__file__)))))
     ext = os.path.join(root, "extension", "manifest.json")
     with open(ext) as f:
-        assert json.load(f)["version"] == "3.2.3"
+        assert json.load(f)["version"] == "3.2.4"
 
 
 def test_log_rotation(tmp_path):
@@ -1062,7 +1062,7 @@ def test_v26_token_current_loopback_only(hub):
     code, d = hub.get("/token/current")
     assert code == 200 and d["ok"] is True
     assert d["token"] == hub.token
-    assert d["app"] == "AdvPrint Pro" and d["version"] == "3.2.3"
+    assert d["app"] == "AdvPrint Pro" and d["version"] == "3.2.4"
 
 
 def test_v26_token_current_rejects_remote(hub):
@@ -1136,8 +1136,8 @@ def test_v261_tray_module_ships_and_parses():
 
 
 def test_v261_version_single_source():
-    assert advprint.VERSION == "3.2.3"
-    assert advprint.VERSION_NAME.startswith("v3.2.3")
+    assert advprint.VERSION == "3.2.4"
+    assert advprint.VERSION_NAME.startswith("v3.2.4")
 
 
 def test_v261_cli_cmd_full_path():
@@ -1303,7 +1303,7 @@ def test_v264_setup_exe_kills_zombie_hubs():
     assert "Stop-Process -Name AdvPrintPro" in stopps
     assert "Stop-Process -Name PrintHubPro" in stopps
     assert "sc.exe delete AdvPrint" in stopps
-    assert 'VIProductVersion "3.2.3.0"' in src
+    assert 'VIProductVersion "3.2.4.0"' in src
 
 
 # ---------------- v2.6.8: printer-name self-heal + menu guard ----------
@@ -1586,7 +1586,7 @@ def _v280_pdf(tmp_path, name="z.pdf", big="AdvPrint Pro v2.8 test"):
 
 
 def test_v280_version_and_config_keys():
-    assert advprint.VERSION == "3.2.3"
+    assert advprint.VERSION == "3.2.4"
     for k in ("drop_enabled", "drop_dir", "drop_delete"):
         assert k in advprint.CFG and k in advprint.CONFIG_KEYS
         assert k in advprint.CONFIG_TYPES
@@ -1811,21 +1811,21 @@ def test_v280_source_wiring_restart_tray_tool_installer():
     nsi = open(os.path.join(root, "installer", "setup.nsi"),
                encoding="utf-8").read()
     assert "hub-stop.ps1" in nsi
-    assert "3.2.3" in nsi and "${IfNot} ${Silent}" in nsi
+    assert "3.2.4" in nsi and "${IfNot} ${Silent}" in nsi
     # extension dual profile
     ext = os.path.join(root, "extension")
     bg = open(os.path.join(ext, "background.js"), encoding="utf-8").read()
     assert "hubUrlLan" in bg and "hubTokenLan" in bg
     assert 'closeAfterPrint: false' in bg
     assert "resolveTarget" in bg
-    # v3.2.2: the popup files are GONE (toolbar icon opens the console)
-    assert not os.path.exists(os.path.join(ext, "popup.html"))
+    # v3.2.4: the popup files are BACK (default_popup opens the popup)
+    assert os.path.exists(os.path.join(ext, "popup.html"))
     opt = open(os.path.join(ext, "options.html"), encoding="utf-8").read()
     # v3.2.1: Options opens the hub directly; the LAN profile lives in
     # background.js + the ONE UI Connections tab
     assert "127.0.0.1:9235" in opt and "ONE UI" in opt
     man = json.load(open(os.path.join(ext, "manifest.json")))
-    assert man["version"] == "3.2.3"
+    assert man["version"] == "3.2.4"
 
 
 def test_v280_lan_profile_never_auto_heals():
@@ -2078,8 +2078,8 @@ def test_v281_setup_nsi_version():
         root = os.path.dirname(root)
     nsi = open(os.path.join(root, "installer", "setup.nsi"),
                encoding="utf-8", errors="replace").read()
-    assert 'VIProductVersion "3.2.3.0"' in nsi
-    assert "AdvPrint-Pro-Setup-3.2.3.exe" in nsi
+    assert 'VIProductVersion "3.2.4.0"' in nsi
+    assert "AdvPrint-Pro-Setup-3.2.4.exe" in nsi
 
 
 # ============================================================
@@ -2562,22 +2562,24 @@ def test_v301_hook_switch_in_power_block():
 def test_v302_popup_has_no_hook_switch():
     """v3.0.2: the popup never carried the window.print() hook switch -
     the ONE switch lives in the ONE UI Power Switches tab since v3.2.1.
-    v3.2.2: THE POPUP IS GONE COMPLETELY - the toolbar icon opens the
-    ONE UI console, so there is no popup.html/popup.js at all and the
-    manifest must not reference a default_popup."""
+    v3.2.2 removed the popup completely; v3.2.4 brings it BACK (the
+    manifest opens it again) - the hook switch stays out of it."""
     ext = os.path.join(os.path.dirname(os.path.dirname(
         os.path.abspath(__file__))), "extension")
-    assert not os.path.exists(os.path.join(ext, "popup.html")), \
-        "v3.2.2 removed the popup - popup.html must not exist"
-    assert not os.path.exists(os.path.join(ext, "popup.js")), \
-        "v3.2.2 removed the popup - popup.js must not exist"
+    assert os.path.exists(os.path.join(ext, "popup.html")), \
+        "v3.2.4 restored the popup - popup.html must exist"
+    assert os.path.exists(os.path.join(ext, "popup.js")), \
+        "v3.2.4 restored the popup - popup.js must exist"
+    pop = open(os.path.join(ext, "popup.html"), encoding="utf-8").read()
+    assert "hookPrint" not in pop, \
+        "the window.print() hook switch must stay out of the popup"
     man = json.load(open(os.path.join(ext, "manifest.json"),
                          encoding="utf-8"))
-    assert "default_popup" not in man.get("action", {}), \
-        "manifest still opens a popup - v3.2.2 opens the console instead"
+    assert man.get("action", {}).get("default_popup") == "popup.html", \
+        "v3.2.4 opens the popup again"
     bg = open(os.path.join(ext, "background.js"), encoding="utf-8").read()
     assert "chrome.action.onClicked" in bg and "/ui" in bg, \
-        "toolbar icon click must open THE ONE UI console"
+        "the console-open onClicked fallback must stay in background.js"
 
 
 

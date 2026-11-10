@@ -187,7 +187,7 @@ def test_v323_options_page_branding_only():
         assert gone not in s, gone
     # the ONE UI is where the options live
     assert "ONE UI" in s
-    assert "v3.2.3" in s
+    assert "v3.2.4" in s
 
 
 def test_v323_options_js_auto_open():

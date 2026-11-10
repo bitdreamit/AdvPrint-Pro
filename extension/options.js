@@ -1,4 +1,4 @@
-/* AdvPrint Pro v3.2.3 - Options page = BRANDING ONLY.
+/* AdvPrint Pro v3.2.4 - Options page = BRANDING ONLY.
    Since v3.2.1 (and fully from v3.2.2) EVERY option lives inside the hub
    console (THE ONE UI) at http://127.0.0.1:9235 - there are no
    Console/Dashboard/Debug buttons here anymore, just the brand card.

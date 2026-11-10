@@ -1,6 +1,56 @@
 # Changelog - AdvPrint Pro (Advanced Printer)
 by Bit Dream IT - Innovative Healthcare Solutions
 
+## v3.2.4 - THE TOOLBAR POPUP IS BACK (2026-11-10)
+
+Base: v3.2.3 - every fix unchanged. Exactly one change, the one asked
+for after the v3.2.3 rollout: the quick extension popup returns.
+
+### 1. The popup is BACK (v3.2.2 had removed it)
+- manifest.json carries default_popup again: the toolbar icon opens the
+  340px quick popup instead of jumping straight to the console.
+- Restored with its full v3.2.1 feature set, adapted to the v3.2.3
+  branding decisions:
+  - master switches: AdvPrint enabled, Queue mode, Share Receive mode
+    (hub share_lan) and Share Send mode (LAN PC route);
+  - actions: Print this page / Save as PDF / Print screenshot / Test
+    page / Options (the Options button the user asked to keep);
+  - live status: hub dot + version, queue state with Pause/Resume,
+    pending count, the eight most recent jobs with per-job one-click
+    "Print now" for queued/held/failed/dead/scheduled/saved jobs;
+  - banners: offline + Retry now (with parked-job flush), default-token
+    warning, token-rejected with one-click Fix token (/token/current),
+    held-jobs "Print now";
+  - the footer is BRANDING ONLY - "100% local - no cloud. By Bit Dream
+    IT - Innovative Healthcare Solutions." - the Console/Dashboard/
+    Debug/API footer links are gone (they duplicated THE ONE UI);
+  - the four dead footer-link listeners are removed from popup.js (the
+    elements no longer exist, so the listeners would have thrown);
+  - Change-token help now opens the (branding-only) options page, which
+    shows its token field exactly when the hub refuses the token;
+  - Share-Send-without-URL opens the options page (console) instead of
+    the removed options.html#lan-settings anchor.
+- background.js: the disabled-state error messages point at the popup
+  again ("enable it in the popup (toolbar icon)"); the icon-click
+  console fallback stays for builds without a popup.
+- i18n.js: every popup string verified present in BOTH languages
+  (36 keys, en + bn); header comment updated.
+
+### 2. Options page stays branding-only (v3.2.3 decision unchanged)
+- The options page keeps the brand card + footer "100% local - no
+  cloud. AdvPrint by Bit Dream IT - Innovative Healthcare Solutions.",
+  auto-opens the console, and shows a token field only on 401.
+
+### 3. Version + packaging
+- VERSION 3.2.4 across the hub (both copies byte-identical), the
+  extension manifest, the NSIS setup (OutFile/VI keys/registry
+  DisplayVersion/silent-install hint) and all docs.
+- setup.nsi packs popup.html + popup.js again into $INSTDIR\\extension.
+- README / START-HERE / CHANGELOG / RELEASE-NOTES / A-to-Z guide
+  updated; new tests/test_v324.py locks the popup contract (manifest
+  default_popup, popup files present, no dead footer listeners, popup
+  i18n keys complete, popup.js <-> background.js message contract).
+
 ## v3.2.3 - CLEAN UI, ONE BUTTON + EVERY SWITCH VERIFIED + ALLOWED IPS (2026-11-10)
 
 Base: v3.2.2 - every feature unchanged. Three upgrades requested after

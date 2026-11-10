@@ -127,17 +127,11 @@ fi
 
 # ---------- 6) SHA256SUMS ----------
 echo "-- SHA256SUMS"
-( cd "$DIST" && sha256sum \
-    AdvPrint-Pro.crx \
-    "AdvPrint-Pro-Extension-$V.zip" \
-    "advprint-pro_${V}_all.deb" \
-    "AdvPrint-Pro-Setup-$V.exe" \
-    > "SHA256SUMS-$V.txt" 2>/dev/null || true )
-( cd "$DIST" && sha256sum \
-    AdvPrint-Pro.crx \
-    "AdvPrint-Pro-Extension-$V.zip" \
-    "advprint-pro_${V}_all.deb" \
-    > "SHA256SUMS-$V.txt" )
+# v3.2.4: ONE pass - all four artifacts (the EXE line was lost when the
+# second sha256sum overwrote the first; the user hit this on 3.2.2)
+SUMS="AdvPrint-Pro.crx AdvPrint-Pro-Extension-$V.zip advprint-pro_${V}_all.deb"
+[ -f "AdvPrint-Pro-Setup-$V.exe" ] && SUMS="$SUMS AdvPrint-Pro-Setup-$V.exe"
+( cd "$DIST" && sha256sum $SUMS > "SHA256SUMS-$V.txt" )
 
 echo "== DONE - artifacts in dist/ =="
 ls -la "$DIST"
