@@ -13,7 +13,7 @@ Web page ──► Chrome extension ──► AdvPrint Pro hub (localhost:9235) 
 
 ---
 
-## What's new in v3.2.2 (EVERY IPP PATTERN + WORKING SWITCHES + NO POPUP)
+## What's new in v3.2.3 (EVERY IPP PATTERN + WORKING SWITCHES + NO POPUP)
 
 The three reported v3.2.1 defects are fixed:
 
@@ -35,8 +35,8 @@ The three reported v3.2.1 defects are fixed:
    actions; duplicate buttons removed; the LAN tab shows live IPP URLs
    and the per-platform add-printer guide.
 
-See `docs/RELEASE-NOTES-v3.2.2.md` and
-`docs/AdvPrint-Pro-v3.2.2-A-to-Z-DEV-GUIDE.md`.
+See `docs/RELEASE-NOTES-v3.2.3.md` and
+`docs/AdvPrint-Pro-v3.2.3-A-to-Z-DEV-GUIDE.md`.
 
 ## What was new in v3.2.1 (THE APPROVED UI IS NOW THE PRODUCT)
 
@@ -225,7 +225,7 @@ The ten most-requested features, all in one release:
 - **DropZone + Send portal — printing WITHOUT the extension.** The hub watches a folder: in Word/Excel/ANY app choose *Microsoft Print to PDF* and save into the DropZone — the page prints seconds later (dashboard → DropZone card; `POST /dropzone/open` opens the folder). Phones/tablets/other PCs print through the built-in **Send portal** (`/send`, token-protected, same as every endpoint).
 - **Restart hub** — in the tray menu, AdvPrint Tool [14] and the dashboard button: the hub relaunches itself cleanly (new process waits for the port; queued jobs, settings and history are kept).
 - **Bullet-proof upgrade & uninstall.** The setup now runs `hub-stop.ps1` BEFORE touching files: stops the optional *AdvPrint* service (wait + PID kill), **deletes the service registration** (reinstalled fresh when ticked — upgrades keep it automatically), kills every process under the install folder and frees TCP 9235. Old program folders are wiped, so no stale file can abort an install any more; the uninstaller retries the folder sweep and reports leftovers honestly.
-- **Silent install** `AdvPrint-Pro-Setup-3.2.2.exe /S` — elevation is requested by the exe manifest itself ("auto permission" on any PC), the hub auto-starts after a silent install, and the firewall rule for LAN sharing (TCP 9235) is added automatically (removed on uninstall).
+- **Silent install** `AdvPrint-Pro-Setup-3.2.3.exe /S` — elevation is requested by the exe manifest itself ("auto permission" on any PC), the hub auto-starts after a silent install, and the firewall rule for LAN sharing (TCP 9235) is added automatically (removed on uninstall).
 - **New A + printer logo** — the letter A drawn as a printer: the crossbar is the output slot and a printed page slides out of it. Same mark in the extension, popup, dashboard, tray icon, installer and docs.
 
 Nothing removed: every v2.7.0 feature (history manager, share toggles, live test tool) is unchanged.

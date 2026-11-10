@@ -1,44 +1,52 @@
-/* AdvPrint Pro v3.2.2 - Options page = one-click opener for THE ONE UI.
-   v3.2.0 carried a full standalone options UI here; since v3.2.1 (and fully in v3.2.2) every
-   option lives inside the hub console at http://127.0.0.1:9235 (17 tabs).
-   This page redirects straight to it and only falls back to a token
-   field when the hub is not reachable. */
+/* AdvPrint Pro v3.2.3 - Options page = BRANDING ONLY.
+   Since v3.2.1 (and fully from v3.2.2) EVERY option lives inside the hub
+   console (THE ONE UI) at http://127.0.0.1:9235 - there are no
+   Console/Dashboard/Debug buttons here anymore, just the brand card.
+   The card opens the console: automatically when the hub answers, and on
+   click. A token field appears ONLY when the hub refuses the saved token. */
 const HUB = "http://127.0.0.1:9235";
 
 const st = document.getElementById("st");
 const tokRow = document.getElementById("tokRow");
 
-async function tryHub() {
+async function tryOpen() {
   const tok = (await chrome.storage.local.get({ token: "" })).token;
   try {
     const r = await fetch(HUB + "/health", {
       headers: tok ? { "X-AdvPrint-Token": tok } : {},
     });
     if (r.ok) {
-      st.textContent = "✓ Hub is running — opening THE ONE UI …";
+      st.className = "st";
+      st.textContent = "Hub is running \u2014 opening THE ONE UI console \u2026";
       const url = HUB + "/?token=" + encodeURIComponent(tok || "");
-      setTimeout(() => (location.href = url), 350);
+      setTimeout(() => (location.href = url), 300);
+      return true;
+    }
+    if (r.status === 401) {
+      st.className = "st bad";
+      st.textContent = "Hub needs the token once \u2014 paste it below to continue.";
+      tokRow.style.display = "flex";
       return true;
     }
   } catch (_) { /* hub offline */ }
   return false;
 }
 
-(async () => {
-  if (await tryHub()) return;
+function offline() {
   st.className = "st bad";
   st.innerHTML =
-    "✖ Hub not reachable at " + HUB +
-    " — start <b>AdvPrint Pro</b> (tray icon) first, then click again.";
-  tokRow.style.display = "flex";
-  document.getElementById("go").textContent = "Retry";
+    "Hub not reachable \u2014 start <b>AdvPrint Pro</b> (system tray icon), " +
+    "then click this card again.";
+}
+
+(async () => {
+  if (!(await tryOpen())) offline();
 })();
 
-document.getElementById("go").addEventListener("click", async () => {
-  if (await tryHub()) return;
-  st.className = "st bad";
-  st.innerHTML = "✖ Still offline — start the AdvPrint Pro app (system tray), " +
-    "then click Retry. The console opens in a normal browser tab.";
+document.getElementById("brand").addEventListener("click", async (e) => {
+  if (e.target && (e.target.id === "save" || e.target.id === "tok")) return;
+  if (await tryOpen()) return;
+  offline();
 });
 
 document.getElementById("save").addEventListener("click", async () => {
@@ -46,8 +54,7 @@ document.getElementById("save").addEventListener("click", async () => {
   if (!t) return;
   await chrome.storage.local.set({ token: t });
   st.className = "st";
-  st.textContent = "Token saved — retrying …";
-  if (await tryHub()) return;
-  st.className = "st bad";
-  st.innerHTML = "✖ Token saved, but the hub is still offline. Start the app and Retry.";
+  st.textContent = "Token saved \u2014 opening the console \u2026";
+  tokRow.style.display = "none";
+  if (!(await tryOpen())) offline();
 });

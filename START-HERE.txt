@@ -1,38 +1,42 @@
-AdvPrint Pro (Advanced Printer) v3.2.2 - START HERE
+AdvPrint Pro (Advanced Printer) v3.2.3 - START HERE
 ====================================================
 by Bit Dream IT - Innovative Healthcare Solutions
 
-WHAT IS NEW IN v3.2.2 - EVERY IPP PATTERN + WORKING SWITCHES + NO POPUP
-------------------------------------------------------------------------
-1) THE IPP PRINTER ANSWERS IN EVERY PATTERN. Keep using
-      ipp://<this-pc-ip>:9235/ipp/print        (Windows/macOS/iOS)
-      http://<this-pc-ip>:9235/ipp/print       (Windows "IPP Device")
-   and NEW: the SAME endpoint is mirrored on the STANDARD printer port
-      http://<this-pc-ip>:631/ipp/print        (Android manual add!)
-   Android's Default Print Service / Mopria ignores custom ports when
-   you add a printer by IP - it always tries port 631 first. That was
-   why Android could not connect before. The installer opens TCP 631
-   in the firewall; config.json "ipp_standard_port": 0 turns the
-   mirror off (the hub port always keeps working).
-2) THE PRINTER APPEARS BY ITSELF EVERYWHERE. AirPrint/mDNS discovery
-   (Bonjour _ipp._tcp) no longer requires LAN sharing - IPP printer
-   mode alone starts it AND starts the LAN listener, so the hub shows
-   up by itself in Windows 10/11 "Add device", macOS Bonjour, iOS
-   AirPrint and Android Mopria lists.
-3) EVERY SWITCH IN THE CONSOLE WORKS NOW. v3.2.1 drew the switches
-   but a click did nothing. Click = flip + INSTANT save (Power and
-   Browser switches push to every paired browser; Hub/Settings save
-   to config.json; DropZone saves its delete-after switch).
-4) THE POPUP IS GONE. Clicking the extension toolbar icon opens THE
-   ONE UI console directly (your paired token is applied
-   automatically). The popup was a second, weaker copy of the same
-   console - one UI now. 13 menu items that were demo stubs now run
+WHAT IS NEW IN v3.2.3 - CLEAN UI, ONE BUTTON + SWITCHES VERIFIED + ALLOWED IPS
+------------------------------------------------------------------------------
+1) THE HUB-PANEL SWITCH BUG IS FIXED FOR REAL. The Hub tab posted two
+   keys (escpos_codepage / thermal_text_engine) the hub did not accept,
+   so EVERY Hub switch save failed with 400 and none of them ever
+   persisted. They are accepted + validated now, the Hub panel refreshes
+   from the live config on every poll, and every switch was verified in
+   a real browser: click -> POST /config -> survives a page reload.
+2) ONE UI, ONE BUTTON. The toolbar now has only the four REAL actions
+   (New Job, Pause Queue, Release ALL, Test Page) plus two live status
+   chips (LAN - ON/OFF, IPP - READY/OFF). The ten toolbar buttons that
+   duplicated the sidebar (About, Settings, etc. in several places) are
+   GONE - the sidebar is the only tab switcher. The address-bar pills
+   and the dashboard Quick-actions duplicates are gone too.
+3) NEW: ALLOWED IPS - LAN Sharing > Allowed IPs decides WHO may reach
+   this hub. Default ["*"] = every device on the LAN (as always). Add
+   real entries (10.26.94.100, a subnet 10.26.94.0/24, or 10.26.*) and
+   ONLY those may connect - console, send portal, API, IPP 9235 + the
+   631 mirror and RAW 9100 all refuse anyone else. The hub PC itself
+   (127.0.0.1) is ALWAYS allowed; denials are audited (acl.denied).
+4) THE EXTENSION PAGE IS BRANDING ONLY: the brand card + the footer
+   "100% local - no cloud. AdvPrint by Bit Dream IT - Innovative
+   Healthcare Solutions." - no Console/Dashboard buttons (every option
+   lives in THE ONE UI); the card opens the console automatically.
+5) STILL ALL v3.2.2: BOTH IPP URL styles (ipp:// and http://) on the
+   hub port 9235, mirrored on the STANDARD printer port 631 (Android
+   manual add), AirPrint/mDNS discovery so the printer appears BY ITSELF
+   in Windows 10/11, macOS, iOS and Android lists, and no popup - the
+   toolbar icon opens THE ONE UI directly.
    their real actions, the duplicate "Save & push to browsers"
    buttons are gone, and the LAN tab shows the live IPP URLs with a
    per-platform add-printer guide (Windows 10/11, macOS, iPhone/iPad,
    Android).
 
-WHAT v3.2.1 ALREADY GAVE YOU (unchanged in v3.2.2)
+WHAT v3.2.1 ALREADY GAVE YOU (unchanged in v3.2.3)
 ---------------------------------------------------
 1) Open  http://127.0.0.1:9235  - you get the APPROVED All-in-One
    console (the exact design you signed off): blue IDM-style title

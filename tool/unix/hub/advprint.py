@@ -95,8 +95,8 @@ if _HUB_DIR not in sys.path:
     sys.path.insert(0, _HUB_DIR)
 
 
-VERSION = "3.2.2"
-VERSION_NAME = ("v3.2.2 (EVERY IPP PATTERN + WORKING SWITCHES + NO POPUP - v3.2.2 fixes the three things v3.2.1 got wrong: (1) THE IPP PRINTER IS BACK EVERYWHERE - the standard printer URL ipp://ip:9235/ipp/print AND http://ip:9235/ipp/print both answer on the hub port, and the SAME endpoint is now MIRRORED on the standard printer port 631 (http://ip:631/ipp/print) because Android's Default Print Service / Mopria ignores custom ports on manual add - that was why Android could not connect; (2) AIRPRINT-GRADE DISCOVERY NOW RUNS BY ITSELF whenever IPP printer mode is on - mDNS/Bonjour announce (_ipp._tcp + _universal._sub._ipp._tcp with URF/pdl/rp TXT, one extra service per local printer) is decoupled from LAN sharing, and IPP printer mode now starts the LAN listener itself, so the printer appears BY ITSELF in Windows 10/11 'Add device', macOS Bonjour, iOS AirPrint and Android Mopria; (3) EVERY SWITCH IN THE ONE UI WORKS - v3.2.1 rendered the switches but clicking them only set a hidden dirty flag; now one delegated handler flips the switch and saves instantly (Power/Browser -> ext_prefs -> paired browsers adopt, Hub -> /config, Settings -> /config, DropZone -> drop_delete, rule editor toggles saved with the form); PLUS the extension popup is GONE - clicking the toolbar icon opens THE ONE UI console directly (the popup was a second, weaker copy of the same console), the two duplicate 'Save & push to browsers' buttons and other same-function duplicates are removed, and all 13 menu items that were demo stubs in v3.2.1 now fire their REAL actions (export CSV, clear finished, copy hub URL, firewall, LAN test, restart, rotate token, service install, update check, real test print, quick-start guide, GitHub). LAN tab shows the live IPP URLs + AirPrint/mDNS + standard-port status and the full per-platform add-printer guide (Windows 10/11, macOS, iPhone/iPad, Android). All v3.2.1 features unchanged.)")
+VERSION = "3.2.3"
+VERSION_NAME = ("v3.2.3 (CLEAN UI + EVERY SWITCH VERIFIED + ALLOWED IPS - three upgrades over v3.2.2: (1) THE HUB-PANEL SWITCH BUG IS FIXED - the Hub tab posted escpos_codepage/thermal_text_engine with every switch save, but those two keys were missing from the server's accepted-config-types list, so POST /config answered 400 and NONE of the Hub switches ever saved (hold offline, instant auto-queue, strict header, watermark, audit, keep files looked dead); the two keys are now accepted + validated, the hub panel refreshes from the live config on every 3 s poll, and a first save can no longer write demo placeholder paths into config.json; (2) ONE UI, ONE BUTTON - every control now appears exactly ONCE: the toolbar carries only the four real actions (New Job, Pause Queue, Release ALL, Test Page) plus live LAN/IPP status chips, the ten navigation buttons that duplicated the sidebar (History, LAN Sharing, DropZone, Connections, Hub, Rules, Power, Debug, Settings, About) are GONE, the address bar keeps only the URL + token, the dashboard Quick-actions row of six sidebar duplicates is removed, and the dashboard header / printer-card duplicate Test Page and Open Printers buttons are gone - the sidebar stays the ONLY place that switches tabs; (3) NEW: ALLOWED IPS - LAN Sharing > Allowed IPs decides WHO may reach this hub: factory default [\"*\"] = every device on the LAN (as always); the moment real entries are added (exact IP like 10.26.94.100, a CIDR subnet like 10.26.94.0/24 or a simple wildcard like 10.26.*) ONLY those may connect - the ONE UI console, send portal, hub API, IPP printing on 9235 AND the 631 mirror AND the RAW 9100 port all answer 403 access-denied to anyone else, while the hub PC itself (127.0.0.1) always stays in and denials are audited (acl.denied). PLUS the extension options page is now branding-only (every option lives in THE ONE UI) with the footer '100% local - no cloud. AdvPrint by Bit Dream IT - Innovative Healthcare Solutions.'. All v3.2.2 fixes unchanged: both IPP URL styles (ipp:// and http://.../ipp/print) on 9235 + mirrored on 631, mDNS/AirPrint discovery, working Power/Browser switches, real menu actions, no extension popup.)")
 FULL_BRAND = ("AdvPrint Pro (Advanced Printer) by "
               "Bit Dream IT - Innovative Healthcare Solutions")
 BRANDING = ("AdvPrint Pro (Advanced Printer) - Version %s - by "
@@ -285,6 +285,19 @@ CFG = {
     "ext_prefs": {},                  # v3.2.1 ONE UI Power/Browser switches +
                                       #  default print options, mirrored to
                                       #  every paired browser on its next sync
+    "allowed_ips": ["*"],             # v3.2.3 ALLOWED IPS - who may reach
+                                      #  this hub from the network.
+                                      #  ["*"] = EVERY device on the LAN
+                                      #  (factory default). Once real
+                                      #  entries are added (exact IP like
+                                      #  10.26.94.100, a CIDR like
+                                      #  10.26.94.0/24, or a wildcard like
+                                      #  10.26.*) ONLY those may connect:
+                                      #  console, send portal, API, IPP
+                                      #  9235 + 631 mirror, RAW 9100. The
+                                      #  hub PC itself (127.0.0.1) is
+                                      #  ALWAYS allowed. Edit in THE ONE
+                                      #  UI > LAN Sharing > Allowed IPs.
     "history_days": 30,               # v3.2.1 Settings tab: keep jobs (days)
     "log_level": "info",              # v3.2.1 Settings tab: info|debug|warn|error
 }
@@ -310,7 +323,8 @@ CONFIG_KEYS = ("token", "token_header_only", "allowed_origins",
                                        #  switch writes it back now
                "drop_enabled", "drop_dir", "drop_delete",
                "rules_mirror", "ext_api_sites", "ext_sync_at",
-               "ext_prefs", "history_days", "log_level")
+               "ext_prefs", "history_days", "log_level",
+               "allowed_ips")
 CONFIG_TYPES = {"token_header_only": bool, "allowed_origins": list,
                 "pdf_url_allowed_hosts": list, "max_auth_failures": int,
                 "lockout_minutes": int, "lockout_exempt_loopback": bool,
@@ -336,7 +350,14 @@ CONFIG_TYPES = {"token_header_only": bool, "allowed_origins": list,
                 "history_days": int,   # v3.2.1 Settings tab
                 "log_level": str,      # v3.2.1 Settings tab
                 "printer": str,        # v3.2.0: default printer via /config
-                "keep_files": bool}
+                "keep_files": bool,
+                # v3.2.3: the Hub panel posts these two with every switch
+                # save - they were MISSING here, so every Hub-panel switch
+                # save died with 400 'unknown config key' and none of the
+                # Hub switches ever persisted (THE switch bug the user hit)
+                "escpos_codepage": str,
+                "thermal_text_engine": str,
+                "allowed_ips": list}   # v3.2.3 ALLOWED IPS (LAN Sharing tab)
 
 DEFAULT_TOKEN_WARNING = False   # True while the legacy default token is active
 BOUND_LAN = False               # True once the listener actually bound 0.0.0.0
@@ -1292,6 +1313,56 @@ _HEALTH_LOCK = threading.Lock()
 _HEALTH_THREAD = [None]
 
 
+# ------------------------------------------------------------
+# v3.2.3 ALLOWED IPS - who may reach the hub from the network
+# ------------------------------------------------------------
+_ACL_AUDIT_TS = {}        # ip -> last acl.denied audit write (1 per 10 s)
+
+def ip_allowed_by_list(ip, rules):
+    """True when client IP `ip` matches the allowed_ips rule list
+    (v3.2.3 ALLOWED IPS). Rule entries (string list):
+      "*"              every address (factory default, all-LAN open hub)
+      "10.26.94.100"   exact IPv4 / IPv6 address
+      "10.26.94.0/24"  CIDR network (a whole subnet)
+      "10.26.*"        simple wildcard (matches the dotted text prefix)
+    Matching is lenient by design: an unparsable entry falls back to a
+    plain text comparison against the normalised address, so a typo can
+    only make the hub STRICTER (deny), never silently open it."""
+    rules = rules or ["*"]
+    if "*" in rules:
+        return True
+    if not ip:
+        return False
+    ip = str(ip).strip()
+    if ip.startswith("::ffff:") and "." in ip:
+        ip = ip[len("::ffff:"):]              # IPv4-mapped IPv6 -> plain IPv4
+    ip = ip.split("%")[0]                     # drop an IPv6 zone suffix
+    for raw in rules:
+        rule = str(raw).strip()
+        if not rule:
+            continue
+        if rule == "*":
+            return True
+        if rule.startswith("::ffff:") and "." in rule:
+            rule = rule[len("::ffff:"):]
+        if "/" in rule:                       # CIDR network (10.26.94.0/24)
+            try:
+                import ipaddress as _ipa
+                if _ipa.ip_address(ip) in _ipa.ip_network(rule,
+                                                          strict=False):
+                    return True
+                continue
+            except ValueError:
+                pass                          # bad CIDR -> text compare
+        if "*" in rule:                       # simple wildcard (10.26.*)
+            import fnmatch as _fn
+            if _fn.fnmatchcase(ip, rule):
+                return True
+            continue
+        if rule == ip:                        # exact address
+            return True
+    return False
+
 def build_health_snapshot():
     """Compute the /health body off the request path."""
     have_db = False
@@ -1339,6 +1410,9 @@ def build_health_snapshot():
         "instant_auto_queue": bool(
             CFG.get("instant_auto_queue", True)),
         "share_lan": bool(CFG.get("share_lan")),
+        # v3.2.3 ALLOWED IPS: live state for the LAN tab card
+        "allowed_ips": list(CFG.get("allowed_ips") or ["*"]),
+        "acl_restricted": "*" not in (CFG.get("allowed_ips") or ["*"]),
         "ipp_printer": bool(CFG.get("ipp_printer", True)),
         "ipp_url": ("http://%s:%d/ipp/print" % (lan_ip(), CFG["port"]))
                    if CFG.get("share_lan") else None,
@@ -4296,6 +4370,83 @@ class Handler(BaseHTTPRequestHandler):
         return ip in ("127.0.0.1", "::1", "localhost",
                       "::ffff:127.0.0.1", "::ffff:127.0.0.1%0")
 
+    def _ip_gate(self):
+        """v3.2.3 ALLOWED-IPS gate - runs BEFORE auth on every GET/POST.
+        Loopback (the hub PC itself) always passes; with the factory
+        default allowed_ips ["*"] every LAN device passes as before.
+        The moment the hub owner adds real entries (LAN Sharing >
+        Allowed IPs) the request IP must match one, otherwise the caller
+        gets a branded 403 (HTML for browsers, JSON for API clients) and
+        the denial is audited (max 1 row per 10 s per IP)."""
+        if self._is_loopback():
+            return True
+        rules = CFG.get("allowed_ips") or ["*"]
+        if "*" in rules:
+            return True
+        ip = self._client_ip() or ""
+        if ip_allowed_by_list(ip, rules):
+            return True
+        log("[ACL] %s denied - not in allowed_ips (%s)"
+            % (ip, ",".join(str(r) for r in rules[:6])))
+        now = time.time()
+        if now - _ACL_AUDIT_TS.get(ip, 0) >= 10:
+            _ACL_AUDIT_TS[ip] = now
+            try:
+                db_audit("acl.denied", ip=ip,
+                         details="IP is not on the allowed_ips list")
+            except Exception:
+                pass
+        if "text/html" in (self.headers.get("Accept") or ""):
+            safe_ip = (ip.replace("&", "&amp;").replace("<", "&lt;")
+                         .replace(">", "&gt;").replace('"', "&quot;"))[:100]
+            page = (
+                "<html><head><meta charset=\"utf-8\">"
+                "<title>AdvPrint Pro - access denied</title>"
+                "<style>body{font-family:Segoe UI,system-ui,sans-serif;"
+                "background:#f5f8fc;color:#0f172a;display:flex;"
+                "align-items:center;justify-content:center;min-height:100vh;"
+                "margin:0}.win{max-width:540px;background:#fff;border:1px"
+                " solid #e2e8f0;border-radius:12px;overflow:hidden;"
+                "box-shadow:0 10px 30px rgba(15,23,42,.08)}.bar{background:"
+                "linear-gradient(135deg,#1e3a8a,#1d4ed8);color:#fff;padding:"
+                "14px 18px;font-weight:700;font-size:15px}.b{padding:18px;"
+                "font-size:13.5px;line-height:1.65}code{background:#f1f5f9;"
+                "border:1px solid #e2e8f0;border-radius:5px;padding:1px 5px;"
+                "font-size:12px}footer{padding:10px 18px;border-top:1px"
+                " solid #e2e8f0;color:#64748b;font-size:11.5px}</style>"
+                "</head><body><div class=\"win\">"
+                "<div class=\"bar\">AdvPrint Pro - access denied</div>"
+                "<div class=\"b\"><b>" + safe_ip + "</b> is not on this"
+                " hub's <b>Allowed-IPs</b> list, so the hub refuses the"
+                " connection - the console, the send portal, the API and"
+                " IPP printing included.<br><br>The hub PC's owner can"
+                " allow this device in <b>THE ONE UI &#8594; LAN Sharing"
+                " &#8594; Allowed IPs</b>, or set"
+                " <code>&quot;allowed_ips&quot;: [&quot;*&quot;]</code> in"
+                " config.json to open the hub for the whole LAN again."
+                " (The hub PC itself, 127.0.0.1, is always allowed.)"
+                "</div><footer>100% local &#183; no cloud. AdvPrint by"
+                " Bit Dream IT - Innovative Healthcare Solutions.</footer>"
+                "</div></body></html>").encode("utf-8")
+            try:
+                self.send_response(403)
+                self._cors()
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(page)))
+                self.end_headers()
+                self.wfile.write(page)
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+            return False
+        try:
+            self._send(403, {"ok": False, "error":
+                "access denied - this IP is not on the hub's allowed_ips"
+                " list (the hub owner can add it in THE ONE UI > LAN"
+                " Sharing > Allowed IPs)", "ip": ip})
+        except Exception:
+            pass
+        return False
+
     def _request_site(self):
         o = self.headers.get("Origin") or self.headers.get("Referer") or ""
         return o.strip()[:200] or None
@@ -4571,6 +4722,9 @@ class Handler(BaseHTTPRequestHandler):
             # its Host header (DNS-rebinding protection)
             if not self._host_ok():
                 return self._host_error()
+            # v3.2.3 ALLOWED IPS - the network-level gate (before auth)
+            if not self._ip_gate():
+                return
             return self._do_get_impl()
         except (BrokenPipeError, ConnectionResetError):
             pass                          # client hung up - fine
@@ -4582,6 +4736,9 @@ class Handler(BaseHTTPRequestHandler):
             # v2.9.1 (audit H5 fix): same Host rule for POSTs
             if not self._host_ok():
                 return self._host_error()
+            # v3.2.3 ALLOWED IPS - same gate for mutating calls
+            if not self._ip_gate():
+                return
             return self._do_post_impl()
         except (BrokenPipeError, ConnectionResetError):
             pass
@@ -6159,6 +6316,34 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send(400, {
                         "ok": False,
                         "error": "ip_printer_proto must be 'raw' or 'ipp'"})
+                if key == "allowed_ips":
+                    # v3.2.3 ALLOWED IPS - clean the list. "*" wins, and an
+                    # EMPTY list means all-LAN again (never lock the owner
+                    # out of their own hub from a typo). Entries are short
+                    # strings (IP / CIDR / wildcard).
+                    cleaned = []
+                    for x in (val if isinstance(val, list) else []):
+                        s = str(x).strip()[:64]
+                        if s and s not in cleaned:
+                            cleaned.append(s)
+                    if not cleaned or "*" in cleaned:
+                        cleaned = ["*"]
+                    val = cleaned
+                if key == "thermal_text_engine" and str(val) not in (
+                        "", "auto", "builtin", "browser"):
+                    return self._send(400, {
+                        "ok": False,
+                        "error": "thermal_text_engine must be '', 'auto',"
+                                 " 'builtin' or 'browser'"})
+                if key == "escpos_codepage":
+                    import re as _re
+                    if not _re.match(r"^[a-z0-9_\-]{1,24}$",
+                                     str(val).lower()):
+                        return self._send(400, {
+                            "ok": False,
+                            "error": "escpos_codepage looks wrong"
+                                     " (examples: cp437, cp850, cp866)"})
+                    val = str(val).lower()
                 want = CONFIG_TYPES[key]
                 try:
                     if want is bool:
@@ -7569,55 +7754,26 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
       <span class="m-right"><b>AdvPrint Pro Printing Hub</b> · 10.26.94.206:9235 · token auth ON</span>
     </div>
 
-    <!-- ================= TOOLBAR ================= -->
+    <!-- ================= TOOLBAR =================
+         v3.2.3 ONE UI, ONE BUTTON: only the four REAL actions here -
+         every tab switch lives in the sidebar (the ten nav buttons that
+         duplicated it are gone), LAN/IPP state shows as status chips. -->
     <div class="toolbar">
-      <button class="tbtn primary" data-tab="queue">
+      <button class="tbtn primary" id="tbNew">
         <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></span><span>New Job</span>
       </button>
-      <button class="tbtn" data-tab="printers">
-        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#1e40af" stroke-width="2"><path d="M6 9V3h12v6M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg></span><span>Test Page</span>
+      <button class="tbtn" id="tbPause">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none"><rect x="6" y="5" width="4" height="14" rx="1" fill="#d97706"/><rect x="14" y="5" width="4" height="14" rx="1" fill="#d97706"/></svg></span><span>Pause Queue</span>
       </button>
-      <button class="tbtn" data-tab="queue">
-        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2"><rect x="6" y="5" width="4" height="14" rx="1" fill="#d97706"/><rect x="14" y="5" width="4" height="14" rx="1" fill="#d97706"/></svg></span><span>Pause Queue</span>
-      </button>
-      <button class="tbtn" data-tab="history">
-        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#1e40af" stroke-width="2"><path d="M21 12a9 9 0 11-2.6-6.4"/><path d="M21 3v6h-6"/></svg></span><span>History</span>
-      </button>
-      <button class="tbtn" data-tab="debug">
+      <button class="tbtn" id="tbRelease">
         <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2"><polygon points="7 4 19 12 7 20" fill="#16a34a"/></svg></span><span>Release ALL</span>
       </button>
-      <div class="tsep"></div>
-      <button class="tbtn" data-tab="lan">
-        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#1e40af" stroke-width="2"><path d="M10 14a5 5 0 007.07 0l3.18-3.18a5 5 0 00-7.07-7.07L11.7 5.23"/><path d="M14 10a5 5 0 00-7.07 0L3.75 13.18a5 5 0 007.07 7.07l1.47-1.47"/></svg></span><span>LAN Sharing</span>
-      </button>
-      <button class="tbtn" data-tab="dropzone">
-        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#1e40af" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/><path d="M12 11v6M9 14l3 3 3-3"/></svg></span><span>DropZone</span>
-      </button>
-      <div class="tsep"></div>
-      <button class="tbtn" data-tab="connections">
-        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#1e40af" stroke-width="2"><path d="M10 14a5 5 0 007.07 0l3.18-3.18a5 5 0 00-7.07-7.07L11.7 5.23"/><path d="M14 10a5 5 0 00-7.07 0L3.75 13.18a5 5 0 007.07 7.07l1.47-1.47"/></svg></span><span>Connections</span>
-      </button>
-      <button class="tbtn" data-tab="hub">
-        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#1e40af" stroke-width="2"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 8h.01M7 17h.01"/></svg></span><span>Hub</span>
-      </button>
-      <div class="tsep"></div>
-      <button class="tbtn" data-tab="rules">
-        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#1e40af" stroke-width="2"><path d="M13 3l-2 6H7l4 5-1 7 6-8h4l-3-6h-2l2-4z"/></svg></span><span>Rules</span>
-      </button>
-      <button class="tbtn" data-tab="power">
-        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#1e40af" stroke-width="2"><path d="M13 2L4 14h6l-1 8 9-12h-6z"/></svg></span><span>Power</span>
-      </button>
-      <div class="tsep"></div>
-      <button class="tbtn" data-tab="debug">
-        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#1e40af" stroke-width="2"><circle cx="12" cy="13" r="5"/><path d="M12 8V4M9 9L6 6M15 9l3-3M7 13H3M18 13h3M9 17l-3 3M15 17l3 3"/></svg></span><span>Debug</span>
-      </button>
-      <button class="tbtn" data-tab="settings">
-        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#1e40af" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 00-.1-1.2l2-1.6-2-3.4-2.4 1a7 7 0 00-2-1.2L14 3h-4l-.5 2.6a7 7 0 00-2 1.2l-2.4-1-2 3.4 2 1.6a7 7 0 000 2.4l-2 1.6 2 3.4 2.4-1a7 7 0 002 1.2L10 21h4l.5-2.6a7 7 0 002-1.2l2.4 1 2-3.4-2-1.6c.06-.4.1-.8.1-1.2z"/></svg></span><span>Settings</span>
+      <button class="tbtn" id="tbTest">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#1e40af" stroke-width="2"><path d="M6 9V3h12v6M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg></span><span>Test Page</span>
       </button>
       <div class="tspacer"></div>
-      <button class="tbtn" data-tab="about">
-        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#1e40af" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M12 11v6"/></svg></span><span>About</span>
-      </button>
+      <span class="chip ok" id="chipLan" style="font-size:11.5px">LAN &#8212; ON</span>
+      <span class="chip ok" id="chipIpp" style="font-size:11.5px">IPP &#8212; READY</span>
     </div>
 
     <!-- ================= ADDRESS BAR ================= -->
@@ -7627,11 +7783,8 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
         <span class="url">http://10.26.94.206:9235/ui — AdvPrint Printing Hub · ALL-IN-ONE</span>
         <span class="lock">&#128274; token ok</span>
       </div>
-      <button class="pill-btn" data-qr="hub">&#128241; QR codes</button>
-      <button class="pill-btn" data-tab="lan">&#128241; Send Portal</button>
-      <button class="pill-btn" data-tab="connections">&#128279; Connections</button>
-      <button class="pill-btn" data-tab="dropzone">&#128449; DropZone</button>
-      <button class="pill-btn blue" data-tab="dashboard">&#9635; THE ONE UI</button>
+      <!-- v3.2.3: the five pill buttons are GONE - QRs live in the Network
+           menu + LAN tab, tab navigation lives in the sidebar -->
     </div>
 
     <!-- ================= BODY ================= -->
@@ -7722,7 +7875,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
         <section class="panel active" id="p-dashboard">
           <div class="p-head">
             <h2>Dashboard</h2><span class="sub">AI-Lab · live · every feature in ONE window</span>
-            <div class="right"><button class="btn blue">&#8635; Refresh</button><button class="btn">&#128424; Test Page</button></div>
+            <div class="right"><button class="btn blue">&#8635; Refresh</button></div>
           </div>
 
           <div class="stats">
@@ -7733,17 +7886,9 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
             <div class="stat"><div class="d">hub</div><div class="v">v3.2.1</div><div class="l">Version</div></div>
           </div>
 
-          <div class="card">
-            <div class="card-h">&#9889; Quick actions <span class="r">the most-used shortcuts — v3.2.2: no button appears twice in this console</span></div>
-            <div class="card-b" style="display:flex;gap:8px;flex-wrap:wrap">
-              <button class="btn" data-tab="dropzone">&#128449; Open DropZone</button>
-              <button class="btn" data-tab="queue">&#9776; Open Queue</button>
-              <button class="btn" data-tab="history">&#128218; History &amp; Reprint</button>
-              <button class="btn" data-tab="lan">&#128241; Send portal QR</button>
-              <button class="btn" data-tab="connections">&#128279; Connections</button>
-              <button class="btn" data-tab="hub">&#9881; Hub settings</button>
-            </div>
-          </div>
+          <!-- v3.2.3: the Quick-actions card is GONE - all six of its
+               buttons were sidebar duplicates (Open DropZone, Open Queue,
+               History, Send portal QR, Connections, Hub settings). -->
 
           <div class="dash-row">
             <div class="card">
@@ -7765,10 +7910,6 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
                 <span class="k">Name</span><span class="v">HP Laser 103 107 108</span>
                 <span class="k">Status</span><span class="v"><span class="chip err"><span class="d"></span>OFFLINE</span></span>
                 <span class="k">Hold</span><span class="v">jobs wait while printer is offline <span class="chip info">status hold ON</span></span>
-              </div>
-              <div style="padding:0 14px 13px;display:flex;gap:7px;flex-wrap:wrap">
-                <button class="btn blue">Test Page</button>
-                <button class="btn" data-tab="printers">Open Printers</button>
               </div>
             </div>
           </div>
@@ -7960,7 +8101,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
         <!-- ============ LAN SHARING ============ -->
         <section class="panel" id="p-lan">
           <div class="p-head">
-            <h2>LAN Sharing &amp; Other PCs</h2><span class="sub">v3.2.2 · share this printer over the network · phones print here like a real network printer</span>
+            <h2>LAN Sharing &amp; Other PCs</h2><span class="sub">v3.2.3 · share this printer over the network · phones print here like a real network printer</span>
             <div class="right"><button class="btn">Disable</button><button class="btn blue">Copy URL</button></div>
           </div>
 
@@ -7979,6 +8120,20 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
           </div>
 
           <div class="card">
+            <div class="card-h">&#128274; Allowed IPs &#8212; who may reach this hub <span class="r">v3.2.3 · * = every device on this LAN · once you add IPs, ONLY those may connect</span></div>
+            <div class="card-b">
+              <div class="frow" style="margin-bottom:6px">
+                <span class="chip ok" id="aclMode">ALL LAN (*)</span>
+                <input class="inp mono" id="aclInput" placeholder="add an IP: 10.26.94.100 &#8212; or a subnet: 10.26.94.0/24 &#8212; or 10.26.*" style="flex:1;min-width:260px;font-size:11.5px">
+                <button class="btn small blue" id="aclAdd">Add IP</button>
+                <button class="btn small" id="aclAllowAll">Allow ALL (*)</button>
+              </div>
+              <div id="aclList" style="display:flex;gap:8px;flex-wrap:wrap;min-height:6px"></div>
+              <div class="note">The hub PC itself (<span class="mono">127.0.0.1</span>) can ALWAYS reach the hub. Any device NOT on the list gets <b>403 access denied</b> &#8212; the console, the send portal, the API, IPP printing (9235 + 631) and the RAW 9100 port included. Every denial lands in the Audit trail (<span class="mono">acl.denied</span>).</div>
+            </div>
+          </div>
+
+          <div class="card">
             <div class="card-h">&#128241; Scan &amp; connect <span class="r">live hub QRs — click any code to enlarge · printed also on hub start</span></div>
             <div class="card-b">
               <div class="qr-grid">
@@ -7991,7 +8146,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
           </div>
 
           <div class="card">
-            <div class="card-h">&#128421; Add this PC as a printer — EVERY device, both URL styles <span class="r">v3.2.2 · ipp:// and http:// both work</span></div>
+            <div class="card-h">&#128421; Add this PC as a printer — EVERY device, both URL styles <span class="r">v3.2.3 · ipp:// and http:// both work</span></div>
             <div class="card-b" style="font-size:11.5px;color:var(--ink-2);line-height:1.7">
               <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
                 <span class="mono" id="ippUrlIpp" style="background:#f1f5f9;border:1px solid #e2e8f0;border-radius:4px;padding:2px 8px;color:var(--blue-deep)">ipp://10.26.94.206:9235/ipp/print</span>
@@ -9115,6 +9270,23 @@ function renderFrame(h){
     sb[8].textContent = hubStartTime ? "Uptime " + fmtUptime(hubStartTime) : "Uptime \u2014";
     sb[9].innerHTML = "<b>Printing Hub v" + (h.version || BOOT.version || "?") + "</b> \u00b7 Bit Dream IT";
   }
+  /* v3.2.3: live toolbar status chips (LAN / IPP) + Pause/Resume label */
+  var cLan = $("chipLan");
+  if (cLan) {
+    cLan.textContent = "LAN \u2014 " + (cfgCache.share_lan ? "ON" : "OFF");
+    cLan.className = "chip " + (cfgCache.share_lan ? "ok" : "gray");
+  }
+  var cIpp = $("chipIpp");
+  if (cIpp) {
+    var ippOn = cfgCache.ipp_printer !== false;
+    cIpp.textContent = "IPP \u2014 " + (ippOn ? "READY" : "OFF");
+    cIpp.className = "chip " + (ippOn ? "ok" : "gray");
+  }
+  var tbP = $("tbPause");
+  if (tbP) {
+    var lbl = tbP.querySelector("span:last-child");
+    if (lbl) lbl.textContent = pausedState ? "Resume Queue" : "Pause Queue";
+  }
   /* sidebar counters */
   var pend = lastJobs.filter(function(j){
     return j.status === "queued" || j.status === "printing" || j.status === "held"; }).length;
@@ -9267,7 +9439,89 @@ function renderLanRows(){
       if (key) dis2.textContent = cfgCache[key] === false ? "Enable" : "Disable";
     }
   });
+  renderAcl();
 }
+
+/* ---- v3.2.3 ALLOWED IPS - who may reach this hub ----
+   Default ["*"] = the whole LAN (as always). The moment real entries are
+   added ONLY those may connect: console, send portal, API, IPP 9235 +
+   631 mirror, RAW 9100. 127.0.0.1 (the hub PC) is always allowed - the
+   hub NEVER locks its owner out. */
+function aclListNow(){
+  return (cfgCache.allowed_ips && cfgCache.allowed_ips.length)
+    ? cfgCache.allowed_ips : ["*"];
+}
+function saveAcl(list){
+  if (!list || !list.length) list = ["*"];   /* never lock the owner out */
+  api("/config", { method: "POST", body: { allowed_ips: list } })
+    .then(function(){
+      toast(list.indexOf("*") >= 0
+        ? "Allowed IPs = * \u2014 the whole LAN may reach the hub"
+        : "Allowed IPs saved \u2014 only " + list.length + " entr" +
+          (list.length > 1 ? "ies" : "y") + " may reach the hub", "ok");
+      poll(); })
+    .catch(function(e){ toast(e.message, "err"); });
+}
+function renderAcl(){
+  var mode = $("aclMode");
+  var list = aclListNow();
+  var restricted = list.indexOf("*") < 0;
+  if (mode) {
+    mode.textContent = restricted
+      ? ("RESTRICTED \u2014 " + list.length + " IP" + (list.length > 1 ? "s" : ""))
+      : "ALL LAN (*)";
+    mode.className = "chip " + (restricted ? "warn" : "ok");
+  }
+  var box = $("aclList");
+  if (!box) return;
+  box.innerHTML = "";
+  list.forEach(function(ip){
+    if (ip === "*") {
+      var t = document.createElement("span");
+      t.className = "mono";
+      t.style.cssText = "background:#f1f5f9;border:1px solid #e2e8f0;" +
+        "border-radius:4px;padding:3px 10px;font-size:11.5px;color:var(--blue-deep)";
+      t.textContent = "*  \u2014 every device on this LAN may connect";
+      box.appendChild(t);
+      return;
+    }
+    var chip = document.createElement("span");
+    chip.className = "chip info";
+    chip.style.cssText = "display:inline-flex;align-items:center;gap:6px;" +
+      "padding:3px 6px 3px 10px;font-size:11.5px";
+    var s = document.createElement("span");
+    s.className = "mono"; s.textContent = ip;
+    var x = document.createElement("button");
+    x.textContent = "\u2715"; x.title = "remove " + ip;
+    x.style.cssText = "height:18px;padding:0 7px;font-size:10.5px;" +
+      "background:#fee2e2;border:1px solid #fecaca;color:#b91c1c;" +
+      "border-radius:5px;cursor:pointer";
+    x.onclick = function(){
+      saveAcl(list.filter(function(v){ return v !== ip; })); };
+    chip.appendChild(s); chip.appendChild(x);
+    box.appendChild(chip);
+  });
+}
+(function aclWire(){
+  function addOne(){
+    var inp = $("aclInput"); if (!inp) return;
+    var v = (inp.value || "").trim();
+    if (!v) { toast("Type an IP first \u2014 e.g. 10.26.94.100", "warn"); return; }
+    if (v === "*") { inp.value = ""; saveAcl(["*"]); return; }
+    var cur = aclListNow().filter(function(x){ return x !== "*"; });
+    if (cur.indexOf(v) >= 0) { toast(v + " is already on the list", "warn"); return; }
+    cur.push(v);
+    inp.value = "";
+    saveAcl(cur);
+  }
+  var add = $("aclAdd");
+  if (add) add.onclick = addOne;
+  var all = $("aclAllowAll");
+  if (all) all.onclick = function(){ saveAcl(["*"]); };
+  var inp = $("aclInput");
+  if (inp) inp.addEventListener("keydown", function(e){
+    if (e.key === "Enter") { e.preventDefault(); addOne(); } });
+})();
 function renderRecent(jobs){
   var tbl = document.querySelector("#p-dashboard table.tbl");
   if (!tbl) return;
@@ -10661,8 +10915,13 @@ async function saveHub(){
     patch.escpos_codepage = getSel(sel[1]).toLowerCase();
   }
   var mono = qsa("#p-hub input.inp.mono");
-  if (mono[0]) patch.file_dir = mono[0].value.trim();
-  if (mono[1]) patch.sumatra_path = mono[1].value.trim();
+  /* v3.2.3 SWITCH FIX part 1: file paths are saved only when the user
+     actually changed them - the first switch save can no longer write
+     the static demo placeholder paths into config.json */
+  if (mono[0] && mono[0].value.trim() !== (cfgCache.file_dir || ""))
+    patch.file_dir = mono[0].value.trim();
+  if (mono[1] && mono[1].value.trim() !== (cfgCache.sumatra_path || ""))
+    patch.sumatra_path = mono[1].value.trim();
   try {
     await api("/config", { method: "POST", body: patch });
     /* v3.2.2: saved -> clear the switch dirty flags */
@@ -10974,6 +11233,10 @@ async function poll(){
     renderExt(audit);
     renderSettings(cfgCache);
     renderExtPrefs((cfgCache.ext_prefs || {}));
+    /* v3.2.3 SWITCH FIX part 2: the hub panel now refreshes from the
+       live config on every poll - the inputs no longer keep the static
+       demo values, and a switch save cannot write them into config.json */
+    refreshHubPanel();
     loadDebugPanel();
     renderAbout(h);
   } catch (e) {
@@ -13646,6 +13909,22 @@ def raw_listen_start():
                 conn, addr = srv.accept()
             except OSError:
                 break
+            # v3.2.3 ALLOWED IPS - the RAW 9100 port honours the same
+            # list: a blocked IP gets an instant close, no print channel
+            peer = addr[0] if isinstance(addr, tuple) else "?"
+            if "*" not in (CFG.get("allowed_ips") or ["*"]) and \
+                    not ip_allowed_by_list(peer, CFG.get("allowed_ips")):
+                log("[ACL] %s denied on the RAW 9100 port" % peer)
+                try:
+                    db_audit("acl.denied", ip=peer,
+                             details="RAW 9100: IP not on allowed_ips list")
+                except Exception:
+                    pass
+                try:
+                    conn.close()
+                except OSError:
+                    pass
+                continue
             # v2.9.1 (audit M5 fix): bounded concurrency - extra
             # connections are closed immediately with a log line
             if not _RAW_SEM.acquire(blocking=False):
@@ -13809,6 +14088,11 @@ class IPP631Handler(BaseHTTPRequestHandler):
         except Exception:
             return "?"
 
+    def _is_loopback(self):
+        return self._client_ip() in (
+            "127.0.0.1", "::1", "localhost",
+            "::ffff:127.0.0.1", "::ffff:127.0.0.1%0")
+
     def _landing(self):
         try:
             page = ipp_landing_html().encode("utf-8")
@@ -13840,6 +14124,15 @@ class IPP631Handler(BaseHTTPRequestHandler):
             pass
 
     def do_GET(self):
+        # v3.2.3 ALLOWED IPS - the 631 mirror honours the same list
+        if not self._is_loopback() and "*" not in (
+                CFG.get("allowed_ips") or ["*"]) and not ip_allowed_by_list(
+                self._client_ip() or "", CFG.get("allowed_ips")):
+            log("[ACL] %s denied on the 631 IPP mirror" % self._client_ip())
+            return self._send_json(403, {
+                "ok": False,
+                "error": "access denied - this IP is not on the hub's"
+                         " allowed_ips list"})
         u = urlparse(self.path)
         route = u.path.rstrip("/")
         if route in ("/ipp/print", "/ipp", "/ipp/") and \
@@ -13853,6 +14146,21 @@ class IPP631Handler(BaseHTTPRequestHandler):
         self._redirect("http://%s:%d%s" % (ip, port, self.path))
 
     def do_POST(self):
+        # v3.2.3 ALLOWED IPS - same rule for print jobs on 631
+        if not self._is_loopback() and "*" not in (
+                CFG.get("allowed_ips") or ["*"]) and not ip_allowed_by_list(
+                self._client_ip() or "", CFG.get("allowed_ips")):
+            log("[ACL] %s denied POST on the 631 IPP mirror"
+                % self._client_ip())
+            try:
+                db_audit("acl.denied", ip=self._client_ip(),
+                         details="631 mirror: IP not on allowed_ips list")
+            except Exception:
+                pass
+            return self._send_json(403, {
+                "ok": False,
+                "error": "access denied - this IP is not on the hub's"
+                         " allowed_ips list"})
         u = urlparse(self.path)
         route = u.path.rstrip("/")
         ipp_q_printer = ""

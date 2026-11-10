@@ -1,6 +1,76 @@
 # Changelog - AdvPrint Pro (Advanced Printer)
 by Bit Dream IT - Innovative Healthcare Solutions
 
+## v3.2.3 - CLEAN UI, ONE BUTTON + EVERY SWITCH VERIFIED + ALLOWED IPS (2026-11-10)
+
+Base: v3.2.2 - every feature unchanged. Three upgrades requested after
+the v3.2.2 rollout, plus one REAL switch bug the live test caught.
+
+### 1. FIXED FOR REAL: the Hub-tab switches never saved (user: "any togol not work")
+- Root cause found by clicking every switch against a live hub: the Hub
+  panel posts `escpos_codepage` + `thermal_text_engine` with every
+  switch save, but those two keys were missing from the hub's accepted
+  config-type list - POST /config answered 400 "unknown config key" and
+  NONE of the Hub switches persisted (hold offline, instant auto-queue,
+  strict header, watermark, reason required, audit, keep files).
+- The two keys are now accepted + validated server-side.
+- The Hub panel also refreshes from the live config on every 3 s poll
+  (it only refreshed when you opened the tab), so inputs can no longer
+  carry stale demo values into a save.
+- A first switch save can no longer write the static demo paths
+  (C:\Users\Admin\Documents\Reports ...) into config.json - file paths
+  are only saved when the user actually changed them.
+- Verified end-to-end with a browser test: Power, Browser, Hub,
+  Settings and DropZone switches are clicked, the POST body is
+  captured, /config is re-read server-side, and the page is reloaded -
+  every switch keeps its state after reload.
+
+### 2. ONE UI, ONE BUTTON - no control appears twice anymore
+- The toolbar now carries ONLY the four real actions: New Job,
+  Pause Queue (label flips to Resume), Release ALL, Test Page - plus
+  two live status chips (LAN - ON/OFF, IPP - READY/OFF).
+- The ten toolbar buttons that duplicated the sidebar (History, LAN
+  Sharing, DropZone, Connections, Hub, Rules, Power, Debug, Settings,
+  About) are GONE. About/Settings etc. exist exactly once - in the
+  sidebar - plus inside the (hidden) menus for keyboard users.
+- The address bar lost its five pill buttons (QR codes / Send Portal /
+  Connections / DropZone / THE ONE UI); QRs stay in the Network menu
+  and the LAN tab.
+- The dashboard Quick-actions card (six sidebar duplicates) and the
+  dashboard header / printer-card duplicate Test Page + Open Printers
+  buttons are removed. The sidebar is the ONLY tab switcher.
+
+### 3. NEW: ALLOWED IPS - decide WHO may reach this hub
+- LAN Sharing > Allowed IPs: factory default ["*"] = every device on
+  the LAN (exactly as before). The moment you add real entries, ONLY
+  those may connect:
+  - exact IP: 10.26.94.100
+  - CIDR subnet: 10.26.94.0/24
+  - simple wildcard: 10.26.*
+- Enforcement is total: the ONE UI console, the send portal, the hub
+  API, IPP printing on 9235, the 631 standard-port mirror AND the RAW
+  9100 port all answer 403 access-denied to anyone else; the RAW port
+  closes the connection instantly. The hub PC itself (127.0.0.1) is
+  ALWAYS allowed - the owner can never lock themselves out. Denials
+  are audited (acl.denied) and the blocked page is branded with the
+  usual footer.
+- The card shows the mode (ALL LAN vs RESTRICTED - N IPs), the live
+  list with one-click remove, Add IP + Allow ALL (*) buttons, and an
+  Enter-to-add input. /health now reports allowed_ips + acl_restricted.
+
+### 4. Extension options page = branding only
+- The options page shows just the brand card and the footer
+  "100% local - no cloud. AdvPrint by Bit Dream IT - Innovative
+  Healthcare Solutions." - no Console/Dashboard/Debug buttons (every
+  option lives in THE ONE UI). It auto-opens the console when the hub
+  answers, or on click; a token field appears only if the hub refuses
+  the saved token. The toolbar-icon click keeps opening the console
+  directly (no popup).
+
+All v3.2.2 fixes unchanged: both IPP URL styles on 9235 + the 631
+mirror, mDNS/AirPrint discovery for Windows/macOS/iOS/Android, working
+Power/Browser switches, real menu actions, no popup.
+
 ## v3.2.2 - EVERY IPP PATTERN + WORKING SWITCHES + NO POPUP (2026-11-10)
 
 Base: v3.2.1 - every feature unchanged. This release fixes the three

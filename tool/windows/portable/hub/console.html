@@ -500,55 +500,26 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
       <span class="m-right"><b>AdvPrint Pro Printing Hub</b> · 10.26.94.206:9235 · token auth ON</span>
     </div>
 
-    <!-- ================= TOOLBAR ================= -->
+    <!-- ================= TOOLBAR =================
+         v3.2.3 ONE UI, ONE BUTTON: only the four REAL actions here -
+         every tab switch lives in the sidebar (the ten nav buttons that
+         duplicated it are gone), LAN/IPP state shows as status chips. -->
     <div class="toolbar">
-      <button class="tbtn primary" data-tab="queue">
+      <button class="tbtn primary" id="tbNew">
         <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></span><span>New Job</span>
       </button>
-      <button class="tbtn" data-tab="printers">
-        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#1e40af" stroke-width="2"><path d="M6 9V3h12v6M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg></span><span>Test Page</span>
+      <button class="tbtn" id="tbPause">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none"><rect x="6" y="5" width="4" height="14" rx="1" fill="#d97706"/><rect x="14" y="5" width="4" height="14" rx="1" fill="#d97706"/></svg></span><span>Pause Queue</span>
       </button>
-      <button class="tbtn" data-tab="queue">
-        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2"><rect x="6" y="5" width="4" height="14" rx="1" fill="#d97706"/><rect x="14" y="5" width="4" height="14" rx="1" fill="#d97706"/></svg></span><span>Pause Queue</span>
-      </button>
-      <button class="tbtn" data-tab="history">
-        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#1e40af" stroke-width="2"><path d="M21 12a9 9 0 11-2.6-6.4"/><path d="M21 3v6h-6"/></svg></span><span>History</span>
-      </button>
-      <button class="tbtn" data-tab="debug">
+      <button class="tbtn" id="tbRelease">
         <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2"><polygon points="7 4 19 12 7 20" fill="#16a34a"/></svg></span><span>Release ALL</span>
       </button>
-      <div class="tsep"></div>
-      <button class="tbtn" data-tab="lan">
-        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#1e40af" stroke-width="2"><path d="M10 14a5 5 0 007.07 0l3.18-3.18a5 5 0 00-7.07-7.07L11.7 5.23"/><path d="M14 10a5 5 0 00-7.07 0L3.75 13.18a5 5 0 007.07 7.07l1.47-1.47"/></svg></span><span>LAN Sharing</span>
-      </button>
-      <button class="tbtn" data-tab="dropzone">
-        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#1e40af" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/><path d="M12 11v6M9 14l3 3 3-3"/></svg></span><span>DropZone</span>
-      </button>
-      <div class="tsep"></div>
-      <button class="tbtn" data-tab="connections">
-        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#1e40af" stroke-width="2"><path d="M10 14a5 5 0 007.07 0l3.18-3.18a5 5 0 00-7.07-7.07L11.7 5.23"/><path d="M14 10a5 5 0 00-7.07 0L3.75 13.18a5 5 0 007.07 7.07l1.47-1.47"/></svg></span><span>Connections</span>
-      </button>
-      <button class="tbtn" data-tab="hub">
-        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#1e40af" stroke-width="2"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 8h.01M7 17h.01"/></svg></span><span>Hub</span>
-      </button>
-      <div class="tsep"></div>
-      <button class="tbtn" data-tab="rules">
-        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#1e40af" stroke-width="2"><path d="M13 3l-2 6H7l4 5-1 7 6-8h4l-3-6h-2l2-4z"/></svg></span><span>Rules</span>
-      </button>
-      <button class="tbtn" data-tab="power">
-        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#1e40af" stroke-width="2"><path d="M13 2L4 14h6l-1 8 9-12h-6z"/></svg></span><span>Power</span>
-      </button>
-      <div class="tsep"></div>
-      <button class="tbtn" data-tab="debug">
-        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#1e40af" stroke-width="2"><circle cx="12" cy="13" r="5"/><path d="M12 8V4M9 9L6 6M15 9l3-3M7 13H3M18 13h3M9 17l-3 3M15 17l3 3"/></svg></span><span>Debug</span>
-      </button>
-      <button class="tbtn" data-tab="settings">
-        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#1e40af" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 00-.1-1.2l2-1.6-2-3.4-2.4 1a7 7 0 00-2-1.2L14 3h-4l-.5 2.6a7 7 0 00-2 1.2l-2.4-1-2 3.4 2 1.6a7 7 0 000 2.4l-2 1.6 2 3.4 2.4-1a7 7 0 002 1.2L10 21h4l.5-2.6a7 7 0 002-1.2l2.4 1 2-3.4-2-1.6c.06-.4.1-.8.1-1.2z"/></svg></span><span>Settings</span>
+      <button class="tbtn" id="tbTest">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#1e40af" stroke-width="2"><path d="M6 9V3h12v6M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg></span><span>Test Page</span>
       </button>
       <div class="tspacer"></div>
-      <button class="tbtn" data-tab="about">
-        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#1e40af" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M12 11v6"/></svg></span><span>About</span>
-      </button>
+      <span class="chip ok" id="chipLan" style="font-size:11.5px">LAN &#8212; ON</span>
+      <span class="chip ok" id="chipIpp" style="font-size:11.5px">IPP &#8212; READY</span>
     </div>
 
     <!-- ================= ADDRESS BAR ================= -->
@@ -558,11 +529,8 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
         <span class="url">http://10.26.94.206:9235/ui — AdvPrint Printing Hub · ALL-IN-ONE</span>
         <span class="lock">&#128274; token ok</span>
       </div>
-      <button class="pill-btn" data-qr="hub">&#128241; QR codes</button>
-      <button class="pill-btn" data-tab="lan">&#128241; Send Portal</button>
-      <button class="pill-btn" data-tab="connections">&#128279; Connections</button>
-      <button class="pill-btn" data-tab="dropzone">&#128449; DropZone</button>
-      <button class="pill-btn blue" data-tab="dashboard">&#9635; THE ONE UI</button>
+      <!-- v3.2.3: the five pill buttons are GONE - QRs live in the Network
+           menu + LAN tab, tab navigation lives in the sidebar -->
     </div>
 
     <!-- ================= BODY ================= -->
@@ -653,7 +621,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
         <section class="panel active" id="p-dashboard">
           <div class="p-head">
             <h2>Dashboard</h2><span class="sub">AI-Lab · live · every feature in ONE window</span>
-            <div class="right"><button class="btn blue">&#8635; Refresh</button><button class="btn">&#128424; Test Page</button></div>
+            <div class="right"><button class="btn blue">&#8635; Refresh</button></div>
           </div>
 
           <div class="stats">
@@ -664,17 +632,9 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
             <div class="stat"><div class="d">hub</div><div class="v">v3.2.1</div><div class="l">Version</div></div>
           </div>
 
-          <div class="card">
-            <div class="card-h">&#9889; Quick actions <span class="r">the most-used shortcuts — v3.2.2: no button appears twice in this console</span></div>
-            <div class="card-b" style="display:flex;gap:8px;flex-wrap:wrap">
-              <button class="btn" data-tab="dropzone">&#128449; Open DropZone</button>
-              <button class="btn" data-tab="queue">&#9776; Open Queue</button>
-              <button class="btn" data-tab="history">&#128218; History &amp; Reprint</button>
-              <button class="btn" data-tab="lan">&#128241; Send portal QR</button>
-              <button class="btn" data-tab="connections">&#128279; Connections</button>
-              <button class="btn" data-tab="hub">&#9881; Hub settings</button>
-            </div>
-          </div>
+          <!-- v3.2.3: the Quick-actions card is GONE - all six of its
+               buttons were sidebar duplicates (Open DropZone, Open Queue,
+               History, Send portal QR, Connections, Hub settings). -->
 
           <div class="dash-row">
             <div class="card">
@@ -696,10 +656,6 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
                 <span class="k">Name</span><span class="v">HP Laser 103 107 108</span>
                 <span class="k">Status</span><span class="v"><span class="chip err"><span class="d"></span>OFFLINE</span></span>
                 <span class="k">Hold</span><span class="v">jobs wait while printer is offline <span class="chip info">status hold ON</span></span>
-              </div>
-              <div style="padding:0 14px 13px;display:flex;gap:7px;flex-wrap:wrap">
-                <button class="btn blue">Test Page</button>
-                <button class="btn" data-tab="printers">Open Printers</button>
               </div>
             </div>
           </div>
@@ -891,7 +847,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
         <!-- ============ LAN SHARING ============ -->
         <section class="panel" id="p-lan">
           <div class="p-head">
-            <h2>LAN Sharing &amp; Other PCs</h2><span class="sub">v3.2.2 · share this printer over the network · phones print here like a real network printer</span>
+            <h2>LAN Sharing &amp; Other PCs</h2><span class="sub">v3.2.3 · share this printer over the network · phones print here like a real network printer</span>
             <div class="right"><button class="btn">Disable</button><button class="btn blue">Copy URL</button></div>
           </div>
 
@@ -910,6 +866,20 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
           </div>
 
           <div class="card">
+            <div class="card-h">&#128274; Allowed IPs &#8212; who may reach this hub <span class="r">v3.2.3 · * = every device on this LAN · once you add IPs, ONLY those may connect</span></div>
+            <div class="card-b">
+              <div class="frow" style="margin-bottom:6px">
+                <span class="chip ok" id="aclMode">ALL LAN (*)</span>
+                <input class="inp mono" id="aclInput" placeholder="add an IP: 10.26.94.100 &#8212; or a subnet: 10.26.94.0/24 &#8212; or 10.26.*" style="flex:1;min-width:260px;font-size:11.5px">
+                <button class="btn small blue" id="aclAdd">Add IP</button>
+                <button class="btn small" id="aclAllowAll">Allow ALL (*)</button>
+              </div>
+              <div id="aclList" style="display:flex;gap:8px;flex-wrap:wrap;min-height:6px"></div>
+              <div class="note">The hub PC itself (<span class="mono">127.0.0.1</span>) can ALWAYS reach the hub. Any device NOT on the list gets <b>403 access denied</b> &#8212; the console, the send portal, the API, IPP printing (9235 + 631) and the RAW 9100 port included. Every denial lands in the Audit trail (<span class="mono">acl.denied</span>).</div>
+            </div>
+          </div>
+
+          <div class="card">
             <div class="card-h">&#128241; Scan &amp; connect <span class="r">live hub QRs — click any code to enlarge · printed also on hub start</span></div>
             <div class="card-b">
               <div class="qr-grid">
@@ -922,7 +892,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
           </div>
 
           <div class="card">
-            <div class="card-h">&#128421; Add this PC as a printer — EVERY device, both URL styles <span class="r">v3.2.2 · ipp:// and http:// both work</span></div>
+            <div class="card-h">&#128421; Add this PC as a printer — EVERY device, both URL styles <span class="r">v3.2.3 · ipp:// and http:// both work</span></div>
             <div class="card-b" style="font-size:11.5px;color:var(--ink-2);line-height:1.7">
               <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
                 <span class="mono" id="ippUrlIpp" style="background:#f1f5f9;border:1px solid #e2e8f0;border-radius:4px;padding:2px 8px;color:var(--blue-deep)">ipp://10.26.94.206:9235/ipp/print</span>
@@ -2046,6 +2016,23 @@ function renderFrame(h){
     sb[8].textContent = hubStartTime ? "Uptime " + fmtUptime(hubStartTime) : "Uptime \u2014";
     sb[9].innerHTML = "<b>Printing Hub v" + (h.version || BOOT.version || "?") + "</b> \u00b7 Bit Dream IT";
   }
+  /* v3.2.3: live toolbar status chips (LAN / IPP) + Pause/Resume label */
+  var cLan = $("chipLan");
+  if (cLan) {
+    cLan.textContent = "LAN \u2014 " + (cfgCache.share_lan ? "ON" : "OFF");
+    cLan.className = "chip " + (cfgCache.share_lan ? "ok" : "gray");
+  }
+  var cIpp = $("chipIpp");
+  if (cIpp) {
+    var ippOn = cfgCache.ipp_printer !== false;
+    cIpp.textContent = "IPP \u2014 " + (ippOn ? "READY" : "OFF");
+    cIpp.className = "chip " + (ippOn ? "ok" : "gray");
+  }
+  var tbP = $("tbPause");
+  if (tbP) {
+    var lbl = tbP.querySelector("span:last-child");
+    if (lbl) lbl.textContent = pausedState ? "Resume Queue" : "Pause Queue";
+  }
   /* sidebar counters */
   var pend = lastJobs.filter(function(j){
     return j.status === "queued" || j.status === "printing" || j.status === "held"; }).length;
@@ -2198,7 +2185,89 @@ function renderLanRows(){
       if (key) dis2.textContent = cfgCache[key] === false ? "Enable" : "Disable";
     }
   });
+  renderAcl();
 }
+
+/* ---- v3.2.3 ALLOWED IPS - who may reach this hub ----
+   Default ["*"] = the whole LAN (as always). The moment real entries are
+   added ONLY those may connect: console, send portal, API, IPP 9235 +
+   631 mirror, RAW 9100. 127.0.0.1 (the hub PC) is always allowed - the
+   hub NEVER locks its owner out. */
+function aclListNow(){
+  return (cfgCache.allowed_ips && cfgCache.allowed_ips.length)
+    ? cfgCache.allowed_ips : ["*"];
+}
+function saveAcl(list){
+  if (!list || !list.length) list = ["*"];   /* never lock the owner out */
+  api("/config", { method: "POST", body: { allowed_ips: list } })
+    .then(function(){
+      toast(list.indexOf("*") >= 0
+        ? "Allowed IPs = * \u2014 the whole LAN may reach the hub"
+        : "Allowed IPs saved \u2014 only " + list.length + " entr" +
+          (list.length > 1 ? "ies" : "y") + " may reach the hub", "ok");
+      poll(); })
+    .catch(function(e){ toast(e.message, "err"); });
+}
+function renderAcl(){
+  var mode = $("aclMode");
+  var list = aclListNow();
+  var restricted = list.indexOf("*") < 0;
+  if (mode) {
+    mode.textContent = restricted
+      ? ("RESTRICTED \u2014 " + list.length + " IP" + (list.length > 1 ? "s" : ""))
+      : "ALL LAN (*)";
+    mode.className = "chip " + (restricted ? "warn" : "ok");
+  }
+  var box = $("aclList");
+  if (!box) return;
+  box.innerHTML = "";
+  list.forEach(function(ip){
+    if (ip === "*") {
+      var t = document.createElement("span");
+      t.className = "mono";
+      t.style.cssText = "background:#f1f5f9;border:1px solid #e2e8f0;" +
+        "border-radius:4px;padding:3px 10px;font-size:11.5px;color:var(--blue-deep)";
+      t.textContent = "*  \u2014 every device on this LAN may connect";
+      box.appendChild(t);
+      return;
+    }
+    var chip = document.createElement("span");
+    chip.className = "chip info";
+    chip.style.cssText = "display:inline-flex;align-items:center;gap:6px;" +
+      "padding:3px 6px 3px 10px;font-size:11.5px";
+    var s = document.createElement("span");
+    s.className = "mono"; s.textContent = ip;
+    var x = document.createElement("button");
+    x.textContent = "\u2715"; x.title = "remove " + ip;
+    x.style.cssText = "height:18px;padding:0 7px;font-size:10.5px;" +
+      "background:#fee2e2;border:1px solid #fecaca;color:#b91c1c;" +
+      "border-radius:5px;cursor:pointer";
+    x.onclick = function(){
+      saveAcl(list.filter(function(v){ return v !== ip; })); };
+    chip.appendChild(s); chip.appendChild(x);
+    box.appendChild(chip);
+  });
+}
+(function aclWire(){
+  function addOne(){
+    var inp = $("aclInput"); if (!inp) return;
+    var v = (inp.value || "").trim();
+    if (!v) { toast("Type an IP first \u2014 e.g. 10.26.94.100", "warn"); return; }
+    if (v === "*") { inp.value = ""; saveAcl(["*"]); return; }
+    var cur = aclListNow().filter(function(x){ return x !== "*"; });
+    if (cur.indexOf(v) >= 0) { toast(v + " is already on the list", "warn"); return; }
+    cur.push(v);
+    inp.value = "";
+    saveAcl(cur);
+  }
+  var add = $("aclAdd");
+  if (add) add.onclick = addOne;
+  var all = $("aclAllowAll");
+  if (all) all.onclick = function(){ saveAcl(["*"]); };
+  var inp = $("aclInput");
+  if (inp) inp.addEventListener("keydown", function(e){
+    if (e.key === "Enter") { e.preventDefault(); addOne(); } });
+})();
 function renderRecent(jobs){
   var tbl = document.querySelector("#p-dashboard table.tbl");
   if (!tbl) return;
@@ -3592,8 +3661,13 @@ async function saveHub(){
     patch.escpos_codepage = getSel(sel[1]).toLowerCase();
   }
   var mono = qsa("#p-hub input.inp.mono");
-  if (mono[0]) patch.file_dir = mono[0].value.trim();
-  if (mono[1]) patch.sumatra_path = mono[1].value.trim();
+  /* v3.2.3 SWITCH FIX part 1: file paths are saved only when the user
+     actually changed them - the first switch save can no longer write
+     the static demo placeholder paths into config.json */
+  if (mono[0] && mono[0].value.trim() !== (cfgCache.file_dir || ""))
+    patch.file_dir = mono[0].value.trim();
+  if (mono[1] && mono[1].value.trim() !== (cfgCache.sumatra_path || ""))
+    patch.sumatra_path = mono[1].value.trim();
   try {
     await api("/config", { method: "POST", body: patch });
     /* v3.2.2: saved -> clear the switch dirty flags */
@@ -3905,6 +3979,10 @@ async function poll(){
     renderExt(audit);
     renderSettings(cfgCache);
     renderExtPrefs((cfgCache.ext_prefs || {}));
+    /* v3.2.3 SWITCH FIX part 2: the hub panel now refreshes from the
+       live config on every poll - the inputs no longer keep the static
+       demo values, and a switch save cannot write them into config.json */
+    refreshHubPanel();
     loadDebugPanel();
     renderAbout(h);
   } catch (e) {
