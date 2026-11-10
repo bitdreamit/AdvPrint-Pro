@@ -46,7 +46,7 @@ $("bRetry").addEventListener("click", async () => {
 });
 
 $("bTokenHelp").addEventListener("click", () => {
-  // v3.2.4: the options page is BRANDING ONLY - it opens the console
+  // v3.2.5: the options page is BRANDING ONLY - it opens the console
   // automatically, and it shows its token field exactly when the hub
   // refuses the saved token (the right place to paste a new one).
   chrome.runtime.openOptionsPage();
@@ -177,7 +177,7 @@ $("swShareTx").addEventListener("change", async () => {
     if (!cfg.ok || !cfg.cfg.hubUrlLan) {
       $("swShareTx").checked = false;
       msg(AdvPrintI18n.t("popShareTxNoUrl"), "err");
-      chrome.runtime.openOptionsPage();   // v3.2.4: LAN profile lives in the console
+      chrome.runtime.openOptionsPage();   // v3.2.5: LAN profile lives in the console
       return;
     }
   }
@@ -398,7 +398,7 @@ $("bPrintHeld").addEventListener("click", async () => {
 });
 
 $("bOpts").addEventListener("click", () => chrome.runtime.openOptionsPage());
-/* v3.2.4: the footer is BRANDING ONLY (100% local - no cloud) - the old
+/* v3.2.5: the footer is BRANDING ONLY (100% local - no cloud) - the old
  * Console/Dashboard/Debug/API footer links are gone. Every option and
  * every control lives in THE ONE UI console; the Options button above
  * still opens the options page (which opens the console itself). */

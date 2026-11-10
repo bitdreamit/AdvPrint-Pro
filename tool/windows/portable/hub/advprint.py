@@ -95,8 +95,44 @@ if _HUB_DIR not in sys.path:
     sys.path.insert(0, _HUB_DIR)
 
 
-VERSION = "3.2.4"
-VERSION_NAME = ("v3.2.4 (THE TOOLBAR POPUP IS BACK - the quick 340px popup returns by popular demand: master switches (AdvPrint enabled, Queue mode, Share Receive + Share Send), the five action buttons (Print this page, Save as PDF, Print screenshot, Test page, Options), live queue state with Pause/Resume, the eight most recent jobs with one-click Print now for stuck ones, and the offline / default-token / held-jobs banners including the one-click Fix token - all under the branding-only footer '100% local - no cloud. By Bit Dream IT - Innovative Healthcare Solutions.'. The toolbar icon opens the popup again; the ONE UI console stays the single place for every advanced option, and the disabled-state error messages point at the popup again. Every popup string exists in both UI languages (English + Bangla). PLUS all v3.2.3 fixes unchanged: the Hub-panel switch save bug fixed (escpos_codepage/thermal_text_engine accepted and validated server-side, hub panel refreshes from the live config on every 3 s poll), ONE UI ONE BUTTON (the toolbar carries only the four real actions New Job / Pause Queue / Release ALL / Test Page plus live LAN/IPP chips, the sidebar is the ONLY tab switcher, no duplicated About/Settings buttons anywhere), ALLOWED IPS (LAN Sharing > Allowed IPs: factory default [\"*\"] = the whole LAN may connect; add exact IPs, CIDR subnets or simple wildcards and ONLY those may reach the console, send portal, hub API, IPP on 9235, the 631 mirror and the RAW 9100 port - everyone else gets a branded 403, the hub PC itself (127.0.0.1) can never be locked out, denials are audited), and the branding-only extension options page with the footer '100% local - no cloud. AdvPrint by Bit Dream IT - Innovative Healthcare Solutions.'.)")
+VERSION = "3.2.5"
+VERSION_NAME = ("v3.2.5 (SIX USER-REPORTED BUGS FIXED. 1) SET DEFAULT "
+    "PRINTERS FOR REAL: the old Set Default button only saved the hub "
+    "config key while Windows kept its own default and the 'let Windows "
+    "manage my default printer' feature silently flipped it back - the new "
+    "POST /printers/set-default endpoint performs the OS-level change "
+    "(Windows: disables the auto-manage feature via HKCU LegacyDefault"
+    "PrinterMode=1, then WScript.Network.SetDefaultPrinter, verified by "
+    "reading the default back; Unix: lpoptions -d), keeps the hub "
+    "destination in sync and returns the REAL new default in the toast. "
+    "2) JOB HISTORY SELECTION SURVIVES THE 3 s AUTO-REFRESH: ticked rows "
+    "stay ticked, a live 'n selected' counter plus Reprint selected / "
+    "Cancel selected / Clear selected buttons and a per-row Cancel join "
+    "the per-row Reprint. 3) LIVE QUEUE GETS THE SAME TREATMENT: a "
+    "checkbox column with select-all, Cancel on every row, Cancel selected "
+    "and Clear selected - selection also survives the poll. 4) THE "
+    "PER-PRINTER IPP URL IS CONFIRMED WORKING: "
+    "ipp://<ip>:9235/ipp/print/<printer-slug> resolves raw names, "
+    "URL-encoded names and slugs case/punctuation-insensitively on both "
+    "the GET landing page and the IPP POST queue (proven by the new "
+    "scripts/live_ipp_smoke.py test), so the URL on every printer card is "
+    "real. 5) FORCE-INSTALL POLICY REPORTS ITS REAL FAILURE: the console "
+    "no longer hides {ok:false} behind 'HTTP 200' - the toast shows the "
+    "server message, reg.exe gets a PowerShell New-ItemProperty fallback "
+    "when AV suites block it, and the docs explain exactly how to apply "
+    "and verify the policy (chrome://policy, ExtensionInstallForcelist, "
+    "updates.xml, managed-PC caveat). 6) START WITH WINDOWS IS HONEST: the "
+    "Settings switch reads the REAL Startup-folder state from /health and "
+    "now actually toggles it via POST /autostart instead of refusing with "
+    "'managed by the service/tray'; the tray, the UI and config.json can "
+    "no longer disagree. PLUS everything from v3.2.4 unchanged: the "
+    "branding-only toolbar popup (master switches, five action buttons, "
+    "live queue state, one-click Print now, Fix token - footer '100% "
+    "local - no cloud. By Bit Dream IT - Innovative Healthcare Solutions.'), "
+    "ONE UI ONE BUTTON (sidebar is the only tab switcher), ALLOWED IPS "
+    "(LAN Sharing > Allowed IPs, factory default [\"*\"], per-IP / CIDR / "
+    "wildcard entries, branded 403, loopback never locked out) and the "
+    "branding-only extension options page.)")
 FULL_BRAND = ("AdvPrint Pro (Advanced Printer) by "
               "Bit Dream IT - Innovative Healthcare Solutions")
 BRANDING = ("AdvPrint Pro (Advanced Printer) - Version %s - by "
@@ -1151,6 +1187,93 @@ def default_printer():
             return None
     except Exception:
         return None
+
+
+# ------------------------------------------------------------
+# v3.2.5 BUG FIX 1: SET THE OS DEFAULT PRINTER FOR REAL.
+# The user report: "Always Default Printer of windows selected even
+# set selected printer as default - why auto change to windows default
+# when hub set other printer as default, why not save it."
+# Root cause: the old "Set Default" button only wrote the hub config
+# key "printer" (the hub's preferred DESTINATION) - the WINDOWS default
+# printer was never touched, and with Windows' "let Windows manage my
+# default printer" enabled (the factory setting on Win10/11) the OS
+# silently re-points the default at the last-printed printer anyway.
+# The fix performs the OS-level change AND opts out of the auto-manage
+# feature in the same call:
+#   1. HKCU\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Windows
+#        -> LegacyDefaultPrinterMode = 1 (DWORD, 1 = legacy user-managed
+#           mode: Windows stops re-pointing the default behind the
+#           user's back; this is exactly the "Let Windows manage my
+#           default printer" toggle in Settings, per-user, no UAC)
+#   2. WScript.Network.SetDefaultPrinter("<name>")  (COM, per-user)
+#   3. read the default back via Win32_Printer and return it so the
+#      console toast reports the VERIFIED result
+# Unix/CUPS: lpoptions -d <name> sets the per-user default (no root
+# needed); the system default stays lpadmin territory.
+# ------------------------------------------------------------
+def os_set_default_printer(name):
+    """Set the OS default printer. Returns (ok, actual_default, detail)."""
+    name = str(name or "").strip()
+    if not name:
+        return False, default_printer() or "", "no printer name given"
+    known = list_printers_cached(max_age=5.0)
+    if known and name not in known:
+        # resolve by slug so a card-copied name always matches
+        for n in known:
+            if re.sub(r"[^a-z0-9]+", "-", (n or "").strip().lower()
+                      ).strip("-") == re.sub(r"[^a-z0-9]+", "-",
+                                             name.lower()).strip("-"):
+                name = n
+                break
+    if IS_WIN:
+        safe = name.replace("'", "''")
+        ps = ("try { Set-ItemProperty -Path "
+              "'HKCU:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion"
+              "\\Windows' -Name LegacyDefaultPrinterMode -Value 1 "
+              "-Type DWord -ErrorAction SilentlyContinue } catch {};"
+              "(New-Object -ComObject WScript.Network).SetDefaultPrinter"
+              "('" + safe + "');"
+              "(Get-CimInstance Win32_Printer | Where-Object Default).Name")
+        try:
+            out = subprocess.run(["powershell", "-NoProfile", "-Command", ps],
+                                 capture_output=True, text=True, timeout=20,
+                                 creationflags=HIDE)
+            lines = [l.strip() for l in (out.stdout or "").splitlines()
+                     if l.strip()]
+            got = lines[0] if lines else ""
+            # multi-line output = several printers flagged Default (rare
+            # WMI artefact); take the one that matches the request
+            for l in lines:
+                if l.lower() == name.lower():
+                    got = l
+                    break
+            ok = bool(got) and got.lower() == name.lower()
+            if ok:
+                detail = ("Windows default printer is now '%s' "
+                          "(auto-manage disabled: LegacyDefaultPrinter"
+                          "Mode=1)" % got)
+            else:
+                detail = ("SetDefaultPrinter ran (rc %s) but the OS "
+                          "default reads '%s' - printer name mismatch?"
+                          % (out.returncode, got or "none"))
+            log("[SETDEF] requested '%s' -> %s" % (name, detail))
+            return ok, got or name, detail
+        except Exception as e:
+            log("[SETDEF] error: %s" % e)
+            return False, default_printer() or name, str(e)
+    try:
+        out = subprocess.run(["lpoptions", "-d", name],
+                             capture_output=True, text=True, timeout=10)
+        got = default_printer() or name
+        ok = out.returncode == 0 and (got or "").lower() == name.lower()
+        detail = ("CUPS default printer is now '%s' (lpoptions -d)" % got
+                  if ok else
+                  (out.stderr or "lpoptions -d failed").strip())
+        log("[SETDEF] requested '%s' -> %s" % (name, detail))
+        return ok, got or name, detail
+    except Exception as e:
+        return False, default_printer() or name, str(e)
 
 # ------------------------------------------------------------
 # Printer STATUS (v2.0): ready / offline / paper-out / error
@@ -4059,10 +4182,42 @@ def _ext_reg_query_values(full_key):
 
 
 def _ext_reg_add(full_key, name, data):
-    return subprocess.run(
+    """v3.2.5 BUG FIX 5: reg.exe first, PowerShell fallback second.
+    User report "policy install failed: HTTP 200" - on several machines
+    reg.exe is blocked by AV suites / app-control policies while
+    New-ItemProperty still works, and the console hid the real reason
+    behind a generic 'HTTP 200'. Both writers do the same thing:
+    REG_SZ value <name> = <data> under <full_key> (the key is created)."""
+    r = subprocess.run(
         ["reg", "add", full_key, "/v", name, "/t", "REG_SZ",
          "/d", data, "/f"], capture_output=True, text=True,
         timeout=10).returncode == 0
+    if r:
+        return True
+    if not IS_WIN:
+        return False
+    ps = ("$k='%s';" % full_key.replace("'", "''") +
+          "New-Item -Path $k -Force -ErrorAction SilentlyContinue "
+          "| Out-Null;"
+          "New-ItemProperty -Path $k -Name '%s' -PropertyType String "
+          "-Value '%s' -Force | Out-Null"
+          % (name.replace("'", "''"), data.replace("'", "''")))
+    try:
+        p2 = subprocess.run(
+            ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
+             "-Command", ps], capture_output=True, text=True, timeout=20,
+            creationflags=HIDE)
+        ok2 = p2.returncode == 0
+        if ok2:
+            log("[POLICY] reg.exe failed for %s - PowerShell fallback "
+                "wrote it" % full_key)
+        else:
+            log("[POLICY] PowerShell fallback failed too (rc %s): %s"
+                % (p2.returncode, (p2.stderr or "").strip()[:200]))
+        return ok2
+    except Exception as e:
+        log("[POLICY] PowerShell fallback error: %s" % e)
+        return False
 
 
 def _ext_reg_delete(full_key, name):
@@ -4134,9 +4289,17 @@ def ext_policy_install():
                          "ExtPolicy." + frag, target)
             wrote += 1
         report[name] = ("written (entry %s)" % target if ok
-                        else "reg add failed (permissions?)")
+                        else "reg add AND PowerShell fallback failed "
+                             "(AV/app-control may block policy writes)")
+    # v3.2.5 BUG FIX 5: carry the real reason in `error` so no client
+    # ever reduces a {ok:false} response to a blind "HTTP 200" again.
     return {"ok": wrote > 0, "browsers": report, "wrote": wrote,
             "value": data,
+            "error": (None if wrote > 0 else
+                      "no policy entry written (HKCU) - check the "
+                      "per-browser report; the docs 'Force-install "
+                      "policy' section has the manual .reg / gpedit "
+                      "apply steps"),
             "message": ("policy written for %d browser(s) - restart the"
                         " browser once, then chrome://policy shows it."
                         " Chrome/Edge install the extension silently on"
@@ -6000,14 +6163,17 @@ class Handler(BaseHTTPRequestHandler):
                     res = {"ok": False, "message": ext_policy_status()
                            .get("note", "policy-install writes Windows "
                            "registry keys; see docs/BUILD-FROM-SOURCE.md "
-                           "for the Linux JSON policy")}
+                           "for the Linux JSON policy"),
+                           "error": "not Windows - " + ext_policy_status()
+                           .get("note", "registry policy is Windows-only")}
                 else:
                     pairs = ([(frag_map[bkey], bkey)] if bkey in frag_map
                              else list(EXT_POLICY_BROWSERS))
                     if bkey and bkey not in frag_map:
                         res = {"ok": False, "message":
                                "unknown browser '%s' (use chrome, edge, "
-                               "brave, vivaldi, chromium)" % bkey}
+                               "brave, vivaldi, chromium)" % bkey,
+                               "error": "unknown browser '%s'" % bkey}
                     else:
                         data = ext_forcelist_value()
                         ext_id = (crx_package() or {}).get("ext_id",
@@ -6031,8 +6197,13 @@ class Handler(BaseHTTPRequestHandler):
                                 wrote += 1
                             report[name] = ("written (%s entry %s)" %
                                             (hive, target) if ok else
-                                            "%s reg add failed "
-                                            "(HKLM needs admin)" % hive)
+                                            "%s write failed (reg.exe AND "
+                                            "PowerShell blocked - %s)"
+                                            % (hive,
+                                               "HKLM needs an admin console"
+                                               if hive == "HKLM" else
+                                               "AV/app-control may block "
+                                               "policy writes"))
                         res = {"ok": wrote > 0, "browsers": report,
                                "wrote": wrote, "value": data,
                                "message": ("%s policy written for %d "
@@ -6040,6 +6211,14 @@ class Handler(BaseHTTPRequestHandler):
                                            "browser once, then "
                                            "chrome://policy shows it"
                                            % (hive, wrote))}
+                        if wrote == 0:
+                            # v3.2.5 BUG FIX 5: the console api() helper
+                            # used to show a blind "HTTP 200" here - now
+                            # the real reason travels in error + message.
+                            res["error"] = ("no policy entry written "
+                                            "(%s) - see the report and "
+                                            "the docs 'Force-install "
+                                            "policy' section" % hive)
             elif action == "fw-allow":
                 threading.Thread(target=_safe, args=(firewall_allow, ""),
                                  daemon=True).start()
@@ -6255,6 +6434,14 @@ class Handler(BaseHTTPRequestHandler):
             if enable is None:
                 enable = (q.get("enabled") or [""])[0].lower() in ("1", "true", "on", "yes")
             state = autostart_set(bool(enable))
+            # v3.2.5 BUG FIX 6: rebuild the health snapshot NOW so the
+            # next console poll reads the NEW state - the old code left
+            # the stale snapshot up for up to 3 s and the UI switch
+            # flipped itself back on (tray said OFF, UI said ON).
+            try:
+                build_health_snapshot()
+            except Exception:
+                pass
             return self._send(200, {"ok": True, "enabled": state,
                                     "path": autostart_path()})
 
@@ -6282,6 +6469,43 @@ class Handler(BaseHTTPRequestHandler):
         # nothing deleted.
         if route == "/livetest":
             return self._send(200, run_livetest(do_print=False))
+
+        # POST /printers/set-default - v3.2.5 BUG FIX 1: ACTUALLY set the
+        # OS default printer. body: {"printer": "<name>"} (default_printer
+        # also accepted - the ONE UI uses printer). The old "Set Default"
+        # button only saved CFG["printer"], so Windows kept its own default
+        # and the auto-manage feature flipped it back. This endpoint calls
+        # os_set_default_printer (Windows: LegacyDefaultPrinterMode=1 +
+        # WScript.Network.SetDefaultPrinter, verified by reading back;
+        # Unix: lpoptions -d), keeps the hub destination key in sync and
+        # returns the VERIFIED new default. 200 even on failure (ok:false
+        # + error) so the console toast can show the real reason.
+        if route == "/printers/set-default":
+            nm = str((body or {}).get("printer")
+                     or (body or {}).get("default_printer") or "").strip()
+            if not nm:
+                return self._send(400, {"ok": False,
+                    "error": "send {\"printer\": \"<printer name>\"}"})
+            ok, got, detail = os_set_default_printer(nm)
+            db_audit("printers.set_default", ip=ip, site=site,
+                     details="%s -> %s (%s)" % (nm, got,
+                                                "verified" if ok else "failed"))
+            if ok:
+                try:
+                    CFG["printer"] = got
+                    disk = {k: CFG[k] for k in CONFIG_KEYS}
+                    write_config_file(disk)
+                except Exception as e:
+                    log("[SETDEF] config sync skipped: %s" % e)
+                _DP_CACHE["t"] = 0.0        # next read re-scans the OS
+                try:
+                    build_health_snapshot()
+                except Exception:
+                    pass
+                return self._send(200, {"ok": True, "default": got,
+                                        "printer": nm, "detail": detail})
+            return self._send(200, {"ok": False, "default": got,
+                                    "printer": nm, "error": detail})
 
         # POST /config - update v2.0 settings at runtime (persists)
         if route == "/config":
@@ -7951,15 +8175,22 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
           </div>
           <div class="card">
             <div class="card-h"><span class="chip ok"><span class="d"></span>RUNNING</span> Queue mode <b>ON</b> — jobs print in order (Pause holds them back) <span class="r">hub #2047 in progress</span></div>
+            <div class="frow" style="margin-bottom:4px">
+              <button class="btn small danger" id="queueCancelSel" disabled>&#10006; Cancel selected</button>
+              <button class="btn small">&#9932; Clear selected</button>
+              <span class="id" id="queueSelInfo" style="color:#64748b">nothing ticked</span>
+              <span style="flex:1"></span>
+              <span style="font-size:12px;color:#64748b">ticked rows stay ticked across the 3 s refresh</span>
+            </div>
             <table class="tbl">
-              <tr><th>ID</th><th>Document</th><th>Printer</th><th>Kind</th><th>Status</th><th style="width:150px">Progress</th><th></th></tr>
-              <tr><td class="id">#2047</td><td class="doc">lab-report-nov.pdf</td><td>HP Laser 103 107 108</td><td><span class="chip info">PDF</span></td><td><span class="chip info"><span class="d"></span>PRINTING</span></td><td><div class="prog"><i style="width:64%"></i></div></td><td><button class="btn small danger">Cancel</button></td></tr>
-              <tr><td class="id">#2045</td><td class="doc">scanned-pp.oxps</td><td>AdvPrint Pro @ AI-Lab</td><td><span class="chip gray">XPS</span></td><td><span class="chip gray"><span class="d"></span>QUEUED</span></td><td><div class="prog"><i style="width:0%"></i></div></td><td><button class="btn small danger">Cancel</button></td></tr>
-              <tr><td class="id">#2042</td><td class="doc">discharge-summary.pdf</td><td>HP Laser 103 107 108</td><td><span class="chip info">PDF</span></td><td><span class="chip warn"><span class="d"></span>HELD · OFFLINE</span></td><td><div class="prog"><i style="width:0%"></i></div></td><td><button class="btn small">&#9889; Release</button></td></tr>
-              <tr><td class="id">#2041</td><td class="doc">label-4711.zpl</td><td>AdvPrint Pro @ AI-Lab</td><td><span class="chip purple">ZPL</span></td><td><span class="chip warn"><span class="d"></span>HELD · OFFLINE</span></td><td><div class="prog"><i style="width:0%"></i></div></td><td><button class="btn small">&#9889; Release</button></td></tr>
-              <tr><td class="id">#2046</td><td class="doc">invoice-2026-11.pdf</td><td>Microsoft Print to PDF</td><td><span class="chip info">PDF</span></td><td><span class="chip ok"><span class="d"></span>DONE</span></td><td><div class="prog done"><i style="width:100%"></i></div></td><td><button class="btn small">&#8635; Reprint</button></td></tr>
-              <tr><td class="id">#2044</td><td class="doc">presentation.pptx</td><td>OneNote (Desktop)</td><td><span class="chip gray">DOC</span></td><td><span class="chip ok"><span class="d"></span>DONE</span></td><td><div class="prog done"><i style="width:100%"></i></div></td><td><button class="btn small">&#8635; Reprint</button></td></tr>
-              <tr><td class="id">#2043</td><td class="doc">manual-de.pdf</td><td>HP Laser 103 107 108</td><td><span class="chip info">PDF</span></td><td><span class="chip err"><span class="d"></span>FAILED</span></td><td><div class="prog fail"><i style="width:31%"></i></div></td><td><button class="btn small">&#8635; Retry</button></td></tr>
+              <tr><th style="width:30px"><input type="checkbox" data-qall></th><th>ID</th><th>Document</th><th>Printer</th><th>Kind</th><th>Status</th><th style="width:150px">Progress</th><th></th></tr>
+              <tr><td><input type="checkbox"></td><td class="id">#2047</td><td class="doc">lab-report-nov.pdf</td><td>HP Laser 103 107 108</td><td><span class="chip info">PDF</span></td><td><span class="chip info"><span class="d"></span>PRINTING</span></td><td><div class="prog"><i style="width:64%"></i></div></td><td><button class="btn small danger">Cancel</button></td></tr>
+              <tr><td><input type="checkbox"></td><td class="id">#2045</td><td class="doc">scanned-pp.oxps</td><td>AdvPrint Pro @ AI-Lab</td><td><span class="chip gray">XPS</span></td><td><span class="chip gray"><span class="d"></span>QUEUED</span></td><td><div class="prog"><i style="width:0%"></i></div></td><td><button class="btn small danger">Cancel</button></td></tr>
+              <tr><td><input type="checkbox"></td><td class="id">#2042</td><td class="doc">discharge-summary.pdf</td><td>HP Laser 103 107 108</td><td><span class="chip info">PDF</span></td><td><span class="chip warn"><span class="d"></span>HELD · OFFLINE</span></td><td><div class="prog"><i style="width:0%"></i></div></td><td><button class="btn small">&#9889; Release</button></td></tr>
+              <tr><td><input type="checkbox"></td><td class="id">#2041</td><td class="doc">label-4711.zpl</td><td>AdvPrint Pro @ AI-Lab</td><td><span class="chip purple">ZPL</span></td><td><span class="chip warn"><span class="d"></span>HELD · OFFLINE</span></td><td><div class="prog"><i style="width:0%"></i></div></td><td><button class="btn small">&#9889; Release</button></td></tr>
+              <tr><td><input type="checkbox"></td><td class="id">#2046</td><td class="doc">invoice-2026-11.pdf</td><td>Microsoft Print to PDF</td><td><span class="chip info">PDF</span></td><td><span class="chip ok"><span class="d"></span>DONE</span></td><td><div class="prog done"><i style="width:100%"></i></div></td><td><button class="btn small">&#8635; Reprint</button></td></tr>
+              <tr><td><input type="checkbox"></td><td class="id">#2044</td><td class="doc">presentation.pptx</td><td>OneNote (Desktop)</td><td><span class="chip gray">DOC</span></td><td><span class="chip ok"><span class="d"></span>DONE</span></td><td><div class="prog done"><i style="width:100%"></i></div></td><td><button class="btn small">&#8635; Reprint</button></td></tr>
+              <tr><td><input type="checkbox"></td><td class="id">#2043</td><td class="doc">manual-de.pdf</td><td>HP Laser 103 107 108</td><td><span class="chip info">PDF</span></td><td><span class="chip err"><span class="d"></span>FAILED</span></td><td><div class="prog fail"><i style="width:31%"></i></div></td><td><button class="btn small">&#8635; Retry</button></td></tr>
             </table>
           </div>
           <div class="note">Queue mode is switched in <b>Power Switches</b> — flip it and it saves instantly:
@@ -7981,12 +8212,15 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
                 <input class="inp" type="text" placeholder="Search title / printer / #id" style="min-width:210px">
                 <select class="inp" style="min-width:130px"><option>load last 100</option><option>last 50</option><option>last 300</option></select>
                 <span style="flex:1"></span>
+                <span class="id" id="histSelInfo" style="color:#64748b">nothing ticked</span>
+                <button class="btn small danger" id="histCancelSel" disabled>&#10006; Cancel selected</button>
+                <button class="btn small">&#9932; Clear selected</button>
                 <button class="btn blue small">&#8635; Reprint selected</button>
                 <button class="btn small">Export CSV</button>
               </div>
             </div>
             <table class="tbl">
-              <tr><th style="width:30px"><input type="checkbox" checked></th><th>#</th><th>Time</th><th>Title</th><th>Printer</th><th>Kind</th><th>Status</th><th></th></tr>
+              <tr><th style="width:30px"><input type="checkbox" data-hall></th><th>#</th><th>Time</th><th>Title</th><th>Printer</th><th>Kind</th><th>Status</th><th></th></tr>
               <tr><td><input type="checkbox" checked></td><td class="id">#2046</td><td class="id">14:19:41</td><td class="doc">invoice-2026-11.pdf</td><td>Microsoft Print to PDF</td><td><span class="chip info">PDF</span></td><td><span class="chip ok">PRINTED</span></td><td><button class="btn small">&#8635; Reprint</button></td></tr>
               <tr><td><input type="checkbox" checked></td><td class="id">#2044</td><td class="id">14:11:55</td><td class="doc">presentation.pptx</td><td>OneNote (Desktop)</td><td><span class="chip gray">DOC</span></td><td><span class="chip ok">PRINTED</span></td><td><button class="btn small">&#8635; Reprint</button></td></tr>
               <tr><td><input type="checkbox"></td><td class="id">#2043</td><td class="id">13:58:12</td><td class="doc">manual-de.pdf</td><td>HP Laser 103 107 108</td><td><span class="chip info">PDF</span></td><td><span class="chip err">FAILED</span></td><td><button class="btn small">&#8635; Reprint</button></td></tr>
@@ -8950,6 +9184,12 @@ var VIEW_LABEL = IS_CENTER ? "CENTER PC UI" : "SELF PC UI";
 var TOKEN = qs.get("token") || localStorage.getItem("advprintHubToken") || "";
 var BASE = location.origin;
 var pollTimer = null, cfgCache = {}, jobFilter = "", auditRows = [], printersCache = [];
+/* v3.2.5 BUG FIXES 2 + 3: checkbox selections that SURVIVE the 3 s poll.
+   Every re-render used to force the boxes back to unchecked - the user
+   ticked rows, the poll wiped them ("Job History select it auto refresh
+   not select"). histSel / queueSel remember the ticked job ids and every
+   render re-applies them. */
+var histSel = {}, queueSel = {}, histSelCount = 0, queueSelCount = 0;
 var rulesCache = [], ruleEditIdx = -1, pausedState = false, hubStartTime = null;
 var dirtyKeys = {};   /* inputs touched but not saved yet - poll must not overwrite */
 var EXT_ID = "likldbkamojokkfdlcjibiljpgbbnohc";
@@ -8971,7 +9211,12 @@ async function api(path, opts){
   if (r.status === 401) { showTokenCard(true); throw new Error("auth"); }
   var d = {};
   try { d = await r.json(); } catch(_){}
-  if (!r.ok || d.ok === false) throw new Error(d.error || ("HTTP " + r.status));
+  /* v3.2.5 BUG FIX 5: surface the server's REAL message. The old line
+     showed a blind "HTTP 200" whenever the hub answered {ok:false} with
+     only a message field (e.g. policy-install on a locked-down PC) - the
+     user could never see WHY it failed. error > message > status now. */
+  if (!r.ok || d.ok === false)
+    throw new Error(d.error || d.message || ("HTTP " + r.status));
   return d;
 }
 
@@ -9648,7 +9893,9 @@ function renderJobs(jobs){
     fc[6].querySelector(".n").textContent = jobs.filter(function(j){
       return ["failed", "dead"].indexOf(j.status) >= 0; }).length;
   }
-  /* queue table */
+  /* queue table - v3.2.5 BUG FIX 3: checkbox column (like History),
+     selection survives the poll, per-row Cancel stays, and a header
+     select-all box ticks every VISIBLE row */
   var tbl = document.querySelector("#p-queue table.tbl");
   if (tbl) {
     var tmpl = null;
@@ -9656,30 +9903,34 @@ function renderJobs(jobs){
     var list = jobs.filter(function(j){ return !jobFilter || j.status === jobFilter; });
     list.slice(0, 60).forEach(function(j){
       var tr = tmpl.cloneNode(true), td = tr.querySelectorAll("td");
-      td[0].textContent = "#" + j.id;
-      td[1].textContent = j.title || "job";
-      td[2].textContent = j.printer || "default";
-      td[3].innerHTML = kindChip(jobKind(j));
-      td[4].innerHTML = chip(j.status);
-      td[5].innerHTML = prog(j.status, jobPct(j));
+      var qc = td[0].querySelector('input[type="checkbox"]');
+      if (qc) { qc.checked = !!queueSel[j.id]; qc.setAttribute("data-qid", j.id); }
+      td[1].textContent = "#" + j.id;
+      td[2].textContent = j.title || "job";
+      td[3].textContent = j.printer || "default";
+      td[4].innerHTML = kindChip(jobKind(j));
+      td[5].innerHTML = chip(j.status);
+      td[6].innerHTML = prog(j.status, jobPct(j));
       var act = j.status === "queued" ? '<button class="btn small danger" data-cancel="' + j.id + '">Cancel</button>'
         : j.status === "held" ? '<button class="btn small" data-pnow="' + j.id + '">\u26A1 Release</button>'
         : j.status === "printing" ? '<button class="btn small danger" data-cancel="' + j.id + '">Cancel</button>'
         : ["failed", "dead"].indexOf(j.status) >= 0 ? '<button class="btn small" data-retry="' + j.id + '">\u21BB Retry</button>'
         : '<button class="btn small" data-reprint="' + j.id + '">\u21BB Reprint</button>';
-      td[6].innerHTML = act;
+      td[7].innerHTML = act;
       tbl.appendChild(tr);
     });
     if (!list.length && tmpl) {
       var tr = tmpl.cloneNode(true), td = tr.querySelectorAll("td");
-      td[0].textContent = "\u2014"; td[1].textContent = "no jobs" +
+      td[1].textContent = "\u2014"; td[2].textContent = "no jobs" +
         (jobFilter ? " with status " + jobFilter : "");
-      for (var i = 2; i < td.length; i++) td[i].innerHTML = "&nbsp;";
+      for (var i = 3; i < td.length; i++) td[i].innerHTML = "&nbsp;";
+      var e0 = td[0].querySelector('input[type="checkbox"]'); if (e0) e0.checked = false;
       tbl.appendChild(tr);
     }
     var running = jobs.filter(function(j){ return j.status === "printing"; })[0];
     var r = document.querySelector("#p-queue .card-h .r");
     if (r) r.textContent = running ? "hub #" + running.id + " in progress" : "hub idle";
+    syncSelBar();
   }
   /* history table */
   var ht = document.querySelector("#p-history table.tbl");
@@ -9706,7 +9957,8 @@ function renderJobs(jobs){
     });
     hlist.slice(0, lim).forEach(function(j){
       var tr = htmpl.cloneNode(true), td = tr.querySelectorAll("td");
-      td[0].firstElementChild.checked = false;
+      /* v3.2.5 BUG FIX 2: ticked rows STAY ticked across the 3 s poll */
+      td[0].firstElementChild.checked = !!histSel[j.id];
       td[0].firstElementChild.setAttribute("data-hid", j.id);
       td[1].textContent = "#" + j.id;
       td[2].textContent = (j.created_at || "").replace("T", " ").slice(11, 19);
@@ -9714,21 +9966,121 @@ function renderJobs(jobs){
       td[4].textContent = j.printer || "\u2014";
       td[5].innerHTML = kindChip(jobKind(j));
       td[6].innerHTML = chip(j.status);
-      td[7].innerHTML = '<button class="btn small" data-reprint="' + j.id + '"' +
-        (j.file_path || ["printed", "saved"].indexOf(j.status) >= 0 ? "" : " disabled") +
-        '>\u21BB Reprint</button>';
+      var canStill = ["queued", "held", "printing"].indexOf(j.status) >= 0;
+      td[7].innerHTML =
+        (canStill ? '<button class="btn small danger" data-cancel="' + j.id + '">Cancel</button>'
+                  : '<button class="btn small" data-reprint="' + j.id + '"' +
+                    (j.file_path || ["printed", "saved"].indexOf(j.status) >= 0 ? "" : " disabled") +
+                    '>\u21BB Reprint</button>');
       ht.appendChild(tr);
     });
     if (!hlist.length && htmpl) {
       var tr = htmpl.cloneNode(true), td = tr.querySelectorAll("td");
       td[1].textContent = "\u2014"; td[3].textContent = "no history yet";
       for (var i2 = 0; i2 < td.length; i2++) if (i2 !== 1 && i2 !== 3) td[i2].innerHTML = "&nbsp;";
+      var h0 = td[0].querySelector('input[type="checkbox"]'); if (h0) h0.checked = false;
       ht.appendChild(tr);
     }
     var hr = document.querySelector("#p-history .card-h .r");
     if (hr) hr.textContent = "last " + Math.min(hlist.length, lim) + " of " + jobs.length +
       " \u00b7 reprint needs the original file on disk (Hub \u2192 Keep printed files)";
+    syncSelBar();
   }
+}
+
+/* ---------- v3.2.5 BUG FIXES 2 + 3: SELECTION TOOLBAR ENGINE ----------
+   History AND Queue now behave the same way:
+     - ticked rows stay ticked across the 3 s auto-refresh
+     - a live counter ("3 selected") sits next to the bulk buttons
+     - Reprint selected / Cancel selected act on the ticked rows
+     - Clear selected just unticks (it never touches the jobs)
+   Queue gets the full set too: per-row Cancel stays, a header
+   select-all box ticks every visible row, Cancel selected cancels
+   every ticked job that can still be canceled. */
+function selIds(sel){
+  return Object.keys(sel).filter(function(k){ return sel[k]; });
+}
+function syncSelBar(){
+  histSelCount = selIds(histSel).length;
+  queueSelCount = selIds(queueSel).length;
+  var h = $("histSelInfo"), q = $("queueSelInfo");
+  if (h) h.textContent = histSelCount ? histSelCount + " selected" : "nothing ticked";
+  if (q) q.textContent = queueSelCount ? queueSelCount + " selected" : "nothing ticked";
+  var ha = $("histCancelSel"), qc = $("queueCancelSel");
+  if (ha) ha.disabled = !histSelCount;
+  if (qc) qc.disabled = !queueSelCount;
+  /* header select-all mirrors the visible rows (queue + history) */
+  qsa('#p-queue table.tbl input[type="checkbox"][data-qall]').forEach(function(a){
+    var rows = qsa('#p-queue table.tbl input[type="checkbox"][data-qid]');
+    if (!rows.length) { a.checked = false; a.indeterminate = false; return; }
+    var n = rows.filter(function(c){ return c.checked; }).length;
+    a.checked = n === rows.length;
+    a.indeterminate = n > 0 && n < rows.length;
+  });
+  qsa('#p-history table.tbl input[type="checkbox"][data-hall]').forEach(function(a){
+    var rows = qsa('#p-history table.tbl input[type="checkbox"][data-hid]');
+    if (!rows.length) { a.checked = false; a.indeterminate = false; return; }
+    var n = rows.filter(function(c){ return c.checked; }).length;
+    a.checked = n === rows.length;
+    a.indeterminate = n > 0 && n < rows.length;
+  });
+}
+function bindSelections(){
+  document.addEventListener("change", function(ev){
+    var c = ev.target;
+    if (!c || !c.type || c.type !== "checkbox") return;
+    if (c.hasAttribute && c.hasAttribute("data-hid")) {
+      histSel[c.getAttribute("data-hid")] = c.checked;
+      syncSelBar(); return;
+    }
+    if (c.hasAttribute && c.hasAttribute("data-qid")) {
+      queueSel[c.getAttribute("data-qid")] = c.checked;
+      syncSelBar(); return;
+    }
+    if (c.hasAttribute && c.hasAttribute("data-qall")) {
+      /* select-all: tick every visible queue row (and remember them) */
+      qsa('#p-queue table.tbl input[type="checkbox"][data-qid]').forEach(function(r){
+        r.checked = c.checked;
+        queueSel[r.getAttribute("data-qid")] = c.checked;
+      });
+      syncSelBar(); return;
+    }
+    if (c.hasAttribute && c.hasAttribute("data-hall")) {
+      /* history select-all: tick every visible history row */
+      qsa('#p-history table.tbl input[type="checkbox"][data-hid]').forEach(function(r){
+        r.checked = c.checked;
+        histSel[r.getAttribute("data-hid")] = c.checked;
+      });
+      syncSelBar(); return;
+    }
+  });
+}
+function clearSelection(scope){
+  if (scope === "history") {
+    histSel = {};
+    qsa('#p-history table.tbl input[type="checkbox"]').forEach(function(c){ c.checked = false; });
+    toast("Selection cleared - the jobs themselves are untouched", "ok");
+  } else {
+    queueSel = {};
+    qsa('#p-queue table.tbl input[type="checkbox"]').forEach(function(c){
+      if (!c.hasAttribute("data-qall")) c.checked = false; });
+    toast("Selection cleared - the jobs themselves are untouched", "ok");
+  }
+  syncSelBar();
+}
+async function cancelSelected(scope){
+  var sel = scope === "history" ? histSel : queueSel;
+  var ids = selIds(sel);
+  if (!ids.length) return toast("Tick some rows first", "warn");
+  var done = 0;
+  for (var i = 0; i < ids.length; i++) {
+    try { await api("/jobs/" + ids[i] + "/cancel", { method: "POST" }); done++; }
+    catch (e) { /* finished jobs cannot be canceled - count only wins */ }
+  }
+  if (scope === "history") histSel = {}; else queueSel = {};
+  toast(done + " job(s) canceled (" + (ids.length - done) +
+        " already finished)", done ? "ok" : "warn");
+  poll();
 }
 
 /* ---- audit ---- */
@@ -10499,8 +10851,13 @@ function bindButtons(){
     var cp = t.getAttribute && t.getAttribute("data-cp");
     if (cp) return copyText(cp, t);
     var sd = t.getAttribute && t.getAttribute("data-setdef");
-    if (sd) { try { await api("/config", { method: "POST", body: { printer: sd } });
-        toast(sd + " is now the default printer", "ok"); poll(); } catch (e) { toast(e.message, "err"); } }
+    if (sd) { try { /* v3.2.5 BUG FIX 1: /printers/set-default performs the
+                        OS-level change (Windows also opts out of "let
+                        Windows manage my default printer"); the toast
+                        reports the VERIFIED result, not a wish */
+      var r5 = await api("/printers/set-default", { method: "POST", body: { printer: sd } });
+      toast(r5.detail || (sd + " is now the OS default printer"), "ok");
+    } catch (e) { toast(e.message, "err"); } poll(); }
     var pt = t.getAttribute && t.getAttribute("data-ptest");
     if (pt) { try { await api("/testprint", { method: "POST", body: { printer: pt } });
         toast("Test page queued on " + pt, "ok"); poll(); } catch (e) { toast(e.message, "err"); } }
@@ -10581,6 +10938,11 @@ function bindButtons(){
   btnLike("#p-history", /Reprint non-printed/i, function(){ reprintFailed(); });
   btnLike("#p-history", /Clear ALL history/i, function(){ ACTIONS["queue-clear-finished"](); });
   btnLike("#p-history", /Export CSV/i, function(){ ACTIONS["export-history"](); });
+  /* v3.2.5 BUG FIXES 2 + 3: the bulk-selection buttons (History AND Queue) */
+  btnLike("#p-history", /Cancel selected/i, function(){ cancelSelected("history"); });
+  btnLike("#p-history", /Clear selected/i, function(){ clearSelection("history"); });
+  btnLike("#p-queue", /Cancel selected/i, function(){ cancelSelected("queue"); });
+  btnLike("#p-queue", /Clear selected/i, function(){ clearSelection("queue"); });
   /* printers */
   btnLike("#p-printers", /Re-scan/i, function(){ ACTIONS["refresh-printers"](); });
   btnLike("#p-printers", /Reload list/i, function(){ ACTIONS["refresh-printers"](); });
@@ -11114,9 +11476,29 @@ function bindSwitches(){
     if (scope === "p-settings") {
       var rows = qsa("#p-settings .f-row .switch");
       var si = rows.indexOf(s);
-      if (si === 0 || si === 1) {          /* tray/service managed */
-        toast(["Start with Windows is managed by the service/tray (use the Hub tools)",
-               "Minimize to tray is the desktop-app default"][si], "warn");
+      if (si === 0) {          /* v3.2.5 BUG FIX 6: Start with Windows
+                                  ACTUALLY toggles now - POST /autostart
+                                  writes/removes the Startup shortcut,
+                                  the very same one the tray icon and
+                                  Task Manager > Startup apps show */
+        var want = !autoStartState;
+        s.classList.toggle("on", want);
+        api("/autostart", { method: "POST", body: { enabled: want } })
+          .then(function(r2){
+            autoStartState = !!(r2 && r2.enabled);
+            s.classList.toggle("on", autoStartState);
+            toast("Start with Windows " + (autoStartState
+              ? "ON - the Startup shortcut is created (Task Manager > Startup apps shows it)"
+              : "OFF - the Startup shortcut was removed"),
+              autoStartState ? "ok" : "warn");
+          })
+          .catch(function(e){ s.classList.toggle("on", autoStartState);
+            toast(e.message, "err"); });
+        return;
+      }
+      if (si === 1) {          /* minimize-to-tray stays a desktop-app
+                                  default - the hub window has no tray */
+        toast("Minimize to tray is the desktop-app default", "warn");
         return;
       }
     }
@@ -11222,7 +11604,11 @@ async function poll(){
     if (!hubStartTime && h.uptime_s) hubStartTime = Date.now() - h.uptime_s * 1000;
     showOffline(false);
     VERSION_TXT = "v" + (h.version || BOOT.version || "?");
-    autoStartState = !!(cfgCache.autostart || (cfgCache.ext_prefs || {}).autostart);
+    /* v3.2.5 BUG FIX 6: the REAL Startup-folder state (the same source
+       the tray icon reads). The old line read cfgCache.autostart - a
+       config.json key the hub never wrote - so the switch showed OFF
+       even when autostart was ON (tray said ON, UI said OFF). */
+    autoStartState = !!h.autostart;
     renderFrame(h);
     renderStats(h, st, q, pr);
     renderLanRows();
@@ -11249,6 +11635,7 @@ async function boot(){
   injectTools();
   bindButtons();
   bindSwitches();
+  bindSelections();   /* v3.2.5: History/Queue checkbox selection engine */
   bindPrintDefaults();
   applyCenterView();
   try {

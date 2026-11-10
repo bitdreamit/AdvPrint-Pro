@@ -204,9 +204,17 @@ def test_v322_switch_saves_are_wired():
 
 
 def test_v322_settings_tray_switches_refuse():
+    # v3.2.5 BUG FIX 6: the OLD refuse-with-a-toast behavior is GONE -
+    # "Start with Windows" now really toggles (POST /autostart writes /
+    # removes the Startup shortcut) and reads the REAL state from
+    # /health. Minimize-to-tray keeps its hint.
     ui = _ui()
-    assert "Start with Windows is managed by the service/tray" in ui
+    assert "Start with Windows is managed by the service/tray" not in ui, \
+        "v3.2.5 removed the refuse-toast - the switch must work now"
+    assert "/autostart" in ui, "the switch must call POST /autostart"
     assert "Minimize to tray is the desktop-app default" in ui
+    assert "autoStartState = !!h.autostart" in ui, \
+        "the UI must read the REAL /health autostart state"
 
 
 # ------------------------------------------------------------
@@ -262,9 +270,9 @@ def test_v322_lan_tab_carries_platform_guide():
 
 
 def test_v322_version_strings_agree():
-    assert advprint.VERSION == "3.2.4"
+    assert advprint.VERSION == "3.2.5"
     vt = open(os.path.join(ROOT, "VERSION.txt"), encoding="utf-8").read()
-    assert "3.2.4" in vt
+    assert "3.2.5" in vt
     man = json.load(open(os.path.join(ROOT, "extension", "manifest.json"),
                          encoding="utf-8"))
-    assert man["version"] == "3.2.4"
+    assert man["version"] == "3.2.5"

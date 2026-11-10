@@ -112,6 +112,44 @@ to the configured destination - ANY printer:
 
 ---
 
+## POST /printers/set-default (v3.2.5)
+
+**Actually sets the OS default printer** (the v3.2.4-and-older "Set
+Default" button only saved the hub config key - Windows kept its own
+default and the "let Windows manage my default printer" feature flipped
+it back). Body: `{"printer": "<name>"}` (`default_printer` also
+accepted).
+
+Windows: disables the auto-manage feature first
+(`HKCU\...\Windows\LegacyDefaultPrinterMode = 1`, per-user, no UAC),
+then `WScript.Network.SetDefaultPrinter`, then reads the default back
+and only reports success when it verifies. Unix: `lpoptions -d <name>`.
+The hub destination key (`printer`) stays in sync; every call is
+audit-logged (`printers.set_default`).
+
+```json
+// 200 - verified
+{ "ok": true, "default": "HP LaserJet Pro", "printer": "HP LaserJet Pro",
+  "detail": "Windows default printer is now 'HP LaserJet Pro' (auto-manage disabled: LegacyDefaultPrinterMode=1)" }
+// 200 - honest failure (unknown printer, OS refused)
+{ "ok": false, "default": "…", "error": "lpoptions: Unknown destination X" }
+```
+
+---
+
+## POST /autostart (v3.2.5 - the REAL state)
+
+`{"enabled": true|false}` writes/removes the logon autostart entry
+(Windows: `shell:startup\AdvPrint Pro.lnk` - the same shortcut the tray
+icon and Task Manager → Startup apps show; Linux: XDG
+`~/.config/autostart/advprint-pro.desktop`). Response:
+`{"ok":true,"enabled":<real state>,"path":"…"}`. The health snapshot is
+rebuilt immediately, so `/health` → `"autostart": true|false` always
+mirrors the real file state (this is what the console Settings switch
+now reads and writes).
+
+---
+
 ## POST /print
 
 One of the payload sources is required. Common optional fields: `title`, `printer` (empty = default), `copies` (1–50), `source` (free tag shown in history), `destination` (`"printer"` default or `"file"` to save as PDF without printing).

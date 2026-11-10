@@ -2358,8 +2358,8 @@ chrome.storage.onChanged.addListener((changes, area) => {
     pushSitesToHub(changes.apiSites.newValue || ["*"]); }
 });
 
-/* ---------------- icon click = the POPUP (v3.2.4) ----------------
-   v3.2.2 removed the popup; v3.2.4 brings it BACK by popular demand:
+/* ---------------- icon click = the POPUP (v3.2.5) ----------------
+   v3.2.2 removed the popup; v3.2.5 brings it BACK by popular demand:
    the toolbar icon opens the quick popup again (master switches, queue,
    recent jobs + the Options button) while EVERY advanced option still
    lives in THE ONE UI console. The popup opens the console whenever

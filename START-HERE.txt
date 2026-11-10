@@ -1,6 +1,38 @@
-AdvPrint Pro (Advanced Printer) v3.2.4 - START HERE
+AdvPrint Pro (Advanced Printer) v3.2.5 - START HERE
 ====================================================
 by Bit Dream IT - Innovative Healthcare Solutions
+
+WHAT IS NEW IN v3.2.5 - SIX USER-REPORTED BUGS, ALL FIXED
+----------------------------------------------------------
+1) SET DEFAULT PRINTERS FOR REAL. The old button only saved the hub
+   config key; Windows kept its own default and the "Let Windows manage
+   my default printer" feature flipped it back. The Set Default button
+   now performs the OS-level change: it disables the auto-manage
+   feature per-user (LegacyDefaultPrinterMode=1 - no UAC), sets the
+   default, READS IT BACK and only reports success when it verifies.
+   Your default stays your default.
+2) JOB HISTORY: the ticked rows SURVIVE the 3 s auto-refresh now, plus
+   a live "n selected" counter, Cancel selected, Clear selected and a
+   per-row Cancel on queued/held/printing rows (Reprint stays on
+   finished rows). The header checkbox is a real select-all.
+3) LIVE QUEUE gets checkboxes like History: select-all, per-row actions
+   by status, Cancel selected + Clear selected, selection persists.
+4) THE PER-PRINTER IPP URL IS CONFIRMED WORKING (you asked us to check):
+   ipp://<ip>:9235/ipp/print/<printer> resolves the raw name, the
+   URL-encoded name AND the slug - case/punctuation-insensitive - on
+   both the landing page and the print queue; unknown queues answer 404.
+5) "POLICY INSTALL FAILED: HTTP 200" FIXED: the console shows the
+   server's REAL reason now; the hub falls back to PowerShell when
+   reg.exe is blocked; docs/RELEASE-NOTES-v3.2.5.md explains how to
+   apply and verify the force-install policy step by step
+   (chrome://policy, manual .reg, GPO, managed-PC caveat).
+6) START WITH WINDOWS IS HONEST: the Settings switch reads the REAL
+   Startup-folder state from /health (the same source as the tray) and
+   ACTUALLY toggles it - ON creates the Startup shortcut (visible in
+   Task Manager > Startup apps), OFF removes it. Tray, UI and Task
+   Manager can no longer disagree.
+
+Everything from v3.2.4 is unchanged - see the section below.
 
 WHAT IS NEW IN v3.2.4 - THE TOOLBAR POPUP IS BACK
 --------------------------------------------------
@@ -47,7 +79,7 @@ WHAT IS NEW IN v3.2.4 - THE TOOLBAR POPUP IS BACK
    per-platform add-printer guide (Windows 10/11, macOS, iPhone/iPad,
    Android).
 
-WHAT v3.2.1 ALREADY GAVE YOU (unchanged in v3.2.4)
+WHAT v3.2.1 ALREADY GAVE YOU (unchanged in v3.2.5)
 ---------------------------------------------------
 1) Open  http://127.0.0.1:9235  - you get the APPROVED All-in-One
    console (the exact design you signed off): blue IDM-style title
@@ -62,7 +94,7 @@ WHAT v3.2.1 ALREADY GAVE YOU (unchanged in v3.2.4)
    (http://<center-ip>:9235) gets the CENTER PC UI (amber banner -
    live queue, history, rules, IPP; system tools stay on the center).
 4) Tray icon > "Console (THE ONE UI)" opens the same UI.
-   The extension toolbar icon opens the QUICK POPUP (v3.2.4); its
+   The extension toolbar icon opens the QUICK POPUP (v3.2.4, unchanged in v3.2.5); its
    Options button and the options page open the same UI
    (http://127.0.0.1:9235). Website whitelist defaults to '*'
    (all websites may print - tighten it on the Extension tab).

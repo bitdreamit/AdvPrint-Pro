@@ -127,11 +127,18 @@ fi
 
 # ---------- 6) SHA256SUMS ----------
 echo "-- SHA256SUMS"
-# v3.2.4: ONE pass - all four artifacts (the EXE line was lost when the
-# second sha256sum overwrote the first; the user hit this on 3.2.2)
+# v3.2.5: the v3.2.4 "one pass" fix still dropped the EXE line - the
+# [ -f ] test looked for the Setup EXE relative to the REPO ROOT but it
+# lives in dist/ (the same silent loss the user hit on v3.2.2). The
+# dist/ prefix + a hard guard make the EXE line unconditional now.
 SUMS="AdvPrint-Pro.crx AdvPrint-Pro-Extension-$V.zip advprint-pro_${V}_all.deb"
-[ -f "AdvPrint-Pro-Setup-$V.exe" ] && SUMS="$SUMS AdvPrint-Pro-Setup-$V.exe"
-( cd "$DIST" && sha256sum $SUMS > "SHA256SUMS-$V.txt" )
+if [ -f "$DIST/AdvPrint-Pro-Setup-$V.exe" ]; then
+  SUMS="$SUMS AdvPrint-Pro-Setup-$V.exe"
+else
+  echo "!! Setup EXE missing - SHA256SUMS will cover only $SUMS"
+fi
+( cd "$DIST" && sha256sum $SUMS > "SHA256SUMS-$V.txt"
+  echo "   lines: $(wc -l < SHA256SUMS-$V.txt)" )
 
 echo "== DONE - artifacts in dist/ =="
 ls -la "$DIST"

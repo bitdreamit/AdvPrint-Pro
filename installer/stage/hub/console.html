@@ -697,15 +697,22 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
           </div>
           <div class="card">
             <div class="card-h"><span class="chip ok"><span class="d"></span>RUNNING</span> Queue mode <b>ON</b> — jobs print in order (Pause holds them back) <span class="r">hub #2047 in progress</span></div>
+            <div class="frow" style="margin-bottom:4px">
+              <button class="btn small danger" id="queueCancelSel" disabled>&#10006; Cancel selected</button>
+              <button class="btn small">&#9932; Clear selected</button>
+              <span class="id" id="queueSelInfo" style="color:#64748b">nothing ticked</span>
+              <span style="flex:1"></span>
+              <span style="font-size:12px;color:#64748b">ticked rows stay ticked across the 3 s refresh</span>
+            </div>
             <table class="tbl">
-              <tr><th>ID</th><th>Document</th><th>Printer</th><th>Kind</th><th>Status</th><th style="width:150px">Progress</th><th></th></tr>
-              <tr><td class="id">#2047</td><td class="doc">lab-report-nov.pdf</td><td>HP Laser 103 107 108</td><td><span class="chip info">PDF</span></td><td><span class="chip info"><span class="d"></span>PRINTING</span></td><td><div class="prog"><i style="width:64%"></i></div></td><td><button class="btn small danger">Cancel</button></td></tr>
-              <tr><td class="id">#2045</td><td class="doc">scanned-pp.oxps</td><td>AdvPrint Pro @ AI-Lab</td><td><span class="chip gray">XPS</span></td><td><span class="chip gray"><span class="d"></span>QUEUED</span></td><td><div class="prog"><i style="width:0%"></i></div></td><td><button class="btn small danger">Cancel</button></td></tr>
-              <tr><td class="id">#2042</td><td class="doc">discharge-summary.pdf</td><td>HP Laser 103 107 108</td><td><span class="chip info">PDF</span></td><td><span class="chip warn"><span class="d"></span>HELD · OFFLINE</span></td><td><div class="prog"><i style="width:0%"></i></div></td><td><button class="btn small">&#9889; Release</button></td></tr>
-              <tr><td class="id">#2041</td><td class="doc">label-4711.zpl</td><td>AdvPrint Pro @ AI-Lab</td><td><span class="chip purple">ZPL</span></td><td><span class="chip warn"><span class="d"></span>HELD · OFFLINE</span></td><td><div class="prog"><i style="width:0%"></i></div></td><td><button class="btn small">&#9889; Release</button></td></tr>
-              <tr><td class="id">#2046</td><td class="doc">invoice-2026-11.pdf</td><td>Microsoft Print to PDF</td><td><span class="chip info">PDF</span></td><td><span class="chip ok"><span class="d"></span>DONE</span></td><td><div class="prog done"><i style="width:100%"></i></div></td><td><button class="btn small">&#8635; Reprint</button></td></tr>
-              <tr><td class="id">#2044</td><td class="doc">presentation.pptx</td><td>OneNote (Desktop)</td><td><span class="chip gray">DOC</span></td><td><span class="chip ok"><span class="d"></span>DONE</span></td><td><div class="prog done"><i style="width:100%"></i></div></td><td><button class="btn small">&#8635; Reprint</button></td></tr>
-              <tr><td class="id">#2043</td><td class="doc">manual-de.pdf</td><td>HP Laser 103 107 108</td><td><span class="chip info">PDF</span></td><td><span class="chip err"><span class="d"></span>FAILED</span></td><td><div class="prog fail"><i style="width:31%"></i></div></td><td><button class="btn small">&#8635; Retry</button></td></tr>
+              <tr><th style="width:30px"><input type="checkbox" data-qall></th><th>ID</th><th>Document</th><th>Printer</th><th>Kind</th><th>Status</th><th style="width:150px">Progress</th><th></th></tr>
+              <tr><td><input type="checkbox"></td><td class="id">#2047</td><td class="doc">lab-report-nov.pdf</td><td>HP Laser 103 107 108</td><td><span class="chip info">PDF</span></td><td><span class="chip info"><span class="d"></span>PRINTING</span></td><td><div class="prog"><i style="width:64%"></i></div></td><td><button class="btn small danger">Cancel</button></td></tr>
+              <tr><td><input type="checkbox"></td><td class="id">#2045</td><td class="doc">scanned-pp.oxps</td><td>AdvPrint Pro @ AI-Lab</td><td><span class="chip gray">XPS</span></td><td><span class="chip gray"><span class="d"></span>QUEUED</span></td><td><div class="prog"><i style="width:0%"></i></div></td><td><button class="btn small danger">Cancel</button></td></tr>
+              <tr><td><input type="checkbox"></td><td class="id">#2042</td><td class="doc">discharge-summary.pdf</td><td>HP Laser 103 107 108</td><td><span class="chip info">PDF</span></td><td><span class="chip warn"><span class="d"></span>HELD · OFFLINE</span></td><td><div class="prog"><i style="width:0%"></i></div></td><td><button class="btn small">&#9889; Release</button></td></tr>
+              <tr><td><input type="checkbox"></td><td class="id">#2041</td><td class="doc">label-4711.zpl</td><td>AdvPrint Pro @ AI-Lab</td><td><span class="chip purple">ZPL</span></td><td><span class="chip warn"><span class="d"></span>HELD · OFFLINE</span></td><td><div class="prog"><i style="width:0%"></i></div></td><td><button class="btn small">&#9889; Release</button></td></tr>
+              <tr><td><input type="checkbox"></td><td class="id">#2046</td><td class="doc">invoice-2026-11.pdf</td><td>Microsoft Print to PDF</td><td><span class="chip info">PDF</span></td><td><span class="chip ok"><span class="d"></span>DONE</span></td><td><div class="prog done"><i style="width:100%"></i></div></td><td><button class="btn small">&#8635; Reprint</button></td></tr>
+              <tr><td><input type="checkbox"></td><td class="id">#2044</td><td class="doc">presentation.pptx</td><td>OneNote (Desktop)</td><td><span class="chip gray">DOC</span></td><td><span class="chip ok"><span class="d"></span>DONE</span></td><td><div class="prog done"><i style="width:100%"></i></div></td><td><button class="btn small">&#8635; Reprint</button></td></tr>
+              <tr><td><input type="checkbox"></td><td class="id">#2043</td><td class="doc">manual-de.pdf</td><td>HP Laser 103 107 108</td><td><span class="chip info">PDF</span></td><td><span class="chip err"><span class="d"></span>FAILED</span></td><td><div class="prog fail"><i style="width:31%"></i></div></td><td><button class="btn small">&#8635; Retry</button></td></tr>
             </table>
           </div>
           <div class="note">Queue mode is switched in <b>Power Switches</b> — flip it and it saves instantly:
@@ -727,12 +734,15 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
                 <input class="inp" type="text" placeholder="Search title / printer / #id" style="min-width:210px">
                 <select class="inp" style="min-width:130px"><option>load last 100</option><option>last 50</option><option>last 300</option></select>
                 <span style="flex:1"></span>
+                <span class="id" id="histSelInfo" style="color:#64748b">nothing ticked</span>
+                <button class="btn small danger" id="histCancelSel" disabled>&#10006; Cancel selected</button>
+                <button class="btn small">&#9932; Clear selected</button>
                 <button class="btn blue small">&#8635; Reprint selected</button>
                 <button class="btn small">Export CSV</button>
               </div>
             </div>
             <table class="tbl">
-              <tr><th style="width:30px"><input type="checkbox" checked></th><th>#</th><th>Time</th><th>Title</th><th>Printer</th><th>Kind</th><th>Status</th><th></th></tr>
+              <tr><th style="width:30px"><input type="checkbox" data-hall></th><th>#</th><th>Time</th><th>Title</th><th>Printer</th><th>Kind</th><th>Status</th><th></th></tr>
               <tr><td><input type="checkbox" checked></td><td class="id">#2046</td><td class="id">14:19:41</td><td class="doc">invoice-2026-11.pdf</td><td>Microsoft Print to PDF</td><td><span class="chip info">PDF</span></td><td><span class="chip ok">PRINTED</span></td><td><button class="btn small">&#8635; Reprint</button></td></tr>
               <tr><td><input type="checkbox" checked></td><td class="id">#2044</td><td class="id">14:11:55</td><td class="doc">presentation.pptx</td><td>OneNote (Desktop)</td><td><span class="chip gray">DOC</span></td><td><span class="chip ok">PRINTED</span></td><td><button class="btn small">&#8635; Reprint</button></td></tr>
               <tr><td><input type="checkbox"></td><td class="id">#2043</td><td class="id">13:58:12</td><td class="doc">manual-de.pdf</td><td>HP Laser 103 107 108</td><td><span class="chip info">PDF</span></td><td><span class="chip err">FAILED</span></td><td><button class="btn small">&#8635; Reprint</button></td></tr>
@@ -1696,6 +1706,12 @@ var VIEW_LABEL = IS_CENTER ? "CENTER PC UI" : "SELF PC UI";
 var TOKEN = qs.get("token") || localStorage.getItem("advprintHubToken") || "";
 var BASE = location.origin;
 var pollTimer = null, cfgCache = {}, jobFilter = "", auditRows = [], printersCache = [];
+/* v3.2.5 BUG FIXES 2 + 3: checkbox selections that SURVIVE the 3 s poll.
+   Every re-render used to force the boxes back to unchecked - the user
+   ticked rows, the poll wiped them ("Job History select it auto refresh
+   not select"). histSel / queueSel remember the ticked job ids and every
+   render re-applies them. */
+var histSel = {}, queueSel = {}, histSelCount = 0, queueSelCount = 0;
 var rulesCache = [], ruleEditIdx = -1, pausedState = false, hubStartTime = null;
 var dirtyKeys = {};   /* inputs touched but not saved yet - poll must not overwrite */
 var EXT_ID = "likldbkamojokkfdlcjibiljpgbbnohc";
@@ -1717,7 +1733,12 @@ async function api(path, opts){
   if (r.status === 401) { showTokenCard(true); throw new Error("auth"); }
   var d = {};
   try { d = await r.json(); } catch(_){}
-  if (!r.ok || d.ok === false) throw new Error(d.error || ("HTTP " + r.status));
+  /* v3.2.5 BUG FIX 5: surface the server's REAL message. The old line
+     showed a blind "HTTP 200" whenever the hub answered {ok:false} with
+     only a message field (e.g. policy-install on a locked-down PC) - the
+     user could never see WHY it failed. error > message > status now. */
+  if (!r.ok || d.ok === false)
+    throw new Error(d.error || d.message || ("HTTP " + r.status));
   return d;
 }
 
@@ -2394,7 +2415,9 @@ function renderJobs(jobs){
     fc[6].querySelector(".n").textContent = jobs.filter(function(j){
       return ["failed", "dead"].indexOf(j.status) >= 0; }).length;
   }
-  /* queue table */
+  /* queue table - v3.2.5 BUG FIX 3: checkbox column (like History),
+     selection survives the poll, per-row Cancel stays, and a header
+     select-all box ticks every VISIBLE row */
   var tbl = document.querySelector("#p-queue table.tbl");
   if (tbl) {
     var tmpl = null;
@@ -2402,30 +2425,34 @@ function renderJobs(jobs){
     var list = jobs.filter(function(j){ return !jobFilter || j.status === jobFilter; });
     list.slice(0, 60).forEach(function(j){
       var tr = tmpl.cloneNode(true), td = tr.querySelectorAll("td");
-      td[0].textContent = "#" + j.id;
-      td[1].textContent = j.title || "job";
-      td[2].textContent = j.printer || "default";
-      td[3].innerHTML = kindChip(jobKind(j));
-      td[4].innerHTML = chip(j.status);
-      td[5].innerHTML = prog(j.status, jobPct(j));
+      var qc = td[0].querySelector('input[type="checkbox"]');
+      if (qc) { qc.checked = !!queueSel[j.id]; qc.setAttribute("data-qid", j.id); }
+      td[1].textContent = "#" + j.id;
+      td[2].textContent = j.title || "job";
+      td[3].textContent = j.printer || "default";
+      td[4].innerHTML = kindChip(jobKind(j));
+      td[5].innerHTML = chip(j.status);
+      td[6].innerHTML = prog(j.status, jobPct(j));
       var act = j.status === "queued" ? '<button class="btn small danger" data-cancel="' + j.id + '">Cancel</button>'
         : j.status === "held" ? '<button class="btn small" data-pnow="' + j.id + '">\u26A1 Release</button>'
         : j.status === "printing" ? '<button class="btn small danger" data-cancel="' + j.id + '">Cancel</button>'
         : ["failed", "dead"].indexOf(j.status) >= 0 ? '<button class="btn small" data-retry="' + j.id + '">\u21BB Retry</button>'
         : '<button class="btn small" data-reprint="' + j.id + '">\u21BB Reprint</button>';
-      td[6].innerHTML = act;
+      td[7].innerHTML = act;
       tbl.appendChild(tr);
     });
     if (!list.length && tmpl) {
       var tr = tmpl.cloneNode(true), td = tr.querySelectorAll("td");
-      td[0].textContent = "\u2014"; td[1].textContent = "no jobs" +
+      td[1].textContent = "\u2014"; td[2].textContent = "no jobs" +
         (jobFilter ? " with status " + jobFilter : "");
-      for (var i = 2; i < td.length; i++) td[i].innerHTML = "&nbsp;";
+      for (var i = 3; i < td.length; i++) td[i].innerHTML = "&nbsp;";
+      var e0 = td[0].querySelector('input[type="checkbox"]'); if (e0) e0.checked = false;
       tbl.appendChild(tr);
     }
     var running = jobs.filter(function(j){ return j.status === "printing"; })[0];
     var r = document.querySelector("#p-queue .card-h .r");
     if (r) r.textContent = running ? "hub #" + running.id + " in progress" : "hub idle";
+    syncSelBar();
   }
   /* history table */
   var ht = document.querySelector("#p-history table.tbl");
@@ -2452,7 +2479,8 @@ function renderJobs(jobs){
     });
     hlist.slice(0, lim).forEach(function(j){
       var tr = htmpl.cloneNode(true), td = tr.querySelectorAll("td");
-      td[0].firstElementChild.checked = false;
+      /* v3.2.5 BUG FIX 2: ticked rows STAY ticked across the 3 s poll */
+      td[0].firstElementChild.checked = !!histSel[j.id];
       td[0].firstElementChild.setAttribute("data-hid", j.id);
       td[1].textContent = "#" + j.id;
       td[2].textContent = (j.created_at || "").replace("T", " ").slice(11, 19);
@@ -2460,21 +2488,121 @@ function renderJobs(jobs){
       td[4].textContent = j.printer || "\u2014";
       td[5].innerHTML = kindChip(jobKind(j));
       td[6].innerHTML = chip(j.status);
-      td[7].innerHTML = '<button class="btn small" data-reprint="' + j.id + '"' +
-        (j.file_path || ["printed", "saved"].indexOf(j.status) >= 0 ? "" : " disabled") +
-        '>\u21BB Reprint</button>';
+      var canStill = ["queued", "held", "printing"].indexOf(j.status) >= 0;
+      td[7].innerHTML =
+        (canStill ? '<button class="btn small danger" data-cancel="' + j.id + '">Cancel</button>'
+                  : '<button class="btn small" data-reprint="' + j.id + '"' +
+                    (j.file_path || ["printed", "saved"].indexOf(j.status) >= 0 ? "" : " disabled") +
+                    '>\u21BB Reprint</button>');
       ht.appendChild(tr);
     });
     if (!hlist.length && htmpl) {
       var tr = htmpl.cloneNode(true), td = tr.querySelectorAll("td");
       td[1].textContent = "\u2014"; td[3].textContent = "no history yet";
       for (var i2 = 0; i2 < td.length; i2++) if (i2 !== 1 && i2 !== 3) td[i2].innerHTML = "&nbsp;";
+      var h0 = td[0].querySelector('input[type="checkbox"]'); if (h0) h0.checked = false;
       ht.appendChild(tr);
     }
     var hr = document.querySelector("#p-history .card-h .r");
     if (hr) hr.textContent = "last " + Math.min(hlist.length, lim) + " of " + jobs.length +
       " \u00b7 reprint needs the original file on disk (Hub \u2192 Keep printed files)";
+    syncSelBar();
   }
+}
+
+/* ---------- v3.2.5 BUG FIXES 2 + 3: SELECTION TOOLBAR ENGINE ----------
+   History AND Queue now behave the same way:
+     - ticked rows stay ticked across the 3 s auto-refresh
+     - a live counter ("3 selected") sits next to the bulk buttons
+     - Reprint selected / Cancel selected act on the ticked rows
+     - Clear selected just unticks (it never touches the jobs)
+   Queue gets the full set too: per-row Cancel stays, a header
+   select-all box ticks every visible row, Cancel selected cancels
+   every ticked job that can still be canceled. */
+function selIds(sel){
+  return Object.keys(sel).filter(function(k){ return sel[k]; });
+}
+function syncSelBar(){
+  histSelCount = selIds(histSel).length;
+  queueSelCount = selIds(queueSel).length;
+  var h = $("histSelInfo"), q = $("queueSelInfo");
+  if (h) h.textContent = histSelCount ? histSelCount + " selected" : "nothing ticked";
+  if (q) q.textContent = queueSelCount ? queueSelCount + " selected" : "nothing ticked";
+  var ha = $("histCancelSel"), qc = $("queueCancelSel");
+  if (ha) ha.disabled = !histSelCount;
+  if (qc) qc.disabled = !queueSelCount;
+  /* header select-all mirrors the visible rows (queue + history) */
+  qsa('#p-queue table.tbl input[type="checkbox"][data-qall]').forEach(function(a){
+    var rows = qsa('#p-queue table.tbl input[type="checkbox"][data-qid]');
+    if (!rows.length) { a.checked = false; a.indeterminate = false; return; }
+    var n = rows.filter(function(c){ return c.checked; }).length;
+    a.checked = n === rows.length;
+    a.indeterminate = n > 0 && n < rows.length;
+  });
+  qsa('#p-history table.tbl input[type="checkbox"][data-hall]').forEach(function(a){
+    var rows = qsa('#p-history table.tbl input[type="checkbox"][data-hid]');
+    if (!rows.length) { a.checked = false; a.indeterminate = false; return; }
+    var n = rows.filter(function(c){ return c.checked; }).length;
+    a.checked = n === rows.length;
+    a.indeterminate = n > 0 && n < rows.length;
+  });
+}
+function bindSelections(){
+  document.addEventListener("change", function(ev){
+    var c = ev.target;
+    if (!c || !c.type || c.type !== "checkbox") return;
+    if (c.hasAttribute && c.hasAttribute("data-hid")) {
+      histSel[c.getAttribute("data-hid")] = c.checked;
+      syncSelBar(); return;
+    }
+    if (c.hasAttribute && c.hasAttribute("data-qid")) {
+      queueSel[c.getAttribute("data-qid")] = c.checked;
+      syncSelBar(); return;
+    }
+    if (c.hasAttribute && c.hasAttribute("data-qall")) {
+      /* select-all: tick every visible queue row (and remember them) */
+      qsa('#p-queue table.tbl input[type="checkbox"][data-qid]').forEach(function(r){
+        r.checked = c.checked;
+        queueSel[r.getAttribute("data-qid")] = c.checked;
+      });
+      syncSelBar(); return;
+    }
+    if (c.hasAttribute && c.hasAttribute("data-hall")) {
+      /* history select-all: tick every visible history row */
+      qsa('#p-history table.tbl input[type="checkbox"][data-hid]').forEach(function(r){
+        r.checked = c.checked;
+        histSel[r.getAttribute("data-hid")] = c.checked;
+      });
+      syncSelBar(); return;
+    }
+  });
+}
+function clearSelection(scope){
+  if (scope === "history") {
+    histSel = {};
+    qsa('#p-history table.tbl input[type="checkbox"]').forEach(function(c){ c.checked = false; });
+    toast("Selection cleared - the jobs themselves are untouched", "ok");
+  } else {
+    queueSel = {};
+    qsa('#p-queue table.tbl input[type="checkbox"]').forEach(function(c){
+      if (!c.hasAttribute("data-qall")) c.checked = false; });
+    toast("Selection cleared - the jobs themselves are untouched", "ok");
+  }
+  syncSelBar();
+}
+async function cancelSelected(scope){
+  var sel = scope === "history" ? histSel : queueSel;
+  var ids = selIds(sel);
+  if (!ids.length) return toast("Tick some rows first", "warn");
+  var done = 0;
+  for (var i = 0; i < ids.length; i++) {
+    try { await api("/jobs/" + ids[i] + "/cancel", { method: "POST" }); done++; }
+    catch (e) { /* finished jobs cannot be canceled - count only wins */ }
+  }
+  if (scope === "history") histSel = {}; else queueSel = {};
+  toast(done + " job(s) canceled (" + (ids.length - done) +
+        " already finished)", done ? "ok" : "warn");
+  poll();
 }
 
 /* ---- audit ---- */
@@ -3245,8 +3373,13 @@ function bindButtons(){
     var cp = t.getAttribute && t.getAttribute("data-cp");
     if (cp) return copyText(cp, t);
     var sd = t.getAttribute && t.getAttribute("data-setdef");
-    if (sd) { try { await api("/config", { method: "POST", body: { printer: sd } });
-        toast(sd + " is now the default printer", "ok"); poll(); } catch (e) { toast(e.message, "err"); } }
+    if (sd) { try { /* v3.2.5 BUG FIX 1: /printers/set-default performs the
+                        OS-level change (Windows also opts out of "let
+                        Windows manage my default printer"); the toast
+                        reports the VERIFIED result, not a wish */
+      var r5 = await api("/printers/set-default", { method: "POST", body: { printer: sd } });
+      toast(r5.detail || (sd + " is now the OS default printer"), "ok");
+    } catch (e) { toast(e.message, "err"); } poll(); }
     var pt = t.getAttribute && t.getAttribute("data-ptest");
     if (pt) { try { await api("/testprint", { method: "POST", body: { printer: pt } });
         toast("Test page queued on " + pt, "ok"); poll(); } catch (e) { toast(e.message, "err"); } }
@@ -3327,6 +3460,11 @@ function bindButtons(){
   btnLike("#p-history", /Reprint non-printed/i, function(){ reprintFailed(); });
   btnLike("#p-history", /Clear ALL history/i, function(){ ACTIONS["queue-clear-finished"](); });
   btnLike("#p-history", /Export CSV/i, function(){ ACTIONS["export-history"](); });
+  /* v3.2.5 BUG FIXES 2 + 3: the bulk-selection buttons (History AND Queue) */
+  btnLike("#p-history", /Cancel selected/i, function(){ cancelSelected("history"); });
+  btnLike("#p-history", /Clear selected/i, function(){ clearSelection("history"); });
+  btnLike("#p-queue", /Cancel selected/i, function(){ cancelSelected("queue"); });
+  btnLike("#p-queue", /Clear selected/i, function(){ clearSelection("queue"); });
   /* printers */
   btnLike("#p-printers", /Re-scan/i, function(){ ACTIONS["refresh-printers"](); });
   btnLike("#p-printers", /Reload list/i, function(){ ACTIONS["refresh-printers"](); });
@@ -3860,9 +3998,29 @@ function bindSwitches(){
     if (scope === "p-settings") {
       var rows = qsa("#p-settings .f-row .switch");
       var si = rows.indexOf(s);
-      if (si === 0 || si === 1) {          /* tray/service managed */
-        toast(["Start with Windows is managed by the service/tray (use the Hub tools)",
-               "Minimize to tray is the desktop-app default"][si], "warn");
+      if (si === 0) {          /* v3.2.5 BUG FIX 6: Start with Windows
+                                  ACTUALLY toggles now - POST /autostart
+                                  writes/removes the Startup shortcut,
+                                  the very same one the tray icon and
+                                  Task Manager > Startup apps show */
+        var want = !autoStartState;
+        s.classList.toggle("on", want);
+        api("/autostart", { method: "POST", body: { enabled: want } })
+          .then(function(r2){
+            autoStartState = !!(r2 && r2.enabled);
+            s.classList.toggle("on", autoStartState);
+            toast("Start with Windows " + (autoStartState
+              ? "ON - the Startup shortcut is created (Task Manager > Startup apps shows it)"
+              : "OFF - the Startup shortcut was removed"),
+              autoStartState ? "ok" : "warn");
+          })
+          .catch(function(e){ s.classList.toggle("on", autoStartState);
+            toast(e.message, "err"); });
+        return;
+      }
+      if (si === 1) {          /* minimize-to-tray stays a desktop-app
+                                  default - the hub window has no tray */
+        toast("Minimize to tray is the desktop-app default", "warn");
         return;
       }
     }
@@ -3968,7 +4126,11 @@ async function poll(){
     if (!hubStartTime && h.uptime_s) hubStartTime = Date.now() - h.uptime_s * 1000;
     showOffline(false);
     VERSION_TXT = "v" + (h.version || BOOT.version || "?");
-    autoStartState = !!(cfgCache.autostart || (cfgCache.ext_prefs || {}).autostart);
+    /* v3.2.5 BUG FIX 6: the REAL Startup-folder state (the same source
+       the tray icon reads). The old line read cfgCache.autostart - a
+       config.json key the hub never wrote - so the switch showed OFF
+       even when autostart was ON (tray said ON, UI said OFF). */
+    autoStartState = !!h.autostart;
     renderFrame(h);
     renderStats(h, st, q, pr);
     renderLanRows();
@@ -3995,6 +4157,7 @@ async function boot(){
   injectTools();
   bindButtons();
   bindSwitches();
+  bindSelections();   /* v3.2.5: History/Queue checkbox selection engine */
   bindPrintDefaults();
   applyCenterView();
   try {

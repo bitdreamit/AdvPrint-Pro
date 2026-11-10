@@ -13,6 +13,47 @@ Web page ──► Chrome extension ──► AdvPrint Pro hub (localhost:9235) 
 
 ---
 
+## What's new in v3.2.5 (SIX USER-REPORTED BUGS, ALL FIXED)
+
+Everything below is locked by tests **and** verified live in a browser.
+
+1. **Set Default printers FOR REAL.** The old button only saved the hub
+   config key; Windows kept its own default and the factory-on
+   *"Let Windows manage my default printer"* feature flipped it back.
+   The new `POST /printers/set-default` performs the OS-level change
+   (Windows: disables the auto-manage feature per-user —
+   `LegacyDefaultPrinterMode=1` — then sets the default and VERIFIES by
+   reading it back; Unix: `lpoptions -d`), keeps the hub destination in
+   sync and the toast reports the verified result.
+2. **Job History selection survives the 3 s auto-refresh** — ticked
+   rows stay ticked; a live "n selected" counter plus **Reprint
+   selected / Cancel selected / Clear selected** and a per-row
+   **Cancel** (queued/held/printing) join the per-row **Reprint**; the
+   header checkbox is a real select-all.
+3. **Live Queue gets the same treatment** — checkbox column, select-all,
+   per-row actions by status, **Cancel selected** + **Clear selected**,
+   selection persists.
+4. **The per-printer IPP URL is confirmed working** —
+   `ipp://<ip>:9235/ipp/print/<printer>` resolves raw names, URL-encoded
+   names and slugs (case/punctuation-insensitive) on both the GET
+   landing page and the IPP print queue; unknown queues answer 404.
+5. **Force-install policy reports its REAL failure** — the console no
+   longer hides `{ok:false}` behind "HTTP 200"; the hub gets a
+   PowerShell fallback when reg.exe is blocked; the release notes
+   document exactly how to apply and verify the policy
+   (`chrome://policy`, `ExtensionInstallForcelist`, manual .reg, GPO,
+   managed-PC caveat).
+6. **Start with Windows is honest** — the Settings switch reads the REAL
+   Startup-folder state from `/health` and actually toggles it via
+   `POST /autostart` (writes/removes the same shortcut the tray icon and
+   Task Manager → Startup apps show). Tray, UI and Task Manager can no
+   longer disagree.
+
+All v3.2.4 features are unchanged (the toolbar popup, ONE UI ONE
+BUTTON, Allowed IPs, branding-only options page). See
+`docs/RELEASE-NOTES-v3.2.5.md` and
+`docs/AdvPrint-Pro-v3.2.5-A-to-Z-DEV-GUIDE.md`.
+
 ## What's new in v3.2.4 (THE TOOLBAR POPUP IS BACK)
 
 One change, exactly as requested: the quick toolbar **popup is back**.
@@ -248,7 +289,7 @@ The ten most-requested features, all in one release:
 - **DropZone + Send portal — printing WITHOUT the extension.** The hub watches a folder: in Word/Excel/ANY app choose *Microsoft Print to PDF* and save into the DropZone — the page prints seconds later (dashboard → DropZone card; `POST /dropzone/open` opens the folder). Phones/tablets/other PCs print through the built-in **Send portal** (`/send`, token-protected, same as every endpoint).
 - **Restart hub** — in the tray menu, AdvPrint Tool [14] and the dashboard button: the hub relaunches itself cleanly (new process waits for the port; queued jobs, settings and history are kept).
 - **Bullet-proof upgrade & uninstall.** The setup now runs `hub-stop.ps1` BEFORE touching files: stops the optional *AdvPrint* service (wait + PID kill), **deletes the service registration** (reinstalled fresh when ticked — upgrades keep it automatically), kills every process under the install folder and frees TCP 9235. Old program folders are wiped, so no stale file can abort an install any more; the uninstaller retries the folder sweep and reports leftovers honestly.
-- **Silent install** `AdvPrint-Pro-Setup-3.2.4.exe /S` — elevation is requested by the exe manifest itself ("auto permission" on any PC), the hub auto-starts after a silent install, and the firewall rule for LAN sharing (TCP 9235) is added automatically (removed on uninstall).
+- **Silent install** `AdvPrint-Pro-Setup-3.2.5.exe /S` — elevation is requested by the exe manifest itself ("auto permission" on any PC), the hub auto-starts after a silent install, and the firewall rule for LAN sharing (TCP 9235) is added automatically (removed on uninstall).
 - **New A + printer logo** — the letter A drawn as a printer: the crossbar is the output slot and a printed page slides out of it. Same mark in the extension, popup, dashboard, tray icon, installer and docs.
 
 Nothing removed: every v2.7.0 feature (history manager, share toggles, live test tool) is unchanged.

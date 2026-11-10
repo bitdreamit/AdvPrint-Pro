@@ -1,6 +1,79 @@
 # Changelog - AdvPrint Pro (Advanced Printer)
 by Bit Dream IT - Innovative Healthcare Solutions
 
+# Changelog - AdvPrint Pro (Advanced Printer)
+by Bit Dream IT - Innovative Healthcare Solutions
+
+## v3.2.5 - SIX USER-REPORTED BUGS, ALL FIXED (2026-11-10)
+
+Base: v3.2.4 - every feature unchanged. Six reported defects fixed,
+each locked by tests AND verified live in a real browser session.
+
+### 1. Set Default actually sets the OS default (was config-only)
+- NEW `POST /printers/set-default` + `os_set_default_printer()`.
+- Windows: `LegacyDefaultPrinterMode=1` (per-user opt-out of "let
+  Windows manage my default printer", no UAC) + `WScript.Network
+  .SetDefaultPrinter` + VERIFY by reading the default back.
+- Unix: `lpoptions -d <name>` (per-user CUPS default).
+- Hub destination key synced, audit event `printers.set_default`,
+  toast shows the verified result.
+
+### 2. Job History: selection survives the 3 s poll + new actions
+- `histSel` state re-applied on every render (the old code forced
+  `checked = false` - the user's selection vanished on auto-refresh).
+- Live "n selected" counter; Reprint selected / Cancel selected /
+  Clear selected; per-row Cancel on queued/held/printing rows;
+  header select-all. Clear selected NEVER deletes jobs.
+
+### 3. Live Queue: checkboxes like History
+- Checkbox column + header select-all (`data-qall`), `queueSel`
+  state, Cancel selected + Clear selected + counter, selection
+  persists; per-row actions by status unchanged (Cancel / Release /
+  Retry / Reprint).
+
+### 4. Per-printer IPP URL verified workable
+- `ipp://<ip>:9235/ipp/print/<printer>` resolves raw / URL-encoded /
+  slug names case+punctuation-insensitively on GET (landing page) and
+  IPP POST (print queue); unknown queue -> 404. Proven live; no code
+  change needed - the URL on the printer cards is real.
+
+### 5. Policy install honesty (was "failed: HTTP 200")
+- console `api()`: `d.error || d.message || HTTP <status>` - the real
+  reason surfaces instead of a blind status line.
+- `_ext_reg_add`: reg.exe first, PowerShell `New-ItemProperty`
+  fallback when AV blocks reg.exe.
+- `/tool policy-install` + `/extension/policy/install` responses carry
+  an honest `error` field + truthful per-browser report.
+- RELEASE-NOTES-v3.2.5.md documents how to apply and verify the
+  policy: one click, chrome://policy verification, manual .reg
+  listing, GPO path, managed-PC caveat, Linux JSON policies.
+
+### 6. Start with Windows is honest (tray ON / UI OFF disagreement)
+- The console read a config.json key the hub never wrote (always OFF)
+  and the switch refused to act ("managed by the service/tray").
+- The switch now reads the REAL Startup-file state from `/health` and
+  toggles it via `POST /autostart` (writes/removes
+  `shell:startup\AdvPrint Pro.lnk` - the same shortcut the tray and
+  Task Manager > Startup apps show).
+- `POST /autostart` rebuilds the health snapshot immediately so the
+  next poll cannot flip the switch back.
+
+### Verification
+- `tests/test_v325.py` (19 locks) added; full suite 366 passed,
+  1 skipped.
+- `scripts/render_v325.py`: live hub + Playwright - all six fixes
+  verified end-to-end with screenshots (queue checkboxes + selection
+  across a real poll tick, history selection + per-row Cancel + bulk
+  cancel, printer card IPP URLs, set-default flip + honest failure,
+  policy error field, autostart round-trip + UI switch).
+
+### Files
+- dist/: AdvPrint-Pro-Setup-3.2.5.exe, advprint-pro_3.2.5_all.deb,
+  AdvPrint-Pro.crx, AdvPrint-Pro-Extension-3.2.5.zip,
+  SHA256SUMS-3.2.5.txt (4 artifacts covered - the build script STILL
+  had the v3.2.2 bug that dropped the Setup-EXE checksum line; the
+  path bug is fixed and a test locks the 4-line result).
+
 ## v3.2.4 - THE TOOLBAR POPUP IS BACK (2026-11-10)
 
 Base: v3.2.3 - every fix unchanged. Exactly one change, the one asked

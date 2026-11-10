@@ -1,4 +1,4 @@
-"""v3.2.4 - THE TOOLBAR POPUP IS BACK.
+"""v3.2.5 - THE TOOLBAR POPUP IS BACK.
 
 Locks the popup contract end to end:
 * manifest default_popup + version coherence
@@ -8,7 +8,7 @@ Locks the popup contract end to end:
 * every popup i18n key exists (en + bn)
 * every sendMessage type popup.js uses exists in background.js
 * setup.nsi packs popup.html + popup.js again
-* the hub VERSION / VERSION_NAME / VERSION.txt / manifest agree on 3.2.4
+* the hub VERSION / VERSION_NAME / VERSION.txt / manifest agree on 3.2.5
 """
 import json
 import os
@@ -28,10 +28,10 @@ EXT = os.path.join(ROOT, "extension")
 def test_v324_manifest_opens_the_popup():
     man = json.load(open(os.path.join(EXT, "manifest.json"),
                          encoding="utf-8"))
-    assert man["version"] == "3.2.4"
+    assert man["version"] == "3.2.5"
     act = man.get("action", {})
     assert act.get("default_popup") == "popup.html", \
-        "v3.2.4 must open the toolbar popup again"
+        "v3.2.5 must open the toolbar popup again"
     assert act.get("default_title") == "AdvPrint Pro"
     # the options page stays exactly where it was
     assert man.get("options_ui", {}).get("page") == "options.html"
@@ -66,7 +66,7 @@ def test_v324_popup_keeps_options_button():
     js = open(os.path.join(EXT, "popup.js"), encoding="utf-8").read()
     assert 'openOptionsPage' in js
     # and the header version chip matches the manifest version
-    assert '<span class="ver" id="ver">v3.2.4</span>' in s
+    assert '<span class="ver" id="ver">v3.2.5</span>' in s
 
 
 def test_v324_popup_js_no_dead_listeners():
@@ -123,7 +123,7 @@ def test_v324_popup_message_types_supported():
     bg = open(os.path.join(EXT, "background.js"), encoding="utf-8").read()
     used = set(re.findall(r'type:\s*"([A-Za-z0-9_]+)"', js))
     # NOTE: openHubPage was ONLY used by the removed footer links - the
-    # v3.2.4 popup reaches the console through the Options button.
+    # v3.2.5 popup reaches the console through the Options button.
     expected = {"getCfg", "saveCfg", "hubStatus", "hubJobs", "hubConfigSet",
                 "printTab", "printScreenshot", "queueAction", "jobPrintNow",
                 "flushRetries", "retryInfo", "tokenDetect"}
@@ -149,28 +149,28 @@ def test_v324_nsis_packs_popup():
                encoding="utf-8").read()
     assert 'File "/oname=popup.html" "../extension/popup.html"' in nsi
     assert 'File "/oname=popup.js" "../extension/popup.js"' in nsi
-    assert 'OutFile "../dist/AdvPrint-Pro-Setup-3.2.4.exe"' in nsi
-    assert 'VIProductVersion "3.2.4.0"' in nsi
+    assert 'OutFile "../dist/AdvPrint-Pro-Setup-3.2.5.exe"' in nsi
+    assert 'VIProductVersion "3.2.5.0"' in nsi
 
 
 # ------------------------------------------------------------
 # version coherence: one version everywhere
 # ------------------------------------------------------------
 def test_v324_version_coherence():
-    assert advprint.VERSION == "3.2.4"
-    assert advprint.VERSION_NAME.startswith("v3.2.4")
+    assert advprint.VERSION == "3.2.5"
+    assert advprint.VERSION_NAME.startswith("v3.2.5")
     vt = open(os.path.join(ROOT, "VERSION.txt"), encoding="utf-8").read()
-    assert "3.2.4" in vt
+    assert "3.2.5" in vt
     man = json.load(open(os.path.join(EXT, "manifest.json"),
                          encoding="utf-8"))
     assert man["version"] == advprint.VERSION
     opt = open(os.path.join(EXT, "options.html"), encoding="utf-8").read()
-    assert "v3.2.4" in opt, "options brand line must carry v3.2.4"
+    assert "v3.2.5" in opt, "options brand line must carry v3.2.5"
 
 
 def test_v324_hub_still_reports_324():
     """/health keeps reporting the live VERSION (popup shows it)."""
-    assert advprint.VERSION == "3.2.4"
+    assert advprint.VERSION == "3.2.5"
     # the ACL feature from v3.2.3 is still wired
     assert advprint.CFG.get("allowed_ips") == ["*"]
     assert hasattr(advprint, "ip_allowed_by_list")
