@@ -11,6 +11,28 @@ All responses are JSON with an `"ok"` field. The API is CORS-open; `Access-Contr
 - `page_url` and every `pdf_url` redirect hop run the private-address guard (`400` on file:// / internal hosts).
 - `?limit=` on `/jobs` and `/audit` is clamped (1-200 / 1-1000).
 
+**v3.2.6 UI SECURITY GATE - the console is local-only:**
+- Every UI / settings / management endpoint answers **only on the hub
+  PC itself** (loopback OR one of the machine's own IPs): `/ui`,
+  `/dashboard`, `/docs`, `/`, `/config` (POST), `/token/*`,
+  `/autostart`, `/queue/*` control, `/history/clear`,
+  `/jobs/release_all`, `/tool`, `/restart`, `/printers/set-default`,
+  `/extension/policy/*`, `/firewall/*`, `/livetest`, `/qr`, `/stats`,
+  `/audit`, `/export/*`, `/debug`, `/diagnostics`, `/peers`,
+  `/dropzone`, `/lan/selftest`. A non-local caller gets a branded
+  `403` (HTML page for browsers, JSON for API clients) that points at
+  the print URLs; the attempt is audited (`ui.locked`).
+- The **print surface stays open** to every address the Allowed-IPs
+  list admits (default `*`): `POST /print`, `GET+POST /send`,
+  `GET+POST /ipp/*` (+ the 631 mirror, RAW 9100), `GET /jobs`,
+  `POST /jobs/<id>/cancel`, `POST /jobs/<id>/print-now`,
+  `POST /jobs/bulk-reprint`, `GET /printers`, `GET /health`,
+  `GET /extension/*`, `GET /connect`, `GET /testprint`,
+  `POST /client/report`, `POST /debug/report`.
+- The two gates stack: Allowed-IPs (v3.2.3) decides who may talk to
+  the hub AT ALL; the v3.2.6 gate then restricts non-local callers to
+  the print surface. The hub PC itself always passes both.
+
 ---
 
 ## POST /ipp/print — IPP network printer endpoint *(v2.9.0, no token)*
@@ -227,7 +249,7 @@ Errors: `400` bad payload · `401` bad token · `500` render failure (html/page)
 | `GET /queue` | `{"ok":true,"paused":false,"pending":2,"current":{...job...}}` |
 | `POST /queue/pause` | Worker stops taking jobs (already-running job finishes) |
 | `POST /queue/resume` | Worker continues; queued jobs print in FIFO order |
-| `POST /queue/clear` | All `queued` jobs become `canceled` |
+| `POST /queue/clear` | **v3.2.6** Cancels every live job (queued/held/scheduled/printing) AND removes all terminal rows - the queue and history come back empty. With `{"finished": true}` it deletes finished rows only (alias of `/history/clear`). **Local-only** (see the security gate) |
 
 The queue is **DB-driven** (SQLite): pending jobs survive hub restarts, and jobs stuck in `printing` after a crash are re-queued at startup.
 
@@ -256,7 +278,7 @@ The queue is **DB-driven** (SQLite): pending jobs survive hub restarts, and jobs
 | `POST /config` (share_lan) | **v2.8.2** now applies LIVE - the response carries `"lan":{"rebound":true,"lan_error":null}` once the LAN listener is already serving |
 | `POST /restart` | **v2.8.0** Restart the hub cleanly (it relaunches itself; queued jobs are kept) |
 | `POST /jobs/bulk-reprint` | **v2.7.0** Reprint many jobs in one call |
-| `POST /history/clear` | **v2.7.0** Delete every FINISHED job from the history |
+| `POST /history/clear` | **v2.7.0** Delete every FINISHED job from the history (waiting jobs untouched). **Local-only** (see the security gate) |
 
 ### POST /send (v2.8.0) - print WITHOUT the extension
 ```bash

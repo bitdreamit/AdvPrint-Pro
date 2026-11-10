@@ -95,44 +95,41 @@ if _HUB_DIR not in sys.path:
     sys.path.insert(0, _HUB_DIR)
 
 
-VERSION = "3.2.5"
-VERSION_NAME = ("v3.2.5 (SIX USER-REPORTED BUGS FIXED. 1) SET DEFAULT "
-    "PRINTERS FOR REAL: the old Set Default button only saved the hub "
-    "config key while Windows kept its own default and the 'let Windows "
-    "manage my default printer' feature silently flipped it back - the new "
-    "POST /printers/set-default endpoint performs the OS-level change "
-    "(Windows: disables the auto-manage feature via HKCU LegacyDefault"
-    "PrinterMode=1, then WScript.Network.SetDefaultPrinter, verified by "
-    "reading the default back; Unix: lpoptions -d), keeps the hub "
-    "destination in sync and returns the REAL new default in the toast. "
-    "2) JOB HISTORY SELECTION SURVIVES THE 3 s AUTO-REFRESH: ticked rows "
-    "stay ticked, a live 'n selected' counter plus Reprint selected / "
-    "Cancel selected / Clear selected buttons and a per-row Cancel join "
-    "the per-row Reprint. 3) LIVE QUEUE GETS THE SAME TREATMENT: a "
-    "checkbox column with select-all, Cancel on every row, Cancel selected "
-    "and Clear selected - selection also survives the poll. 4) THE "
-    "PER-PRINTER IPP URL IS CONFIRMED WORKING: "
-    "ipp://<ip>:9235/ipp/print/<printer-slug> resolves raw names, "
-    "URL-encoded names and slugs case/punctuation-insensitively on both "
-    "the GET landing page and the IPP POST queue (proven by the new "
-    "scripts/live_ipp_smoke.py test), so the URL on every printer card is "
-    "real. 5) FORCE-INSTALL POLICY REPORTS ITS REAL FAILURE: the console "
-    "no longer hides {ok:false} behind 'HTTP 200' - the toast shows the "
-    "server message, reg.exe gets a PowerShell New-ItemProperty fallback "
-    "when AV suites block it, and the docs explain exactly how to apply "
-    "and verify the policy (chrome://policy, ExtensionInstallForcelist, "
-    "updates.xml, managed-PC caveat). 6) START WITH WINDOWS IS HONEST: the "
-    "Settings switch reads the REAL Startup-folder state from /health and "
-    "now actually toggles it via POST /autostart instead of refusing with "
-    "'managed by the service/tray'; the tray, the UI and config.json can "
-    "no longer disagree. PLUS everything from v3.2.4 unchanged: the "
-    "branding-only toolbar popup (master switches, five action buttons, "
-    "live queue state, one-click Print now, Fix token - footer '100% "
-    "local - no cloud. By Bit Dream IT - Innovative Healthcare Solutions.'), "
-    "ONE UI ONE BUTTON (sidebar is the only tab switcher), ALLOWED IPS "
-    "(LAN Sharing > Allowed IPs, factory default [\"*\"], per-IP / CIDR / "
-    "wildcard entries, branded 403, loopback never locked out) and the "
-    "branding-only extension options page.)")
+VERSION = "3.2.6"
+VERSION_NAME = ("v3.2.6 (SEVEN USER-REPORTED BUGS FIXED + THE UI "
+    "SECURITY MODEL. 1) HISTORY / QUEUE CLEAR REALLY CLEANS: "
+    "POST /queue/clear now cancels every waiting job AND removes all "
+    "finished records so the list is actually empty afterwards, honors "
+    "{finished:true} as an alias of POST /history/clear, and the console "
+    "'Clear ALL history' button finally calls the right endpoint (it "
+    "used to call /queue/clear with a body the hub ignored). 2) PRINTER "
+    "DETAILS NO LONGER DOUBLES THE PATH: the hub now returns the bare "
+    "queue slug and the console no longer prepends /ipp/print a second "
+    "time - http://127.0.0.1:9235/ipp/print/ipp/print/<slug> is dead. "
+    "3) LAN PANEL TOP SWITCH WORKS + COPY URL CARRIES THE TOKEN: the "
+    "header Disable/Enable button was never wired and Copy URL copied a "
+    "token-less URL - both fixed, and an extra IPP Enable/Disable toggle "
+    "joins the panel header. 4) LAN-SHARE ROW COPY URL CARRIES THE TOKEN "
+    "too. 5) QR ENCODES http:// - the IPP QR contains the http:// printer "
+    "URL (phone browsers cannot open ipp:// and just Google-search it) "
+    "while the modal display and the Copy button keep the ipp:// URL "
+    "printers expect. 6) THE INSTALL DOC IS NOT BACKDATED: the "
+    "self-host extension page and the /docs install section no longer "
+    "claim v3.0.7, and the console got an in-UI Docs button - the guide "
+    "opens INSIDE THE ONE UI, no extra old-UI tab. 7) SECURITY - THE UI "
+    "IS LOCAL-ONLY: the console, every settings endpoint and all "
+    "management calls answer ONLY on the hub PC itself (loopback or one "
+    "of the machine's own IPs); LAN PCs keep FULL print access (/print, "
+    "/send, /ipp/*, 631 mirror, RAW 9100, /jobs, /health, extension "
+    "updates) exactly per the allowed_ips list - they simply can no "
+    "longer view the UI or change settings. PLUS: LAN sharing now "
+    "auto-enables the IPP printer when switched on, the interactive CLI "
+    "menu is GONE (python tool.py opens the console instead; all "
+    "subcommands still work) and the tray menu is reduced to Dashboard / "
+    "Restart / Exit. Everything from v3.2.5 stays unchanged: set-default "
+    "for real, history/queue selection that survives the poll, "
+    "per-printer IPP queues, honest policy install, honest autostart, "
+    "ALLOWED IPS and the branding-only popup.)")
 FULL_BRAND = ("AdvPrint Pro (Advanced Printer) by "
               "Bit Dream IT - Innovative Healthcare Solutions")
 BRANDING = ("AdvPrint Pro (Advanced Printer) - Version %s - by "
@@ -800,6 +797,28 @@ def db_clear_history():
             "DELETE FROM jobs WHERE status IN (%s)" %
             ",".join("?" * len(JOB_TERMINAL_STATES)), JOB_TERMINAL_STATES)
         return cur.rowcount or 0
+
+def db_clear_queue():
+    """v3.2.6 BUG FIX 1 - "History and Queue clear but not clean": the
+    old /queue/clear only flipped queued jobs to canceled, so the queue
+    AND the history stayed full of rows. NOW one call:
+      1. cancels every live job (queued / held / scheduled / printing),
+      2. DELETES every terminal row (the fresh cancels included), so
+         the queue view is actually EMPTY afterwards.
+    A job actively printing is canceled the same way the per-row Cancel
+    button cancels it. Returns (canceled, removed)."""
+    live = ("queued", "held", "scheduled", "printing")
+    with _DB_LOCK, db() as conn:
+        cur = conn.execute(
+            "UPDATE jobs SET status='canceled', "
+            "error='queue cleared by user' WHERE status IN (%s)" %
+            ",".join("?" * len(live)), live)
+        canceled = cur.rowcount or 0
+        cur = conn.execute(
+            "DELETE FROM jobs WHERE status IN (%s)" %
+            ",".join("?" * len(JOB_TERMINAL_STATES)), JOB_TERMINAL_STATES)
+        removed = cur.rowcount or 0
+    return canceled, removed
 
 def db_list_not_printed(limit=500):
     """v2.7.0: every finished job that did NOT reach the printer
@@ -1485,6 +1504,87 @@ def ip_allowed_by_list(ip, rules):
         if rule == ip:                        # exact address
             return True
     return False
+
+# ------------------------------------------------------------
+# v3.2.6 UI SECURITY GATE - "only own IP or loopback IP can show UI"
+# ------------------------------------------------------------
+# The user report: "currently any one can change different HUB UI
+# setting it very dangerous. One security reason any same LAN can
+# access and change value - this is bad. Only own IP or loopback IP
+# can show UI. But LAN Sharing & Other PCs related Send/IPP etc
+# different IP can call or access, otherwise can't view or connect.
+# Print not blocked if all IP *, or given IP allow list."
+#
+# Rule, in two layers:
+#   LAYER 1 (unchanged) _ip_gate(): allowed_ips decides WHO may talk to
+#   the hub at all - ["*"] (factory default) or a real allow list.
+#   LAYER 2 (NEW) _mgmt_locked(): from a NON-LOCAL address only the
+#   PRINT SURFACE answers. Everything else - the console UI, the docs,
+#   every settings / management endpoint, /config POST, /token/*,
+#   /queue control, /history/clear, /tool, /qr, /stats, /audit,
+#   /export, /debug, /peers, /dropzone - is answered with a branded
+#   403 that points the visitor at the print URLs.
+#
+# PRINT SURFACE (open to every allowed IP, token rules unchanged):
+#   GET  /health /jobs /printers /testprint /connect /send /qr?NO
+#   GET  /ipp/* (landing + per-printer queues)  /extension/* (updates.xml,
+#        CRX, info - child-PC extensions self-update from here)
+#   POST /print /send /ipp/* /jobs/<id>/cancel /jobs/<id>/print-now
+#        /jobs/bulk-reprint /client/report /debug/report /peer-connect
+#   The 631 IPP mirror and the RAW 9100 port are print surface too and
+#   keep their own ACL logic.
+#
+# The hub PC itself (loopback 127.0.0.1/::1 AND any of the machine's
+# own IPs - so http://<own-lan-ip>:9235/ui still works ON the hub PC)
+# always passes BOTH layers: the owner can never lock themselves out.
+
+_OWN_IPS_CACHE = {"ips": None, "t": 0.0}
+
+def own_ip_set():
+    """Every IP address that belongs to THIS machine (loopback + all
+    LAN addresses). Cached 5 s so DHCP changes are picked up without
+    hammering getaddrinfo on every request."""
+    now = time.time()
+    if _OWN_IPS_CACHE["ips"] is not None and now - _OWN_IPS_CACHE["t"] < 5.0:
+        return _OWN_IPS_CACHE["ips"]
+    ips = {"127.0.0.1", "::1", "::ffff:127.0.0.1"}
+    try:
+        lip = lan_ip()
+        if lip:
+            ips.add(lip)
+    except Exception:
+        pass
+    try:
+        for info in socket.getaddrinfo(socket.gethostname(), None):
+            ips.add(str(info[4][0]))
+    except Exception:
+        pass
+    ips.discard("")
+    _OWN_IPS_CACHE["ips"] = ips
+    _OWN_IPS_CACHE["t"] = now
+    return ips
+
+# Routes a REMOTE (non-local) client may still call - the print surface.
+MGMT_OPEN_GET_EXACT = frozenset((
+    "/health",      # extension + child PCs poll it
+    "/jobs",        # popup queue list / reprint picker
+    "/printers",    # destination picker on child PCs
+    "/testprint",   # a test page IS a print job
+    "/connect",     # the one-click invite landing (opens on the other PC)
+    "/send",        # the phones' send portal page
+))
+MGMT_OPEN_GET_PREFIX = ("/ipp", "/extension/")
+MGMT_OPEN_POST_EXACT = frozenset((
+    "/print",           # THE print API
+    "/send",            # print upload (portal + curl -F)
+    "/peer-connect",    # invite landing POST (still loopback-checked inside)
+    "/client/report",   # write-only extension error reports
+    "/debug/report",    # ditto
+))
+MGMT_OPEN_POST_PREFIX = ("/ipp", "/jobs/")   # /jobs/<id>/cancel, print-now,
+                                             # bulk-reprint = print actions
+# ...but queue CONTROL stays local even under an open prefix:
+MGMT_POST_DENY = frozenset(("/jobs/release_all",))
 
 def build_health_snapshot():
     """Compute the /health body off the request path."""
@@ -4610,6 +4710,121 @@ class Handler(BaseHTTPRequestHandler):
             pass
         return False
 
+    # ---- v3.2.6 UI SECURITY GATE ------------------------------------
+    def _is_own_host(self):
+        """True when the request comes from the hub PC ITSELF: loopback
+        OR any of this machine's own IPs (so http://<own-lan-ip>:9235/ui
+        still opens ON the hub PC). An undeterminable client address
+        passes - the owner is never locked out by a proxy quirk."""
+        ip = self._client_ip()
+        if not ip:
+            return True
+        if ip in ("127.0.0.1", "::1", "::ffff:127.0.0.1"):
+            return True
+        try:
+            return ip in own_ip_set()
+        except Exception:
+            return True
+
+    def _mgmt_locked(self, route):
+        """v3.2.6: True when THIS route must refuse non-local callers.
+        From the hub PC everything answers as before. From the LAN only
+        the PRINT SURFACE answers (see MGMT_OPEN_* above) - the console
+        UI and every settings/management endpoint are local-only."""
+        if self._is_own_host():
+            return False
+        if self.command == "POST":
+            if route in MGMT_POST_DENY:
+                return True
+            if route in MGMT_OPEN_POST_EXACT:
+                return False
+            for p in MGMT_OPEN_POST_PREFIX:
+                if route.startswith(p):
+                    return False
+            return True
+        if route in MGMT_OPEN_GET_EXACT:
+            return False
+        for p in MGMT_OPEN_GET_PREFIX:
+            if route.startswith(p):
+                return False
+        return True
+
+    def _ui_locked_answer(self, route):
+        """Branded 403 for a LAN visitor that touched a local-only
+        route. HTML for browsers (points at the print URLs), JSON for
+        API clients. Audited once per 10 s per IP like the ACL gate."""
+        ip = self._client_ip() or "?"
+        log("[SECURITY] %s %s refused - the console UI is local-only "
+            "(v3.2.6)" % (ip, route))
+        now = time.time()
+        if now - _ACL_AUDIT_TS.get("ui" + ip, 0) >= 10:
+            _ACL_AUDIT_TS["ui" + ip] = now
+            try:
+                db_audit("ui.locked", ip=ip,
+                         details="non-local request to local-only %s"
+                                 % route[:80])
+            except Exception:
+                pass
+        if "text/html" in (self.headers.get("Accept") or ""):
+            page = (
+                "<html><head><meta charset=\"utf-8\">"
+                "<title>AdvPrint Pro - console is local-only</title>"
+                "<style>body{font-family:Segoe UI,system-ui,sans-serif;"
+                "background:#f5f8fc;color:#0f172a;display:flex;"
+                "align-items:center;justify-content:center;min-height:100vh;"
+                "margin:0}.win{max-width:560px;background:#fff;border:1px"
+                " solid #e2e8f0;border-radius:12px;overflow:hidden;"
+                "box-shadow:0 10px 30px rgba(15,23,42,.08)}.bar{background:"
+                "linear-gradient(135deg,#1e3a8a,#1d4ed8);color:#fff;padding:"
+                "14px 18px;font-weight:700;font-size:15px}.b{padding:18px;"
+                "font-size:13.5px;line-height:1.7}code{background:#f1f5f9;"
+                "border:1px solid #e2e8f0;border-radius:5px;padding:1px 5px;"
+                "font-size:12px}footer{padding:10px 18px;border-top:1px"
+                " solid #e2e8f0;color:#64748b;font-size:11.5px}</style>"
+                "</head><body><div class=\"win\">"
+                "<div class=\"bar\">AdvPrint Pro - the console runs on"
+                " the hub PC only</div>"
+                "<div class=\"b\"><b>Printing still works from this"
+                " device.</b> This hub accepts print jobs from the whole"
+                " LAN (or the Allowed-IPs list): the send portal, the"
+                " IPP printer URL and the print API all answer"
+                " normally.<br><br>"
+                "The <b>console UI, the settings and the history are"
+                " locked to the hub PC itself</b> (v3.2.6 security -"
+                " only the hub's own screen may change hub settings)."
+                " Open the console on the hub PC:"
+                " <code>http://127.0.0.1:%d/ui</code><br><br>"
+                "To PRINT from this device:<ul>"
+                "<li>Phones: open the <b>Send portal</b> - ask the hub"
+                " owner for the <code>/send?token=...</code> URL</li>"
+                "<li>Any PC or phone: add this PC as a network printer"
+                " - <code>http://%s:%d/ipp/print</code></li></ul>"
+                "</div><footer>100% local &#183; no cloud. AdvPrint by"
+                " Bit Dream IT - Innovative Healthcare Solutions.</footer>"
+                "</div></body></html>"
+                % (int(CFG.get("port", 9235)),
+                   _html_escape(lan_ip() or "this-PC"),
+                   int(CFG.get("port", 9235)))).encode("utf-8")
+            try:
+                self.send_response(403)
+                self._cors()
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(page)))
+                self.end_headers()
+                self.wfile.write(page)
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+            return
+        try:
+            self._send(403, {
+                "ok": False,
+                "error": "local-only endpoint - '%s' answers on the hub"
+                         " PC itself; LAN devices keep print access"
+                         " (/print, /send, /ipp/print, /jobs)"
+                         % route[:60]})
+        except Exception:
+            pass
+
     def _request_site(self):
         o = self.headers.get("Origin") or self.headers.get("Referer") or ""
         return o.strip()[:200] or None
@@ -4888,6 +5103,12 @@ class Handler(BaseHTTPRequestHandler):
             # v3.2.3 ALLOWED IPS - the network-level gate (before auth)
             if not self._ip_gate():
                 return
+            # v3.2.6 UI SECURITY GATE - non-local clients get the print
+            # surface only; the console UI + management endpoints are
+            # local-only ("only own ip or loopback ip can show ui")
+            if self._mgmt_locked(self.path.split("?")[0].rstrip("/") or "/"):
+                return self._ui_locked_answer(
+                    self.path.split("?")[0].rstrip("/") or "/")
             return self._do_get_impl()
         except (BrokenPipeError, ConnectionResetError):
             pass                          # client hung up - fine
@@ -4902,6 +5123,10 @@ class Handler(BaseHTTPRequestHandler):
             # v3.2.3 ALLOWED IPS - same gate for mutating calls
             if not self._ip_gate():
                 return
+            # v3.2.6 UI SECURITY GATE - same rule for mutating calls
+            if self._mgmt_locked(self.path.split("?")[0].rstrip("/") or "/"):
+                return self._ui_locked_answer(
+                    self.path.split("?")[0].rstrip("/") or "/")
             return self._do_post_impl()
         except (BrokenPipeError, ConnectionResetError):
             pass
@@ -5098,7 +5323,7 @@ class Handler(BaseHTTPRequestHandler):
                     "</head><body style='font-family:Segoe UI,sans-serif;"
                     "background:#f5f8fc;color:#0f172a;padding:32px'>"
                     "<h2>AdvPrint Pro - self-host extension server"
-                    " (v3.0.7)</h2>"
+                    " (v%s)</h2>" % VERSION +
                     "<p>This hub serves its signed browser extension so"
                     " Chrome / Edge / Brave can install and update it"
                     " silently via the ExtensionInstallForcelist"
@@ -5517,7 +5742,13 @@ class Handler(BaseHTTPRequestHandler):
                         "is_group": False}
                 if per_printer:
                     item["ipp_queue"] = ipp_queue_url(n)
-                    item["ipp_path"] = "ipp/print/" + _ipp_queue_slug(n)
+                    # v3.2.6 BUG FIX 2: return the BARE queue slug. The
+                    # console used to prepend "/ipp/print" to this value
+                    # AND the value itself started with "ipp/print/",
+                    # producing the doubled
+                    # /ipp/print/ipp/print/<printer>?token=... URL on
+                    # the printer Details button.
+                    item["ipp_path"] = _ipp_queue_slug(n)
                 items.append(item)
             for g in groups:
                 items.append({"name": g, "is_default": False,
@@ -5636,6 +5867,14 @@ class Handler(BaseHTTPRequestHandler):
             # kind=send (default) -> the LAN Send-portal URL with token;
             # kind=invite          -> the one-click /connect invite link.
             # kind=ipp (v2.9)      -> the IPP printer URL (no token).
+            # v3.2.6 BUG FIX 5 - the ipp QR MUST encode the http:// URL:
+            # phone browsers cannot open ipp:// (they Google-search it),
+            # so the SCANNABLE payload is always
+            #   http://<ip>:<port>/ipp/print
+            # while the console modal DISPLAYS and COPIES the ipp:// URL
+            # that Windows / macOS / CUPS expect for "add a printer".
+            # (lan_share_url("ipp") already returns http:// - the rule is
+            # pinned here explicitly and locked by tests/test_v326.py.)
             # Auth like every GET (?token= works), answer is an SVG image
             # that the dashboard <img> tag (and any phone camera) reads.
             kind = (q.get("kind") or ["send"])[0]
@@ -5647,6 +5886,10 @@ class Handler(BaseHTTPRequestHandler):
                      if CFG.get("share_lan")
                      else ("http://127.0.0.1:%d" % CFG["port"])),
                     quote(str(CFG["token"] or "")))
+            elif kind == "ipp":     # v3.2.6: http:// goes INTO the QR
+                url = "http://%s:%d/ipp/print" % (
+                    lan_ip() if CFG.get("share_lan") else "127.0.0.1",
+                    int(CFG.get("port", 9235)))
             else:
                 url = self._lan_share_url(kind)
             svg = qr_svg(url.encode("utf-8")).encode("utf-8")
@@ -6410,14 +6653,34 @@ class Handler(BaseHTTPRequestHandler):
                 db_audit("queue.resumed", ip=ip, site=site)
                 log("[QUEUE] resumed by request")
             else:
-                n = 0
-                for j in db_list(limit=500, status="queued"):
-                    db_update(j["id"], status="canceled",
-                              error="queue cleared by user")
-                    n += 1
-                db_audit("queue.cleared", ip=ip, site=site, details="%d jobs" % n)
-                log("[QUEUE] cleared %d pending job(s)" % n)
-                return self._send(200, {"ok": True, "canceled": n})
+                # v3.2.6 BUG FIX 1 - "clear but not clean": the old code
+                # only flipped queued jobs to canceled and IGNORED the
+                # {finished:true} body the console sent - rows stayed in
+                # both views forever. NOW:
+                #   {finished:true} -> remove every FINISHED record
+                #                     (same as POST /history/clear)
+                #   plain           -> cancel every live job AND remove
+                #                     all terminal rows (queue is EMPTY
+                #                     afterwards - really clean)
+                if isinstance(body, dict) and body.get("finished"):
+                    n = db_clear_history()
+                    db_audit("history.cleared", ip=ip, site=site,
+                             details="queue/clear finished:true - %d "
+                                     "finished job(s) removed" % n)
+                    log("[QUEUE] clear finished - %d row(s) removed" % n)
+                    return self._send(200, {
+                        "ok": True, "deleted": n,
+                        "message": "%d finished job(s) removed" % n})
+                canceled, removed = db_clear_queue()
+                db_audit("queue.cleared", ip=ip, site=site,
+                         details="%d job(s) canceled, %d row(s) removed"
+                                 % (canceled, removed))
+                log("[QUEUE] cleared - %d canceled, %d row(s) removed"
+                    % (canceled, removed))
+                return self._send(200, {
+                    "ok": True, "canceled": canceled, "removed": removed,
+                    "message": "%d job(s) canceled, %d record(s) removed "
+                               "- the queue is clean" % (canceled, removed)})
             # v2.6.3: pause/resume must show in /health instantly (the
             # snapshot refreshes every 3 s in the background - rebuild it
             # now so the popup/dashboard never reads a stale pause flag).
@@ -6650,14 +6913,30 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send(400, {"ok": False,
                                             "error": "config '%s': %s" % (key, e)})
                 updates[key] = val
+            # v3.2.6 NEW FEATURE: "LAN Sharing & Other PCs ipp by default
+            # on when lan share on" - switching LAN sharing ON silently
+            # enables the IPP printer with it (unless the same request
+            # set ipp_printer explicitly, so the extra IPP Enable/Disable
+            # toggle can still turn it off on a LAN-on hub).
+            ipp_link = False
+            if updates.get("share_lan") is True and \
+                    "ipp_printer" not in updates and \
+                    CFG.get("ipp_printer") is False:
+                updates["ipp_printer"] = True
+                ipp_link = True
             if updates:
                 CFG.update(updates)
                 changed = list(updates.keys())
                 disk = {k: CFG[k] for k in CONFIG_KEYS}
                 write_config_file(disk)
                 db_audit("config.changed", ip=ip, site=site,
-                         details=", ".join(changed))
-                log("[CONFIG] updated: %s" % ", ".join(changed))
+                         details=", ".join(changed) +
+                         (" (ipp auto-enabled with LAN sharing)"
+                          if ipp_link else ""))
+                log("[CONFIG] updated: %s%s"
+                    % (", ".join(changed),
+                       " [IPP printer auto-enabled with LAN sharing]"
+                       if ipp_link else ""))
                 # v2.6.3: config changes must be visible in /health
                 # IMMEDIATELY (the snapshot refreshes every 3 s in the
                 # background - rebuild it now so no client ever reads a
@@ -6679,6 +6958,17 @@ class Handler(BaseHTTPRequestHandler):
                 elif CFG.get("share_lan"):
                     err = lan_listen_start()
                     lan_info = {"rebound": True, "lan_error": err}
+                    # v3.2.6: the IPP listeners must follow the fresh
+                    # config IMMEDIATELY (the 3 s refresher would catch
+                    # up anyway - the user sees it faster this way).
+                    try:
+                        ipp631_listen_ensure()
+                    except Exception:
+                        pass
+                    try:
+                        ipp_mdns_ensure()
+                    except Exception:
+                        pass
                 else:
                     lan_listen_stop()
                     lan_info = {"rebound": True, "lan_error": None}
@@ -8335,8 +8625,8 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
         <!-- ============ LAN SHARING ============ -->
         <section class="panel" id="p-lan">
           <div class="p-head">
-            <h2>LAN Sharing &amp; Other PCs</h2><span class="sub">v3.2.3 · share this printer over the network · phones print here like a real network printer</span>
-            <div class="right"><button class="btn">Disable</button><button class="btn blue">Copy URL</button></div>
+            <h2>LAN Sharing &amp; Other PCs</h2><span class="sub">v3.2.6 · share printing over the network · the UI stays on this PC — LAN PCs print via Send / IPP</span>
+            <div class="right"><button class="btn" id="lanTopToggle">Disable</button><button class="btn" id="ippTopToggle">IPP: ON</button><button class="btn blue">Copy URL</button></div>
           </div>
 
           <div class="card">
@@ -8345,12 +8635,13 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
             <div class="lrow"><span class="lk">Send portal (phones) <small>print from any phone browser</small></span><span class="chip ok">QR READY</span><span class="lv">http://10.26.94.206:9235/send?token=mPz5&#8230;nXs</span><span class="sp"></span><span class="ops"><button class="btn small blue">Copy send URL</button><button class="btn small" data-qr="send">QR code</button></span></div>
             <div class="lrow"><span class="lk">Connect another PC <small>1-click invite, connects itself</small></span><span class="chip ok">1-CLICK</span><span class="lv">http://10.26.94.206:9235/connect?t=mPz5&#8230;nXs&amp;n=AI-Lab</span><span class="sp"></span><span class="ops"><button class="btn small blue">Copy invite link</button><button class="btn small" data-qr="invite">QR</button></span></div>
             <div class="lrow"><span class="lk">IP Printer mode <small>this PC becomes a network printer</small></span><span class="chip info">ACTIVE</span><span class="lv plain">every PC or phone adds this PC as their network printer &#8594; jobs print to (default printer)</span><span class="sp"></span><span class="ops"><button class="btn small" data-qr="ipp">QR</button></span></div>
-            <div class="lrow"><span class="lk">Network printer (IPP) <small>built-in IPP Class Driver, no tools</small></span><span class="chip ok">READY</span><span class="lv">http://10.26.94.206:9235/ipp/print</span><span class="sp"></span><span class="ops"><button class="btn small blue">Copy printer URL</button><button class="btn small" data-qr="ipp">QR</button></span></div>
+            <div class="lrow"><span class="lk">Network printer (IPP) <small>built-in IPP Class Driver, no tools</small></span><span class="chip ok">READY</span><span class="lv">http://10.26.94.206:9235/ipp/print</span><span class="sp"></span><span class="ops"><button class="btn small ipp-tgl">Disable</button><button class="btn small blue">Copy printer URL</button><button class="btn small" data-qr="ipp">QR</button></span></div>
             <div class="lrow" id="row-mdns"><span class="lk">AirPrint / mDNS discovery <small>the printer appears BY ITSELF in phone &amp; PC lists</small></span><span class="chip gray">STARTING</span><span class="lv plain">Bonjour/_ipp._tcp broadcast on the LAN</span><span class="sp"></span><span class="ops"></span></div>
             <div class="lrow" id="row-ipp631"><span class="lk">Standard IPP port 631 <small>mirror of /ipp/print — Android &amp; printer defaults</small></span><span class="chip gray">STARTING</span><span class="lv plain">http://IP:631/ipp/print answers like a real printer</span><span class="sp"></span><span class="ops"></span></div>
             <div class="lrow"><span class="lk">RAW printer port <small>JetDirect, port 9100</small></span><span class="chip ok">LISTENING</span><span class="lv">10.26.94.206:9100</span><span class="sp"></span><span class="ops"><button class="btn small">How to add</button></span></div>
             <div class="lrow"><span class="lk">Windows firewall <small>inbound rule for LAN PCs</small></span><span class="chip ok">ALLOWED</span><span class="lv plain">inbound TCP 9235 allowed for LAN PCs</span><span class="sp"></span><span class="ops"><button class="btn small">Test LAN</button></span></div>
             <div class="lrow"><span class="lk">Printer status hold <small>pause jobs while a printer is offline</small></span><span class="chip ok">ON</span><span class="lv plain">jobs wait while the printer reports offline</span><span class="sp"></span><span class="ops"><button class="btn small">Disable</button></span></div>
+            <div class="note" id="lanSecurityNote" style="margin-top:10px"><b>&#128274; v3.2.6 security:</b> the console UI and every setting answer <b>only on this PC</b> (loopback or this machine's own IP). Other PCs and phones keep full print access &#8212; Send portal, IPP printer URL, print API, ports 9235/631/9100 &#8212; exactly per the Allowed-IPs list below; they simply cannot open the UI or change anything. Opening the share URL from another PC shows a friendly locked page with the print instructions. Switching LAN sharing ON also turns the IPP printer ON automatically.</div>
           </div>
 
           <div class="card">
@@ -9044,6 +9335,19 @@ https://reports.example.com/*</textarea>
   </div>
 </div>
 
+<!-- ================= IN-UI DOCS MODAL (v3.2.6 BUG FIX 6) =================
+     The full guide opens INSIDE THE ONE UI - no extra old-UI tab. -->
+<div class="modal-back" id="docsmodal">
+  <div class="modal wide" style="width:min(860px,94vw)">
+    <div class="m-h"><span id="docs-title">Docs &#8212; quick start &amp; how-to</span><button class="x" data-close>&#x2715;</button></div>
+    <div class="m-b docs-body" id="docs-body" style="max-height:70vh;overflow-y:auto;text-align:left;padding:16px 20px"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;padding:10px 16px;border-top:1px solid #e2e8f0;background:#f8fafc">
+      <button class="btn small" id="docs-lnk-old">Full guide page</button>
+      <button class="btn blue" data-close>Close</button>
+    </div>
+  </div>
+</div>
+
 <!-- ================= KEYBOARD SHORTCUTS MODAL ================= -->
 <div class="modal-back" id="keysmodal">
   <div class="modal">
@@ -9333,6 +9637,15 @@ qsa(".modal-back").forEach(function(back){
     if (e.target === back || e.target.closest("[data-close]")) closeModal();
   });
 });
+/* v3.2.6: the docs modal "Full guide page" button - the ONLY path to
+   the classic /docs page, kept for deep links and printing the guide */
+(function docsOldWire(){
+  var b = $("docs-lnk-old");
+  if (b) b.onclick = function(){
+    closeModal();
+    window.open(BASE + "/docs?token=" + encodeURIComponent(TOKEN), "_blank");
+  };
+})();
 
 /* ---------- filter chips (queue/history/logs) ---------- */
 qsa(".filters, .p-head .right").forEach(function(group){
@@ -9381,7 +9694,10 @@ var QR_KINDS = {
   invite: { title: "Invite \u2014 connect another PC",
             note: "Open on the other PC \u2192 it fills in hub URL + token itself and appears under Connections. Works across the LAN only." },
   ipp:    { title: "IPP printer URL",
-            note: "Add once as a network printer: Windows 10/11 uses the built-in IPP Class Driver; Android uses any IPP print service. Jobs then print to your default printer." }
+            /* v3.2.6 BUG FIX 5: the QR ENCODES the http:// URL (phone
+               browsers cannot open ipp:// - they Google-search it); the
+               display + Copy below stay ipp:// for printer setup. */
+            note: "The QR contains the http:// printer URL - scanning opens it in any phone or PC browser (ipp:// would just trigger a Google search). The Copy button keeps the standard ipp:// URL that Windows, macOS and CUPS expect when ADDING the printer." }
 };
 function lanBase(){
   var ip = BOOT.lan_ip || location.hostname || "127.0.0.1";
@@ -9418,8 +9734,8 @@ function openQR(kind){
   var box = $("qr-box"); box.innerHTML = ""; box.appendChild(qrImgEl(kind));
   $("qr-url").textContent = (kind === "ipp") ? ippUrl() : shareUrl(kind);
   $("qr-note").textContent = (kind === "ipp")
-    ? d.note + "  Standard URL: " + ippUrl() +
-      " \u00b7 Windows add-by-URL form: " + lanBase() + "/ipp/print"
+    ? d.note + "  QR code contains: " + lanBase() +
+      "/ipp/print  \u00b7  printer-add URL (copy): " + ippUrl()
     : d.note;
   $("qr-copy").onclick = function(){
     var u = (kind === "ipp") ? ippUrl() : shareUrl(kind);
@@ -9432,8 +9748,15 @@ document.addEventListener("click", function(e){
 });
 document.addEventListener("click", function(e){
   var op = e.target.closest("[data-open]");
-  if (op) window.open(BASE + "/ipp/print/" + op.dataset.open +
-    "?token=" + encodeURIComponent(TOKEN), "_blank");
+  if (op) {
+    /* v3.2.6 BUG FIX 2: the hub now returns the BARE queue slug in
+       ipp_path - the old code prepended /ipp/print a second time and
+       opened /ipp/print/ipp/print/<printer>. Empty slug (IPP printer
+       mode off) lands on the general /ipp/print page. */
+    var slug = op.dataset.open || "";
+    window.open(BASE + "/ipp/print" + (slug ? "/" + slug : "") +
+      "?token=" + encodeURIComponent(TOKEN), "_blank");
+  }
 });
 
 /* ---------- status chips ---------- */
@@ -9637,16 +9960,23 @@ function renderLanRows(){
       var c0 = r.querySelector(".chip");
       if (c0) { c0.textContent = cfgCache.ipp_printer === false ? "OFF" : "ACTIVE";
         c0.className = "chip " + (cfgCache.ipp_printer === false ? "gray" : "info"); }
-    } else if (k.indexOf("Network printer (IPP)") === 0 && v) {
-      v.innerHTML = "";
-      var b = document.createElement("b");
-      b.className = "mono"; b.textContent = ippUrl();
-      v.appendChild(b);
-      var s = document.createElement("span");
-      s.style.cssText = "display:block;font-size:10.5px;color:#94a3b8;margin-top:2px";
-      s.textContent = "standard printer URL \u00b7 Windows add-by-URL form: " +
-        lanBase() + "/ipp/print";
-      v.appendChild(s);
+    } else if (k.indexOf("Network printer (IPP)") === 0) {
+      /* v3.2.6: the chip + toggle follow the SAME ipp_printer key as
+         the IP Printer mode row - two views of one switch. */
+      var c2 = r.querySelector(".chip");
+      if (c2) { c2.textContent = cfgCache.ipp_printer === false ? "OFF" : "READY";
+        c2.className = "chip " + (cfgCache.ipp_printer === false ? "gray" : "ok"); }
+      if (v) {
+        v.innerHTML = "";
+        var b = document.createElement("b");
+        b.className = "mono"; b.textContent = ippUrl();
+        v.appendChild(b);
+        var s = document.createElement("span");
+        s.style.cssText = "display:block;font-size:10.5px;color:#94a3b8;margin-top:2px";
+        s.textContent = "standard printer URL \u00b7 Windows add-by-URL form: " +
+          lanBase() + "/ipp/print";
+        v.appendChild(s);
+      }
     } else if (k.indexOf("RAW printer port") === 0 && v)
       v.textContent = (BOOT.lan_ip || location.hostname || "127.0.0.1") + ":9100";
     else if (k.indexOf("Printer status hold") === 0) {
@@ -9663,6 +9993,7 @@ function renderLanRows(){
         var row;
         if (k.indexOf("LAN sharing") === 0) row = ["share_lan", "LAN sharing"];
         else if (k.indexOf("IP Printer mode") === 0) row = ["ipp_printer", "IP Printer mode"];
+        else if (k.indexOf("Network printer (IPP)") === 0) row = ["ipp_printer", "IPP printer"];
         else if (k.indexOf("Printer status hold") === 0) row = ["hold_offline", "Printer status hold"];
         if (row) dis.onclick = function(){
           var on = cfgCache[row[0]] === false;
@@ -9680,10 +10011,44 @@ function renderLanRows(){
     if (dis2) {
       var key = k.indexOf("LAN sharing") === 0 ? "share_lan"
         : k.indexOf("IP Printer mode") === 0 ? "ipp_printer"
+        : k.indexOf("Network printer (IPP)") === 0 ? "ipp_printer"
         : k.indexOf("Printer status hold") === 0 ? "hold_offline" : null;
       if (key) dis2.textContent = cfgCache[key] === false ? "Enable" : "Disable";
     }
   });
+  /* v3.2.6 BUG FIX 3 + NEW FEATURE: the PANEL HEADER buttons - the top
+     Disable/Enable (LAN sharing) was never wired, and the extra IPP
+     Enable/Disable toggle lives right next to it. */
+  var lanTop = $("lanTopToggle"), ippTop = $("ippTopToggle");
+  if (lanTop) {
+    lanTop.textContent = cfgCache.share_lan === false ? "Enable" : "Disable";
+    lanTop.onclick = function(){
+      var on = cfgCache.share_lan === false;
+      var patch = { share_lan: on };
+      /* the hub auto-enables IPP with LAN sharing; mirror it in the
+         request so the toggle state is never ambiguous */
+      if (on && cfgCache.ipp_printer === false) patch.ipp_printer = true;
+      api("/config", { method: "POST", body: patch })
+        .then(function(){
+          toast("LAN sharing " + (on ? "ON \u2014 IPP printer joined it" : "OFF \u2014 only this PC reaches the hub"),
+                on ? "ok" : "warn");
+          poll(); })
+        .catch(function(e){ toast(e.message, "err"); });
+    };
+  }
+  if (ippTop) {
+    var ippOn = cfgCache.ipp_printer !== false;
+    ippTop.textContent = "IPP: " + (ippOn ? "ON" : "OFF");
+    ippTop.className = "btn" + (ippOn ? " blue" : "");
+    ippTop.onclick = function(){
+      var on = cfgCache.ipp_printer === false;
+      api("/config", { method: "POST", body: { ipp_printer: on } })
+        .then(function(){
+          toast("IPP printer " + (on ? "ON \u2014 this PC accepts IPP print jobs" : "OFF"), on ? "ok" : "warn");
+          poll(); })
+        .catch(function(e){ toast(e.message, "err"); });
+    };
+  }
   renderAcl();
 }
 
@@ -9826,7 +10191,7 @@ function renderPrinters(list){
       ops.innerHTML = '<button class="btn blue" data-ptest="' + esc(p.name) + '">Test Page</button>' +
         '<button class="btn" data-setdef="' + esc(p.name) + '"' + (p.is_default ? " disabled" : "") +
         '>Set Default</button><button class="btn" data-open="' +
-        esc(p.ipp_path || "queue") + '">Details</button>';
+        esc(p.ipp_path || "") + '">Details</button>';
       grid.appendChild(c);
     });
     if (!real.length && t0) {
@@ -10561,8 +10926,9 @@ function renderAbout(h){
     var t = b.textContent.trim();
     if (t === "GitHub repo") b.onclick = function(){ window.open("https://github.com/bitdreamit/AdvPrint-Pro", "_blank"); };
     if (t === "Releases") b.onclick = function(){ window.open("https://github.com/bitdreamit/AdvPrint-Pro/releases", "_blank"); };
-    if (t === "Docs") b.onclick = function(){ window.open(BASE + "/docs?token=" + encodeURIComponent(TOKEN), "_blank"); };
-    if (t === "Release notes") b.onclick = function(){ window.open(BASE + "/docs?token=" + encodeURIComponent(TOKEN) + "#notes", "_blank"); };
+    /* v3.2.6 BUG FIX 6: Docs + Release notes open INSIDE the UI */
+    if (t === "Docs") b.onclick = function(){ openDocs(); };
+    if (t === "Release notes") b.onclick = function(){ openDocs("d-notes"); };
   });
 }
 
@@ -10592,6 +10958,82 @@ async function renderUpdate(res){
   toast(res.up_to_date ? "v" + res.current + " is up to date" : "Update available: " + res.latest_tag,
     res.up_to_date ? "ok" : "warn");
 }
+
+/* ============================================================
+   v3.2.6 BUG FIX 6 - DOCS INSIDE THE ONE UI
+   The old Docs buttons opened /docs in a new tab (the "old UI view").
+   openDocs() renders the guide in a modal right here instead; the
+   full-page /docs stays available via the "Full guide page" button.
+   ============================================================ */
+function docsHtml(){
+  var v = esc(BOOT.version || "3.2.6");
+  var ip = esc(BOOT.lan_ip || location.hostname || "127.0.0.1");
+  var port = esc(String(BOOT.port || location.port || "9235"));
+  var base = "http://" + ip + ":" + port;
+  return ''
+  + '<style>.docs-body h3{font-size:13px;font-weight:800;color:#1e3a8a;margin:16px 0 6px;'
+  + 'padding-bottom:4px;border-bottom:1px solid #e2e8f0}.docs-body h3:first-child{margin-top:0}'
+  + '.docs-body p,.docs-body li{font-size:12.5px;line-height:1.65;color:#334155}'
+  + '.docs-body ul,.docs-body ol{margin:4px 0 8px 20px}.docs-body code{background:#f1f5f9;border:1px solid #e2e8f0;'
+  + 'border-radius:4px;padding:1px 5px;font-size:11.5px;color:#1e40af;word-break:break-all}'
+  + '.docs-body .dk{display:inline-block;background:#eff6ff;border:1px solid #bfdbfe;color:#1e40af;'
+  + 'border-radius:5px;font-size:10.5px;font-weight:700;padding:1px 8px;margin-right:6px;vertical-align:1px}</style>'
+  + '<h3 id="d-quick">1 · Quick start</h3>'
+  + '<ol><li>The hub starts with Windows (tray icon near the clock). The console opens at <code>http://127.0.0.1:' + port + '/ui</code>.</li>'
+  + '<li>Print anything from Chrome → the job lands in <b>Live Queue</b> and prints on your destination printer.</li>'
+  + '<li>Pick the destination in the <b>Printers</b> tab (default printer / any installed printer / an IP printer).</li>'
+  + '<li><span class="dk">TEST</span> the chain with <b>Hub → Test print</b> or press <code>Ctrl+T</code>.</li></ol>'
+  + '<h3 id="d-install">2 · Install the Chrome/Edge extension</h3>'
+  + '<p><b>Easiest — one click policy install (v' + v + '):</b> Console → <b>Extension</b> tab → <b>Install by policy</b>. Chrome, Edge and Brave get the extension silently — no chrome://extensions, no Developer mode. Verify at <code>chrome://policy</code> (Reload policy) — the extension appears within a minute.</p>'
+  + '<p><b>Manual:</b> <code>chrome://extensions</code> → enable <i>Developer mode</i> → <b>Load unpacked</b> → pick the <code>extension</code> folder (installed at <code>C:\\Program Files\\AdvPrint Pro\\extension</code>).</p>'
+  + '<p>After a token change: open the extension <b>Options</b> and paste the new token — or use the popup’s <b>Fix token</b> banner.</p>'
+  + '<h3 id="d-print">3 · Printing — what happens to a job</h3>'
+  + '<ul><li>Chrome print preview → the extension captures the PDF → <code>POST /print</code> on this hub → the queue worker prints it on the destination printer.</li>'
+  + '<li><b>Queue mode</b> lines jobs up FIFO (held while the printer is offline — release with ⚡); <b>instant mode</b> prints immediately.</li>'
+  + '<li><b>History</b> keeps every job — tick rows and Reprint in bulk; <b>Clear ALL history</b> removes finished records, waiting jobs are never touched.</li></ul>'
+  + '<h3 id="d-lan">4 · LAN sharing · other PCs · security (v' + v + ')</h3>'
+  + '<ul><li><b>The console UI is local-only:</b> settings, history and the queue open only on this PC (loopback or this machine’s own IP). Nobody on the LAN can change your hub settings any more.</li>'
+  + '<li><b>LAN PCs and phones keep FULL print access</b> — the send portal, the IPP printer URL, the print API and ports ' + port + ' / 631 / 9100 answer normally, exactly per the <b>Allowed-IPs</b> list (<code>*</code> = whole LAN).</li>'
+  + '<li>Opening the share URL from another PC shows a friendly locked page with the print instructions.</li>'
+  + '<li>Switching <b>LAN sharing ON also switches the IPP printer ON</b> automatically; the extra <b>IPP: ON/OFF</b> toggle in the panel header controls it independently.</li></ul>'
+  + '<h3 id="d-ipp">5 · Add this PC as a network printer (IPP)</h3>'
+  + '<ul><li><b>Printer URL:</b> <code>ipp://' + ip + ':' + port + '/ipp/print</code> — or the browser-friendly <code>' + base + '/ipp/print</code>. Per-printer queues: <code>ipp://' + ip + ':' + port + '/ipp/print/&lt;printer&gt;</code>.</li>'
+  + '<li><b>Windows 10/11:</b> Settings → Bluetooth &amp; devices → Printers → Add device — the hub appears by itself (AirPrint-style). Or Add manually → IPP device → paste <code>' + base + '/ipp/print</code> → the built-in IPP Class Driver installs it.</li>'
+  + '<li><b>macOS:</b> System Settings → Printers — appears in the Bonjour list. <b>iPhone/iPad:</b> Share → Print — appears while on the same Wi-Fi.</li>'
+  + '<li><b>Android:</b> Default Print Service finds it automatically; manual add uses the standard port 631 mirror (<code>' + base.replace(':9235', ':631') + '/ipp/print</code>).</li>'
+  + '<li><b>QR codes:</b> the IPP QR contains the <code>http://</code> URL (phone browsers cannot open <code>ipp://</code> — they Google-search it). The Copy button keeps the <code>ipp://</code> printer URL.</li></ul>'
+  + '<h3 id="d-send">6 · Send portal — print from any phone</h3>'
+  + '<p>LAN tab → <b>Copy send URL</b> (<code>' + base + '/send?token=…</code>) → open it on the phone → pick a PDF or paste text → it prints here. No app, no account. QR in the same tab.</p>'
+  + '<h3 id="d-security">7 · Tokens &amp; Allowed IPs</h3>'
+  + '<ul><li>The hub token protects every print call (<code>?token=</code> or the <code>X-AdvPrint-Token</code> header). Rotate it in the <b>Hub</b> tab — then update it once in the extension options.</li>'
+  + '<li><b>Allowed IPs</b> (LAN tab): <code>*</code> opens the hub for the whole LAN; add entries like <code>10.26.94.100</code>, <code>10.26.94.0/24</code> or <code>10.26.*</code> to restrict who can reach it. This PC (127.0.0.1) is always allowed.</li></ul>'
+  + '<h3 id="d-trouble">8 · Troubleshooting</h3>'
+  + '<ul><li><b>Extension says offline:</b> is the tray icon there? Then check the token (popup → Fix token) and the hub URL (<code>http://127.0.0.1:' + port + '</code>).</li>'
+  + '<li><b>Job stuck HELD:</b> the printer reports offline — clear the paper jam, then ⚡ Release (or wait: the queue retries by itself).</li>'
+  + '<li><b>LAN PC cannot print:</b> check Allowed-IPs (<code>*</code> or their IP), the Windows firewall rule (LAN tab → Test LAN) and that the token is on their side.</li>'
+  + '<li><b>Logs:</b> Debug tab → live hub log + <code>hub.log</code> on disk. The A-to-Z self-test: Tools menu → LIVE TEST.</li></ul>'
+  + '<h3 id="d-notes">Release notes — v' + v + '</h3>'
+  + '<ul><li>History / Queue clear really cleans now; “Clear ALL history” calls the right endpoint.</li>'
+  + '<li>Printer Details no longer builds a doubled <code>/ipp/print/ipp/print/</code> URL.</li>'
+  + '<li>LAN panel: the top Disable/Enable works, Copy URL carries the token, extra IPP Enable/Disable toggle, IPP auto-ON with LAN sharing.</li>'
+  + '<li>IPP QR encodes <code>http://</code> (scannable); display + copy keep <code>ipp://</code>.</li>'
+  + '<li>Install doc no longer backdated; Docs live here in the UI.</li>'
+  + '<li>NEW SECURITY: UI + settings local-only; LAN keeps print access per Allowed-IPs.</li>'
+  + '<li>The numbered CLI tool menu is gone (this console is the tool) and the tray menu is just Dashboard / Restart / Exit.</li></ul>';
+}
+function openDocs(anchor){
+  var box = $("docs-body");
+  if (!box) return;
+  box.innerHTML = docsHtml();
+  openModal("docsmodal");
+  if (anchor) {
+    var el = box.querySelector("#" + anchor);
+    if (el) box.scrollTop = el.offsetTop - 8;
+  } else {
+    box.scrollTop = 0;
+  }
+}
+
 var ACTIONS = {
   "poll": function(){ poll(); toast("Refreshed", "ok"); },
   "testprint": async function(){
@@ -10603,12 +11045,20 @@ var ACTIONS = {
       toast(pausedState ? "Queue RESUMED" : "Queue PAUSED", pausedState ? "ok" : "warn"); poll();
     } catch (e) { toast(e.message, "err"); } },
   "queue-clear": function(){
-    confirmBox("Clear the whole queue?", "Waiting, held and printing jobs are removed. History is kept.",
+    /* v3.2.6 BUG FIX 1: clear really CLEANS - waiting jobs are canceled
+       AND every finished record is removed, so the list is empty. */
+    confirmBox("Clear the whole queue?",
+      "Every waiting / held / printing job is canceled AND all finished "
+      + "records are removed - the queue AND the history come back clean.",
       async function(){ try { await api("/queue/clear", { method: "POST" });
-        toast("Queue cleared", "warn"); poll(); } catch (e) { toast(e.message, "err"); } }); },
+        toast("Queue cleared - all records removed", "warn"); poll();
+      } catch (e) { toast(e.message, "err"); } }); },
   "queue-clear-finished": async function(){
-    try { await api("/queue/clear", { method: "POST", body: { finished: true } });
-      toast("Finished jobs cleared \u2014 waiting jobs untouched", "ok"); poll();
+    /* v3.2.6 BUG FIX 1: the old code POSTed /queue/clear {finished:true}
+       - a body the hub IGNORED - so 'Clear ALL history' never cleaned.
+       It now calls the real history-clear endpoint. */
+    try { await api("/history/clear", { method: "POST" });
+      toast("Finished history cleared \u2014 waiting jobs untouched", "ok"); poll();
     } catch (e) { toast(e.message, "err"); } },
   "release-held": async function(){
     try {
@@ -10635,7 +11085,11 @@ var ACTIONS = {
                "  note:  " + (r.note || "")]);
       toast("LAN test OK \u2014 hub answered", "ok");
     } catch (e) { toolOut(["LAN self-test FAILED", "  " + e.message]); toast("LAN test failed: " + e.message, "err"); } },
-  "copy-hub-url": function(){ copyText(lanBase() + "/ui"); toast("Hub URL copied", "ok"); },
+  "copy-hub-url": function(){
+    /* v3.2.6 BUG FIX 3/4: the URL carries the token - the old copy was
+       a bare http://ip:9235/ui that opened the token error page. */
+    var u = lanBase() + "/ui?token=" + encodeURIComponent(TOKEN);
+    copyText(u); toast("Console URL copied (token included) \u2014 opens on this PC", "ok"); },
   "copy-send-url": function(){ copyText(lanBase() + "/send?token=" + encodeURIComponent(TOKEN)); toast("Send portal URL copied", "ok"); },
   "copy-invite": function(){ copyText(lanBase() + "/connect?t=" + encodeURIComponent(TOKEN)); toast("Invite link copied", "ok"); },
   "copy-ipp-url": function(){ copyText(ippUrl()); toast("IPP printer URL copied \u2014 " + ippUrl(), "ok"); },
@@ -10663,7 +11117,7 @@ var ACTIONS = {
     try { var r = await api("/dropzone/open", { method: "POST" });
       toast("DropZone folder opened: " + (r.dir || ""), "ok");
     } catch (e) { toast(e.message, "err"); } },
-  "open-docs": function(){ window.open(BASE + "/docs?token=" + encodeURIComponent(TOKEN), "_blank"); },
+  "open-docs": function(){ openDocs(); },   /* v3.2.6: docs INSIDE the UI */
   "open-github": function(){ window.open("https://github.com/bitdreamit/AdvPrint-Pro", "_blank"); },
   "save-cfg": function(){ saveCfg(); },
   "save-hub": function(){ saveHub(); },
@@ -12376,7 +12830,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     </div>
     <p style="font-size:13px;color:#334155;margin:2px 0 0">Where every job prints: the OS <b>default printer</b>, <b>any installed printer</b> (picked from the list), or an <b>IP printer</b> - a real network printer at IP:port (RAW&nbsp;9100 or IPP). PCs and phones that added <i>this</i> hub as their network printer print through exactly this destination, so one setting routes everything.</p>
   </div>
-  <h2>Browser extension - silent install <small style="text-transform:none;letter-spacing:0">&nbsp;- v3.0.7: Chrome/Edge/Brave install the extension BY POLICY - no chrome://extensions, no Load unpacked</small></h2>
+  <h2>Browser extension - silent install <small style="text-transform:none;letter-spacing:0">&nbsp;- v@@VERSION@@: Chrome/Edge/Brave install the extension BY POLICY - no chrome://extensions, no Load unpacked</small></h2>
   <div class="panel ltbox">
     <div class="hbar">
       <span class="mono">ID: <span id="extId">-</span></span>

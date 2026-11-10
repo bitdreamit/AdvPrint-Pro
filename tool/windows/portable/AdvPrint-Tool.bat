@@ -1,10 +1,12 @@
 @echo off
 
-rem AdvPrint Pro Tool - friendly control menu
+rem AdvPrint Pro - opens THE ONE UI console in the browser
 
-rem (start / stop / status / service add+remove / auto-run /
+rem (v3.2.6: the old numbered CLI menu is gone - the console IS the
 
-rem  update check / uninstall)
+rem  menu now. One-shot repair commands still work:
+
+rem  python hub\tool.py start|stop|status|diagnose|uninstall ...)
 
 if exist "%~dp0installer\runtime\python.exe" (
 
@@ -17,4 +19,3 @@ if exist "%~dp0installer\runtime\python.exe" (
 )
 
 pause
-

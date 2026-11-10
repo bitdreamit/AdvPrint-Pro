@@ -88,8 +88,8 @@ DWMWA_WINDOW_CORNER_PREFERENCE = 33     # Win11 rounded corners (fail-safe)
 DWMWCP_ROUND       = 2
 
 # menu item ids (high word safety: keep < 0x8000)
-M_OPEN, M_TEST, M_PAUSE, M_AUTO, M_EXIT, M_RESTART, M_FIREWALL, M_CONSOLE = (
-    1001, 1002, 1003, 1004, 1005, 1006, 1007, 1008)
+M_OPEN, M_TEST, M_PAUSE, M_AUTO, M_EXIT, M_RESTART, M_FIREWALL = (
+    1001, 1002, 1003, 1004, 1005, 1006, 1007)
 
 # menu colors (COLORREF = 0x00BBGGRR)
 COL_BG     = 0x301B0D              # dark navy  RGB(13, 27, 48)
@@ -789,17 +789,12 @@ class Tray(object):
 
     # ---- menu (v2.6.2 self-drawn, native fallback) --------------------
     def _menu_items(self):
-        paused = bool(self._cb("is_paused"))
-        auto = bool(self._cb("is_autostart"))
+        # v3.2.6 USER REQUEST: "AdvPrint tray can reduce - only need
+        # Exit, Dashboard, Restart". The whole tool menu already lives
+        # in THE ONE UI console, so the tray stays a 3-item launcher.
         return [
             ("Open dashboard", M_OPEN, False),
-            ("Console (THE ONE UI)", M_CONSOLE, False),
-            ("Print test page", M_TEST, False),
-            ("sep",),
-            ("Pause queue", M_PAUSE, paused),
-            ("Start at Windows logon", M_AUTO, auto),
             ("Restart hub", M_RESTART, False),
-            ("Allow LAN in firewall", M_FIREWALL, False),
             ("sep",),
             ("Exit", M_EXIT, False),
         ]
@@ -850,8 +845,6 @@ class Tray(object):
     def _dispatch_menu_cmd(self, cmd):
         if cmd == M_OPEN:
             self._cb_async("on_open")
-        elif cmd == M_CONSOLE:
-            self._cb_async("on_console")
         elif cmd == M_TEST:
             self._cb_async("on_test", done=lambda r: self._log(
                 "test page queued from the tray menu"))

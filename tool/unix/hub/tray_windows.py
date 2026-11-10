@@ -789,16 +789,12 @@ class Tray(object):
 
     # ---- menu (v2.6.2 self-drawn, native fallback) --------------------
     def _menu_items(self):
-        paused = bool(self._cb("is_paused"))
-        auto = bool(self._cb("is_autostart"))
+        # v3.2.6 USER REQUEST: "AdvPrint tray can reduce - only need
+        # Exit, Dashboard, Restart". The whole tool menu already lives
+        # in THE ONE UI console, so the tray stays a 3-item launcher.
         return [
             ("Open dashboard", M_OPEN, False),
-            ("Print test page", M_TEST, False),
-            ("sep",),
-            ("Pause queue", M_PAUSE, paused),
-            ("Start at Windows logon", M_AUTO, auto),
             ("Restart hub", M_RESTART, False),
-            ("Allow LAN in firewall", M_FIREWALL, False),
             ("sep",),
             ("Exit", M_EXIT, False),
         ]

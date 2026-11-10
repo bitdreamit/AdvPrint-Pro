@@ -1,8 +1,93 @@
 # Changelog - AdvPrint Pro (Advanced Printer)
 by Bit Dream IT - Innovative Healthcare Solutions
 
-# Changelog - AdvPrint Pro (Advanced Printer)
-by Bit Dream IT - Innovative Healthcare Solutions
+## v3.2.6 - SEVEN BUGS + THE UI SECURITY MODEL (2026-11-10)
+
+Base: v3.2.5 - every v3.2.5 fix unchanged. Seven reported defects fixed,
+one new feature, two removals and a brand-new security model - each
+locked by tests (397 passed) AND verified live in a real browser.
+
+### 1. History / Queue clear really cleans (was "clear but not clean")
+- `POST /queue/clear` now cancels every live job (queued / held /
+  scheduled / printing) AND deletes every terminal row, so the queue
+  view is actually EMPTY afterwards. The old code only flipped queued
+  jobs to canceled and left every row visible.
+- `POST /queue/clear {finished:true}` is now honored as an alias of
+  `POST /history/clear` (the console sent that body for years and the
+  hub silently ignored it).
+- The console "Clear ALL history" button calls `/history/clear` (the
+  real endpoint) instead of `/queue/clear` with a dead body.
+- Waiting jobs are never touched by the history clear.
+
+### 2. Printer Details no longer doubles the path
+- `/printers` returns `ipp_path` as the BARE queue slug; the console
+  joins `BASE + "/ipp/print/" + slug` itself.
+- `http://127.0.0.1:9235/ipp/print/ipp/print/<printer>?token=...` is
+  dead - Details opens the working per-printer URL.
+
+### 3. LAN panel top switch works + Copy URL carries the token
+- The header Disable/Enable button was never wired (only the rows
+  were) - it now toggles `share_lan` and its label follows the state.
+- "Copy URL" (header + row) now copies
+  `http://<ip>:9235/ui?token=<token>` - the old copy was a bare,
+  token-less URL that opened the token error page.
+
+### 4. LAN-share row Copy URL carries the token
+- Same action as 3 - both Copy URL buttons are fixed.
+
+### 5. QR encodes http:// - copy keeps ipp://
+- `/qr?kind=ipp` hard-pins the http:// printer URL as the SCANNABLE
+  payload: phone browsers cannot open ipp:// (they Google-search it).
+- The QR modal displays `ipp://<ip>:9235/ipp/print` and the Copy
+  button keeps the ipp:// printer URL (what Windows / macOS / CUPS
+  expect); the note explains both URLs.
+
+### 6. Install doc not backdated + Docs button inside the UI
+- The self-host extension page no longer claims "(v3.0.7)" - it shows
+  the current VERSION; the /docs install section uses @@VERSION@@.
+- NEW: the console has an in-UI Docs modal (Help > Quick start guide,
+  About > Docs, About > Release notes) - the guide opens INSIDE THE
+  ONE UI with 8 sections (quick start, extension install, printing,
+  LAN sharing + security, IPP per OS, send portal, tokens, trouble-
+  shooting) + release notes. "Full guide page" keeps /docs for deep
+  links. No extra old-UI tab needed.
+
+### 7. SECURITY - the console UI is local-only
+- "only own ip or loopback ip can show ui. But LAN Sharing & Other PCs
+  related Send/IPP etc different ip can call or access":
+  `_mgmt_locked()` answers non-local callers with a branded 403 for
+  every UI / settings / management route (/ui, /dashboard, /docs,
+  /config, /token/*, /queue control, /history/clear, /tool, /qr,
+  /stats, /audit, /export, /debug, /peers, /dropzone, policy install,
+  ...). The page points the visitor at the print URLs.
+- The PRINT SURFACE stays open per allowed_ips (default `*`): /print,
+  /send, /ipp/*, 631 mirror, RAW 9100, /jobs (+cancel / print-now /
+  bulk-reprint), /printers, /health, /extension/* (child-PC
+  self-update), /connect, /testprint, error reports.
+- The hub PC itself (loopback AND its own LAN IP) always passes - the
+  owner can never be locked out. A LAN PC opening the share URL gets
+  the locked page, not the console.
+
+### NEW - LAN sharing ON auto-enables the IPP printer
+- Switching `share_lan` on sets `ipp_printer: true` with it (unless
+  the same request set ipp_printer explicitly). The LAN panel header
+  gains an independent "IPP: ON/OFF" toggle and the "Network printer
+  (IPP)" row gets its own Enable/Disable button; the LAN/mDNS/631
+  listeners re-ensure immediately.
+
+### REMOVED - the interactive CLI menu
+- `tool.py` no longer has the numbered ASCII menu. Running it opens
+  THE ONE UI console in the browser. Every repair subcommand stays:
+  start / stop / restart / status / testprint / history / autorun /
+  livetest / diagnose / dashboard / service-* / update-check /
+  uninstall.
+- Start Menu: "AdvPrint Tool.lnk" became "AdvPrint Console.lnk"; the
+  portable AdvPrint-Tool.bat opens the console.
+
+### REMOVED - the tray menu is 3 items
+- Dashboard / Restart / Exit only (user request: "tray can reduce -
+  only need Exit, Dashboard, Restart"). Everything else lives in the
+  console.
 
 ## v3.2.5 - SIX USER-REPORTED BUGS, ALL FIXED (2026-11-10)
 

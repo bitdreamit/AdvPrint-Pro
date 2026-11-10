@@ -1,6 +1,41 @@
-AdvPrint Pro (Advanced Printer) v3.2.5 - START HERE
+AdvPrint Pro (Advanced Printer) v3.2.6 - START HERE
 ====================================================
 by Bit Dream IT - Innovative Healthcare Solutions
+
+WHAT IS NEW IN v3.2.6 - SEVEN BUGS + THE UI SECURITY MODEL
+----------------------------------------------------------
+1) HISTORY / QUEUE CLEAR REALLY CLEANS. Clear queue cancels every
+   waiting job AND removes all finished records - the list is empty
+   afterwards. "Clear ALL history" calls the real /history/clear
+   endpoint (the old button posted a body the hub ignored). Waiting
+   jobs are never touched by the history clear.
+2) PRINTER DETAILS NO LONGER DOUBLES THE PATH. The
+   /ipp/print/ipp/print/<printer> URL is gone - Details opens the
+   working per-printer queue URL.
+3) LAN PANEL: the top Disable/Enable works now (it was never wired)
+   and EVERY "Copy URL" carries the token:
+   http://<ip>:9235/ui?token=... A new independent "IPP: ON/OFF"
+   toggle sits right next to it, and switching LAN sharing ON
+   automatically switches the IPP printer ON.
+4) QR CODES ENCODE http:// - scanning opens the page in any phone or
+   PC browser (phones Google-search ipp:// URLs). The display and the
+   Copy button keep the ipp:// printer URL for printer setup.
+5) THE INSTALL DOC IS NOT BACKDATED - the self-host extension page
+   shows the current version (not v3.0.7) - and the console has an
+   IN-UI DOCS BUTTON: Help > Quick start guide (or About > Docs)
+   opens the full guide inside the console - no extra old-UI tab.
+6) SECURITY - THE CONSOLE UI IS LOCAL-ONLY. Only the hub PC itself
+   (loopback or its own IP) can open the console or change settings;
+   nobody on the LAN can touch your hub settings any more. LAN PCs
+   and phones keep FULL print access per the Allowed-IPs list:
+   Send portal, IPP printer URL, print API, ports 9235 / 631 / 9100.
+7) THE CLI TOOL MENU IS GONE - the console IS the tool now. Running
+   tool.py (or AdvPrint-Tool.bat, or the Start Menu "AdvPrint
+   Console" shortcut) opens the console. Repair commands stay:
+   python tool.py start|stop|restart|status|diagnose|uninstall ...
+   AND the tray menu is exactly: Open dashboard / Restart hub / Exit.
+
+Everything from v3.2.5 is unchanged - see the section below.
 
 WHAT IS NEW IN v3.2.5 - SIX USER-REPORTED BUGS, ALL FIXED
 ----------------------------------------------------------
@@ -426,7 +461,7 @@ WHAT'S NEW IN 2.8.0 (TWO HUB PROFILES + DROPZONE + BULLET-PROOF UNINSTALL)
        that folder - AdvPrint prints it seconds later.
      - /send portal: any phone / tablet / PC on the LAN uploads a
        PDF and it prints (token required, 100% local).
-  7. RESTART HUB - tray menu, AdvPrint Tool [14] and the dashboard:
+  7. RESTART HUB - tray menu, the console Hub tab and the dashboard:
      clean self-relaunch, nothing is lost.
   8. BULLET-PROOF UPGRADE + UNINSTALL: setup stops and REMOVES the
      service before touching files, wipes old program folders and
@@ -671,13 +706,14 @@ WHAT'S NEW IN 2.6.1 (HUB START + TRAY FIX RELEASE)
      tool shows the REAL version (was stuck "v2.5") and every
      button plainly says when the hub is offline.
   4. STILL OFFLINE? 60-SECOND FIX, NO CONSOLE SKILLS NEEDED:
-       a. open the tool (AdvPrint-Tool.bat, or Start Menu >
-          AdvPrint Pro > AdvPrint Tool)
-       b. pick [13] Diagnose & fix -> read the [4/5] result
-       c. pick [1] Start -> "Started: v2.6.7 on http://127.0.0.1:9235"
+       a. open a terminal in the install folder
+       b. run:  python hub\tool.py diagnose  -> read the result
+       c. run:  python hub\tool.py start
+          (v3.2.6: running tool.py with no arguments opens the
+          console UI directly - the numbered menu is gone)
        d. tray icon appears -> right-click -> Open dashboard
-     If [13] says antivirus: add the AdvPrint folder to your AV's
-     exclusions and start again (menu [1]).
+     If diagnose says antivirus: add the AdvPrint folder to your
+     AV's exclusions and run start again.
 
 WHAT'S NEW IN 2.6.0 (REBRAND + ONE-CLICK TOKEN FIX) - kept for reference
   1. THE WHOLE PRODUCT IS AdvPrint Pro (Advanced Printer) BY

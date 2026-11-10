@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # ============================================================
-#  AdvPrint Pro - Control Tool  (the friendly one-stop tool)
-#  v2.8.1 - menu [14] Restart AdvPrint added, nothing removed
-# ------------------------------------------------------------
-#  One menu for everything a normal user needs:
-#    start / stop / status, auto-run on/off, Windows service
-#    install/remove, test page, history, GitHub update check,
-#    uninstall. No command line knowledge needed - just pick
-#    a number. Also scriptable:  python tool.py <command>
+#  AdvPrint Pro - Control Tool  (scriptable helper)
+#  v3.2.6 - the interactive numbered menu is REMOVED (user request:
+#  "AdvPrint Tool no need extra - it already exists in UI"). Running
+#  the tool without arguments opens THE ONE UI console in the browser.
+#  Everything the menu did lives in the console now; the one-shot
+#  subcommands stay for scripts and repairs:
+#    python tool.py start|stop|restart|status|testprint|history
+#    python tool.py autorun on|off | livetest | diagnose | dashboard
+#    python tool.py service-install|service-remove|service-status
+#    python tool.py update-check | uninstall
 #
-#  Windows : "AdvPrint Tool.lnk" (Start Menu) runs this menu with
-#            the bundled runtime python - no console skills needed.
+#  Windows : the Start Menu shortcut opens THE ONE UI console.
 #  Unix    : python3 tool.py   (after install-unix.sh / .deb)
 # ============================================================
 
@@ -117,7 +118,7 @@ def _report_start_failure():
         else:
             print("  Port %d      : SOMETHING is listening but /health did"
                   " not answer yet - either the hub is still warming up"
-                  " (try menu [1] again) or another program holds the"
+                  " (run start again) or another program holds the"
                   " port." % ph.CFG["port"])
     else:
         print("  Port %d      : nothing is listening - the hub process is"
@@ -130,7 +131,7 @@ def _report_start_failure():
                if alive else "NOT running - it exited or was blocked"))
         if not alive:
             print("                 (antivirus tools sometimes silently kill"
-                  " a freshly downloaded exe - use menu [13] > Fix, it also"
+                  " a freshly downloaded exe - run 'python tool.py diagnose', it also"
                   " unblocks the folder)")
     tail = _tail(logp, 20)
     if tail:
@@ -143,7 +144,7 @@ def _report_start_failure():
     print("  Manual start (copy/paste into cmd - full path, works from"
           " any folder):")
     print("    " + _manual_command())
-    print("  Or pick menu [13] Diagnose & fix - it finds and repairs the"
+    print("  Or run the one-shot fixer - 'python tool.py diagnose' - it finds and repairs the"
           " usual causes automatically.")
     print("  -----------------------------------------------------------")
     print("")
@@ -179,7 +180,7 @@ def start_hub():
             print("If this is 'Permission denied' or 'Access is denied':")
             print("  Windows or your antivirus blocked the freshly downloaded"
                   " file.")
-            print("  Pick menu [13] Diagnose & fix - it unblocks the folder"
+            print("  Run 'python tool.py diagnose' - it unblocks the folder"
                   " automatically (no admin needed).")
             return False
     else:
@@ -254,7 +255,7 @@ def stop_hub():
 
 
 def restart_hub():
-    """v2.8 menu [14]: restart the RUNNING hub without killing it hard.
+    """v2.8: restart the RUNNING hub without killing it hard.
     The hub relaunches ITSELF as a new process (POST /restart) - settings
     are re-read, the port is re-bound, nothing is lost. When the hub is
     not running this simply starts it."""
@@ -289,7 +290,7 @@ def restart_hub():
                   % (info.get("version", "?"), ph.CFG["port"]))
             return True
     print("  The hub did not answer within 45 s - check the tray icon or"
-          " menu [13] Diagnose & fix.")
+          " 'python tool.py diagnose'.")
     return False
     ph = _load_advprint()
     ok, info = _health()
@@ -393,7 +394,7 @@ def update_check():
 
 
 def livetest(do_print=False):
-    """v2.6 LIVE TEST: full A-to-Z self-check (menu [11] / CLI livetest)."""
+    """v2.6 LIVE TEST: full A-to-Z self-check (console Tools menu / CLI)."""
     ph = _load_advprint()
     ph.db_init()
     ph.init_config()
@@ -414,7 +415,7 @@ def livetest(do_print=False):
 
 
 def diagnose_and_fix():
-    """v2.6.1 menu [13]: find and REPAIR the usual 'hub offline' causes
+    """v2.6.1: find and REPAIR the usual 'hub offline' causes
     without any console knowledge:
       1. install-folder pre-flight (missing files -> exact name shown)
       2. unblock the folder (Windows Mark-of-the-Web from downloaded zips)
@@ -504,7 +505,7 @@ def diagnose_and_fix():
     if _port_listening():
         if hub_running():
             print("  the hub is ALREADY running and healthy - nothing to"
-                  " fix. Close and reopen the dashboard with menu [12].")
+                  " fix. Close and reopen the console (python tool.py dashboard).")
             return
         print("  SOMETHING (not the hub) is listening on the port.")
         a = input("  Kill whatever holds port %d now? [Y/n]: "
@@ -561,11 +562,11 @@ def diagnose_and_fix():
             if b.strip().lower() not in ("n", "no"):
                 print("  AdvPrint Pro stays running. For the normal hidden"
                       " start (recommended, with tray icon) close the tool"
-                      " and use menu [1] next time.")
+                      " and run 'python tool.py start' next time.")
                 return
             proc.terminate()
             time.sleep(1.0)
-            print("  test instance stopped - use menu [1] to start hidden")
+            print("  test instance stopped - run 'python tool.py start' to start hidden")
             return
         proc.terminate()
         time.sleep(1.0)
@@ -587,7 +588,7 @@ def diagnose_and_fix():
     print("\n  Manual start (copy/paste into cmd/terminal):")
     print("    " + _manual_command())
     print("  If the output above mentions permissions/antivirus: add the")
-    print("  AdvPrint folder to your AV's exclusions, then menu [1].")
+    print("  AdvPrint folder to your AV's exclusions, then run 'python tool.py start'.")
 
 
 def uninstall():
@@ -621,79 +622,29 @@ def uninstall():
 
 
 # ------------------------------------------------------------
-# interactive menu
+# v3.2.6: the interactive numbered menu is GONE (user request -
+# "AdvPrint Tool no need extra, it already exists in UI"). The console
+# IS the menu now; running this file opens it.
 # ------------------------------------------------------------
-MENU = """
-  ____  _             _      ____  __  __
- |  _ \\| | __ _ _ __ | | ___|  _ \\|  \\/  | __ _ _ __   ___ ___
- | |_) | |/ _` | '_ \\| |/ _ \\ |_) | |\\/| |/ _` | '_ \\ / __/ _ \\
- |  __/| | (_| | | | |  __/  __/| |  | | (_| | | | | (_|  __/
- |_|   |_|\\__,_|_| |_|\\___|_|   |_|  |_|\\__,_|_| |_|\\___\\___|
-
-  [1] Start AdvPrint            [5] Windows service - install
-  [2] Stop AdvPrint             [6] Windows service - remove
-  [3] Status                    [7] Start at logon: ON / OFF
-  [4] Print test page           [8] Check for updates (GitHub)
-  [9] Show recent jobs         [10] Uninstall / remove
-  [11] LIVE TEST (A-to-Z)      [12] Open dashboard
-  [13] Diagnose & fix (hub offline / tray missing / blocked exe)
-  [14] Restart AdvPrint (v2.8 - clean relaunch, no Task Manager)
-  [0] Exit
-"""
-
-
-def menu():
-    while True:
-        print(MENU)
-        try:
-            c = input("  Choose [0-14]: ").strip()
-        except (EOFError, KeyboardInterrupt):
-            print("")
-            return
-        print("")
-        if c == "1":
-            start_hub()
-        elif c == "2":
-            stop_hub()
-        elif c == "3":
-            show_status()
-        elif c == "4":
-            test_page()
-        elif c == "5":
-            service("install")
-        elif c == "6":
-            service("remove")
-        elif c == "7":
-            ph = _load_advprint()
-            set_autorun(not ph.autostart_enabled())
-        elif c == "8":
-            update_check()
-        elif c == "9":
-            show_history()
-        elif c == "10":
-            uninstall()
-            return
-        elif c == "11":
-            livetest()
-        elif c == "12":
-            ph = _load_advprint()
-            import urllib.parse
-            webbrowser.open("http://127.0.0.1:%d/dashboard?token=%s" % (
-                ph.CFG["port"], urllib.parse.quote(ph.CFG["token"])))
-        elif c == "13":
-            diagnose_and_fix()
-        elif c == "14":
-            restart_hub()
-        elif c == "0":
-            return
-        else:
-            print("Pick 0-14.")
-        print("")
+def open_console():
+    """Open THE ONE UI console in the default browser (the hub must be
+    running - the tray icon or 'python tool.py start' starts it)."""
+    ph = _load_advprint()
+    import urllib.parse
+    ok, info = _health()
+    if not ok:
+        print("The hub is not running yet - starting it ...")
+        start_hub()
+    webbrowser.open("http://127.0.0.1:%d/ui?token=%s" % (
+        ph.CFG["port"], urllib.parse.quote(str(ph.CFG.get("token") or ""))))
+    print("Opened THE ONE UI console: http://127.0.0.1:%d/ui" % ph.CFG["port"])
 
 
 def usage():
-    print("""AdvPrint Pro Tool - commands:
-  (no command)  interactive menu
+    print("""AdvPrint Pro Tool - one-shot commands (v3.2.6: the menu
+lives in THE ONE UI console - running this file with no arguments
+opens it):
+  (no command)  open THE ONE UI console in the browser
   status        show status
   start|stop    start / stop the hub
   restart       restart the running hub (clean relaunch, v2.8)
@@ -701,8 +652,8 @@ def usage():
   history [n]   show recent jobs
   autorun on|off   start-at-logon on/off
   livetest [print] full A-to-Z live self-test ("print" = real test page)
-  diagnose        find and fix why the hub will not start (menu [13])
-  dashboard        open the dashboard with the current token
+  diagnose        find and fix why the hub will not start
+  dashboard       open the console with the current token
   service-install | service-remove | service-status
   update-check  check GitHub for updates
   uninstall     stop + de-register (program files via Apps settings)
@@ -713,10 +664,8 @@ def main():
     args = sys.argv[1:]
     cmd = args[0] if args else ""
     if not cmd:
-        if sys.stdin and sys.stdin.isatty():
-            menu()
-        else:
-            show_status()
+        # v3.2.6: no interactive menu any more - open the console UI.
+        open_console()
         return
     if cmd == "status":
         show_status()
@@ -747,10 +696,7 @@ def main():
     elif cmd == "diagnose":
         diagnose_and_fix()
     elif cmd == "dashboard":
-        ph = _load_advprint()
-        import urllib.parse
-        webbrowser.open("http://127.0.0.1:%d/dashboard?token=%s" % (
-            ph.CFG["port"], urllib.parse.quote(ph.CFG["token"])))
+        open_console()
     elif cmd in ("help", "--help", "-h"):
         usage()
     else:

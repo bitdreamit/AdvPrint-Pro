@@ -13,6 +13,43 @@ Web page ──► Chrome extension ──► AdvPrint Pro hub (localhost:9235) 
 
 ---
 
+## What's new in v3.2.6 (SEVEN BUGS + THE UI SECURITY MODEL)
+
+Everything below is locked by tests (397 passed) **and** verified live
+in a browser (`scripts/render_v326.py`).
+
+1. **History / Queue clear really cleans.** Clear queue cancels every
+   waiting job AND removes all finished records — the list is empty
+   afterwards. "Clear ALL history" calls the real `/history/clear`
+   endpoint (it used to post a body the hub ignored). Waiting jobs are
+   never touched by the history clear.
+2. **Printer → Details no longer doubles the path** — the
+   `/ipp/print/ipp/print/<printer>` URL is dead; the hub returns the
+   bare queue slug and the console joins it once.
+3. **LAN panel top Disable/Enable works** (it was never wired) and
+   **every Copy URL carries the token**
+   (`http://<ip>:9235/ui?token=...`).
+4. **QR codes encode `http://`** (phone browsers cannot open `ipp://`
+   — they Google-search it) while the display and the Copy button
+   keep the `ipp://` printer URL printers expect.
+5. **The install doc is not backdated** (the self-host extension page
+   shows the current version, not v3.0.7) and the console has an
+   **in-UI Docs button** — the guide opens inside THE ONE UI, no
+   extra old-UI tab.
+6. **SECURITY — the console UI is local-only.** Only the hub PC itself
+   (loopback or its own IP) can open the console or change settings.
+   LAN PCs and phones keep FULL print access per the Allowed-IPs list
+   (Send portal, IPP printer URL, print API, ports 9235/631/9100) —
+   they get a friendly locked page instead of the UI.
+7. **LAN sharing ON now switches the IPP printer ON automatically**
+   (an explicit IPP: ON/OFF toggle stays independent in the LAN panel
+   header), **the interactive CLI tool menu is gone** (running
+   `tool.py` opens the console; every repair subcommand stays) and
+   **the tray menu is exactly Dashboard / Restart / Exit**.
+
+Details: `docs/RELEASE-NOTES-v3.2.6.md` and
+`docs/AdvPrint-Pro-v3.2.6-A-to-Z-DEV-GUIDE.md`.
+
 ## What's new in v3.2.5 (SIX USER-REPORTED BUGS, ALL FIXED)
 
 Everything below is locked by tests **and** verified live in a browser.
@@ -287,7 +324,7 @@ The ten most-requested features, all in one release:
 - **Dashboard + Audit log, Self and LAN separately** — four buttons in Options: *Open dashboard / audit log — Self PC* and *— LAN PC*; the popup footer opens the active target.
 - **Close tab after auto-print is now default OFF** — tabs stay open unless you explicitly opt in (Options → Behavior).
 - **DropZone + Send portal — printing WITHOUT the extension.** The hub watches a folder: in Word/Excel/ANY app choose *Microsoft Print to PDF* and save into the DropZone — the page prints seconds later (dashboard → DropZone card; `POST /dropzone/open` opens the folder). Phones/tablets/other PCs print through the built-in **Send portal** (`/send`, token-protected, same as every endpoint).
-- **Restart hub** — in the tray menu, AdvPrint Tool [14] and the dashboard button: the hub relaunches itself cleanly (new process waits for the port; queued jobs, settings and history are kept).
+- **Restart hub** — in the tray menu, the console Hub tab and the dashboard button: the hub relaunches itself cleanly (new process waits for the port; queued jobs, settings and history are kept).
 - **Bullet-proof upgrade & uninstall.** The setup now runs `hub-stop.ps1` BEFORE touching files: stops the optional *AdvPrint* service (wait + PID kill), **deletes the service registration** (reinstalled fresh when ticked — upgrades keep it automatically), kills every process under the install folder and frees TCP 9235. Old program folders are wiped, so no stale file can abort an install any more; the uninstaller retries the folder sweep and reports leftovers honestly.
 - **Silent install** `AdvPrint-Pro-Setup-3.2.5.exe /S` — elevation is requested by the exe manifest itself ("auto permission" on any PC), the hub auto-starts after a silent install, and the firewall rule for LAN sharing (TCP 9235) is added automatically (removed on uninstall).
 - **New A + printer logo** — the letter A drawn as a printer: the crossbar is the output slot and a printed page slides out of it. Same mark in the extension, popup, dashboard, tray icon, installer and docs.

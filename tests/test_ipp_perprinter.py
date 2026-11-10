@@ -175,7 +175,9 @@ def test_printers_answers_queue_metadata(hub, printers, ipp_on):
     assert by_name["HP Laser 103 107 108"]["ipp_queue"] == \
         "ipp://192.168.1.50:%d/ipp/print/hp-laser-103-107-108" \
         % advprint.CFG["port"]
-    assert by_name["OneNote (Desktop)"]["ipp_path"] == "ipp/print/onenote-desktop"
+    # v3.2.6 BUG FIX 2: ipp_path is the BARE slug (the console
+    # joins "/ipp/print/" + slug itself - no doubled path any more)
+    assert by_name["OneNote (Desktop)"]["ipp_path"] == "onenote-desktop"
 
 
 def test_classic_central_queue_still_works(hub, printers, ipp_on,
