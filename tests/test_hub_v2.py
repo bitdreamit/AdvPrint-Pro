@@ -1818,10 +1818,10 @@ def test_v280_source_wiring_restart_tray_tool_installer():
     assert "hubUrlLan" in bg and "hubTokenLan" in bg
     assert 'closeAfterPrint: false' in bg
     assert "resolveTarget" in bg
-    pop = open(os.path.join(ext, "popup.html"), encoding="utf-8").read()
-    assert "swHook" not in pop          # v3.0.2: popup switch removed
+    # v3.2.2: the popup files are GONE (toolbar icon opens the console)
+    assert not os.path.exists(os.path.join(ext, "popup.html"))
     opt = open(os.path.join(ext, "options.html"), encoding="utf-8").read()
-    # v3.2.2: Options opens the hub directly; the LAN profile lives in
+    # v3.2.1: Options opens the hub directly; the LAN profile lives in
     # background.js + the ONE UI Connections tab
     assert "127.0.0.1:9235" in opt and "ONE UI" in opt
     man = json.load(open(os.path.join(ext, "manifest.json")))
@@ -2406,7 +2406,7 @@ def test_v290_raw_listener_disabled_without_lan_sharing():
 
 def test_v290_extension_version_single_source():
     """ONE version everywhere in the extension - the manifest.
-    v3.2.2: Options is the hub-redirect opener; the version lives in
+    v3.2.1: Options is the hub-redirect opener; the version lives in
     manifest.json (popup carries the same-value fallback, options.html
     shows the same brand line, no JS hardcodes an old version)."""
     ext = os.path.normpath(os.path.join(os.path.dirname(advprint.__file__),
@@ -2425,7 +2425,7 @@ def test_v290_extension_version_single_source():
     assert ('id="ver">v%s<' % v) in popup, "popup fallback drifts"
     assert ("v%s" % v) in options, "options brand line drifts"
     assert "127.0.0.1:9235" in options and "127.0.0.1:9235" in ojs, \
-        "v3.2.2 Options must open the hub directly"
+        "v3.2.1 Options must open the hub directly"
     assert "getManifest().version" in open(
         os.path.join(ext, "popup.js")).read()
     for f in ("popup.js", "background.js", "options.js"):
@@ -2540,7 +2540,7 @@ def test_v301_tray_menu_click_targets():
 
 
 def test_v301_hook_switch_in_power_block():
-    """v3.0.1 -> v3.2.2: the Intercept window.print() switch is the ONE
+    """v3.0.1 -> v3.2.1: the Intercept window.print() switch is the ONE
     hookPrint switch and lives in the ONE UI Power Switches tab (rev-4
     markup), between Queue mode and Debug mode. The extension adopts it
     via the hub ext_prefs mirror (background.js adoptHubExtPrefs)."""
@@ -2561,16 +2561,23 @@ def test_v301_hook_switch_in_power_block():
 
 def test_v302_popup_has_no_hook_switch():
     """v3.0.2: the popup never carried the window.print() hook switch -
-    the ONE switch lives in the ONE UI Power Switches tab since v3.2.2."""
+    the ONE switch lives in the ONE UI Power Switches tab since v3.2.1.
+    v3.2.2: THE POPUP IS GONE COMPLETELY - the toolbar icon opens the
+    ONE UI console, so there is no popup.html/popup.js at all and the
+    manifest must not reference a default_popup."""
     ext = os.path.join(os.path.dirname(os.path.dirname(
         os.path.abspath(__file__))), "extension")
-    pop = open(os.path.join(ext, "popup.html"), encoding="utf-8").read()
-    assert "swHook" not in pop, "popup still has the hook switch row"
-    pjs = open(os.path.join(ext, "popup.js"), encoding="utf-8").read()
-    assert "swHook" not in pjs and "renderHookState" not in pjs, \
-        "popup.js still wires the removed switch"
-    i18n = open(os.path.join(ext, "i18n.js"), encoding="utf-8").read()
-    assert "popHook" not in i18n, "i18n still carries popHook* keys"
+    assert not os.path.exists(os.path.join(ext, "popup.html")), \
+        "v3.2.2 removed the popup - popup.html must not exist"
+    assert not os.path.exists(os.path.join(ext, "popup.js")), \
+        "v3.2.2 removed the popup - popup.js must not exist"
+    man = json.load(open(os.path.join(ext, "manifest.json"),
+                         encoding="utf-8"))
+    assert "default_popup" not in man.get("action", {}), \
+        "manifest still opens a popup - v3.2.2 opens the console instead"
+    bg = open(os.path.join(ext, "background.js"), encoding="utf-8").read()
+    assert "chrome.action.onClicked" in bg and "/ui" in bg, \
+        "toolbar icon click must open THE ONE UI console"
 
 
 
@@ -2595,7 +2602,7 @@ def test_v302_multi_printer_doc_ships():
 
 
 def test_v303_rules_print_labels_actions():
-    """v3.0.3 -> v3.2.2: rules can print LABELS/RECEIPTS without page
+    """v3.0.3 -> v3.2.1: rules can print LABELS/RECEIPTS without page
     JavaScript. The action picker lives in the ONE UI rule editor
     (rev-4 re-what select: Raw text / ZPL / ESC-POS stream), the
     background engine still extracts page text and posts it with an
@@ -2616,7 +2623,7 @@ def test_v303_rules_print_labels_actions():
 
 
 def test_v303_rules_copies_paper_columns():
-    """v3.0.3 -> v3.2.2: per-rule Copies + Paper - the ONE UI rule
+    """v3.0.3 -> v3.2.1: per-rule Copies + Paper - the ONE UI rule
     editor carries both (re-copies / re-paper), the hub rules_mirror
     validation keeps them (copies 1-99, paper <=24 chars) and the
     extension's rulePrintExtras still turns them into job fields."""
@@ -2635,7 +2642,7 @@ def test_v303_rules_copies_paper_columns():
 
 
 def test_v303_lab_card_and_docs():
-    """v3.0.3 -> v3.2.2: the multi-printer lab explanation lives in the
+    """v3.0.3 -> v3.2.1: the multi-printer lab explanation lives in the
     ONE UI Rules tab (match-by help) and MULTI-PRINTER.md still shows
     the RULES as the primary label flow."""
     root = os.path.dirname(os.path.dirname(os.path.dirname(
@@ -2652,7 +2659,7 @@ def test_v303_lab_card_and_docs():
 
 
 def test_v304_multi_printer_rules_made_easy():
-    """v3.0.4 -> v3.2.2: several printers stay easy - (1) patternToRegex
+    """v3.0.4 -> v3.2.1: several printers stay easy - (1) patternToRegex
     supports 'contains' (background engine unchanged); (2) the ONE UI
     rule editor fills the printer dropdown from the LIVE hub printer
     list (one option per real printer - no duplicates by construction);
@@ -2671,7 +2678,7 @@ def test_v304_multi_printer_rules_made_easy():
 
 
 def test_v305_rule_manager_tab():
-    """v3.0.5 -> v3.2.2: the rule manager IS the ONE UI Rules tab
+    """v3.0.5 -> v3.2.1: the rule manager IS the ONE UI Rules tab
     (rev-4): the rule table lives there once, every rule row has
     Edit + Delete, the rule editor modal opens for new + existing
     rules, and the hub keeps the mirror in rules_mirror."""
@@ -2695,7 +2702,7 @@ def test_v305_pause_counters_and_log():
     """v3.0.5: pausing is a power switch - rulesPaused stops ONLY the
     hidden auto work (manual prints unaffected); every rule-triggered
     job bumps a per-rule run counter and lands in a 100-entry activity
-    log. v3.2.2: the switch is ALSO mirrored in the ONE UI Power
+    log. v3.2.1: the switch is ALSO mirrored in the ONE UI Power
     Switches tab (ext_prefs.rulesPaused)."""
     ext = os.path.join(os.path.dirname(os.path.dirname(
         os.path.abspath(__file__))), "extension")
@@ -2721,7 +2728,7 @@ def test_v305_pause_counters_and_log():
 
 
 def test_v306_content_rules_engine():
-    """v3.0.6 -> v3.2.2: rules can match by CONTENT - the engine in
+    """v3.0.6 -> v3.2.1: rules can match by CONTENT - the engine in
     background.js is unchanged (isContentRule / matchRule(kind) /
     detectTabKind / ruleActionFor / printTabImage / two-pass auto
     matching), and the ONE UI rule editor exposes it (Match by +

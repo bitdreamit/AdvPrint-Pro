@@ -2,34 +2,38 @@ AdvPrint Pro (Advanced Printer) v3.2.2 - START HERE
 ====================================================
 by Bit Dream IT - Innovative Healthcare Solutions
 
-WHAT IS NEW IN v3.2.2 - ALL IPP PATTERNS BACK + FAST DISCOVERY
----------------------------------------------------------------
-1) EVERY IPP printer URL pattern answers again: the standard
-   ipp://<pc-ip>:9235/ipp/print, the Windows add-by-URL form
-   http://<pc-ip>:9235/ipp/print, /ipp, the per-printer queues
-   ipp://<pc-ip>:9235/ipp/print/<printer> AND the short ROOT form
-   ipp://<pc-ip>:9235 (just the address, no path) - the form Windows
-   "Add a printer -> IPP Device", macOS IP printing and CUPS send.
-2) Phone-sized IPP jobs (>1 MB photo/policy PDFs) are accepted - the
-   big-body guard no longer 401s native IPP (token-free by design,
-   still size-capped and audited).
-3) INSTANT discovery for phones: the mDNS/AirPrint responder answers
-   every query back-to-back (it used to nap 3 s between answers, so
-   Android Default Print Service / iOS AirPrint scans kept missing the
-   hub), announces twice at startup, no longer answers for OTHER
-   printers on the LAN, and the one-click firewall repair now also
-   restores the UDP 5353 rule.
-4) THE ONE UI got leaner: the toolbar keeps only real actions (New
-   Job, Pause/Resume, Release ALL, Test Page) + live LAN/IPP chips -
-   the tab shortcuts that duplicated the sidebar are gone. The LAN tab
-   now shows the STANDARD ipp:// URL, the short root form, the live
-   mDNS state and a per-OS add guide (Windows / macOS / iPhone /
+WHAT IS NEW IN v3.2.2 - EVERY IPP PATTERN + WORKING SWITCHES + NO POPUP
+------------------------------------------------------------------------
+1) THE IPP PRINTER ANSWERS IN EVERY PATTERN. Keep using
+      ipp://<this-pc-ip>:9235/ipp/print        (Windows/macOS/iOS)
+      http://<this-pc-ip>:9235/ipp/print       (Windows "IPP Device")
+   and NEW: the SAME endpoint is mirrored on the STANDARD printer port
+      http://<this-pc-ip>:631/ipp/print        (Android manual add!)
+   Android's Default Print Service / Mopria ignores custom ports when
+   you add a printer by IP - it always tries port 631 first. That was
+   why Android could not connect before. The installer opens TCP 631
+   in the firewall; config.json "ipp_standard_port": 0 turns the
+   mirror off (the hub port always keeps working).
+2) THE PRINTER APPEARS BY ITSELF EVERYWHERE. AirPrint/mDNS discovery
+   (Bonjour _ipp._tcp) no longer requires LAN sharing - IPP printer
+   mode alone starts it AND starts the LAN listener, so the hub shows
+   up by itself in Windows 10/11 "Add device", macOS Bonjour, iOS
+   AirPrint and Android Mopria lists.
+3) EVERY SWITCH IN THE CONSOLE WORKS NOW. v3.2.1 drew the switches
+   but a click did nothing. Click = flip + INSTANT save (Power and
+   Browser switches push to every paired browser; Hub/Settings save
+   to config.json; DropZone saves its delete-after switch).
+4) THE POPUP IS GONE. Clicking the extension toolbar icon opens THE
+   ONE UI console directly (your paired token is applied
+   automatically). The popup was a second, weaker copy of the same
+   console - one UI now. 13 menu items that were demo stubs now run
+   their real actions, the duplicate "Save & push to browsers"
+   buttons are gone, and the LAN tab shows the live IPP URLs with a
+   per-platform add-printer guide (Windows 10/11, macOS, iPhone/iPad,
    Android).
-5) Everything else from v3.2.1 (the embedded ONE UI, 17 tabs, SELF vs
-   CENTER view, 14 tools, rules manager) is unchanged.
 
-WHAT IS NEW IN v3.2.1 - THE ONE ALL-IN-ONE UI EVERYWHERE
-----------------------------------------------------------
+WHAT v3.2.1 ALREADY GAVE YOU (unchanged in v3.2.2)
+---------------------------------------------------
 1) Open  http://127.0.0.1:9235  - you get the APPROVED All-in-One
    console (the exact design you signed off): blue IDM-style title
    bar, 9 menus, 17 tabs (Dashboard, Queue, History, Printers, LAN
@@ -37,16 +41,14 @@ WHAT IS NEW IN v3.2.1 - THE ONE ALL-IN-ONE UI EVERYWHERE
    Browser, Extension, Debug, Audit, Logs, Settings, About).
    /ui and /dashboard answer with the SAME UI - one URL, one window.
 2) THE UI IS EMBEDDED IN advprint.py ITSELF (CONSOLE_HTML constant):
-   the first v3.2.1 build could lose a console.html file on Windows
-   and fall back to the old dashboard - that can never happen again.
-   Nothing external to go missing, on Windows or Linux.
+   nothing external to go missing, on Windows or Linux.
 3) SELF vs CENTER view: on the hub PC you get the SELF PC UI (full
    control, incl. the 14 tools). A PC that opens the LAN share URL
    (http://<center-ip>:9235) gets the CENTER PC UI (amber banner -
    live queue, history, rules, IPP; system tools stay on the center).
 4) Tray icon > "Console (THE ONE UI)" opens the same UI.
-   Chrome/Edge/Brave extension > AdvPrint Pro options opens the same
-   UI (http://127.0.0.1:9235). Website whitelist defaults to '*'
+   The extension toolbar icon and Options page open the same UI
+   (http://127.0.0.1:9235). Website whitelist defaults to '*'
    (all websites may print - tighten it on the Extension tab).
 5) The OLD classic dashboard is no longer served - if you still see
    it after installing THIS build, an old AdvPrint Pro service is

@@ -1,5 +1,5 @@
-/* AdvPrint Pro v3.2.1 - Options page = one-click opener for THE ONE UI.
-   v3.2.0 carried a full standalone options UI here; since v3.2.1 every
+/* AdvPrint Pro v3.2.2 - Options page = one-click opener for THE ONE UI.
+   v3.2.0 carried a full standalone options UI here; since v3.2.1 (and fully in v3.2.2) every
    option lives inside the hub console at http://127.0.0.1:9235 (17 tabs).
    This page redirects straight to it and only falls back to a token
    field when the hub is not reachable. */

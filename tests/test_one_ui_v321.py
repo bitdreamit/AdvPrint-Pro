@@ -1,4 +1,4 @@
-"""v3.2.2 - THE ONE UI is the approved rev-4 All-in-One design.
+"""v3.2.1 - THE ONE UI is the approved rev-4 All-in-One design.
 
 The rev-4 markup (title bar + 9 working menus + 218px sidebar + 17 tabs
 + rule editor modal + QR tiles + status bar) ships byte-for-byte as

@@ -1,97 +1,57 @@
 # AdvPrint Pro v3.2.2 — A-to-Z DEVELOPMENT & BUILD GUIDE
 
-> **v3.2.2 = "ALL IPP PATTERNS BACK + INSTANT DISCOVERY + ONE TOOLBAR".**
-> Base is v3.2.1 (the embedded rev-4 ONE UI). This release changes only
-> the hub's IPP/discovery layer and the UI chrome:
->
-> 1. **POST dispatch** (`_do_post_impl`): any POST whose Content-Type is
->    `application/ipp` routes to the IPP engine on EVERY path - the root
->    form `ipp://<ip>:9235` / `http://<ip>:9235` (no path) is served
->    again; `application/ipp` requests also bypass the 1 MB preauth gate
->    (phone PDFs are bigger than 1 MB; IPP is token-free by design and
->    stays bounded by MAX_PDF 413 + Origin refusal + per-IP audit).
-> 2. **mDNS responder** (`_ipp_mdns_loop`): drains every packet
->    back-to-back (the v3.2.1 loop answered ONE packet then slept 3 s -
->    phones missed the hub), announces twice at startup (RFC 6762 §8.3)
->    and answers only the service names / own instances / own host
->    target (multi-hub record-poisoning fix).
-> 3. **Firewall repair** (`firewall_allow`): now also adds the UDP 5353
->    mDNS rule next to the TCP rules.
-> 4. **UI** (console.html, embedded via `refresh_embed_v322.py`): the
->    toolbar keeps only real actions (New Job, Pause/Resume, Release
->    ALL, Test Page) + live LAN/IPP chips; the LAN tab gained the
->    STANDARD ipp:// row, the short-root row, the live AirPrint
->    discovery (mDNS) row and a per-OS add guide (Windows 10/11, macOS,
->    iPhone AirPrint, Android Mopria); the Network menu gained
->    "Copy IPP printer URL (ipp://...)".
-> 5. **API fix**: `POST /print` instant path answers `auto_queued` as a
->    real boolean (the bare and/or chain returned the held_reason
->    string when the worker had already held the job).
->
-> Rebuild flow is unchanged: edit `tool/unix/hub/console.html` →
-> `python3 scripts/refresh_embed_v322.py` (re-embed into BOTH
-> advprint.py copies) → `bash scripts/build-all.sh` (crx + zip + exe +
-> deb + sums). Tests: `python3 -m pytest tests/` (312 passed for
-> v3.2.2; the mDNS + root-IPP tests live in `tests/test_mdns_v322.py`
-> and `tests/test_ipp.py`).
+> **v3.2.2 = "EVERY IPP PATTERN + WORKING SWITCHES + NO POPUP".** Three
+> reported v3.2.1 defects fixed: (1) the IPP printer answers in every
+> URL pattern — the hub port (ipp:// and http://) AND a NEW standard-
+> port mirror on 631, because Android's Default Print Service / Mopria
+> ignores custom ports on manual add; (2) AirPrint/mDNS discovery is
+> decoupled from LAN sharing and IPP printer mode starts the LAN
+> listener itself, so the printer appears by itself everywhere; (3)
+> every switch in THE ONE UI is a real control now (delegated click
+> handler: flip + instant save). The extension popup is REMOVED — the
+> toolbar icon opens the console. 13 demo-stub menu items now fire
+> their real actions and duplicate buttons are gone.
 
-# AdvPrint Pro v3.2.1 history (unchanged in v3.2.2)
+> **Build flow (unchanged since v3.2.1, one command each):**
+> 1. edit `tool/unix/hub/console.html` (the ONE UI source),
+> 2. re-embed it: `python3 scripts/embed_console_v322.py` (writes the
+>    `CONSOLE_HTML` constant into BOTH advprint.py copies and syncs the
+>    windows console.html),
+> 3. build everything: `bash scripts/build-all.sh` (CRX3 + extension
+>    zip + NSIS Setup EXE + DEB + SHA256SUMS into dist/),
+> 4. verify: `python3 -m pytest tests/` (318 tests — test_v322.py locks
+>    the new behavior) + Playwright screenshots of all 17 tabs.
 
-> **v3.2.1 = "the approved UI is now the product".** The rev-4 design
-> file the customer approved (`AdvPrint-Pro-AllInOne-UI-Design-v3.1.3-4.html`)
-> ships byte-for-byte as `console.html`; only the demo `<script>` was
-> swapped for the production wiring (`build/console.wire.v321.js` in the
-> dev workspace, shipped compiled into console.html) and the hub gained
-> 5 small additions (see §2.1). Everything below applies as in v3.2.0.
+## 2.2 What changed in v3.2.2 (the exact code map)
 
-> **v3.2.1 (fix) - THE UI IS EMBEDDED IN THE HUB.** The first v3.2.1
-> Setup EXE did not pack `console.html` into the install folder, so
-> those installs served the OLD classic dashboard at `/`. advprint.py
-> now carries the whole UI as the `CONSOLE_HTML` constant and
-> `console_page_bytes()` serves it directly - no file can go missing.
-> Rebuild flow: `build_console_v321.py` (rebuild console.html) →
-> `embed_console_v321.py` (re-embed into advprint.py) →
-> `scripts/build-all.sh` (crx + zip + exe + deb).
+| Area | File | Change |
+|---|---|---|
+| Standard-port IPP mirror | `advprint.py` | `IPP631Handler` + `ipp631_listen_start/stop/ensure()`; config `ipp_standard_port` (default 631); serves only /ipp/print(+/<printer>), landing page + redirects; health refresher hooks it every 3 s |
+| IPP landing page shared | `advprint.py` | new `ipp_landing_html()` — one source for both ports, shows ipp:// AND http:// URLs + the 631 note when the mirror is up |
+| Discovery decoupling | `advprint.py` | `_ipp_mdns_loop` want = `ipp_printer AND ipp_mdns` (share_lan removed); `lan_listen_ensure` want = `share_lan OR ipp_printer` |
+| mDNS TXT | `advprint.py` | adds `usb_MFG=Bit Dream IT`, `usb_MDL=AdvPrint Pro Hub` (Mopria display name) |
+| Health fields | `advprint.py` | `/health` now returns `ipp_urls {ipp,http,std}`, `ipp_mdns_up`, `ipp_std {up,port,err}` |
+| Switches that work | `console.html` | `bindSwitches()` = ONE delegated document-level click handler on `.switch` inside `.tgl/.f-row/#rulemodal`; `swSave()` debounces 400 ms → `saveExtPrefs()/saveHub()/saveSettingsPanel()`; `swDirty()` guards the 3 s poll; saves clear dirty keys |
+| Menu linkups | `console.html` | 13 `data-toast="…(demo)"` items replaced with `data-act=`, `data-tool=`, `data-goto=`; menu clicks close the dropdown |
+| Dedupe | `console.html` | removed both "Save & push to browsers" buttons, dashboard quick-action duplicates, DropZone double "Open folder" |
+| IPP guide card | `console.html` | LAN tab: per-platform table (Windows 10/11, macOS, iPhone/iPad, Android) with live-filled ids `ippUrlIpp`, `ippUrlHttp`, `ippGuideWin/MacHost/Android/Android631/RawIp`; live chips rows `row-mdns`, `row-ipp631` |
+| No popup | `extension/` | `popup.html`/`popup.js` deleted; manifest `action` has no `default_popup`; `chrome.action.onClicked` opens `<hubUrl>/ui?token=…`; wording switched to Console |
+| Firewall | `installer/setup.nsi` | + TCP 631 rule "AdvPrint Pro IPP 631" |
+| Version | everywhere | VERSION.txt, `VERSION`/`VERSION_NAME`, manifest 3.2.2, NSIS `VIProductVersion 3.2.2.0` + OutFile …3.2.2.exe, DEB control (auto from VERSION.txt) |
 
-## 2.1 How v3.2.1 was built from the rev-4 design (the exact process)
+## 2.3 v3.2.2 verification (what the tests lock)
 
-1. **Freeze the master.** The approved rev-4 HTML is the only UI source
-   of truth. Its markup/CSS are never retyped - a build script
-   (`scripts/build_console_v321.py` pattern) reads it and applies four
-   production edits only:
-   - static version strings v3.1.3 → v3.2.1,
-   - remove the fixed design-note preview strip,
-   - insert `<script id="bootjson" type="application/json">
-     __ADVPRINT_BOOT_JSON__</script>` before `</head>`,
-   - replace the demo `<script>` with the production wiring JS.
-2. **Wire live data, structure-bound.** The wiring script keeps the
-   design's own UX code (tab switching, menus, toasts, modals, QR,
-   rule editor) and feeds the frozen markup with live hub data:
-   boot JSON (view/host/lan_ip/port/version) + 3 s polling renderers
-   for stats, queue, history, printers, rules, audit, logs, peers,
-   DropZone, extension pairing + the 14 tools via `POST /tool`.
-   Table rows are rebuilt by cloning the design's own first row
-   (template-clone), so the rebuilt rows look byte-identical to the
-   approved design.
-3. **Hub additions (advprint.py, both unix + windows copies in sync):**
-   - `VERSION` / `VERSION_NAME` → 3.2.1,
-   - `rules_mirror` validation keeps the rev-4 rule-editor fields
-     (`auto, sched, priority, content, color, duplex`),
-   - new config keys `ext_prefs` (Power/Browser switches + default
-     print options, mirrored to paired browsers), `history_days`,
-     `log_level`,
-   - `GET /qr?kind=hub` (the console QR),
-   - `POST /tool {"action":"policy-install","browser":...,"hive":...}`
-     (multi-browser CRX forcelist writer, reuses ext_policy_* helpers).
-4. **Extension.** `manifest.json` 3.2.1; `options.html/js` replaced by
-   the one-click opener that goes straight to `http://127.0.0.1:9235`;
-   `background.js` adopts `ext_prefs` on every hub sync
-   (ONE UI = master of the switches, exactly like rules_mirror).
-5. **Verify like a user.** Boot the hub, open `/` in a real browser
-   (Playwright): all 17 tabs + 3 modals + center view get screenshotted,
-   plus `pytest tests/` (301 tests, incl. `test_one_ui_v321.py` which
-   locks the rev-4 contract: 9 menus, 17 panels, rule editor ids,
-   design tokens, boot JSON, self/center views).
+- `tests/test_v322.py` (16 tests): the mirror answers a REAL IPP
+  Print-Job (RFC 8010 wire form) with `successful-ok` and queues the
+  job; landing page + redirect behavior; `ipp_standard_port` config
+  round-trip; `/health` carries the new fields; discovery no longer
+  depends on share_lan; LAN listener follows ipp_printer; AirPrint TXT
+  keys; the delegated switch handler + instant-save wiring; tray-managed
+  switches refuse; NO popup files + manifest has no default_popup +
+  onClicked opens /ui; ZERO demo-stub menu items; all 13 real menu
+  actions present; no duplicate "Save & push" buttons; LAN tab
+  platform guide + live fill.
+- Full suite: **318 passed, 1 skipped** (was 302 on v3.2.1).
 
 ---
 

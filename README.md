@@ -13,25 +13,32 @@ Web page ──► Chrome extension ──► AdvPrint Pro hub (localhost:9235) 
 
 ---
 
-## What's new in v3.2.2 (ALL IPP PATTERNS BACK + INSTANT DISCOVERY)
+## What's new in v3.2.2 (EVERY IPP PATTERN + WORKING SWITCHES + NO POPUP)
 
-- **Every IPP URL pattern answers**: `ipp://<ip>:9235/ipp/print`,
-  `http://<ip>:9235/ipp/print`, `/ipp`, per-printer
-  `ipp://<ip>:9235/ipp/print/<printer>` AND the bare root
-  `ipp://<ip>:9235` (Windows "IPP Device" / macOS IP printing / CUPS
-  form). Phone-sized (>1 MB) IPP Print-Jobs are accepted again.
-- **Instant mDNS discovery**: the responder answers every query
-  back-to-back, double-announces at startup (RFC 6762) and no longer
-  claims other printers' instances on a multi-hub LAN; the firewall
-  repair button also restores UDP 5353. Android Default Print Service
-  and iOS AirPrint find the hub while LAN sharing is ON.
-- **Leaner ONE UI**: toolbar = real actions + LAN/IPP status chips;
-  LAN tab shows the standard ipp:// URL, the short root form, the live
-  mDNS state and a per-OS add guide.
-- Details: `docs/RELEASE-NOTES-v3.2.2.md`,
-  `docs/AdvPrint-Pro-v3.2.2-A-to-Z-DEV-GUIDE.md`.
+The three reported v3.2.1 defects are fixed:
 
-## What's new in v3.2.1 (THE APPROVED UI IS NOW THE PRODUCT)
+1. **The IPP printer answers in EVERY pattern.** `ipp://ip:9235/ipp/print`
+   and `http://ip:9235/ipp/print` on the hub port, plus a **new
+   standard-port mirror on 631** (`http://ip:631/ipp/print`) — Android's
+   Default Print Service / Mopria ignores custom ports on manual add and
+   always tries port 631 first (that is why Android could not connect).
+   The installer opens TCP 631 in the firewall; `"ipp_standard_port": 0`
+   turns the mirror off.
+2. **The printer appears by itself everywhere.** AirPrint/mDNS discovery
+   no longer requires LAN sharing — IPP printer mode alone starts it
+   (and starts the LAN listener), so Windows 10/11 "Add device", macOS
+   Bonjour, iOS AirPrint and Android Mopria discover the hub on their own.
+3. **Every switch in THE ONE UI works** — click = flip + instant save
+   (Power/Browser switches push to paired browsers; Hub/Settings save to
+   config.json). The **extension popup is gone** — the toolbar icon opens
+   the console directly. 13 demo-stub menu items now fire their real
+   actions; duplicate buttons removed; the LAN tab shows live IPP URLs
+   and the per-platform add-printer guide.
+
+See `docs/RELEASE-NOTES-v3.2.2.md` and
+`docs/AdvPrint-Pro-v3.2.2-A-to-Z-DEV-GUIDE.md`.
+
+## What was new in v3.2.1 (THE APPROVED UI IS NOW THE PRODUCT)
 
 The customer-approved rev-4 All-in-One design is now the shipped UI -
 byte-for-byte markup/CSS with live hub data wired in (17 tabs, 9 menus,
@@ -40,11 +47,8 @@ rule editor, multi-browser silent CRX install, real QR codes).
 **v3.2.1 fix - the UI is EMBEDDED in `advprint.py`** (`CONSOLE_HTML`):
 the hub never depends on an external `console.html` file, so the
 approved UI is served at `/`, `/ui` and `/dashboard` on every install,
-even if files are damaged. The first v3.2.1 Setup EXE could miss the
-external file and fall back to the old dashboard - impossible now.
-extension Options opens http://127.0.0.1:9235 directly. See
-`docs/RELEASE-NOTES-v3.2.1.md` and
-`docs/AdvPrint-Pro-v3.2.1-A-to-Z-DEV-GUIDE.md`.
+even if files are damaged. extension Options opens
+http://127.0.0.1:9235 directly.
 
 ## What was new in v3.2.0 (THE ONE ALL-IN-ONE UI EVERYWHERE)
 

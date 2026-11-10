@@ -1,36 +1,85 @@
 # Changelog - AdvPrint Pro (Advanced Printer)
 by Bit Dream IT - Innovative Healthcare Solutions
 
-## v3.2.2 - ALL IPP PATTERNS BACK + INSTANT DISCOVERY + ONE TOOLBAR (2026-11-09)
+## v3.2.2 - EVERY IPP PATTERN + WORKING SWITCHES + NO POPUP (2026-11-10)
 
-Base: v3.2.1 - the embedded approved ONE UI and every feature unchanged.
+Base: v3.2.1 - every feature unchanged. This release fixes the three
+things reported on v3.2.1: the IPP printer URL seemed missing, Android
+could not connect in ANY of the documented ways, and none of the UI
+switches reacted to clicks. The extension popup is gone.
 
-- IPP: ANY POST with Content-Type application/ipp goes to the IPP
-  engine on every path - the ROOT form ipp://<ip>:9235 /
-  http://<ip>:9235 (no path; Windows "IPP Device", macOS IP printing,
-  CUPS) is served again alongside /ipp/print, /ipp and the per-printer
-  queues; phone-sized (>1 MB) Print-Jobs no longer 401 at the preauth
-  gate (IPP is token-free by design, still MAX_PDF-capped, Origin-
-  refused for browsers, audited per IP).
-- Discovery: the mDNS/AirPrint responder answers every query
-  back-to-back (the old loop answered one packet then slept 3 s, so
-  Android Default Print Service / iOS AirPrint / Windows scans kept
-  missing the hub), double-announces at startup (RFC 6762 §8.3),
-  refuses to claim other printers' instances (multi-hub record
-  poisoning), and the one-click firewall repair also restores the
-  UDP 5353 rule.
-- THE ONE UI: toolbar reduced to real actions (New Job, Pause/Resume
-  with honest label, Release ALL, Test Page) + live LAN/IPP chips -
-  the ten tab shortcuts duplicating the sidebar are gone; address bar
-  keeps the two QR pills; the LAN tab gained the STANDARD ipp:// URL
-  row, the short-root row, the live AirPrint discovery (mDNS) row and
-  a per-OS add guide (Windows 10/11, macOS, iPhone/iPad, Android);
-  Network menu gained "Copy IPP printer URL (ipp://...)"; the IPP QR
-  modal lists all three URL forms.
-- API: POST /print (instant mode) answers auto_queued as a real
-  boolean (previously the held_reason string leaked into the field).
-- Tests: 312 passed - new root-IPP conformance tests (>1 MB Print-Job
-  on /) and a full mDNS suite (tests/test_mdns_v322.py).
+### 1. The IPP printer answers in EVERY pattern
+- ipp://ip:9235/ipp/print and http://ip:9235/ipp/print keep working on
+  the hub port (GET = the how-to page with both URLs shown, POST =
+  full IPP 1.1/2.0 engine - Print-Job, Create-Job + Send-Document,
+  Get-Printer-Attributes, Get-Jobs, Cancel-Job, per-printer queues at
+  /ipp/print/<printer>).
+- NEW standard-port mirror: the SAME endpoint also answers on the
+  standard IPP port - http://ip:631/ipp/print (config
+  "ipp_standard_port": 631, 0 = off). Reason: Android's Default Print
+  Service / Mopria IGNORES custom ports on manual add and always tries
+  port 631 first - that is exactly why Android could not connect to a
+  hub that only listened on 9235. Windows needs no admin for port 631;
+  on macOS/Linux a refused bind only disables the MIRROR, never the
+  hub (logged as [IPP631] in hub.log). The mirror serves ONLY the IPP
+  endpoint; every other path redirects to the hub port.
+- Setup adds the inbound firewall rule for TCP 631 automatically.
+
+### 2. Discovery now runs by itself (Android / iOS / Windows / macOS)
+- mDNS/Bonjour announce (_ipp._tcp + _universal._sub._ipp._tcp, TXT
+  with rp=ipp/print, pdl, URF, UUID, usb_MFG/usb_MDL; one extra
+  service per local printer) is DECOUPLED from LAN sharing: IPP
+  printer mode alone starts discovery.
+- IPP printer mode also starts the LAN listener by itself (phones
+  cannot print to a loopback-only hub) - turning both switches off
+  stops it again.
+- Result: the printer appears BY ITSELF in Windows 10/11
+  Settings > Printers > Add device, macOS Bonjour list, iOS AirPrint
+  picker and Android Default Print Service / Mopria.
+
+### 3. Every switch in THE ONE UI actually works
+- v3.2.1 rendered the switches but a click only set a hidden dirty
+  flag - the switch did not move and nothing was saved. v3.2.2 ships
+  one delegated handler: click = flip + instant save (debounced 400 ms).
+  - Power Switches + Browser Behavior -> ext_prefs -> every paired
+    browser adopts the change (no save button needed).
+  - Hub panel switches -> /config (same patch as the Apply button).
+  - Settings panel -> /config; Start-with-Windows and Minimize-to-tray
+    stay managed by the service/tray and refuse with a hint.
+  - DropZone delete-after-print -> drop_delete, straight to the hub.
+  - Rule editor On/Auto toggles flip; saved with the rule form.
+- Saves clear their dirty flags so the 3 s poll refreshes again.
+
+### 4. The popup is GONE - the toolbar icon IS the console
+- popup.html / popup.js deleted, manifest no longer opens a popup.
+- Clicking the toolbar icon opens http://127.0.0.1:9235/ui (the paired
+  token is appended automatically) - one UI, not two.
+- All "popup" wording in extension messages now points to the Console.
+
+### 5. UI cleanups (more professional, fewer duplicates)
+- The two duplicate "Save & push to browsers" buttons are gone (the
+  switches save instantly).
+- Dashboard quick-actions strip reduced to navigation shortcuts (the
+  duplicated REAL test print / Release ALL held / Full self-test live
+  in their home tabs).
+- DropZone: one Open folder button instead of two.
+- All 13 menu items that were demo stubs now fire their REAL actions
+  (export CSV, clear finished jobs, copy hub URL, firewall allow, LAN
+  test, restart, rotate token, service install, update check, real
+  test print, quick-start guide, GitHub) - and any menu choice closes
+  the dropdown.
+- LAN tab: the full add-printer guide for Windows 10/11, macOS,
+  iPhone/iPad (AirPrint) and Android (incl. the 631 fix), live-filled
+  ipp:// + http:// URLs with copy buttons, and live status chips for
+  AirPrint/mDNS discovery + the standard-port mirror (read from
+  /health: ipp_mdns_up + ipp_std).
+
+### Compatibility
+- Same token auth (X-AdvPrint-Token), same audit trail, same rules
+  mirror, same config keys - 3.2.2 adds "ipp_standard_port" (default
+  631) and changes nothing else. Upgrade = replace the files.
+
+---
 
 ## v3.2.1 - THE APPROVED UI IS NOW THE PRODUCT (2026-11-09)
 

@@ -211,7 +211,7 @@ Section "AdvPrint Pro hub (required)" SEC_MAIN
   DetailPrint "Copying program files..."
   SetOutPath "$INSTDIR\hub"
   File "stage/hub/advprint.py"
-  ; v3.2.2: the ONE UI is EMBEDDED in advprint.py (CONSOLE_HTML);
+  ; v3.2.1: the ONE UI is EMBEDDED in advprint.py (CONSOLE_HTML);
   ; the file copy ships too so on-disk layout matches the docs.
   File "stage/hub/console.html"
   File "stage/hub/tool.py"
@@ -275,13 +275,17 @@ Section "AdvPrint Pro hub (required)" SEC_MAIN
   ; ---- v2.8/v2.9: firewall rules so LAN sharing + the network
   ; printer port work out of the box (hub 9235 + RAW 9100) ----
   ; v3.0.8: + UDP 5353 so phones/PCs can SEE the mDNS printer announce
-  DetailPrint "Adding the firewall rules for LAN sharing + printer port (TCP 9235 + 9100 + UDP 5353 mDNS)..."
+  ; v3.2.2: + TCP 631 - the standard IPP port mirror (Android's Default
+  ;         Print Service tries port 631 first on manual add)
+  DetailPrint "Adding the firewall rules for LAN sharing + printer port (TCP 9235 + 9100 + 631 IPP + UDP 5353 mDNS)..."
   nsExec::Exec 'netsh advfirewall firewall delete-rule name="AdvPrint Pro" dir=in'
   nsExec::Exec 'netsh advfirewall firewall delete-rule name="AdvPrint Pro RAW 9100" dir=in'
   nsExec::Exec 'netsh advfirewall firewall delete-rule name="AdvPrint Pro mDNS" dir=in'
+  nsExec::Exec 'netsh advfirewall firewall delete-rule name="AdvPrint Pro IPP 631" dir=in'
   nsExec::Exec 'netsh advfirewall firewall add rule name="AdvPrint Pro" dir=in action=allow protocol=TCP localport=9235'
   nsExec::Exec 'netsh advfirewall firewall add rule name="AdvPrint Pro RAW 9100" dir=in action=allow protocol=TCP localport=9100'
   nsExec::Exec 'netsh advfirewall firewall add rule name="AdvPrint Pro mDNS" dir=in action=allow protocol=UDP localport=5353'
+  nsExec::Exec 'netsh advfirewall firewall add rule name="AdvPrint Pro IPP 631" dir=in action=allow protocol=TCP localport=631'
 
   ; ---- auto-run as a normal STARTUP APP (visible + controllable) ----
   DetailPrint "Registering auto-run as a Startup app..."
@@ -404,8 +408,7 @@ Section "Install browser extension files" SEC_EXT
   File "/oname=managed.json" "../extension/managed.json"
   File "/oname=options.html" "../extension/options.html"
   File "/oname=options.js" "../extension/options.js"
-  File "/oname=popup.html" "../extension/popup.html"
-  File "/oname=popup.js" "../extension/popup.js"
+  ; v3.2.2: popup.html/popup.js are GONE - the toolbar icon opens the console
   SetOutPath "$INSTDIR\extension\content"
   File "/oname=api.js" "../extension/content/api.js"
   File "/oname=hook.js" "../extension/content/hook.js"

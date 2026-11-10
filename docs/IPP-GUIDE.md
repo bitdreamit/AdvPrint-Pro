@@ -1,4 +1,4 @@
-# IPP Printer Mode - the professional guide (v3.0.8)
+# IPP Printer Mode - the professional guide (v3.2.2)
 
 AdvPrint Pro (Advanced Printer) by Bit Dream IT - Innovative Healthcare Solutions
 
@@ -23,13 +23,15 @@ AdvPrint Pro hub  ──►  the REAL printer connected to this PC
 
 | What | Value |
 | --- | --- |
-| Standard IPP URL (recommended) | `ipp://<this-PC-LAN-IP>:9235/ipp/print` |
-| Windows add-by-URL form | `http://<this-PC-LAN-IP>:9235/ipp/print` |
-| Short ROOT form (no path) | `ipp://<this-PC-LAN-IP>:9235` - what Windows "IPP Device", macOS IP printing and CUPS send when you type just the address |
-| Per-printer queues | `ipp://<this-PC-LAN-IP>:9235/ipp/print/<printer>` |
-| RAW JetDirect port | `9235` (v2.9 style) and `<LAN-IP>:9100` |
-| Discovery | automatic via mDNS while LAN sharing is ON |
-| Auth | none (like a physical network printer) - the endpoint only accepts print data, is size-capped, audited per IP and can be turned off with `"ipp_printer": false` |
+| IPP URL (hub port) | `ipp://<this-PC-LAN-IP>:9235/ipp/print` and `http://<LAN-IP>:9235/ipp/print` - both work |
+| IPP URL (STANDARD port, v3.2.2) | `http://<LAN-IP>:631/ipp/print` - the SAME endpoint mirrored on the standard printer port |
+| RAW JetDirect port | `<LAN-IP>:9100` |
+| Discovery | automatic via mDNS whenever IPP printer mode is ON (v3.2.2 - LAN sharing no longer required; IPP printer mode starts the LAN listener itself) |
+| Auth | none (like a physical network printer) - the endpoint only accepts print data, is size-capped, audited per IP and can be turned off with `"ipp_printer": false`; the 631 mirror is `"ipp_standard_port": 0` |
+
+Open `http://<pc-ip>:9235/ipp/print` in a **browser** and you get the
+per-OS cheat sheet (it lists both ports); IPP clients POST binary IPP
+to the same URL on either port.
 
 Open `http://<pc-ip>:9235/ipp/print` in a **browser** and you get the
 per-OS cheat sheet; IPP clients POST binary IPP to the same URL.
@@ -95,8 +97,16 @@ Prints land in the hub queue and print on the PC's real printer.
 
 Print from any app (Chrome menu → Print, Gmail, Photos) → choose
 **Default Print Service** (or Mopria / OEM service) → "AdvPrint Pro"
-appears in the list. Older Android builds: add the printer by IP inside
-the service settings.
+appears in the list (mDNS discovery - v3.2.2 runs it as soon as IPP
+printer mode is on).
+
+**Manual add - the v3.2.2 fix:** Android's Default Print Service
+IGNORES custom ports when you add a printer by IP: it always builds
+`http://<ip>:631/ipp/print`. Since v3.2.2 the hub MIRRORS the IPP
+endpoint on port 631, so manual add by IP just works. If your network
+blocks 631, set `"ipp_standard_port"` to a free port - but note that
+stock Android will still try 631 first, so keep 631 reachable when
+possible.
 
 ### Linux desktops
 
@@ -125,7 +135,8 @@ passthrough), `image/pwg-raster` accepted on request.
 | Symptom | Fix |
 | --- | --- |
 | Windows: "couldn't connect" (3.0.7 or older) | **Update to 3.0.8** - this exact bug is fixed |
-| Printer not discovered on phones | LAN sharing ON; phone on same Wi-Fi (guest Wi-Fi isolation blocks mDNS); Windows firewall allows UDP 5353 |
+| Printer not discovered on phones | IPP printer mode ON (v3.2.2: it alone starts discovery); phone on same Wi-Fi (guest Wi-Fi isolation blocks mDNS); Windows firewall allows UDP 5353 |
+| Android manual add fails | it tries port 631 - keep the mirror on (`"ipp_standard_port": 631`) and allow inbound TCP 631 (the Setup exe adds the rule) |
 | Discovery works, print fails | AP/router "client isolation" or VPN on the phone; test the manual URL way |
 | Windows adds it but jobs hang | the PC must be awake and the hub running (tray icon); check the hub History tab for the job |
 | "ipp_mdns" noise on a big network | set `"ipp_mdns": false` in config.json - manual URL printing keeps working |

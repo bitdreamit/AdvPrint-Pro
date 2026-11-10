@@ -96,7 +96,7 @@ if _HUB_DIR not in sys.path:
 
 
 VERSION = "3.2.2"
-VERSION_NAME = ("v3.2.2 (ALL IPP PATTERNS BACK + INSTANT DISCOVERY + ONE TOOLBAR: (1) the ROOT IPP printer URL - ipp://<ip>:9235 or http://<ip>:9235 with NO path, the form Windows 'Add a printer -> IPP Device', macOS IP printing and CUPS send when the user types just the address - is answered by the IPP engine again: ANY POST whose Content-Type is application/ipp is routed to the IPP printer on every path (/ipp/print, /ipp and the bare root), and phone-sized IPP jobs (photo/document PDFs well over 1 MB) no longer trip the big-body preauth gate that 401'd them before the engine ever saw them. (2) mDNS/AirPrint discovery responder rewritten: it now answers EVERY query back-to-back (the old loop answered one packet then slept 3 s, so Android Default Print Service / iOS AirPrint / Windows printer scans kept missing the hub), announces twice on startup per RFC 6762 section 8.3, and the one-click firewall repair now also adds the UDP 5353 mDNS rule so phones can SEE the printer. (3) THE ONE UI toolbar reduced to real action buttons (New Job, Pause/Resume queue, Release ALL, Test Page) - the tab shortcuts that duplicated the sidebar are gone; the LAN tab gained the STANDARD ipp:// printer URL, the short root form, a per-OS add guide (Windows 10/11, macOS, iPhone AirPrint, Android Mopria) and the live AirPrint discovery state. v3.2.1 (THE ONE ALL-IN-ONE UI EVERYWHERE - the approved rev-4 All-in-One design is now the live product UI: the exact markup/CSS the customer approved (title bar, 9 working menus, 218px sidebar, 17 tabs, rule editor modal, QR tiles, status bar) served byte-for-byte at /, /ui and /dashboard with live hub data wired in - SELF PC UI on 127.0.0.1 (owner, full control incl. the 14 tools) vs CENTER PC UI from the LAN (amber banner, live queue/history/rules/IPP, tools stay on the center PC). v3.2.0 THE ONE ALL-IN-ONE UI EVERYWHERE - one window manages everything, on every URL and every PC: (1) /, /ui and /dashboard all serve the SAME approved IDM console.html - no separate URLs any more; the classic dashboard stays in the code but the routes answer with the ONE UI. (2) SELF PC vs CENTER PC: the hub detects WHO opened the page - the owner on 127.0.0.1 gets the SELF PC UI (full control), a LAN PC gets the CENTER PC UI (amber banner 'you are viewing the CENTER printing PC' - live queue, jobs, history, rules, IPP + test print, system tools stay on the center PC). (3) Tools (14): the desktop tool's whole menu (start/stop/status/testpage/service install/remove/autostart/update-check/recent jobs/uninstall/livetest/open-dashboard/diagnose/restart) is now a console panel backed by the new POST /tool API - loopback + token only - so the command-line tool is no longer needed. (4) Central rule manager: rules_mirror config key - the console edits rules (URL/address filter, match by URL or page content, what to print, printer, copies, paper, on/auto, runs) and installed extensions adopt hub rules automatically (local edits always win). (5) Website whitelist defaults to '*' - ALL websites may print out of the box (extension apiSites default '*' + hub mirror). (6) Real QR codes on the LAN tab served by /qr; DropZone, Connections, Power switches, Debug, Audit, Logs, Settings panels all live. Same token auth, same audit trail, all v3.0.x-v3.1.3 features unchanged.)")
+VERSION_NAME = ("v3.2.2 (EVERY IPP PATTERN + WORKING SWITCHES + NO POPUP - v3.2.2 fixes the three things v3.2.1 got wrong: (1) THE IPP PRINTER IS BACK EVERYWHERE - the standard printer URL ipp://ip:9235/ipp/print AND http://ip:9235/ipp/print both answer on the hub port, and the SAME endpoint is now MIRRORED on the standard printer port 631 (http://ip:631/ipp/print) because Android's Default Print Service / Mopria ignores custom ports on manual add - that was why Android could not connect; (2) AIRPRINT-GRADE DISCOVERY NOW RUNS BY ITSELF whenever IPP printer mode is on - mDNS/Bonjour announce (_ipp._tcp + _universal._sub._ipp._tcp with URF/pdl/rp TXT, one extra service per local printer) is decoupled from LAN sharing, and IPP printer mode now starts the LAN listener itself, so the printer appears BY ITSELF in Windows 10/11 'Add device', macOS Bonjour, iOS AirPrint and Android Mopria; (3) EVERY SWITCH IN THE ONE UI WORKS - v3.2.1 rendered the switches but clicking them only set a hidden dirty flag; now one delegated handler flips the switch and saves instantly (Power/Browser -> ext_prefs -> paired browsers adopt, Hub -> /config, Settings -> /config, DropZone -> drop_delete, rule editor toggles saved with the form); PLUS the extension popup is GONE - clicking the toolbar icon opens THE ONE UI console directly (the popup was a second, weaker copy of the same console), the two duplicate 'Save & push to browsers' buttons and other same-function duplicates are removed, and all 13 menu items that were demo stubs in v3.2.1 now fire their REAL actions (export CSV, clear finished, copy hub URL, firewall, LAN test, restart, rotate token, service install, update check, real test print, quick-start guide, GitHub). LAN tab shows the live IPP URLs + AirPrint/mDNS + standard-port status and the full per-platform add-printer guide (Windows 10/11, macOS, iPhone/iPad, Android). All v3.2.1 features unchanged.)")
 FULL_BRAND = ("AdvPrint Pro (Advanced Printer) by "
               "Bit Dream IT - Innovative Healthcare Solutions")
 BRANDING = ("AdvPrint Pro (Advanced Printer) - Version %s - by "
@@ -208,6 +208,15 @@ CFG = {
                                       #  printer list of phones (AirPrint /
                                       #  Mopria), Windows 10/11 and macOS
                                       #  while LAN sharing is on
+    "ipp_standard_port": 631,         # v3.2.2: ALSO answer IPP on the
+                                      #  STANDARD printer port on the LAN IP
+                                      #  (what Android's Default Print
+                                      #  Service tries first on manual add,
+                                      #  and what many printer dialogs
+                                      #  assume). Windows needs no admin
+                                      #  for ports < 1024; on macOS/Linux
+                                      #  the hub logs a hint when the bind
+                                      #  is refused. 0 = off.
     "raw_printer_port": 9100,         # v2.9: JetDirect RAW listener port for
                                       #  Windows "Standard TCP/IP port"
                                       #  printers (0 = off)
@@ -296,6 +305,7 @@ CONFIG_KEYS = ("token", "token_header_only", "allowed_origins",
                "printer", "file_dir", "sumatra_path",
                "dest_mode", "ip_printer_host", "ip_printer_port",
                "ip_printer_proto",
+               "ipp_printer", "ipp_mdns", "ipp_standard_port",
                "keep_files",           # v3.2.0 gap fix: the ONE UI
                                        #  switch writes it back now
                "drop_enabled", "drop_dir", "drop_delete",
@@ -309,7 +319,7 @@ CONFIG_TYPES = {"token_header_only": bool, "allowed_origins": list,
                 "retry_base_seconds": int, "dedupe_minutes": int,
                 "hold_offline": bool, "audit_enabled": bool,
                 "share_lan": bool, "ipp_printer": bool,
-                "ipp_mdns": bool,
+                "ipp_mdns": bool, "ipp_standard_port": int,
                 "raw_printer_port": int,
                 "reprint_watermark": bool, "reprint_reason_required": bool,
                 "peer_hubs": list, "peer_forwarding": bool,
@@ -1330,10 +1340,6 @@ def build_health_snapshot():
             CFG.get("instant_auto_queue", True)),
         "share_lan": bool(CFG.get("share_lan")),
         "ipp_printer": bool(CFG.get("ipp_printer", True)),
-        # v3.2.2: export the discovery switch too - the ONE UI reads it
-        # for the dashboard glance row and the LAN tab AirPrint (mDNS)
-        # state; it was never exported so those rows could not be live.
-        "ipp_mdns": bool(CFG.get("ipp_mdns", True)),
         "ipp_url": ("http://%s:%d/ipp/print" % (lan_ip(), CFG["port"]))
                    if CFG.get("share_lan") else None,
         "raw_printer_port": int(CFG.get("raw_printer_port") or 0),
@@ -1350,9 +1356,21 @@ def build_health_snapshot():
         # v2.9: IP PRINTER MODE - the hub IS a network printer (any PC
         # or phone can add it at /ipp/print or the RAW port) and every
         # incoming job prints to the configured destination
-        "ip_printer_mode": bool(CFG.get("share_lan") and (
+        "ip_printer_mode": bool((CFG.get("share_lan") or
+            CFG.get("ipp_printer", True)) and (
             CFG.get("ipp_printer", True) or
             int(CFG.get("raw_printer_port") or 0) > 0)),
+        # v3.2.2: IPP URLS + discovery state for the LAN tab chips
+        "ipp_urls": {"ipp": lan_share_url("ipp"),
+                     "http": "http://%s:%d/ipp/print"
+                             % (lan_ip(), int(CFG.get("port", 9235))),
+                     "std": ("http://%s:%d/ipp/print"
+                             % (lan_ip(), int(CFG.get("ipp_standard_port") or 0)))
+                            if int(CFG.get("ipp_standard_port") or 0) > 0 else None},
+        "ipp_mdns_up": bool(_mdns_state.get("sock") is not None),
+        "ipp_std": {"up": bool(_IPP631_STATE.get("up")),
+                    "port": int(_IPP631_STATE.get("port") or 0),
+                    "err": _IPP631_STATE.get("err") or ""},
         "lan_active": bool(BOUND_LAN),
         "lan_url": ("http://%s:%d" % (lan_ip(), CFG["port"]))
                    if CFG.get("share_lan") else None,
@@ -1409,6 +1427,12 @@ def start_health_refresher():
             # v2.9.0: same for the RAW JetDirect printer port (9100).
             try:
                 raw_listen_ensure()
+            except Exception:
+                pass
+            # v3.2.2: standard-port IPP mirror (631) - Android's Default
+            # Print Service tries port 631 first on manual add.
+            try:
+                ipp631_listen_ensure()
             except Exception:
                 pass
             # v3.0.8: AirPrint-grade mDNS discovery (phones/PCs see the
@@ -5068,58 +5092,9 @@ class Handler(BaseHTTPRequestHandler):
         if route in ("/ipp/print", "/ipp", "/ipp/"):
             # v2.9.0: humans who open the IPP printer URL in a browser
             # get a how-to page (IPP clients POST binary IPP instead).
-            # v3.0.8: per-OS cheat sheet for the professional printer.
-            host = socket.gethostname()
-            ipp_url = lan_share_url("ipp")
-            # v3.2.2: the ROOT short form - every IPP URL pattern the hub
-            # answers (ipp scheme, http scheme, with and without path).
-            ipp_root = re.sub(r"^http://", "ipp://", ipp_url).split("/ipp")[0]
-            return self._send_html(200, """<!DOCTYPE html>
-<html><head><meta charset="utf-8"><meta name="viewport"
- content="width=device-width,initial-scale=1"><title>AdvPrint Pro - IPP printer</title>
-<style>body{font:15px/1.55 "Segoe UI",system-ui,sans-serif;background:#f5f8fc;
- color:#0f172a;margin:0;padding:24px}.b{max-width:640px;margin:4vh auto;background:#fff;
- border:1px solid #e2e8f0;border-radius:14px;padding:22px}
- h1{font-size:19px;margin:0 0 6px}h2{font-size:15px;margin:18px 0 6px;color:#1d4ed8}
- code{background:#f1f5f9;border:1px solid #e2e8f0;border-radius:4px;padding:1px 6px;
- font-size:12.5px;word-break:break-all}li{margin:5px 0}
- .ok{background:#ecfdf5;border:1px solid #a7f3d0;border-radius:10px;padding:10px 14px;
- margin:14px 0;font-size:13.5px}</style></head><body><div class="b">
- <h1>AdvPrint Pro - IPP network printer</h1>
- <p>This URL is the <b>IPP print endpoint of <span>%s</span></b>.
- Add it as a printer - do not open it in a browser:</p>
- <p style="font-size:16px"><code>%s</code></p>
- <p style="margin-top:-6px">Short forms also work: <code>%s</code> (the
- ipp scheme, no path) or just the bare address <code>host:9235</code> -
- every IPP URL pattern answers on this hub.</p>
- <h2>Windows 10 / 11</h2>
- <ul><li>Settings &rarr; Bluetooth &amp; devices &rarr; Printers &amp;
- scanners &rarr; <b>Add device</b>. The printer appears by itself
- (AirPrint-style discovery) when LAN sharing is on - click it.</li>
- <li>Or: <b>Add manually</b> &rarr; &ldquo;Add a printer using an IP
- address or hostname&rdquo; &rarr; Device type <b>IPP Device</b> &rarr;
- paste <code>%s</code> &rarr; Next.</li></ul>
- <h2>macOS</h2>
- <ul><li>System Settings &rarr; Printers &amp; Scanners &rarr;
- <b>Add Printer</b> - it appears in the Bonjour list.</li>
- <li>Or: IP tab &rarr; Protocol <b>IPP</b> &rarr; Address
- <code>host:9235</code> &rarr; Queue <code>ipp/print</code>.</li></ul>
- <h2>iPhone / iPad (AirPrint)</h2>
- <ul><li>Open anything printable &rarr; Share &rarr; Print &rarr;
- Select Printer - <b>AdvPrint Pro appears by itself</b> while this PC
- is on the same Wi-Fi.</li></ul>
- <h2>Android</h2>
- <ul><li>Print from any app &rarr; Default Print Service / Mopria -
- the printer is discovered automatically.</li></ul>
- <div class="ok"><b>Prints go to THIS PC's printer</b> through the
- AdvPrint Pro hub - the PC must be on and the hub running (tray icon).
- The first job also shows in the hub history like every other print.
- 100%% local - powered by AdvPrint Pro %s.</div>
- </div></body></html>""" % (_html_escape(host),
-                             _html_escape(ipp_url, quote=True),
-                             _html_escape(ipp_root, quote=True),
-                             _html_escape(ipp_url, quote=True),
-                             VERSION))
+            # v3.0.8: per-OS cheat sheet. v3.2.2: shared with the
+            # standard-port mirror (ipp631) via ipp_landing_html().
+            return self._send_html(200, ipp_landing_html())
         err = self._auth_error(qt, allow_query=True)   # v2.0.2: every GET
         if err:
             if self._loopback_token_redirect(route, q):
@@ -5459,16 +5434,7 @@ class Handler(BaseHTTPRequestHandler):
         # v2.9.1 (audit M1 fix): refuse LARGE unauthenticated bodies before
         # reading them (401, nothing swallowed). Query token counts - the
         # phone /send portal rides its QR link's ?token=.
-        if ctype.strip().startswith("application/ipp"):
-            # v3.2.2: native IPP is token-free BY DESIGN (a physical
-            # network printer has none either) and a phone's photo or
-            # policy PDF easily exceeds the 1 MB preauth threshold - the
-            # gate used to 401 those Print-Jobs before the engine ever
-            # saw them. IPP stays bounded by its own MAX_PDF 413 limit,
-            # refuses browser Origins, and every job is audited with the
-            # source IP, so the exposure is the same as any printer.
-            pass
-        elif self._preauth_gate(q):
+        if self._preauth_gate(q):
             return self._send(401, {
                 "ok": False,
                 "error": "invalid or missing token - "
@@ -5505,17 +5471,6 @@ class Handler(BaseHTTPRequestHandler):
                              "/printers for the ipp:// URL of every "
                              "local printer"})
             route = "/ipp/print"
-        # v3.2.2 ALL IPP PATTERNS: identify native IPP by its
-        # Content-Type FIRST - application/ipp is never sent by a web
-        # page, so any path that carries it is a printer client. This
-        # restores the ROOT form ipp://<ip>:9235 / http://<ip>:9235
-        # (Windows "IPP Device", macOS IP printing and CUPS send the
-        # bare address with no path) alongside /ipp/print, /ipp and the
-        # per-printer /ipp/print/<name> queues - every URL form v2.9 /
-        # v3.0.x ever answered, on one engine.
-        if route not in ("/ipp/print", "/ipp") and \
-                ctype.strip().startswith("application/ipp"):
-            route = "/ipp/print"          # bare host form -> central queue
         if route in ("/ipp/print", "/ipp", "/ipp/"):
             if not ipp_printer_enabled():
                 return self._send(404, {"ok": False,
@@ -6715,16 +6670,12 @@ class Handler(BaseHTTPRequestHandler):
             # 0.35 s poll), so an auto-queued job can already be HELD
             # (printer offline) by the time this response is built -
             # "held with a hold reason" counts as auto-queued too.
-            # v3.2.2: bool() - the bare and/or chain returned the
-            # held_reason STRING as auto_queued when the worker had
-            # already held the job (the API promises a boolean here).
             real_row = db_get(job) or {}
             real_status = real_row.get("status")
-            auto_queued = bool(not queue_mode and not run_at and dup is None
-                               and
-                               (real_status == "queued" or
-                                (real_status == "held"
-                                 and real_row.get("held_reason"))))
+            auto_queued = (not queue_mode and not run_at and dup is None and
+                           (real_status == "queued" or
+                            (real_status == "held"
+                             and real_row.get("held_reason"))))
             resp = {
                 "ok": True, "job_id": job, "kind": kind, "copies": copies,
                 "destination": "printer",
@@ -6861,12 +6812,6 @@ def redacted_config():
         peers.append(q)
     c["peer_hubs"] = peers
     c["config_file"] = config_path()
-    # v3.2.2: the ONE UI reads these for the dashboard glance row and
-    # the LAN tab AirPrint (mDNS) state - they were not part of
-    # CONFIG_KEYS so the dashboard always said "OFF" and the LAN tab
-    # could only guess the real discovery state.
-    c["ipp_printer"] = bool(CFG.get("ipp_printer", True))
-    c["ipp_mdns"] = bool(CFG.get("ipp_mdns", True))
     c["hint"] = ("POST the same keys to /config to change them;"
                  " use POST /token/rotate for the token")
     return c
@@ -7127,10 +7072,10 @@ CONSOLE_HTML = r"""<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AdvPrint Pro — Printing Hub · ALL-IN-ONE Console v3.2.2 — UI Design (IDM Style)</title>
+<title>AdvPrint Pro — Printing Hub · ALL-IN-ONE Console v3.2.1 — UI Design (IDM Style)</title>
 <style>
 /* ============================================================
-   AdvPrint Pro v3.2.2 — ALL-IN-ONE CONSOLE · FIRST UI DESIGN
+   AdvPrint Pro v3.2.1 — ALL-IN-ONE CONSOLE · FIRST UI DESIGN
    ONE Windows-IDM window manages EVERYTHING:
    dashboard + printers + jobs/history + LAN sharing + DropZone
    + rules + extension switches + debug + audit + logs + settings
@@ -7190,15 +7135,6 @@ body{font-family:'Segoe UI',system-ui,-apple-system,Roboto,'Noto Sans SC',sans-s
 .tbtn.danger .ic{color:var(--err)}
 .tsep{width:1px;background:#c9d6ea;margin:4px 5px}
 .tspacer{flex:1}
-.tstat{font-size:11px;font-weight:700;color:#64748b;background:#f1f5f9;border:1px solid #e2e8f0;
- border-radius:999px;padding:5px 12px;white-space:nowrap}
-.tstat.ok{color:#15803d;background:#f0fdf4;border-color:#bbf7d0}
-.tstat.warn{color:#b45309;background:#fffbeb;border-color:#fde68a}
-.osgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.oscard{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:10px 12px}
-.oscard b{display:block;font-size:12px;color:var(--ink);margin-bottom:4px}
-.oscard ul{margin:0;padding-left:16px;font-size:11px;color:var(--ink-2);line-height:1.6}
-.oscard li{margin:3px 0}
 /* ---------- address bar ---------- */
 .addrbar{flex:0 0 auto;display:flex;align-items:center;gap:8px;background:#fff;
   border-bottom:1px solid var(--line);padding:7px 10px}
@@ -7497,7 +7433,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
     <!-- ================= TITLE BAR ================= -->
     <div class="titlebar">
       <div class="logo">AP</div>
-      <div class="t-main">AdvPrint Pro — Printing Hub <small>· All-in-One Console v3.2.2 · AI-Lab · THE ONE UI</small></div>
+      <div class="t-main">AdvPrint Pro — Printing Hub <small>· All-in-One Console v3.2.1 · AI-Lab · THE ONE UI</small></div>
       <div class="spacer"></div>
       <button class="winbtn">&#x2500;</button>
       <button class="winbtn">&#x25A1;</button>
@@ -7562,8 +7498,8 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
         <span class="menu-label">History</span>
         <div class="dd">
           <div class="dd-it" data-goto="history"><span class="ic">&#8635;</span>Reprint selected jobs</div>
-          <div class="dd-it" data-goto="audit" data-toast="history.csv exported to Downloads" data-ttype="ok"><span class="ic">&#11015;</span>Export CSV&#8230;</div>
-          <div class="dd-it" data-goto="history" data-toast="Finished jobs cleared — waiting jobs untouched" data-ttype="warn"><span class="ic">&#128465;</span>Clear ALL finished jobs&#8230;</div>
+          <div class="dd-it" data-act="export-history"><span class="ic">&#11015;</span>Export CSV&#8230;</div>
+          <div class="dd-it" data-act="queue-clear-finished"><span class="ic">&#128465;</span>Clear ALL finished jobs&#8230;</div>
           <div class="dd-sep"></div>
           <div class="dd-it" data-goto="history"><span class="ic">&#8594;</span>Open History tab<span class="sc">Ctrl+3</span></div>
         </div>
@@ -7572,7 +7508,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
         <span class="menu-label">Printers</span>
         <div class="dd">
           <div class="dd-it" data-goto="printers"><span class="ic">&#128424;</span>Printers tab<span class="sc">Ctrl+4</span></div>
-          <div class="dd-it" data-goto="printers" data-toast="Windows printer picker opens (demo)"><span class="ic">&#10133;</span>Add IP printer&#8230;</div>
+          <div class="dd-it" data-goto="lan"><span class="ic">&#10133;</span>Add IP printer&#8230;</div>
           <div class="dd-it" data-goto="printers"><span class="ic">&#9733;</span>Set default printer</div>
           <div class="dd-it" data-goto="printers"><span class="ic">&#9208;</span>Printer status hold</div>
           <div class="dd-sep"></div>
@@ -7587,30 +7523,29 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
           <div class="dd-it" data-qr="send"><span class="ic">&#128241;</span>Send portal QR&#8230;</div>
           <div class="dd-it" data-qr="invite"><span class="ic">&#128101;</span>Invite another PC (QR)&#8230;</div>
           <div class="dd-it" data-qr="ipp"><span class="ic">&#128424;</span>IPP printer URL (QR)&#8230;</div>
-          <div class="dd-it"><span class="ic">&#128203;</span>Copy IPP printer URL (ipp://&#8230;)</div>
           <div class="dd-it" data-qr="hub"><span class="ic">&#9635;</span>Hub console QR&#8230;</div>
           <div class="dd-sep"></div>
-          <div class="dd-it" data-toast="Hub URL copied — http://10.26.94.206:9235" data-ttype="ok"><span class="ic">&#128203;</span>Copy hub URL</div>
-          <div class="dd-it" data-toast="Firewall rule present: inbound TCP 9235 ALLOWED" data-ttype="ok"><span class="ic">&#128293;</span>Allow TCP 9235 in firewall</div>
-          <div class="dd-it" data-toast="LAN test OK — hub answered in 12 ms" data-ttype="ok"><span class="ic">&#128246;</span>Test LAN</div>
+          <div class="dd-it" data-act="copy-hub-url"><span class="ic">&#128203;</span>Copy hub URL</div>
+          <div class="dd-it" data-act="fw-allow"><span class="ic">&#128293;</span>Allow hub port in firewall</div>
+          <div class="dd-it" data-act="fw-status"><span class="ic">&#128246;</span>Test LAN</div>
         </div>
       </div>
       <div class="menu">
         <span class="menu-label">Hub</span>
         <div class="dd">
           <div class="dd-it" data-goto="hub"><span class="ic">&#9881;</span>Hub settings tab<span class="sc">Ctrl+8</span></div>
-          <div class="dd-it" data-toast="Hub restart queued — printing resumes automatically" data-ttype="warn"><span class="ic">&#128260;</span>Restart hub</div>
-          <div class="dd-it" data-goto="hub" data-toast="Token rotated — re-pair the extension once" data-ttype="warn"><span class="ic">&#128273;</span>Rotate token&#8230;</div>
-          <div class="dd-it" data-goto="hub"><span class="ic">&#128295;</span>Install as Windows service</div>
+          <div class="dd-it" data-act="restart"><span class="ic">&#128260;</span>Restart hub</div>
+          <div class="dd-it" data-act="rotate-token"><span class="ic">&#128273;</span>Rotate token&#8230;</div>
+          <div class="dd-it" data-tool="service-install"><span class="ic">&#128295;</span>Install as Windows service</div>
           <div class="dd-sep"></div>
-          <div class="dd-it" data-toast="v3.2.2 is up to date" data-ttype="ok"><span class="ic">&#11014;</span>Check for updates</div>
+          <div class="dd-it" data-tool="check-update"><span class="ic">&#11014;</span>Check for updates</div>
           <div class="dd-it" data-goto="hub"><span class="ic">&#8594;</span>Open Hub tab</div>
         </div>
       </div>
       <div class="menu">
         <span class="menu-label">Tools</span>
         <div class="dd">
-          <div class="dd-it" data-toast="REAL test page sent to HP Laser 103 (demo)" data-ttype="ok"><span class="ic">&#9889;</span>REAL test print<span class="sc">Ctrl+T</span></div>
+          <div class="dd-it" data-act="testprint"><span class="ic">&#9889;</span>REAL test print<span class="sc">Ctrl+T</span></div>
           <div class="dd-it" data-goto="debug"><span class="ic">&#129514;</span>Full self-test</div>
           <div class="dd-it" data-goto="debug"><span class="ic">&#128027;</span>Debug mode</div>
           <div class="dd-sep"></div>
@@ -7624,9 +7559,9 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
       <div class="menu">
         <span class="menu-label">Help</span>
         <div class="dd">
-          <div class="dd-it" data-toast="Quick start guide opens in the browser (demo)"><span class="ic">&#10067;</span>Quick start guide</div>
+          <div class="dd-it" data-act="open-docs"><span class="ic">&#10067;</span>Quick start guide</div>
           <div class="dd-it" data-modal="keys"><span class="ic">&#9000;</span>Keyboard shortcuts</div>
-          <div class="dd-it" data-toast="GitHub: github.com/bitdreamit/AdvPrint-Pro (demo)"><span class="ic">&#127760;</span>GitHub repository</div>
+          <div class="dd-it" data-act="open-github"><span class="ic">&#127760;</span>GitHub repository</div>
           <div class="dd-sep"></div>
           <div class="dd-it" data-goto="about"><span class="ic">&#8505;</span>About AdvPrint Pro<span class="sc">F1</span></div>
         </div>
@@ -7635,25 +7570,54 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
     </div>
 
     <!-- ================= TOOLBAR ================= -->
-    <!-- ================= TOOLBAR (v3.2.2: REAL ACTIONS ONLY - the tab
-                         shortcuts that duplicated the sidebar are gone;
-                         status lives in the two chips on the right) ==== -->
     <div class="toolbar">
-      <button class="tbtn primary">
+      <button class="tbtn primary" data-tab="queue">
         <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></span><span>New Job</span>
       </button>
-      <button class="tbtn">
-        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2"><rect x="6" y="5" width="4" height="14" rx="1" fill="#d97706"/><rect x="14" y="5" width="4" height="14" rx="1" fill="#d97706"/></svg></span><span>Pause Queue</span>
-      </button>
-      <button class="tbtn">
-        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2"><polygon points="7 4 19 12 7 20" fill="#16a34a"/></svg></span><span>Release ALL</span>
-      </button>
-      <button class="tbtn">
+      <button class="tbtn" data-tab="printers">
         <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#1e40af" stroke-width="2"><path d="M6 9V3h12v6M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg></span><span>Test Page</span>
       </button>
+      <button class="tbtn" data-tab="queue">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2"><rect x="6" y="5" width="4" height="14" rx="1" fill="#d97706"/><rect x="14" y="5" width="4" height="14" rx="1" fill="#d97706"/></svg></span><span>Pause Queue</span>
+      </button>
+      <button class="tbtn" data-tab="history">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#1e40af" stroke-width="2"><path d="M21 12a9 9 0 11-2.6-6.4"/><path d="M21 3v6h-6"/></svg></span><span>History</span>
+      </button>
+      <button class="tbtn" data-tab="debug">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2"><polygon points="7 4 19 12 7 20" fill="#16a34a"/></svg></span><span>Release ALL</span>
+      </button>
+      <div class="tsep"></div>
+      <button class="tbtn" data-tab="lan">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#1e40af" stroke-width="2"><path d="M10 14a5 5 0 007.07 0l3.18-3.18a5 5 0 00-7.07-7.07L11.7 5.23"/><path d="M14 10a5 5 0 00-7.07 0L3.75 13.18a5 5 0 007.07 7.07l1.47-1.47"/></svg></span><span>LAN Sharing</span>
+      </button>
+      <button class="tbtn" data-tab="dropzone">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#1e40af" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/><path d="M12 11v6M9 14l3 3 3-3"/></svg></span><span>DropZone</span>
+      </button>
+      <div class="tsep"></div>
+      <button class="tbtn" data-tab="connections">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#1e40af" stroke-width="2"><path d="M10 14a5 5 0 007.07 0l3.18-3.18a5 5 0 00-7.07-7.07L11.7 5.23"/><path d="M14 10a5 5 0 00-7.07 0L3.75 13.18a5 5 0 007.07 7.07l1.47-1.47"/></svg></span><span>Connections</span>
+      </button>
+      <button class="tbtn" data-tab="hub">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#1e40af" stroke-width="2"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 8h.01M7 17h.01"/></svg></span><span>Hub</span>
+      </button>
+      <div class="tsep"></div>
+      <button class="tbtn" data-tab="rules">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#1e40af" stroke-width="2"><path d="M13 3l-2 6H7l4 5-1 7 6-8h4l-3-6h-2l2-4z"/></svg></span><span>Rules</span>
+      </button>
+      <button class="tbtn" data-tab="power">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#1e40af" stroke-width="2"><path d="M13 2L4 14h6l-1 8 9-12h-6z"/></svg></span><span>Power</span>
+      </button>
+      <div class="tsep"></div>
+      <button class="tbtn" data-tab="debug">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#1e40af" stroke-width="2"><circle cx="12" cy="13" r="5"/><path d="M12 8V4M9 9L6 6M15 9l3-3M7 13H3M18 13h3M9 17l-3 3M15 17l3 3"/></svg></span><span>Debug</span>
+      </button>
+      <button class="tbtn" data-tab="settings">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#1e40af" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 00-.1-1.2l2-1.6-2-3.4-2.4 1a7 7 0 00-2-1.2L14 3h-4l-.5 2.6a7 7 0 00-2 1.2l-2.4-1-2 3.4 2 1.6a7 7 0 000 2.4l-2 1.6 2 3.4 2.4-1a7 7 0 002 1.2L10 21h4l.5-2.6a7 7 0 002-1.2l2.4 1 2-3.4-2-1.6c.06-.4.1-.8.1-1.2z"/></svg></span><span>Settings</span>
+      </button>
       <div class="tspacer"></div>
-      <span class="tstat" id="tb-lan" title="LAN sharing - other PCs and phones can print through this hub (details in the LAN Sharing tab)">&#127760; LAN &#8212; &#8230;</span>
-      <span class="tstat" id="tb-ipp" title="IPP network printer - every URL pattern answers: ipp://ip:9235/ipp/print, /ipp and the bare root ipp://ip:9235">&#128424; IPP &#8212; &#8230;</span>
+      <button class="tbtn" data-tab="about">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#1e40af" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M12 11v6"/></svg></span><span>About</span>
+      </button>
     </div>
 
     <!-- ================= ADDRESS BAR ================= -->
@@ -7665,6 +7629,9 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
       </div>
       <button class="pill-btn" data-qr="hub">&#128241; QR codes</button>
       <button class="pill-btn" data-tab="lan">&#128241; Send Portal</button>
+      <button class="pill-btn" data-tab="connections">&#128279; Connections</button>
+      <button class="pill-btn" data-tab="dropzone">&#128449; DropZone</button>
+      <button class="pill-btn blue" data-tab="dashboard">&#9635; THE ONE UI</button>
     </div>
 
     <!-- ================= BODY ================= -->
@@ -7763,20 +7730,16 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
             <div class="stat g"><div class="d">7 days</div><div class="v">94.7%</div><div class="l">Success Rate</div></div>
             <div class="stat w"><div class="d">live</div><div class="v">4</div><div class="l">In Queue</div></div>
             <div class="stat r"><div class="d">1 offline</div><div class="v">3/4</div><div class="l">Printers Ready</div></div>
-            <div class="stat"><div class="d">hub</div><div class="v">v3.2.2</div><div class="l">Version</div></div>
+            <div class="stat"><div class="d">hub</div><div class="v">v3.2.1</div><div class="l">Version</div></div>
           </div>
 
           <div class="card">
-            <div class="card-h">&#9889; Quick actions <span class="r">the most-used buttons from every old card — now one strip</span></div>
+            <div class="card-h">&#9889; Quick actions <span class="r">the most-used shortcuts — v3.2.2: no button appears twice in this console</span></div>
             <div class="card-b" style="display:flex;gap:8px;flex-wrap:wrap">
-              <button class="btn blue">&#128424; REAL test print</button>
               <button class="btn" data-tab="dropzone">&#128449; Open DropZone</button>
-              <button class="btn" data-tab="lan">&#128241; Send portal QR</button>
-              <button class="btn" data-tab="lan">&#128279; Copy invite link</button>
-              <button class="btn" data-tab="debug">&#9889; Release ALL held</button>
-              <button class="btn" data-tab="debug">&#128300; Full self-test</button>
               <button class="btn" data-tab="queue">&#9776; Open Queue</button>
               <button class="btn" data-tab="history">&#128218; History &amp; Reprint</button>
+              <button class="btn" data-tab="lan">&#128241; Send portal QR</button>
               <button class="btn" data-tab="connections">&#128279; Connections</button>
               <button class="btn" data-tab="hub">&#9881; Hub settings</button>
             </div>
@@ -7858,9 +7821,9 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
               <tr><td class="id">#2043</td><td class="doc">manual-de.pdf</td><td>HP Laser 103 107 108</td><td><span class="chip info">PDF</span></td><td><span class="chip err"><span class="d"></span>FAILED</span></td><td><div class="prog fail"><i style="width:31%"></i></div></td><td><button class="btn small">&#8635; Retry</button></td></tr>
             </table>
           </div>
-          <div class="note">Queue mode is switched in <b>Power Switches</b> or directly in the popup:
+          <div class="note">Queue mode is switched in <b>Power Switches</b> — flip it and it saves instantly:
             <b>ON</b> = jobs print in order (Pause holds them back); <b>OFF</b> = instant print — every job goes straight to the printer.
-            If no printer is active the job is auto-queued instead of failing. Release ALL held jobs: <b>Debug &amp; Tools</b> or the toolbar button.</div>
+            If no printer is active the job is auto-queued instead of failing. Release ALL held jobs: <b>Queue</b> tab.</div>
         </section>
 
         <!-- ============ HISTORY (separate tab) ============ -->
@@ -7979,7 +7942,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
           </div>
 
           <div class="card">
-            <div class="card-h">&#9881; Default print options <span class="r">sent with EVERY job · popup, rules &amp; page scripts can override</span></div>
+            <div class="card-h">&#9881; Default print options <span class="r">sent with EVERY job · the extension defaults, rules &amp; page scripts can override</span></div>
             <div class="card-b">
               <div class="frow"><label>Copies</label><input class="inp narrow" value="1">
                 <label style="min-width:auto">Pages</label><select class="inp" style="min-width:150px"><option>All pages</option><option>Odd pages only</option><option>Even pages only</option><option>Custom range&#8230;</option></select>
@@ -7997,7 +7960,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
         <!-- ============ LAN SHARING ============ -->
         <section class="panel" id="p-lan">
           <div class="p-head">
-            <h2>LAN Sharing &amp; Other PCs</h2><span class="sub">v2.2 · share this printer over the network · shift jobs to another PC</span>
+            <h2>LAN Sharing &amp; Other PCs</h2><span class="sub">v3.2.2 · share this printer over the network · phones print here like a real network printer</span>
             <div class="right"><button class="btn">Disable</button><button class="btn blue">Copy URL</button></div>
           </div>
 
@@ -8007,10 +7970,9 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
             <div class="lrow"><span class="lk">Send portal (phones) <small>print from any phone browser</small></span><span class="chip ok">QR READY</span><span class="lv">http://10.26.94.206:9235/send?token=mPz5&#8230;nXs</span><span class="sp"></span><span class="ops"><button class="btn small blue">Copy send URL</button><button class="btn small" data-qr="send">QR code</button></span></div>
             <div class="lrow"><span class="lk">Connect another PC <small>1-click invite, connects itself</small></span><span class="chip ok">1-CLICK</span><span class="lv">http://10.26.94.206:9235/connect?t=mPz5&#8230;nXs&amp;n=AI-Lab</span><span class="sp"></span><span class="ops"><button class="btn small blue">Copy invite link</button><button class="btn small" data-qr="invite">QR</button></span></div>
             <div class="lrow"><span class="lk">IP Printer mode <small>this PC becomes a network printer</small></span><span class="chip info">ACTIVE</span><span class="lv plain">every PC or phone adds this PC as their network printer &#8594; jobs print to (default printer)</span><span class="sp"></span><span class="ops"><button class="btn small" data-qr="ipp">QR</button></span></div>
-            <div class="lrow"><span class="lk">Network printer (IPP) <small>built-in IPP Class Driver, no tools</small></span><span class="chip ok">READY</span><span class="lv">http://10.26.94.206:9235/ipp/print</span><span class="sp"></span><span class="ops"><button class="btn small blue" data-cp-http="1">Copy add-by-URL</button><button class="btn small" data-qr="ipp">QR</button></span></div>
-            <div class="lrow"><span class="lk">Standard printer URL <small>ipp:// — the form Windows 10/11, macOS, iPhone &amp; Android expect</small></span><span class="chip info">RECOMMENDED</span><span class="lv mono" id="ipp-url-std">ipp://10.26.94.206:9235/ipp/print</span><span class="sp"></span><span class="ops"><button class="btn small blue" data-cp-ipp="1">Copy ipp:// URL</button><button class="btn small" data-qr="ipp">QR</button></span></div>
-            <div class="lrow"><span class="lk">Short form (root) <small>just the address, no queue path — also answers</small></span><span class="chip info">ALSO WORKS</span><span class="lv mono" id="ipp-url-root">ipp://10.26.94.206:9235</span><span class="sp"></span><span class="ops"><button class="btn small blue" data-cp-ipp-root="1">Copy short URL</button></span></div>
-            <div class="lrow"><span class="lk">AirPrint discovery (mDNS) <small>the printer appears BY ITSELF in phone/PC printer lists</small></span><span class="chip ok" id="ipp-mdns-chip">ON</span><span class="lv plain" id="ipp-mdns-note">announcing on the LAN — iPhone, Android, Windows and macOS find this printer by themselves</span><span class="sp"></span><span class="ops"></span></div>
+            <div class="lrow"><span class="lk">Network printer (IPP) <small>built-in IPP Class Driver, no tools</small></span><span class="chip ok">READY</span><span class="lv">http://10.26.94.206:9235/ipp/print</span><span class="sp"></span><span class="ops"><button class="btn small blue">Copy printer URL</button><button class="btn small" data-qr="ipp">QR</button></span></div>
+            <div class="lrow" id="row-mdns"><span class="lk">AirPrint / mDNS discovery <small>the printer appears BY ITSELF in phone &amp; PC lists</small></span><span class="chip gray">STARTING</span><span class="lv plain">Bonjour/_ipp._tcp broadcast on the LAN</span><span class="sp"></span><span class="ops"></span></div>
+            <div class="lrow" id="row-ipp631"><span class="lk">Standard IPP port 631 <small>mirror of /ipp/print — Android &amp; printer defaults</small></span><span class="chip gray">STARTING</span><span class="lv plain">http://IP:631/ipp/print answers like a real printer</span><span class="sp"></span><span class="ops"></span></div>
             <div class="lrow"><span class="lk">RAW printer port <small>JetDirect, port 9100</small></span><span class="chip ok">LISTENING</span><span class="lv">10.26.94.206:9100</span><span class="sp"></span><span class="ops"><button class="btn small">How to add</button></span></div>
             <div class="lrow"><span class="lk">Windows firewall <small>inbound rule for LAN PCs</small></span><span class="chip ok">ALLOWED</span><span class="lv plain">inbound TCP 9235 allowed for LAN PCs</span><span class="sp"></span><span class="ops"><button class="btn small">Test LAN</button></span></div>
             <div class="lrow"><span class="lk">Printer status hold <small>pause jobs while a printer is offline</small></span><span class="chip ok">ON</span><span class="lv plain">jobs wait while the printer reports offline</span><span class="sp"></span><span class="ops"><button class="btn small">Disable</button></span></div>
@@ -8029,22 +7991,30 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
           </div>
 
           <div class="card">
-            <div class="card-h">&#128421; Add this PC as a printer on any device <span class="r">do not open the printer URL in a browser — ADD it as a printer</span></div>
-            <div class="card-b">
-              <div class="osgrid">
-                <div class="oscard"><b>&#128421; Windows 10 / 11</b>
-                  <ul><li>Settings &#8594; Bluetooth &amp; devices &#8594; Printers &amp; scanners &#8594; <b>Add device</b> — the printer appears by itself (AirPrint-style discovery) when LAN sharing is ON — click it.</li>
-                  <li>Or: <b>Add manually</b> &#8594; &#8220;Add a printer using an IP address or hostname&#8221; &#8594; Device type <b>IPP Device</b> &#8594; paste <span class="mono" style="color:var(--blue-deep)" id="ipp-url-http">http://10.26.94.206:9235/ipp/print</span> &#8594; Next.</li></ul></div>
-                <div class="oscard"><b>&#127823; macOS</b>
-                  <ul><li>System Settings &#8594; Printers &amp; Scanners &#8594; <b>Add Printer</b> — it appears in the Bonjour list.</li>
-                  <li>Or: IP tab &#8594; Protocol <b>IPP</b> &#8594; Address <span class="mono">host:9235</span> &#8594; Queue <span class="mono">ipp/print</span>.</li></ul></div>
-                <div class="oscard"><b>&#128241; iPhone / iPad (AirPrint)</b>
-                  <ul><li>Open anything printable &#8594; Share &#8594; Print &#8594; Select Printer — <b>AdvPrint Pro appears by itself</b> while this PC is on the same Wi-Fi.</li></ul></div>
-                <div class="oscard"><b>&#129359; Android</b>
-                  <ul><li>Print from any app &#8594; <b>Default Print Service / Mopria</b> — the printer is discovered automatically (keep the mDNS row above ON).</li>
-                  <li>Android cannot add a printer by hand — discovery is the only path, and it is instant while this hub runs.</li></ul></div>
+            <div class="card-h">&#128421; Add this PC as a printer — EVERY device, both URL styles <span class="r">v3.2.2 · ipp:// and http:// both work</span></div>
+            <div class="card-b" style="font-size:11.5px;color:var(--ink-2);line-height:1.7">
+              <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+                <span class="mono" id="ippUrlIpp" style="background:#f1f5f9;border:1px solid #e2e8f0;border-radius:4px;padding:2px 8px;color:var(--blue-deep)">ipp://10.26.94.206:9235/ipp/print</span>
+                <button class="btn small blue" data-act="copy-ipp-url">Copy ipp:// URL</button>
+                <span class="mono" id="ippUrlHttp" style="background:#f1f5f9;border:1px solid #e2e8f0;border-radius:4px;padding:2px 8px;color:var(--blue-deep)">http://10.26.94.206:9235/ipp/print</span>
+                <button class="btn small blue" data-act="copy-ipp-http">Copy http:// URL</button>
+                <button class="btn small" data-qr="ipp">QR code</button>
               </div>
-              <div class="note" style="margin-top:10px"><b>Prints go to THIS PC's printer</b> through the AdvPrint Pro hub — the PC must be on and the hub running (tray icon). The first job also shows in the hub history like every other print. The old RAW method still works on Windows too: <b>Add a printer using a TCP/IP address</b> — IP <span class="mono">10.26.94.206</span>, port <span class="mono">9100</span>, device type <b>Generic Network Card (RAW)</b>.</div>
+              <table class="tbl" style="width:100%">
+                <tr><th style="width:110px">Device</th><th>How to add this printer</th></tr>
+                <tr><td><b>Windows 10 / 11</b></td><td>
+                  Settings &#8594; Bluetooth &amp; devices &#8594; Printers &amp; scanners &#8594; <b>Add device</b> — the printer appears by itself (mDNS discovery), click it.
+                  Or: <b>Add manually</b> &#8594; &ldquo;Add a printer using an IP address or hostname&rdquo; &#8594; Device type <b>IPP Device</b> &#8594; paste <span class="mono" id="ippGuideWin">http://10.26.94.206:9235/ipp/print</span> &#8594; Next — Windows installs it with the built-in <b>IPP Class Driver</b>.</td></tr>
+                <tr><td><b>macOS</b></td><td>
+                  System Settings &#8594; Printers &amp; Scanners &#8594; it appears in the <b>Bonjour list</b> — click it.
+                  Or: IP tab &#8594; Protocol <b>IPP</b> &#8594; Address <span class="mono" id="ippGuideMacHost">10.26.94.206:9235</span> &#8594; Queue <span class="mono">ipp/print</span>.</td></tr>
+                <tr><td><b>iPhone / iPad</b></td><td>
+                  Open anything printable &#8594; Share &#8594; <b>Print</b> &#8594; Select Printer — <b>AdvPrint Pro appears by itself</b> (AirPrint) while the phone is on the same Wi-Fi.</td></tr>
+                <tr><td><b>Android</b></td><td>
+                  Print from any app &#8594; <b>Default Print Service / Mopria</b> — the printer is discovered automatically (mDNS).
+                  Manual add: Default Print Service &#8594; &#8942; &#8594; Add printer &#8594; <b>IP address</b> &#8594; <span class="mono" id="ippGuideAndroid">10.26.94.206</span> — Android tries the standard port <b>631</b> first, where this hub mirrors <span class="mono" id="ippGuideAndroid631">http://10.26.94.206:631/ipp/print</span> (v3.2.2 fix — Android ignores custom ports on manual add).</td></tr>
+              </table>
+              <div class="note" style="margin:10px 0 0">RAW / JetDirect lovers: add a <b>Standard TCP/IP port</b> — IP <span class="mono" id="ippGuideRawIp">10.26.94.206</span>, port <span class="mono">9100</span>, device type <b>Generic Network Card</b>. Prints go to THIS PC's printer through the AdvPrint Pro hub — 100% local, no cloud.</div>
             </div>
           </div>
 
@@ -8081,7 +8051,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
               <div class="frow"><label>LAN PC hub URL</label><input class="inp mono" value="http://10.26.94.77:9235"></div>
               <div class="frow" style="margin-bottom:4px"><label>LAN PC token</label><input class="inp mono" type="password" value="&#183;&#183;&#183;&#183;&#183;&#183;&#183;&#183;&#183;&#183;&#183;&#183;" style="min-width:170px">
                 <button class="btn blue">Connect</button><button class="btn danger">Clear</button></div>
-              <div class="note" style="margin-bottom:0">Turning <b>Share Send Mode</b> ON in the popup sends every print job to that PC.
+              <div class="note" style="margin-bottom:0">Turning <b>Share Send Mode</b> ON (Power Switches — it saves instantly) sends every print job to that PC.
                 OFF (default) prints on the Self PC above. Receiving is the OTHER PC's switch (Share Receive Mode).</div>
             </div>
           </div>
@@ -8169,7 +8139,7 @@ https://reports.example.com/*</textarea>
         <section class="panel" id="p-dropzone">
           <div class="p-head">
             <h2>DropZone</h2><span class="sub">v2.8 · print WITHOUT the extension — save a PDF into the folder, AdvPrint prints it (works from any Windows app, MS Word style)</span>
-            <div class="right"><button class="btn blue">&#128193; Open folder</button><button class="btn">Disable</button></div>
+            <div class="right"><button class="btn">Disable</button></div>
           </div>
 
           <div class="stats" style="grid-template-columns:repeat(4,1fr)">
@@ -8337,8 +8307,7 @@ https://reports.example.com/*</textarea>
         <!-- ============ POWER SWITCHES ============ -->
         <section class="panel" id="p-power">
           <div class="p-head">
-            <h2>Power Switches</h2><span class="sub">every silent / background behavior of the extension — one switch each, managed from here</span>
-            <div class="right"><button class="btn blue">&#128190; Save &amp; push to browsers</button></div>
+            <h2>Power Switches</h2><span class="sub">every silent / background behavior of the extension — one switch each · v3.2.2: every switch SAVES the moment you flip it</span>
           </div>
           <div class="card">
             <div class="card-h">&#9889; Power switches <span class="r">same switches as the extension options — now in the ONE UI</span></div>
@@ -8356,17 +8325,16 @@ https://reports.example.com/*</textarea>
               <div class="tgl"><span class="sw"><span class="switch on"></span></span>
                 <div><b>Retry when the hub comes back</b><p>If the hub is offline, jobs are kept in the browser and sent automatically as soon as the hub answers again (checked every minute).</p></div></div>
               <div class="tgl"><span class="sw"><select class="inp" style="min-width:110px"><option>Automatic</option><option>English</option><option>&#2476;&#2494;&#2434;&#2455;&#2509;&#2482;&#2494;</option></select></span>
-                <div><b>UI language</b><p>English or &#2476;&#2494;&#2434;&#2455;&#2509;&#2482;&#2494; for the popup and the extension pages. "Automatic" follows the browser language.</p></div></div>
+                <div><b>UI language</b><p>English or &#2476;&#2494;&#2434;&#2455;&#2509;&#2482;&#2494; for the extension pages and notifications. "Automatic" follows the browser language.</p></div></div>
             </div>
           </div>
-          <div class="note">These switches live in the paired browsers. Press <b>Save &amp; push to browsers</b> and every paired Chrome/Edge gets the new settings within a minute — no need to open the extension options page anymore.</div>
+          <div class="note">These switches live in the paired browsers. Flip a switch and it is saved <b>instantly</b> — every paired Chrome/Edge adopts the new settings within a minute, no save button needed (v3.2.2: the switches finally work).</div>
         </section>
 
         <!-- ============ BROWSER BEHAVIOR ============ -->
         <section class="panel" id="p-browser">
           <div class="p-head">
             <h2>Browser Behavior</h2><span class="sub">what happens around the printing — tabs, menus, badges</span>
-            <div class="right"><button class="btn blue">&#128190; Save &amp; push to browsers</button></div>
           </div>
           <div class="card">
             <div class="card-h">&#127760; Browser behavior</div>
@@ -8397,8 +8365,8 @@ https://reports.example.com/*</textarea>
               <div class="card-h">&#128274; Paired Browsers <span class="r">2 connected</span></div>
               <table class="tbl">
                 <tr><th>Client</th><th>Extension</th><th>Last seen</th><th>Status</th></tr>
-                <tr><td><b>AI-Lab-PC · Chrome</b></td><td>v3.2.2</td><td>just now</td><td><span class="chip ok"><span class="d"></span>PAIRED</span></td></tr>
-                <tr><td><b>client-laptop · Edge</b></td><td>v3.2.2</td><td>2 min ago</td><td><span class="chip ok"><span class="d"></span>PAIRED</span></td></tr>
+                <tr><td><b>AI-Lab-PC · Chrome</b></td><td>v3.2.1</td><td>just now</td><td><span class="chip ok"><span class="d"></span>PAIRED</span></td></tr>
+                <tr><td><b>client-laptop · Edge</b></td><td>v3.2.1</td><td>2 min ago</td><td><span class="chip ok"><span class="d"></span>PAIRED</span></td></tr>
               </table>
               <div class="note orange" style="margin:10px 14px 12px">
                 <b style="display:block;margin-bottom:3px">&#9888; Two extension installs detected on this PC</b>
@@ -8419,7 +8387,7 @@ https://reports.example.com/*</textarea>
             <div class="card-h">&#128231; Silent install — deploy the CRX to every PC without Chrome Web Store <span class="r">works on every Chromium browser</span></div>
             <div class="card-b">
               <div class="frow" style="margin-bottom:8px">
-                <span class="chip ok"><span class="d"></span>CRX v3.2.2 READY</span>
+                <span class="chip ok"><span class="d"></span>CRX v3.2.1 READY</span>
                 <span class="mono" style="font-size:11px;color:var(--blue-deep)">AdvPrint-Pro.crx</span>
                 <span style="flex:1"></span>
                 <button class="btn small">Download CRX</button>
@@ -8534,7 +8502,7 @@ https://reports.example.com/*</textarea>
           </div>
 
           <div class="card">
-            <div class="card-h">&#128300; Live debug &amp; test tool <span class="r">v3.2.2 · runs on this PC immediately</span></div>
+            <div class="card-h">&#128300; Live debug &amp; test tool <span class="r">v3.2.1 · runs on this PC immediately</span></div>
             <div class="card-b" style="display:flex;gap:8px;flex-wrap:wrap">
               <button class="btn blue">&#128424; REAL test print</button>
               <button class="btn">&#9889; Release ALL held</button>
@@ -8595,7 +8563,7 @@ https://reports.example.com/*</textarea>
             <div><span class="ts">13:58:12.905</span> <span class="lv E">ERROR</span> job #2043 failed · media-out · retried 1/2</div>
             <div><span class="ts">13:41:02.336</span> <span class="lv W">WARN </span> auth rejected from 10.26.94.77 (bad token)</div>
             <div><span class="ts">13:12:00.100</span> <span class="lv I">INFO </span> RAW JetDirect listening on <span class="hl">10.26.94.206:9100</span></div>
-            <div><span class="ts">10:00:01.002</span> <span class="lv I">INFO </span> AdvPrint Pro hub v3.2.2 started · 4 printers · LAN ON · DropZone ON · tray ON</div>
+            <div><span class="ts">10:00:01.002</span> <span class="lv I">INFO </span> AdvPrint Pro hub v3.2.1 started · 4 printers · LAN ON · DropZone ON · tray ON</div>
           </div>
         </section>
 
@@ -8629,7 +8597,7 @@ https://reports.example.com/*</textarea>
             <div class="card-b" style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap">
               <div style="width:64px;height:64px;border-radius:12px;background:linear-gradient(135deg,#1e40af,#1d4ed8);color:#fff;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:800;box-shadow:0 8px 22px rgba(29,78,216,.35)">AP</div>
               <div style="flex:1;min-width:260px">
-                <div style="font-size:17px;font-weight:800;color:var(--ink)">AdvPrint Pro — Printing Hub <span class="chip ok" style="margin-left:8px">v3.2.2 · UP TO DATE</span></div>
+                <div style="font-size:17px;font-weight:800;color:var(--ink)">AdvPrint Pro — Printing Hub <span class="chip ok" style="margin-left:8px">v3.2.1 · UP TO DATE</span></div>
                 <div style="font-size:12px;color:var(--ink-2);margin-top:4px">by <b>Bit Dream IT — Innovative Healthcare Solutions</b></div>
                 <div style="font-size:11.5px;color:var(--muted);margin-top:2px">Chrome silent-print extension + local print hub · port 9235 · 100% local, no cloud</div>
                 <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
@@ -8669,7 +8637,7 @@ https://reports.example.com/*</textarea>
       <span class="sb-pane">DropZone <b>ON</b></span>
       <span class="sb-pane grow"></span>
       <span class="sb-pane">Uptime 04:12:37</span>
-      <span class="sb-pane"><b>Printing Hub v3.2.2</b> · Bit Dream IT</span>
+      <span class="sb-pane"><b>Printing Hub v3.2.1</b> · Bit Dream IT</span>
     </div>
 
   </div>
@@ -9025,12 +8993,6 @@ function ippUrl(){
      Windows "IPP device", macOS, iOS AirPrint and CUPS expect. */
   return lanBase().replace(/^http:/, "ipp:") + "/ipp/print";
 }
-function ippRootUrl(){
-  /* v3.2.2: the SHORT ROOT form - just ipp://host:port, no queue path.
-     Windows "Add a printer -> IPP Device", macOS IP printing and CUPS
-     all accept the bare address; the hub answers IPP on ANY path now. */
-  return lanBase().replace(/^http:/, "ipp:");
-}
 function shareUrl(kind){
   if (kind === "ipp") return lanBase() + "/ipp/print";
   if (kind === "invite") return lanBase() + "/connect?t=" + encodeURIComponent(TOKEN) +
@@ -9057,8 +9019,7 @@ function openQR(kind){
   $("qr-url").textContent = (kind === "ipp") ? ippUrl() : shareUrl(kind);
   $("qr-note").textContent = (kind === "ipp")
     ? d.note + "  Standard URL: " + ippUrl() +
-      " \u00b7 Windows add-by-URL form: " + lanBase() + "/ipp/print" +
-      " \u00b7 Short root form: " + ippRootUrl()
+      " \u00b7 Windows add-by-URL form: " + lanBase() + "/ipp/print"
     : d.note;
   $("qr-copy").onclick = function(){
     var u = (kind === "ipp") ? ippUrl() : shareUrl(kind);
@@ -9210,13 +9171,48 @@ function renderStats(h, st, q, pr){
    approved markup ships with design-demo values; the hub replaces
    them live - including the STANDARD ipp:// printer URL) ---- */
 function renderLanRows(){
+  /* v3.2.2: fill every IPP URL / IP on the panel from the LIVE hub */
+  var ipEl = function(id, val){ var e = $(id); if (e) e.textContent = val; };
+  ipEl("ippUrlIpp", ippUrl());
+  ipEl("ippUrlHttp", lanBase() + "/ipp/print");
+  ipEl("ippGuideWin", lanBase() + "/ipp/print");
+  ipEl("ippGuideMacHost", (BOOT.lan_ip || location.hostname || "127.0.0.1") + ":" + (BOOT.port || 9235));
+  ipEl("ippGuideAndroid", BOOT.lan_ip || location.hostname || "127.0.0.1");
+  ipEl("ippGuideAndroid631", lanBase().replace(/:\d+\/?$/, "") + ":631/ipp/print");
+  ipEl("ippGuideRawIp", BOOT.lan_ip || location.hostname || "127.0.0.1");
+  /* discovery + standard-port chips (hub /health: ipp_mdns_up, ipp_std) */
+  function setChip(rowId, ok, onTxt, offTxt, lvTxt){
+    var row = $(rowId); if (!row) return;
+    var c = row.querySelector(".chip"), lv = row.querySelector(".lv");
+    if (c) { c.textContent = ok ? onTxt : offTxt;
+      c.className = "chip " + (ok ? "ok" : "warn"); }
+    if (lv && lvTxt) lv.textContent = lvTxt;
+  }
+  var mdnsUp = !!(window._lastHealth && window._lastHealth.ipp_mdns_up);
+  var std = (window._lastHealth && window._lastHealth.ipp_std) || {};
+  setChip("row-mdns", mdnsUp, "ON AIR", "OFF",
+    mdnsUp ? ("Bonjour/_ipp._tcp broadcasting \u2014 the printer appears by itself (advprint@" +
+      (BOOT.lan_ip || "") + ".local)")
+           : (cfgCache.ipp_mdns === false ? "discovery off in Hub settings (ipp_mdns)"
+              : "starts when LAN sharing / IP Printer mode is ON"));
+  setChip("row-ipp631", !!std.up, "LISTENING", "OFF",
+    std.up ? ("http://" + (BOOT.lan_ip || "") + ":" + (std.port || 631) +
+      "/ipp/print \u2014 Android manual add and printer defaults work")
+           : (std.err || "standard port off (needs admin on macOS/Linux, or ipp_standard_port: 0)"));
   var rows = qsa("#p-lan .lrow");
   rows.forEach(function(r){
     var kEl = r.querySelector(".lk") || {};
     var k = (kEl.textContent || "").replace(/\s+/g, " ").trim();
     var v = r.querySelector(".lv");
     var t4 = TOKEN ? TOKEN.slice(0, 4) + "\u2026" + TOKEN.slice(-4) : "";
-    if (k.indexOf("Send portal") === 0 && v)
+    if (k.indexOf("LAN sharing") === 0) {
+      var cLan = r.querySelector(".chip");
+      if (cLan) { cLan.textContent = cfgCache.share_lan ? "ON" : "OFF";
+        cLan.className = "chip " + (cfgCache.share_lan ? "ok" : "gray"); }
+      if (v) v.textContent = lanBase() +
+        (cfgCache.share_lan ? "" : "  (LAN sharing is OFF)");
+    }
+    else if (k.indexOf("Send portal") === 0 && v)
       v.textContent = lanBase() + "/send?t=" + t4;
     else if (k.indexOf("Connect another PC") === 0 && v)
       v.textContent = lanBase() + "/connect?t=" + t4 + "\u2026";
@@ -9227,16 +9223,16 @@ function renderLanRows(){
     } else if (k.indexOf("Network printer (IPP)") === 0 && v) {
       v.innerHTML = "";
       var b = document.createElement("b");
-      b.className = "mono"; b.textContent = lanBase() + "/ipp/print";
+      b.className = "mono"; b.textContent = ippUrl();
       v.appendChild(b);
       var s = document.createElement("span");
       s.style.cssText = "display:block;font-size:10.5px;color:#94a3b8;margin-top:2px";
-      s.textContent = "Windows add-by-URL form \u00b7 the IPP Class Driver " +
-        "installs it automatically";
+      s.textContent = "standard printer URL \u00b7 Windows add-by-URL form: " +
+        lanBase() + "/ipp/print";
       v.appendChild(s);
-    } else if (k.indexOf("RAW printer port") === 0 && v) {
+    } else if (k.indexOf("RAW printer port") === 0 && v)
       v.textContent = (BOOT.lan_ip || location.hostname || "127.0.0.1") + ":9100";
-    } else if (k.indexOf("Printer status hold") === 0) {
+    else if (k.indexOf("Printer status hold") === 0) {
       var c1 = r.querySelector(".chip");
       if (c1) { c1.textContent = cfgCache.hold_offline === false ? "OFF" : "ON";
         c1.className = "chip " + (cfgCache.hold_offline === false ? "gray" : "ok"); }
@@ -9271,40 +9267,6 @@ function renderLanRows(){
       if (key) dis2.textContent = cfgCache[key] === false ? "Enable" : "Disable";
     }
   });
-  /* v3.2.2: the STANDARD ipp:// + SHORT ROOT printer URL rows, the live
-     mDNS discovery state and the toolbar status chips - every IPP URL
-     pattern the hub answers, in one place, all live. */
-  var std = document.getElementById("ipp-url-std");
-  if (std) { std.textContent = ippUrl();
-    var bc = std.parentNode.querySelector("[data-cp-ipp]");
-    if (bc) bc.setAttribute("data-cp", ippUrl()); }
-  var root = document.getElementById("ipp-url-root");
-  if (root) { root.textContent = ippRootUrl();
-    var rc = root.parentNode.querySelector("[data-cp-ipp-root]");
-    if (rc) rc.setAttribute("data-cp", ippRootUrl()); }
-  var httpu = document.getElementById("ipp-url-http");
-  if (httpu) httpu.textContent = lanBase() + "/ipp/print";
-  var hcp = document.querySelector("#p-lan [data-cp-http]");
-  if (hcp) hcp.setAttribute("data-cp", lanBase() + "/ipp/print");
-  var md = document.getElementById("ipp-mdns-chip");
-  if (md) {
-    var on = cfgCache.ipp_mdns !== false && cfgCache.ipp_printer !== false &&
-             cfgCache.share_lan !== false;
-    md.textContent = on ? "ON" : "OFF";
-    md.className = "chip " + (on ? "ok" : "gray");
-    var note = document.getElementById("ipp-mdns-note");
-    if (note) note.textContent = on
-      ? "announcing on the LAN \u2014 iPhone, Android, Windows and macOS find this printer by themselves"
-      : "OFF \u2014 turn ON LAN sharing + IP Printer mode + discovery to let phones find this printer";
-  }
-  var tl = document.getElementById("tb-lan");
-  if (tl) { var lOn = cfgCache.share_lan !== false;
-    tl.textContent = "\uD83C\uDF10 LAN \u2014 " + (lOn ? "ON" : "OFF");
-    tl.className = "tstat " + (lOn ? "ok" : "warn"); }
-  var ti = document.getElementById("tb-ipp");
-  if (ti) { var iOn = cfgCache.ipp_printer !== false;
-    ti.textContent = "\uD83D\uDDA5 IPP \u2014 " + (iOn ? "READY" : "OFF");
-    ti.className = "tstat " + (iOn ? "ok" : "warn"); }
 }
 function renderRecent(jobs){
   var tbl = document.querySelector("#p-dashboard table.tbl");
@@ -9824,7 +9786,7 @@ function renderExt(audit){
     rows.slice(0, 6).forEach(function(r2){
       var tr = tmpl.cloneNode(true), td = tr.querySelectorAll("td");
       td[0].innerHTML = "<b>" + esc(r2.who) + "</b>";
-      td[1].textContent = "v" + (BOOT.version || "3.2.2");
+      td[1].textContent = "v" + (BOOT.version || "3.2.1");
       td[2].textContent = r2.at ? r2.at.slice(11, 19) : "\u2014";
       td[3].innerHTML = '<span class="chip ok"><span class="d"></span>PAIRED</span>';
       tbl.appendChild(tr);
@@ -9846,7 +9808,7 @@ function renderExt(audit){
       m2.textContent = BASE + "/extension/updates.xml";
   });
   var crxChip = document.querySelector("#p-extension .frow .chip.ok");
-  if (crxChip) crxChip.innerHTML = '<span class="d"></span>CRX v' + (BOOT.version || "3.2.2") + " READY";
+  if (crxChip) crxChip.innerHTML = '<span class="d"></span>CRX v' + (BOOT.version || "3.2.1") + " READY";
   setCnt("extension", audit ? audit.filter(function(a){
     return a.actor && a.actor.indexOf("ext") >= 0; }).length : 0);
 }
@@ -10032,13 +9994,7 @@ var ACTIONS = {
     } catch (e) { toast("Test page failed: " + e.message, "err"); } },
   "queue-pause-toggle": async function(){
     try { await api("/queue/" + (pausedState ? "resume" : "pause"), { method: "POST" });
-      toast(pausedState ? "Queue RESUMED" : "Queue PAUSED", pausedState ? "ok" : "warn");
-      /* v3.2.2: keep every Pause/Resume button label honest */
-      qsa("button").forEach(function(b){
-        if (/^\s*(Pause|Resume)\s+Queue/i.test(b.textContent))
-          b.textContent = b.textContent.replace(/^\s*(Pause|Resume)/i,
-            pausedState ? "Resume" : "Pause"); });
-      poll();
+      toast(pausedState ? "Queue RESUMED" : "Queue PAUSED", pausedState ? "ok" : "warn"); poll();
     } catch (e) { toast(e.message, "err"); } },
   "queue-clear": function(){
     confirmBox("Clear the whole queue?", "Waiting, held and printing jobs are removed. History is kept.",
@@ -10102,6 +10058,7 @@ var ACTIONS = {
       toast("DropZone folder opened: " + (r.dir || ""), "ok");
     } catch (e) { toast(e.message, "err"); } },
   "open-docs": function(){ window.open(BASE + "/docs?token=" + encodeURIComponent(TOKEN), "_blank"); },
+  "open-github": function(){ window.open("https://github.com/bitdreamit/AdvPrint-Pro", "_blank"); },
   "save-cfg": function(){ saveCfg(); },
   "save-hub": function(){ saveHub(); },
   "save-ext-prefs": function(){ saveExtPrefs(); },
@@ -10273,6 +10230,9 @@ function bindButtons(){
   /* data-act + data-tool delegation */
   document.addEventListener("click", async function(ev){
     var t = ev.target;
+    /* v3.2.2: choosing ANY menu item closes its dropdown (the old UI
+       kept the dropdown hanging open until you clicked elsewhere) */
+    if (t.closest && t.closest(".dd-it")) closeMenus();
     var goto = t.closest && t.closest("[data-goto]");
     if (goto) { showTab(goto.dataset.goto);
       if (goto.dataset.toast) toast(goto.dataset.toast, goto.dataset.ttype);
@@ -10380,7 +10340,7 @@ function bindButtons(){
   btnLike("#p-lan", /Copy URL/i, function(){ ACTIONS["copy-hub-url"](); });
   btnLike("#p-lan", /Copy send URL/i, function(){ ACTIONS["copy-send-url"](); });
   btnLike("#p-lan", /Copy invite link/i, function(){ ACTIONS["copy-invite"](); });
-  btnLike("#p-lan", /Copy add-by-URL/i, function(){ ACTIONS["copy-ipp-http"](); });
+  btnLike("#p-lan", /Copy printer URL/i, function(){ ACTIONS["copy-ipp-url"](); });
   btnLike("#p-lan", /Test LAN/i, function(){ ACTIONS["fw-status"](); });
   btnLike("#p-lan", /Allow in firewall|firewall/i, function(){ ACTIONS["fw-allow"](); });
   /* Disable/Enable buttons are bound per-row in renderLanRows()
@@ -10444,8 +10404,9 @@ function bindButtons(){
     var v = qsa("#p-rules input.inp.mono")[1].value.trim();
     if (v) { openRuleEditor(-1); $("re-content").value = v; } });
   /* power + browser */
-  btnLike("#p-power", /Save & push/i, function(){ ACTIONS["save-ext-prefs"](); });
-  btnLike("#p-browser", /Save & push/i, function(){ ACTIONS["save-ext-prefs"](); });
+  /* v3.2.2: the switches save themselves the moment they are flipped
+     (see bindSwitches) - the two old "Save & push to browsers" buttons
+     were duplicates and are gone. Keep the ACTION for one-off use. */
   /* extension */
   btnLike("#p-extension", /New Token/i, function(){ ACTIONS["rotate-token"](); });
   btnLike("#p-extension", /Download CRX/i, function(){
@@ -10508,7 +10469,7 @@ function bindButtons(){
       .catch(function(e){ toast(e.message, "err"); }); });
   btnLike("#p-settings", /Restore Defaults/i, function(){
     confirmBox("Restore default settings?", "Queue, LAN, IPP, DropZone and audit switches return to " +
-      "the v3.2.2 defaults (website whitelist stays *).",
+      "the v3.2.1 defaults (website whitelist stays *).",
       async function(){
         try {
           await api("/config", { method: "POST", body: {
@@ -10549,8 +10510,6 @@ function bindButtons(){
       it.addEventListener("click", function(){ runTool("check-update"); }); }
     else if (/^Copy hub URL$/.test(t)) { it.dataset.bound = "1";
       it.addEventListener("click", function(){ ACTIONS["copy-hub-url"](); }); }
-    else if (/^Copy IPP printer URL/.test(t)) { it.dataset.bound = "1";
-      it.addEventListener("click", function(){ ACTIONS["copy-ipp-url"](); }); }
     else if (/^Pause queue$/.test(t) || /^Resume queue$/.test(t)) { it.dataset.bound = "1";
       it.addEventListener("click", function(){ ACTIONS["queue-pause-toggle"](); }); }
     else if (/^Release ALL held jobs$/.test(t)) { it.dataset.bound = "1";
@@ -10706,6 +10665,9 @@ async function saveHub(){
   if (mono[1]) patch.sumatra_path = mono[1].value.trim();
   try {
     await api("/config", { method: "POST", body: patch });
+    /* v3.2.2: saved -> clear the switch dirty flags */
+    Object.keys(dirtyKeys).forEach(function(k){
+      if (k.indexOf("hub_") === 0) delete dirtyKeys[k]; });
     toast("Hub settings saved \u2014 applied live", "ok"); poll();
   } catch (e) { toast("Save failed: " + e.message, "err"); }
 }
@@ -10738,6 +10700,9 @@ async function saveExtPrefs(){
     var cur = (await api("/config")).ext_prefs || {};
     prefs.print_defaults = cur.print_defaults || (cfgCache.ext_prefs || {}).print_defaults || {};
     await api("/config", { method: "POST", body: { ext_prefs: prefs } });
+    /* v3.2.2: saved -> the poll may refresh the switches again */
+    Object.keys(dirtyKeys).forEach(function(k){
+      if (k.indexOf("#p-power") === 0 || k.indexOf("#p-browser") === 0) delete dirtyKeys[k]; });
     toast("Power/Browser switches saved \u2014 paired browsers adopt them within 5 min (or on next start)", "ok");
     poll();
   } catch (e) { toast("Save failed: " + e.message, "err"); }
@@ -10784,6 +10749,8 @@ async function saveSettingsPanel(){
     if (sws[2]) patch.share_lan = sws[2].classList.contains("on");
     if (sws[3]) patch.hold_offline = sws[3].classList.contains("on");
     await api("/config", { method: "POST", body: patch });
+    Object.keys(dirtyKeys).forEach(function(k){
+      if (["autostart", "minimize", "lan", "hold"].indexOf(k) >= 0) delete dirtyKeys[k]; });
     var port = parseInt(ins[0].value, 10);
     if (port && port !== (BOOT.port || 9235))
       toast("Port lives in config.json / the installer \u2014 the hub rebinds on restart only (asked at install time)", "warn");
@@ -10835,38 +10802,76 @@ function bindPrintDefaults(){
       .catch(function(e){ toast(e.message, "err"); });
   });
 }
-/* power/browser/settings/dropzone switch instant-save */
+/* ---------- v3.2.2 SWITCHES THAT ACTUALLY WORK ----------
+   The v3.2.1 console rendered every switch but clicking one only set a
+   hidden dirty flag - the switch did not move and nothing was saved.
+   Now ONE delegated handler flips every switch and saves it instantly
+   (debounced 400 ms so flipping several switches = one write):
+     Power / Browser switches -> ext_prefs  -> paired browsers adopt
+     Hub panel switches       -> /config (same patch as Apply)
+     Settings panel switches  -> /config (Start-with-Windows and
+        Minimize-to-tray are managed by the service/tray - they refuse
+        with a hint instead of saving)
+     DropZone delete-after    -> drop_delete config key
+     Rule editor switches     -> toggle only, saved with the rule form
+   dirtyKeys guards every scope so the 3 s poll never overwrites a
+   switch the user just flipped; every save clears them again. */
+var _swTimers = {};
+function swSave(scope){
+  clearTimeout(_swTimers[scope]);
+  _swTimers[scope] = setTimeout(function(){
+    if (scope === "p-power" || scope === "p-browser") saveExtPrefs();
+    else if (scope === "p-hub") saveHub();
+    else if (scope === "p-settings") saveSettingsPanel();
+  }, 400);
+}
+function swDirty(scope, s){
+  if (scope === "p-power")
+    dirtyKeys["#p-power" + qsa("#p-power .tgl .switch").indexOf(s)] = 1;
+  else if (scope === "p-browser")
+    dirtyKeys["#p-browser" + qsa("#p-browser .tgl .switch").indexOf(s)] = 1;
+  else if (scope === "p-hub") {
+    var i = qsa("#p-hub .tgl .switch").indexOf(s);
+    var map = ["hold_offline", "instant_auto_queue", "token_header_only", null,
+               "reprint_watermark", "reprint_reason_required", "audit_enabled",
+               "keep_files"];
+    if (map[i]) dirtyKeys["hub_" + map[i]] = 1;
+  } else if (scope === "p-settings") {
+    var i2 = qsa("#p-settings .f-row .switch").indexOf(s);
+    dirtyKeys[["autostart", "minimize", "lan", "hold"][i2] || "s" + i2] = 1;
+  }
+}
 function bindSwitches(){
-  var pwMap = [["enabled"], ["queue_mode"], ["auto_rules"], ["intercept_print"], ["debug"], ["retry_offline"]];
-  qsa("#p-power .tgl .switch").forEach(function(s, i){
-    s.addEventListener("click", function(){ dirtyKeys["pw" + i] = 1; });
-  });
-  qsa("#p-browser .tgl .switch").forEach(function(s, i){
-    s.addEventListener("click", function(){ dirtyKeys["br" + i] = 1; });
-  });
-  /* hub panel switches are saved by Apply hub settings; mark dirty so poll keeps them */
-  qsa("#p-hub .tgl .switch").forEach(function(s, i){
-    s.addEventListener("click", function(){
-      var map = ["hold_offline", "instant_auto_queue", "token_header_only", null,
-                 "reprint_watermark", "reprint_reason_required", "audit_enabled", "keep_files"];
-      if (map[i]) dirtyKeys["hub_" + map[i]] = 1; });
-  });
-  /* settings panel switches */
-  qsa("#p-settings .f-row .switch").forEach(function(s, i){
-    s.addEventListener("click", function(){
-      dirtyKeys[["autostart", "minimize", "lan", "hold"][i] || "s" + i] = 1;
-      if ([ "autostart", "minimize" ].indexOf(["autostart", "minimize", "lan", "hold"][i]) >= 0)
+  document.addEventListener("click", function(ev){
+    var s = ev.target.closest ? ev.target.closest(".switch") : null;
+    if (!s) return;
+    /* only switches inside toggle rows / form rows / the rule editor
+       are controls - per-browser state table cells stay read-only */
+    var zone = s.closest(".tgl, .f-row, #rulemodal");
+    if (!zone) return;
+    if (zone.id === "rulemodal") { s.classList.toggle("on"); return; }
+    var panel = s.closest(".panel");
+    var scope = panel ? panel.id : "";
+    if (scope === "p-settings") {
+      var rows = qsa("#p-settings .f-row .switch");
+      var si = rows.indexOf(s);
+      if (si === 0 || si === 1) {          /* tray/service managed */
         toast(["Start with Windows is managed by the service/tray (use the Hub tools)",
-               "Minimize to tray is the desktop-app default"][["autostart", "minimize"].indexOf(["autostart", "minimize", "lan", "hold"][i])], "warn");
-    });
-  });
-  /* dropzone delete-after switch */
-  var dz = document.querySelector("#p-dropzone .tgl .switch");
-  if (dz) dz.addEventListener("click", function(){
-    var v = dz.classList.contains("on");
-    api("/config", { method: "POST", body: { drop_delete: v } })
-      .then(function(){ toast((v ? "Delete" : "Move to done\\") + " after printing", v ? "warn" : "ok"); loadDropzone(); })
-      .catch(function(e){ toast(e.message, "err"); });
+               "Minimize to tray is the desktop-app default"][si], "warn");
+        return;
+      }
+    }
+    s.classList.toggle("on");
+    if (scope === "p-dropzone") {          /* save immediately */
+      var v = s.classList.contains("on");
+      api("/config", { method: "POST", body: { drop_delete: v } })
+        .then(function(){ toast((v ? "Delete" : "Move to done\\") +
+          " after printing", v ? "warn" : "ok"); loadDropzone(); })
+        .catch(function(e){ toast(e.message, "err"); });
+      return;
+    }
+    swDirty(scope, s);
+    swSave(scope);
   });
   /* history inputs dirty flags */
   var hq = document.querySelector("#p-history input.inp");
@@ -10947,6 +10952,7 @@ var VERSION_TXT = BOOT.version || "";
 async function poll(){
   try {
     var h = await api("/health");
+    window._lastHealth = h;   /* v3.2.2: discovery / standard-port chips read this */
     var st = await api("/stats");
     var q = await api("/queue");
     var pr = await api("/printers");
@@ -12715,14 +12721,22 @@ def lan_listen_stop():
 
 def lan_listen_ensure():
     """Health-refresher hook (runs every 3 s): follow config changes
-    AND DHCP IP changes without any user action."""
+    AND DHCP IP changes without any user action.
+    v3.2.2: IPP PRINTER MODE owns the LAN listener too - when
+    ipp_printer is on, phones/PCs must be able to REACH /ipp/print,
+    so the LAN listener starts even when share_lan is off (turning
+    'IP Printer mode' off + 'LAN sharing' off stops it again)."""
     if _env("HOST"):
         return
-    want = bool(CFG.get("share_lan"))
+    want = bool(CFG.get("share_lan")) or ipp_printer_enabled()
     if want and _LAN_HTTPD is None:
         err = lan_listen_start()
         if err:
             log("[LAN] auto-start: %s" % err)
+        elif not bool(CFG.get("share_lan")):
+            log("[IPP] printer mode ON: LAN listener started so phones "
+                "and PCs can reach /ipp/print (turn OFF 'IP Printer "
+                "mode' to stop it)")
     elif want and _LAN_BIND_IP and _LAN_BIND_IP != lan_ip():
         # DHCP handed this PC a new address - follow it automatically.
         log("[LAN] LAN IP changed %s -> %s - rebinding the LAN listener"
@@ -13690,6 +13704,276 @@ def ipp_printer_enabled():
     return bool(CFG.get("ipp_printer", True))
 
 
+def ipp_landing_html():
+    """v3.2.2: the IPP how-to page served when a HUMAN opens the printer
+    URL in a browser (GET /ipp/print). Shared by the main hub listener
+    and the standard-port mirror - one source, both ports."""
+    host = socket.gethostname()
+    ipp_url = lan_share_url("ipp")
+    http_url = "http://%s:%d/ipp/print" % (lan_ip(), int(CFG.get("port", 9235)))
+    std = int(CFG.get("ipp_standard_port") or 0)
+    std_note = ""
+    if std > 0 and _IPP631_STATE.get("up"):
+        std_note = ("<li>Standard port also UP: <code>http://%s:%d/ipp/print"
+                    "</code> - Android's manual add and most printer "
+                    "dialogs default to port %d.</li>"
+                    % (_html_escape(lan_ip()), std, std))
+    return """<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport"
+ content="width=device-width,initial-scale=1"><title>AdvPrint Pro - IPP printer</title>
+<style>body{font:15px/1.55 "Segoe UI",system-ui,sans-serif;background:#f5f8fc;
+ color:#0f172a;margin:0;padding:24px}.b{max-width:640px;margin:4vh auto;background:#fff;
+ border:1px solid #e2e8f0;border-radius:14px;padding:22px}
+ h1{font-size:19px;margin:0 0 6px}h2{font-size:15px;margin:18px 0 6px;color:#1d4ed8}
+ code{background:#f1f5f9;border:1px solid #e2e8f0;border-radius:4px;padding:1px 6px;
+ font-size:12.5px;word-break:break-all}li{margin:5px 0}
+ .ok{background:#ecfdf5;border:1px solid #a7f3d0;border-radius:10px;padding:10px 14px;
+ margin:14px 0;font-size:13.5px}</style></head><body><div class="b">
+ <h1>AdvPrint Pro - IPP network printer</h1>
+ <p>This URL is the <b>IPP print endpoint of <span>%s</span></b>.
+ Add it as a printer - do not open it in a browser:</p>
+ <p style="font-size:16px"><code>ipp://%s</code></p>
+ <p style="font-size:16px"><code>%s</code></p>
+ <h2>Windows 10 / 11</h2>
+ <ul><li>Settings &rarr; Bluetooth &amp; devices &rarr; Printers &amp;
+ scanners &rarr; <b>Add device</b>. The printer appears by itself
+ (AirPrint-style discovery) when LAN sharing is on - click it.</li>
+ <li>Or: <b>Add manually</b> &rarr; &ldquo;Add a printer using an IP
+ address or hostname&rdquo; &rarr; Device type <b>IPP Device</b> &rarr;
+ paste <code>%s</code> &rarr; Next.</li></ul>
+ <h2>macOS</h2>
+ <ul><li>System Settings &rarr; Printers &amp; Scanners &rarr;
+ <b>Add Printer</b> - it appears in the Bonjour list.</li>
+ <li>Or: IP tab &rarr; Protocol <b>IPP</b> &rarr; Address
+ <code>host:%d</code> &rarr; Queue <code>ipp/print</code>.</li></ul>
+ <h2>iPhone / iPad (AirPrint)</h2>
+ <ul><li>Open anything printable &rarr; Share &rarr; Print &rarr;
+ Select Printer - <b>AdvPrint Pro appears by itself</b> while this PC
+ is on the same Wi-Fi.</li></ul>
+ <h2>Android</h2>
+ <ul><li>Print from any app &rarr; Default Print Service / Mopria -
+ the printer is discovered automatically.</li>
+ %s</ul>
+ <div class="ok"><b>Prints go to THIS PC's printer</b> through the
+ AdvPrint Pro hub - the PC must be on and the hub running (tray icon).
+ The first job also shows in the hub history like every other print.
+ 100%% local - powered by AdvPrint Pro %s.</div>
+ </div></body></html>""" % (
+        _html_escape(host),
+        _html_escape(ipp_url.replace("ipp://", ""), quote=True),
+        _html_escape(http_url, quote=True),
+        _html_escape(http_url, quote=True),
+        int(CFG.get("port", 9235)),
+        std_note,
+        VERSION)
+
+
+# ------------------------------------------------------------
+# v3.2.2 STANDARD-PORT IPP MIRROR - the SAME IPP printer endpoint
+# ALSO answered on the standard printer port (631) on the LAN IP.
+#
+# Why: Android's Default Print Service / Mopria IGNORES custom ports
+# when a printer is added manually (the user types just the IP) and
+# tries http://<ip>:631/ipp/print. Plenty of printer dialogs and
+# CUPS defaults assume 631 as well. The hub's own port (9235) stays
+# the primary endpoint; this mirror exists so EVERY IPP pattern
+# works: ipp://ip:9235/ipp/print, http://ip:9235/ipp/print AND
+# http://ip:631/ipp/print.
+#
+# Scope is intentionally tiny - this listener serves ONLY the IPP
+# print endpoint + its landing page; everything else is redirected
+# to the hub's main port. Same rules as the main endpoint: no token
+# (like a physical network printer), browser Origins refused, body
+# size caps, every job audited. Windows needs no admin for ports
+# < 1024; on macOS/Linux the bind may need root - a refused bind
+# only disables the MIRROR, never the hub. Control: config.json
+# "ipp_standard_port": 631 (default) | other port | 0 = off.
+# ------------------------------------------------------------
+_IPP631_HTTPD = None
+_IPP631_THREAD = None
+_IPP631_BIND_IP = None
+_IPP631_STATE = {"up": False, "port": 0, "err": ""}
+
+
+class IPP631Handler(BaseHTTPRequestHandler):
+    """Restricted HTTP handler for the standard-port IPP mirror."""
+
+    protocol_version = "HTTP/1.1"
+
+    def log_message(self, fmt, *args):     # silence stderr, use hub log
+        pass
+
+    def _client_ip(self):
+        try:
+            return self.client_address[0]
+        except Exception:
+            return "?"
+
+    def _landing(self):
+        try:
+            page = ipp_landing_html().encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(page)))
+            self.end_headers()
+            self.wfile.write(page)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+
+    def _redirect(self, where):
+        try:
+            self.send_response(302)
+            self.send_header("Location", where)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+
+    def _ipp_reply(self, body):
+        self.send_response(200)
+        self.send_header("Content-Type", IPP_MIME)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        try:
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+
+    def do_GET(self):
+        u = urlparse(self.path)
+        route = u.path.rstrip("/")
+        if route in ("/ipp/print", "/ipp", "/ipp/") and \
+                ipp_printer_enabled():
+            return self._landing()
+        if route.startswith("/ipp/print/"):
+            return self._landing()
+        # everything else belongs on the main hub port
+        port = int(CFG.get("port", 9235))
+        ip = _IPP631_BIND_IP or lan_ip() or "127.0.0.1"
+        self._redirect("http://%s:%d%s" % (ip, port, self.path))
+
+    def do_POST(self):
+        u = urlparse(self.path)
+        route = u.path.rstrip("/")
+        ipp_q_printer = ""
+        if route.startswith("/ipp/print/"):
+            ipp_q_printer = _ipp_queue_match(
+                urllib.parse.unquote(route[len("/ipp/print/"):]))
+            if not ipp_q_printer:
+                db_audit("ipp.queue.reject", ip=self._client_ip(),
+                         site="lan", details="631 mirror: unknown "
+                         "per-printer IPP queue %r" % route[:120])
+                return self._send_json(404, {
+                    "ok": False, "error": "unknown per-printer IPP queue"})
+            route = "/ipp/print"
+        if route not in ("/ipp/print", "/ipp", "/ipp/") or \
+                not ipp_printer_enabled():
+            return self._send_json(404, {"ok": False,
+                                         "error": "IPP printer is off"})
+        # same anti-web guard as the main endpoint (audit H6)
+        ipp_origin = (self.headers.get("Origin") or "").strip()
+        if ipp_origin and ipp_origin.lower() != "null" \
+                and not _extension_origin(ipp_origin):
+            return self._send_json(403, {
+                "ok": False,
+                "error": "IPP is for native print clients"})
+        try:
+            data = read_raw_body(self)
+        except ValueError as e:
+            return self._send_json(400, {"ok": False,
+                                         "error": "bad IPP request: %s" % e})
+        if len(data) > MAX_PDF:
+            return self._send_json(413, {"ok": False,
+                                         "error": "IPP request too large"})
+        resp = ipp_handle(data, self._client_ip(), printer=ipp_q_printer)
+        self._ipp_reply(resp)
+
+    def _send_json(self, code, obj):
+        try:
+            body = json.dumps(obj).encode("utf-8")
+            self.send_response(code)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+
+
+def ipp631_listen_start():
+    """Bind the standard-port IPP mirror to the LAN IP. Returns an
+    error string or None."""
+    global _IPP631_HTTPD, _IPP631_THREAD, _IPP631_BIND_IP
+    port = int(CFG.get("ipp_standard_port") or 0)
+    if port <= 0 or not ipp_printer_enabled():
+        return None
+    if _IPP631_HTTPD is not None:
+        return None
+    ip = lan_ip()
+    if ip in ("127.0.0.1", "::1", ""):
+        return None                                  # no LAN - stay off
+    try:
+        httpd = ThreadingHTTPServer((ip, port), IPP631Handler)
+    except OSError as e:
+        _IPP631_STATE.update({"up": False, "port": port,
+                              "err": "port %d busy/refused (%s)" % (port, e)})
+        return ("cannot bind IPP mirror %s:%d (%s) - on macOS/Linux the "
+                "standard port needs root; the hub's own port still "
+                "works everywhere" % (ip, port, e))
+    except Exception as e:
+        _IPP631_STATE.update({"up": False, "port": port, "err": str(e)})
+        return "cannot bind IPP mirror %s:%d (%s)" % (ip, port, e)
+    httpd.daemon_threads = True
+    _IPP631_HTTPD = httpd
+    _IPP631_BIND_IP = ip
+    _IPP631_THREAD = threading.Thread(
+        target=httpd.serve_forever, kwargs={"poll_interval": 0.2},
+        name="advprint-ipp631", daemon=True)
+    _IPP631_THREAD.start()
+    _IPP631_STATE.update({"up": True, "port": port, "err": ""})
+    log("[IPP631] standard-port printer UP on http://%s:%d/ipp/print - "
+        "Android manual add and printer dialogs that assume port %d "
+        "work now" % (ip, port, port))
+    return None
+
+
+def ipp631_listen_stop():
+    global _IPP631_HTTPD, _IPP631_THREAD, _IPP631_BIND_IP
+    httpd = _IPP631_HTTPD
+    if httpd is None:
+        return
+    _IPP631_HTTPD = None
+    _IPP631_THREAD = None
+    _IPP631_BIND_IP = None
+    _IPP631_STATE.update({"up": False, "port": 0, "err": ""})
+    try:
+        httpd.shutdown()
+        httpd.server_close()
+    except OSError:
+        pass
+    log("[IPP631] standard-port printer stopped")
+
+
+def ipp631_listen_ensure():
+    """Health-refresher hook: start/stop/rebind the 631 mirror
+    following ipp_printer + ipp_standard_port + DHCP changes."""
+    want_port = int(CFG.get("ipp_standard_port") or 0)
+    want = want_port > 0 and ipp_printer_enabled()
+    if want and _IPP631_HTTPD is None:
+        err = ipp631_listen_start()
+        if err:
+            log("[IPP631] auto-start: %s" % err)
+    elif not want and _IPP631_HTTPD is not None:
+        ipp631_listen_stop()
+    elif want and _IPP631_BIND_IP and _IPP631_BIND_IP != lan_ip():
+        ipp631_listen_stop()
+        ipp631_listen_start()
+    if want and _IPP631_STATE.get("up"):
+        _IPP631_STATE["err"] = ""
+    else:
+        _IPP631_STATE.setdefault("up", False)
+
+
 # ------------------------------------------------------------
 # v3.0.8 AIRPRINT-GRADE DISCOVERY - mDNS / DNS-SD announcer.
 # Manually typing http://192.168.1.x:9235/ipp/print works on
@@ -13756,6 +14040,8 @@ def _mdns_txt_records(rp="ipp/print", ty="AdvPrint Pro",
           ("pdl", "application/pdf,image/urf,image/jpeg"),
           ("ty", ty), ("product", "(AdvPrint Pro)"),
           ("Note", note),
+          ("usb_MFG", "Bit Dream IT"),
+          ("usb_MDL", "AdvPrint Pro Hub"),
           ("UUID", _ipp_printer_uuid().replace("urn:uuid:", "")),
           ("URF", "V1.4"), ("Color", "T"), ("Duplex", "F"),
           ("Scan", "F"), ("Sort", "F")]
@@ -13884,18 +14170,17 @@ def _mdns_announce(ip, ttl=_MDNS_TTL):
 
 def _ipp_mdns_loop():
     """Responder thread: opens the socket while discovery is wanted,
-    answers EVERY queued query back-to-back (v3.2.2: phone print
-    services scan for a few seconds - the old loop answered ONE packet
-    then slept 3 s, so Android Default Print Service, iOS AirPrint and
-    the Windows printer scan kept missing the hub), re-announces
-    periodically, says goodbye (TTL 0) when LAN sharing turns off.
-    Any error silently downgrades to "no discovery" - printing itself
-    never depends on this."""
+    answers queries, re-announces periodically, says goodbye (TTL 0)
+    when LAN sharing turns off. Any error silently downgrades to
+    "no discovery" - printing itself never depends on this."""
     while True:
         try:
             want = (ipp_printer_enabled() and
-                    bool(CFG.get("ipp_mdns", True)) and
-                    bool(CFG.get("share_lan")))
+                    bool(CFG.get("ipp_mdns", True)))
+                    # v3.2.2: decoupled from share_lan - IPP printer mode
+                    # owns discovery (lan_listen_ensure now starts the
+                    # LAN listener for ipp_printer too, so advertising
+                    # without a listener can no longer happen)
             ip = lan_ip() if want else None
             if ip in ("127.0.0.1", "::1", ""):
                 want, ip = False, None
@@ -13909,12 +14194,6 @@ def _ipp_mdns_loop():
                     log("[MDNS] AirPrint discovery UP on %s (%s) - the"
                         " hub now shows up in phone/PC printer lists"
                         % (ip, _mdns_instance_name()))
-                    # RFC 6762 §8.3: announce at least twice, about one
-                    # second apart, so every listener on the LAN catches
-                    # the record set (phones may join mid-announce).
-                    _mdns_announce(ip)
-                    time.sleep(1.0)
-                    _mdns_announce(ip)
                 except OSError as e:
                     if not _mdns_state["err_logged"]:
                         log("[MDNS] cannot join multicast group (%s) -"
@@ -13940,28 +14219,17 @@ def _ipp_mdns_loop():
                            time.time() - _mdns_state["last_announce"]
                            >= _MDNS_ANNOUNCE_EVERY):
                     _mdns_announce(ip)
-                # v3.2.2 DRAIN: answer packets back-to-back for up to
-                # 30 s before re-reading the config switches - a query
-                # must NEVER wait for a sleep() to finish (that was the
-                # "Android cannot find the printer" bug).
-                sock.settimeout(0.5)
-                quiet_until = time.time() + 30.0
-                while True:
-                    try:
-                        pkt, addr = sock.recvfrom(9000)
-                    except socket.timeout:
-                        if time.time() >= quiet_until:
-                            break
-                        continue
-                    except OSError:
-                        break
-                    _mdns_answer_query(pkt, addr, _mdns_state["ip"] or ip)
-                    if time.time() >= quiet_until:
-                        break
-                continue      # config may have changed - re-evaluate now
+                sock.settimeout(2.0)
+                try:
+                    pkt, addr = sock.recvfrom(9000)
+                    _mdns_answer_query(pkt, addr, ip)
+                except socket.timeout:
+                    pass
+                except OSError:
+                    pass
         except Exception:
             pass                    # discovery must never break the hub
-        time.sleep(2.0)
+        time.sleep(3.0)
 
 
 def ipp_mdns_ensure():
@@ -14018,14 +14286,12 @@ def _mdns_answer_query(pkt, addr, ip):
     qdcount = 0
     full_set_sent = False
     for name, qtype, qclass, raw in qs:
-        # v3.2.2 MULTI-HUB FIX: only the SERVICE names (_ipp._tcp.local
-        # and the AirPrint subtype) or OUR OWN instance names / host
-        # target may be answered. The old suffix match answered SRV
-        # queries for ANY "<instance>._ipp._tcp.local" - on a LAN with
-        # TWO AdvPrint hubs each one claimed the other's instance and
-        # phones could connect to the wrong PC.
-        if name not in services and name not in instances \
-                and name != target:
+        matched = False
+        for svc, want in services.items():
+            if name == svc or name.endswith("." + svc):
+                matched = want
+                break
+        if not matched and name not in instances and name != target:
             continue
         qdcount += 1
         echoed += raw
@@ -14105,13 +14371,6 @@ def firewall_allow():
     raw = int(CFG.get("raw_printer_port") or 0)
     adds = ["advfirewall firewall add rule name=\"%s\" dir=in action=allow "
             "protocol=TCP localport=%d" % (FIREWALL_RULE_NAME, port)]
-    # v3.2.2: the mDNS announce (UDP 5353) rides the same one-click fix -
-    # without it phones never SEE the printer even with every TCP rule
-    # in place (the Setup exe already adds this rule; a repair after a
-    # cleanup tool must restore BOTH).
-    adds.append("advfirewall firewall add rule name=\"%s mDNS\" dir=in "
-                "action=allow protocol=UDP localport=5353"
-                % FIREWALL_RULE_NAME)
     if raw > 0:
         adds.append("advfirewall firewall add rule name=\"%s RAW %d\" "
                     "dir=in action=allow protocol=TCP localport=%d"
@@ -15036,7 +15295,8 @@ def cmd_serve():
     if DEFAULT_TOKEN_WARNING:
         log("[SECURITY] WARNING: the default token is still in use!"
             " Change it with:  %s" % cli_cmd("token-rotate"))
-    log("Open the extension popup and click Connect. Press Ctrl+C to stop.")
+    log("Open THE ONE UI console:  http://127.0.0.1:%d/ui  (the toolbar "
+        "icon opens it too). Press Ctrl+C to stop." % CFG["port"])
     _start_tray(httpd)
     try:
         httpd.serve_forever()

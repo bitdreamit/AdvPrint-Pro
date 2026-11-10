@@ -302,13 +302,16 @@ def test_ip_printer_test_needs_a_host(hub, dest_reset):
 
 def test_ip_printer_mode_derived_status(hub, dest_reset):
     """IP PRINTER MODE = the hub is reachable as a network printer
-    (LAN sharing + the IPP/RAW listeners) - derived, never drifts."""
+    (LAN sharing + the IPP/RAW listeners) - derived, never drifts.
+    v3.2.2: ipp_printer ON now starts the LAN listener BY ITSELF
+    (phones must reach /ipp/print), so ipp_printer alone IS
+    network-printer mode - share_lan no longer required."""
     advprint.CFG["share_lan"] = False
     advprint.CFG["ipp_printer"] = True
-    assert advprint.build_health_snapshot()["ip_printer_mode"] is False
-    advprint.CFG["share_lan"] = True
     assert advprint.build_health_snapshot()["ip_printer_mode"] is True
     advprint.CFG["ipp_printer"] = False
+    assert advprint.build_health_snapshot()["ip_printer_mode"] is False
+    advprint.CFG["share_lan"] = True
     advprint.CFG["raw_printer_port"] = 0
     assert advprint.build_health_snapshot()["ip_printer_mode"] is False
     advprint.CFG["raw_printer_port"] = 9100

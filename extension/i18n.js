@@ -1,9 +1,11 @@
-/* AdvPrint Pro v2.7.0 - UI language: English + Bangla (বাংলা).
- * Shared by popup + options. The language comes from:
+/* AdvPrint Pro v3.2.2 - UI language: English + Bangla (বাংলা).
+ * Used by the options page + notifications (the popup was removed in
+ * v3.2.2 - the toolbar icon opens the ONE UI console now).
+ * The language comes from:
  *   1. chrome.storage.local.lang ("en" | "bn"), set in Options
  *   2. fallback: the browser UI language (auto-detect)
- * Usage in HTML: <span data-i18n="popupOffline">..</span>
- * In JS:         const s = await t("popupOffline");
+ * Usage in HTML: <span data-i18n="optLanguage">..</span>
+ * In JS:         const s = await t("optLanguage");
  */
 (function (global) {
   "use strict";
@@ -80,7 +82,7 @@
       optTypeGlob: "Glob (* wildcard)",
       optTypeRegex: "Regex",
       // about / branding
-      brandLine: "Version 2.7.0 - AdvPrint Pro (Advanced Printer) by Bit Dream IT - Innovative Healthcare Solutions - MIT license - 100% local - no cloud, no tracking."
+      brandLine: "Version 3.2.2 - AdvPrint Pro (Advanced Printer) by Bit Dream IT - Innovative Healthcare Solutions - MIT license - 100% local - no cloud, no tracking."
     },
     bn: {
       appName: "AdvPrint Pro",
@@ -151,7 +153,7 @@
       optRulesType: "ধরন",
       optTypeGlob: "Glob (* ওয়াইল্ডকার্ড)",
       optTypeRegex: "Regex",
-      brandLine: "সংস্করণ 2.7.0 - AdvPrint Pro (Advanced Printer) by Bit Dream IT - Innovative Healthcare Solutions - MIT লাইসেন্স - ১০০% লোকাল - কোনো ক্লাউড নেই, কোনো ট্র্যাকিং নেই।"
+      brandLine: "সংস্করণ 3.2.2 - AdvPrint Pro (Advanced Printer) by Bit Dream IT - Innovative Healthcare Solutions - MIT লাইসেন্স - ১০০% লোকাল - কোনো ক্লাউড নেই, কোনো ট্র্যাকিং নেই।"
     }
   };
 

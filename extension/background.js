@@ -1549,13 +1549,13 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
           // window.print() was called on a page -> print that page silently
           const hcfg = await loadCfg();
           if (hcfg.enabled === false) {
-            reply({ ok: false, error: "AdvPrint is disabled - enable it from the toolbar popup" });
+            reply({ ok: false, error: "AdvPrint is disabled - enable it in the Console (click the toolbar icon)" });
             break;
           }
           if (!hcfg.hookPrint) {
             reply({ ok: false,
                      error: "window.print() interception is OFF - turn the " +
-                            "window.print switch on in the popup" });
+                            "window.print switch in the Console (Power Switches)" });
             break;
           }
           const tab = sender.tab ||
@@ -1573,7 +1573,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
         }
         case "printTab": {
           if ((await loadCfg()).enabled === false) {
-            reply({ ok: false, error: "AdvPrint is disabled - enable it in the popup" });
+            reply({ ok: false, error: "AdvPrint is disabled - enable it in the Console" });
             break;
           }
           const tab = (await chrome.tabs.query({ active: true, currentWindow: true }))[0];
@@ -1584,7 +1584,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
         }
         case "printPdfUrl": {
           if ((await loadCfg()).enabled === false) {
-            reply({ ok: false, error: "AdvPrint is disabled - enable it in the popup" });
+            reply({ ok: false, error: "AdvPrint is disabled - enable it in the Console" });
             break;
           }
           const printer = await resolvePrinter(msg.url, msg.title);
@@ -1599,14 +1599,14 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
         }
         case "printSelection":
           if ((await loadCfg()).enabled === false) {
-            reply({ ok: false, error: "AdvPrint is disabled - enable it in the popup" });
+            reply({ ok: false, error: "AdvPrint is disabled - enable it in the Console" });
             break;
           }
           reply({ ok: true, ...(await printSelection(msg.text, msg.title)) });
           break;
         case "printScreenshot": {
           if ((await loadCfg()).enabled === false) {
-            reply({ ok: false, error: "AdvPrint is disabled - enable it in the popup" });
+            reply({ ok: false, error: "AdvPrint is disabled - enable it in the Console" });
             break;
           }
           const win = await chrome.windows.getCurrent();
@@ -1759,7 +1759,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
           if (cfgQ.lanSend !== true) {
             reply({ ok: false,
                      error: "Share Send Mode is OFF - turn it on in the " +
-                            "popup (LAN sharing > Share Send Mode) to " +
+                            "Console (LAN tab > Share Send Mode) to " +
                             "shift jobs to another PC" });
             break;
           }
@@ -2027,7 +2027,7 @@ async function handleApi(msg, sender) {
   // are refused so a disabled AdvPrint never prints from a page
   const PRINT_FNS = ["printPage", "printPdf", "print"];
   if (PRINT_FNS.includes(req.fn) && cfg.enabled === false) {
-    throw new HubError("AdvPrint is disabled - enable it in the toolbar popup");
+    throw new HubError("AdvPrint is disabled - enable it in the Console (Power Switches)");
   }
   switch (req.fn) {
     case "status":
@@ -2358,8 +2358,23 @@ chrome.storage.onChanged.addListener((changes, area) => {
     pushSitesToHub(changes.apiSites.newValue || ["*"]); }
 });
 
-/* ---------------- icon click (no popup case) ---------------- */
-chrome.action.onClicked?.addListener?.(async () => { /* popup handles it */ });
+/* ---------------- icon click = THE ONE UI console (v3.2.2) ----------------
+   The popup is GONE as of v3.2.2 - it was a second, weaker copy of the
+   same console. Clicking the toolbar icon now opens the hub console
+   (http://127.0.0.1:9235/ui) with the paired token so the owner lands
+   straight in the full UI. If the hub is not running, the browser
+   shows its own error page - the tray icon is the fix then. */
+chrome.action.onClicked?.addListener?.(async () => {
+  try {
+    const st = await chrome.storage.local.get({ hubUrl: "", token: "" });
+    let base = (st.hubUrl || "http://127.0.0.1:9235").replace(/\/+$/, "");
+    if (!/^https?:\/\//i.test(base)) base = "http://" + base;
+    const url = base + "/ui" + (st.token ? "?token=" + encodeURIComponent(st.token) : "");
+    chrome.tabs.create({ url });
+  } catch (e) {
+    chrome.tabs.create({ url: "http://127.0.0.1:9235/ui" });
+  }
+});
 
 /* ---------------- lifecycle ---------------- */
 chrome.runtime.onInstalled.addListener(async () => {

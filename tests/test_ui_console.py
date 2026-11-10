@@ -1,4 +1,4 @@
-"""v3.2.2 THE ONE UI - the hub serves the approved rev-4 All-in-One
+"""v3.2.1 THE ONE UI - the hub serves the approved rev-4 All-in-One
 console at /ui, / and /dashboard.
 
 - The console UI is EMBEDDED in advprint.py itself (CONSOLE_HTML):
@@ -57,7 +57,7 @@ def test_ui_browser_gets_html_auth_error(hub):
 
 
 def test_ui_embedded_survives_missing_console_file(hub, monkeypatch):
-    # v3.2.2: the UI lives INSIDE advprint.py (CONSOLE_HTML). Even when
+    # v3.2.1: the UI lives INSIDE advprint.py (CONSOLE_HTML). Even when
     # console.html cannot be found on disk - a damaged install, a broken
     # copy step - the hub STILL serves the full approved All-in-One UI.
     # (The v3.2.0 build served the old dashboard here; that class of
@@ -78,7 +78,7 @@ def test_ui_embedded_survives_missing_console_file(hub, monkeypatch):
 
 
 def test_console_html_embedded_in_hub_source():
-    # v3.2.2: CONSOLE_HTML must be a module constant with the full
+    # v3.2.1: CONSOLE_HTML must be a module constant with the full
     # rev-4 markup - this is what makes the UI un-missable.
     src = open(os.path.join(_console_dir(), "advprint.py"),
                encoding="utf-8").read()
