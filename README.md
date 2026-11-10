@@ -13,6 +13,45 @@ Web page ──► Chrome extension ──► AdvPrint Pro hub (localhost:9235) 
 
 ---
 
+## What's new in v3.2.8 (THE ipp:// + HTTP-PAGE FIX RELEASE)
+
+Two real-world bugs reported against v3.2.7, both fixed and locked by
+new tests (`tests/test_v328.py`). Everything from v3.2.7 — the complete
+Developer API guide and every earlier fix — stays unchanged.
+
+1. **The IPP landing page no longer prints the protocol twice.**
+   Opening `http://192.168.1.101:9235/ipp/print` in a browser showed
+   `ipp://http://192.168.1.101:9235/ipp/print` — `ipp://` was prepended
+   to a URL that already carried `http://`, so Windows, macOS, iOS and
+   CUPS refused the pasted address. The new `_ipp_scheme_url()` helper
+   strips the web scheme first; the page now shows the one clean form
+   `ipp://192.168.1.101:9235/ipp/print` next to the browser-friendly
+   `http://…` URL.
+2. **`window.advprint.printPdf()` (and every other page-API method)
+   now works on http:// sites too.** A `https://host/*` pattern in the
+   Website API list pinned the scheme, so the SAME site over `http://`
+   was refused. The host is what you allow, not the transport:
+   `https://reports.example.com/*` now also covers
+   `http://reports.example.com/*` (and the other way round). The refusal
+   message now names the real editor and suggests a ready-made pattern
+   for the blocked host, the console hint documents the rule, and
+   `docs/DEVELOPER-API.md` gained a full "Website API permission"
+   section with the http troubleshooting case.
+3. **The hub can no longer serve a stale extension.** Chrome
+   auto-updates the extension from the hub's own package
+   (`/extension/updates.xml`) — and only when that package is NEWER.
+   The first 3.2.8 build left the embedded hub copies at 3.2.6, so
+   browsers silently never updated and kept the old http-page refusal.
+   The build now syncs + verifies every embedded CRX (hard-fail on
+   drift), and the hub flags a stale package in `/health`,
+   `/extension/info`, the `/extension` page and the Console Extension
+   panel. After updating the hub, re-run Setup (or copy
+   `prebuilt/AdvPrint-Pro.crx` over `hub/extension/AdvPrint-Pro.crx`)
+   and let Chrome update to 3.2.8.
+
+Details: `docs/RELEASE-NOTES-v3.2.8.md` and
+`docs/AdvPrint-Pro-v3.2.8-A-to-Z-DEV-GUIDE.md`.
+
 ## What's new in v3.2.7 (THE DEVELOPER API RELEASE)
 
 The print API — `window.advprint` in every web page and `POST /print`

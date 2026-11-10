@@ -1,6 +1,30 @@
-AdvPrint Pro (Advanced Printer) v3.2.6 - START HERE
+AdvPrint Pro (Advanced Printer) v3.2.8 - START HERE
 ====================================================
 by Bit Dream IT - Innovative Healthcare Solutions
+
+QUICK NOTE ON v3.2.8 - THE ipp:// + HTTP-PAGE FIX (read this first!)
+--------------------------------------------------------------------
+1) The IPP landing page (http://<ip>:9235/ipp/print) now shows the ONE
+   clean printer URL: ipp://<ip>:9235/ipp/print  (no more
+   "ipp://http://..." - protocol twice - that Windows/macOS/CUPS
+   refused).
+2) window.advprint.printPdf() & friends now work on http:// sites too
+   (a https://host/* Website-API pattern refused the http:// twin of
+   the same site; the HOST is what you allow, not the transport).
+3) IMPORTANT UPGRADE STEP: the extension is auto-updated FROM THE HUB
+   (updates.xml) - after updating the hub, check
+   http://127.0.0.1:9235/extension/info : it must show
+   "stale": false and version 3.2.8. If it shows "stale": true, re-run
+   the Setup (or copy prebuilt/AdvPrint-Pro.crx over
+   hub/extension/AdvPrint-Pro.crx) and run chrome://extensions >
+   Update - Chrome then silently updates the extension to 3.2.8 and
+   the http-page fix reaches every page.
+   Full details: CHANGELOG.md, docs/RELEASE-NOTES-v3.2.8.md,
+   docs/DEVELOPER-API.md (Website API permission + troubleshooting).
+
+The rest of this file describes v3.2.6 in depth - still accurate as
+the architecture overview; the per-release deltas live in CHANGELOG.md
+and docs/AdvPrint-Pro-v3.2.8-A-to-Z-DEV-GUIDE.md.
 
 WHAT IS NEW IN v3.2.6 - SEVEN BUGS + THE UI SECURITY MODEL
 ----------------------------------------------------------

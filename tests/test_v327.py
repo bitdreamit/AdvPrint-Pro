@@ -59,21 +59,21 @@ CHANGELOG = open(os.path.join(ROOT, "CHANGELOG.md"),
 
 
 # ---------------------------------------------------------------
-# 1. version coherence 3.2.7
+# 1. version coherence 3.2.8 (rolled forward with every release)
 # ---------------------------------------------------------------
 
 def test_version_327_everywhere():
-    assert advprint.VERSION == "3.2.7"
-    assert advprint.VERSION_NAME.startswith("v3.2.7")
-    assert "THE DEVELOPER API RELEASE" in advprint.VERSION_NAME
-    assert re.search(r"3\.2\.7", VERSION_TXT), VERSION_TXT
-    assert MANIFEST["version"] == "3.2.7"
-    assert 'v3.2.7</span>' in open(os.path.join(
+    assert advprint.VERSION == "3.2.8"
+    assert advprint.VERSION_NAME.startswith("v3.2.8")
+    assert "HTTP-PAGE FIX RELEASE" in advprint.VERSION_NAME
+    assert re.search(r"3\.2\.8", VERSION_TXT), VERSION_TXT
+    assert MANIFEST["version"] == "3.2.8"
+    assert 'v3.2.8</span>' in open(os.path.join(
         EXT, "popup.html"), encoding="utf-8").read()
-    assert "v3.2.7" in open(os.path.join(
+    assert "v3.2.8" in open(os.path.join(
         EXT, "options.html"), encoding="utf-8").read()
-    assert 'var _apVerFallback = "3.2.7";' in APIJS_SRC
-    assert 'BOOT.version || "3.2.7"' in CONSOLE
+    assert 'var _apVerFallback = "3.2.8";' in APIJS_SRC
+    assert 'BOOT.version || "3.2.8"' in CONSOLE
     assert "## v3.2.7 - THE DEVELOPER API RELEASE" in CHANGELOG
 
 

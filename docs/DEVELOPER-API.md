@@ -83,8 +83,62 @@ from JavaScript and a job sent with `curl` are identical afterwards.
 
 ```js
 window.advprint.status();    // -> Promise<health JSON>
-window.advprint.version;     // -> "3.2.7" (the extension version)
+window.advprint.version;     // -> "3.2.8" (the extension version)
 ```
+
+### 2.1.1 Website API permission — WHO may call the API (read once!)
+
+By default **every** website may call the API (the allowlist is `*`).
+If your deployment restricted it, your page's origin must match one
+pattern — otherwise every method answers:
+
+```
+{ok:false, error:"AdvPrint page API is not allowed for http://your.host
+ - open the AdvPrint Pro Console (/ui), Connections tab > Website API,
+ and add this site (one line: *://your.host/*, or * for ALL sites)"}
+```
+
+**Where the list lives:** AdvPrint Pro Console (`http://127.0.0.1:9235/ui`)
+→ **Connections** tab → **Website API permission** — one pattern per
+line, saved live into the extension.
+
+**The four pattern forms** (like the auto-print rules):
+
+| Pattern | Matches |
+|---|---|
+| `*` | EVERY website (default) |
+| `*://www.htncr.org/*` or `www.htncr.org` | that host, ANY scheme |
+| `https://reports.example.com/*` | that host — **v3.2.8: BOTH `https://` and `http://`** |
+| `*.example.org` | every subdomain of example.org, any scheme |
+
+**The v3.2.8 scheme rule — the HOST is what you allow, not the
+transport.** A pattern that pins `http://` or `https://` matches that
+host on **both** web schemes, so a site served over `http://` and
+`https://` works whichever form was typed. (`file://` and other
+non-web schemes never match.)
+
+**Troubleshooting — "works on https, not on http":** before v3.2.8 a
+`https://host/*` pattern refused the `http://` twin of the same site.
+Upgrade to v3.2.8 (no settings migration needed — your existing
+pattern simply starts covering both), or change the pattern to
+`*://host/*` on older builds. An EMPTY list means the page API is OFF
+for every website; the extension's own pages (popup/options) are
+always allowed.
+
+**Troubleshooting — "I updated the hub but the page API still refuses
+http":** the extension inside Chrome is auto-updated from the hub's
+own package (`http://<hub>:9235/extension/updates.xml`), and Chrome
+installs an update only when that package shows a HIGHER version. If
+the hub folder still holds an old `AdvPrint-Pro.crx`, every browser
+silently keeps the OLD extension. Check
+`http://<hub>:9235/extension/info` — if it answers `"stale":true`
+(served version older than `hub_version`), copy the fresh
+`AdvPrint-Pro.crx` from the release package over the hub's
+`hub/extension/AdvPrint-Pro.crx` (no restart needed), then run
+chrome://extensions → **Update** and confirm AdvPrint Pro shows the
+new version. The same warning appears in `/health`
+(`extension.stale`), on the `/extension` page and in the Console
+Extension panel.
 
 ### 2.2 The methods
 

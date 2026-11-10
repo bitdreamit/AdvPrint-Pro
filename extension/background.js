@@ -64,6 +64,11 @@ const DEFAULTS = {
                             //  per line to restrict, e.g.
                             //   *://www.htncr.org/*
                             //   https://reports.example.com/*
+                            //  v3.2.8: the SCHEME never filters - a
+                            //  pattern that pins https:// (or http://)
+                            //  matches the SAME host over BOTH web
+                            //  schemes, so a site that serves http:// and
+                            //  https:// works with either pattern form.
                             //  The extension's own pages are always allowed.
   rulesPaused: false,       // v3.0.5 RULE MANAGER: pause ALL auto-print
                             // rules with ONE switch. v3.0.6: the switch
@@ -1972,13 +1977,20 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
  * window.advprint / printPdfLink used to be injectable into <all_urls>
  * and callable by EVERY http(s) page - any tab you had open could print
  * documents, read the job history and pass raw PDFs to the hub. The API
- * is now restricted to cfg.apiSites (Options > Website API): the page's
- * origin must match one entry. Patterns are like the auto-print rules:
+ * is now restricted to cfg.apiSites (Console > Connections > Website
+ * API): the page's origin must match one entry. Patterns are like the
+ * auto-print rules:
  *   *://www.htncr.org/*      scheme wildcard + host + path
  *   https://reports.example.com/*
  *   reports.example.com      bare host = any scheme
  *   *.example.org            subdomain wildcard
- */
+ * v3.2.8 BUG FIX 2 (user: "https site ok work but only http site not"):
+ * a pattern that PINS a web scheme no longer filters by it. The HOST is
+ * what the user allows - https://reports.example.com/* now also matches
+ * http://reports.example.com/* (and the other way round), so a site that
+ * serves both schemes works whichever form was typed. *:// and bare-host
+ * patterns were already scheme-free; file:// and other schemes still
+ * never match a web-scheme pattern. */
 function apiSiteAllowed(origin, sites) {
   if (!sites || !sites.length) return false;
   let host = "", scheme = "";
@@ -1995,7 +2007,15 @@ function apiSiteAllowed(origin, sites) {
     const m = pat.match(/^([a-z*]+):\/\/(.*)$/);
     if (m) { pScheme = m[1]; rest = m[2]; }
     const pHost = rest.split("/")[0];
-    const schemeOk = !pScheme || pScheme === "*" || pScheme === scheme;
+    // v3.2.8 BUG FIX 2: scheme-equivalent host match - a pattern that
+    // pins http:// or https:// matches that host on BOTH web schemes
+    // (the user allows the HOST, not the transport). Everything else
+    // keeps the old semantics (no scheme in pattern = any scheme,
+    // *:// = any scheme, other schemes compare literally).
+    const WEB = (scheme === "http" || scheme === "https");
+    const PINNED_WEB = (pScheme === "http" || pScheme === "https");
+    const schemeOk = !pScheme || pScheme === "*" || pScheme === scheme ||
+      (WEB && PINNED_WEB);
     const hostOk = pHost === "*" || pHost === host ||
       (pHost.startsWith("*.") &&
        (host === pHost.slice(2) ||
@@ -2017,10 +2037,18 @@ async function handleApi(msg, sender) {
                  sOrigin.startsWith("safari-web-extension://");
   if (!ownExt) {
     if (!apiSiteAllowed(sOrigin, cfg.apiSites)) {
+      // v3.2.8: point to the REAL editor (the Console Connections tab -
+      // the extension Options page has no Website API section) and offer
+      // a ready-made pattern for this exact host.
+      let hint = "the host";
+      try { hint = "*://" + new URL(sOrigin || "").hostname + "/*"; }
+      catch (_) {}
       throw new HubError(
         "AdvPrint page API is not allowed for " +
         (sOrigin || "this page") +
-        " - add the site in AdvPrint Pro Options > Website API");
+        " - open the AdvPrint Pro Console (/ui), Connections tab > " +
+        "Website API, and add this site (one line: " + hint +
+        ", or * for ALL sites)");
     }
   }
   // read-only calls stay available even while disabled; printing calls

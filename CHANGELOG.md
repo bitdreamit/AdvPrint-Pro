@@ -1,6 +1,91 @@
 # Changelog - AdvPrint Pro (Advanced Printer)
 by Bit Dream IT - Innovative Healthcare Solutions
 
+## v3.2.8 - THE ipp:// + HTTP-PAGE FIX RELEASE (2026-11-11)
+
+Base: v3.2.7 - the complete Developer API guide, full API parity and
+every earlier fix unchanged. Two real-world bugs reported by the user
+on the AI-Lab PC, both fixed and locked by `tests/test_v328.py`.
+
+### BUG 1 - IPP landing page printed the protocol twice
+- Opening `http://192.168.1.101:9235/ipp/print` in a browser showed
+  `ipp://http://192.168.1.101:9235/ipp/print` - the page prepended
+  `ipp://` to `lan_share_url("ipp")`, but that value is an `http://`
+  URL, so the `.replace("ipp://", "")` safety call never fired and the
+  address Windows/macOS/iOS/CUPS expect was malformed.
+- NEW `_ipp_scheme_url()` + `ipp_scheme_bare()` helpers in
+  `tool/unix/hub/advprint.py`: strip `http://` / `https://` FIRST, then
+  prepend `ipp://` (idempotent for URLs already carrying `ipp://`).
+  `ipp_landing_html()` now renders the one clean printer URL
+  `ipp://192.168.1.101:9235/ipp/print` next to the browser-friendly
+  `http://...` URL. The per-printer landing page (`/ipp/print/<printer>`)
+  was already correct and stays as-is.
+
+### BUG 2 - window.advprint worked on https:// but not on http:// pages
+- Root cause: the v2.9.1 Website API allowlist (`background.js`
+  `apiSiteAllowed()`) pinned the SCHEME - a pattern typed as
+  `https://host/*` matched https pages only, so the SAME site served
+  over `http://` was refused with the misleading
+  "add the site in AdvPrint Pro Options > Website API" message (the
+  extension Options page never had such a section).
+- v3.2.8 rule: **the HOST is what you allow, not the transport** - a
+  pattern that pins `http://` or `https://` now matches that host on
+  BOTH web schemes; `*://host/*` and bare-host patterns stay
+  scheme-free; `file://` and other schemes still never match.
+- The refusal message now names the real editor (AdvPrint Pro Console
+  > Connections > Website API) and suggests a ready-made pattern for
+  the blocked host (`*://<host>/*`).
+- The console Website API card documents the scheme rule inline
+  (embedded CONSOLE_HTML + console.html - re-embedded with
+  `scripts/embed_console.py`, the new version-agnostic replacement for
+  the per-release embed helpers).
+- `docs/DEVELOPER-API.md` gained a full "Website API permission"
+  section: default `*`, the four pattern forms, the scheme rule, and
+  the exact troubleshooting case "works on https, not on http".
+
+### BUG 2 - DELIVERY layer: the hub was still serving extension 3.2.6
+
+  (found by the user's follow-up: "http localhost site not print api
+  advprintpdf but urlopen pdf work for both - where actually the
+  http/https bug?")
+- The browser extension is AUTO-UPDATED from the hub's own package
+  (`/extension/updates.xml` + `/extension/AdvPrint-Pro.crx`), and
+  Chrome only updates when that package shows a HIGHER version. The
+  v3.2.8 build signed a fresh 3.2.8 CRX into `dist/` and the installer
+  stage but left the EMBEDDED hub copies stale
+  (`tool/unix/hub/extension/`, `tool/windows/portable/hub/extension/`
+  still carried 3.2.6) - so paired browsers silently never received
+  the fix and kept the old scheme-pinned refusal on every http page.
+- Build (`scripts/build-all.sh`): after signing, the fresh CRX is
+  copied to BOTH embedded locations + the installer stage, byte-
+  compared against `dist/AdvPrint-Pro.crx`, its manifest version is
+  parsed and the build HARD-FAILS unless it equals `VERSION.txt`.
+- Hub (`advprint.py`): NEW `_ver_lt()`; `ext_health()` (the /health
+  `extension` block), `/extension/info` and the `/extension` page now
+  report `hub_version` + `stale` (served package older than the hub);
+  the `/extension` page renders a red "Stale package - your browsers
+  are NOT auto-updating" warning with the exact fix. `crx_package()`
+  already re-parsed on file change, so dropping a fresh CRX over the
+  old one heals the hub WITHOUT a restart.
+- Console (ONE UI): the Extension panel chip shows the REAL served
+  version (fetched from `/extension/info`, an open endpoint) instead
+  of the hub version, and a red `#extStaleWarn` banner explains the
+  trap the moment the served package is older than the hub.
+- User-facing upgrade path: re-run the v3.2.8 Setup (or copy
+  `prebuilt/AdvPrint-Pro.crx` over `hub/extension/AdvPrint-Pro.crx`),
+  wait for Chrome's auto-update (or chrome://extensions > Update),
+  confirm chrome://extensions shows 3.2.8. No settings migration.
+
+### Housekeeping
+- Version rolled everywhere (hub VERSION/VERSION_NAME, VERSION.txt,
+  manifest.json, popup, options, i18n, api.js fallback, console boot
+  fallback, setup.nsi, DEB control, README "What's new").
+- `tests/test_v328.py` locks both fixes AND the delivery guard
+  (embedded-CRX freshness, `_ver_lt`, `ext_health` stale flag,
+  build-script sync lines, console warning markers); the rolling
+  version pins in test_hub_v2 / v321 / v322 / v323 / v324 / v325 /
+  v326 / v327 moved to 3.2.8; historical content checks untouched.
+
 ## v3.2.7 - THE DEVELOPER API RELEASE (2026-11-10)
 
 Base: v3.2.6 - every fix and the local-only UI security model unchanged.

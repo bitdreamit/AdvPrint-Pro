@@ -36,6 +36,37 @@ python3 tool/crx3.py pack extension extension-signing/advprint-printer.pem \
 cp "$DIST/AdvPrint-Pro.crx" "$STAGE/hub/extension/AdvPrint-Pro.crx"
 python3 tool/crx3.py info "$DIST/AdvPrint-Pro.crx" | head -4 || true
 
+# v3.2.8 STALE-CRX GUARD (Bug 2 delivery trap): the hub serves its
+# EMBEDDED .crx (hub/extension/AdvPrint-Pro.crx) at /extension/updates.xml
+# and Chrome auto-updates ONLY when that package shows a HIGHER version.
+# Older releases shipped fresh CRX to dist/ + installer stage but left
+# the embedded copies stale (v3.2.8 shipped with 3.2.6 embedded), so
+# paired browsers silently never updated and kept the old bugs (the
+# "works on https, not on http" page-API refusal). Sync EVERY embedded
+# copy now, then hard-fail the build if any copy is not exactly the
+# freshly signed package.
+cp "$DIST/AdvPrint-Pro.crx" tool/unix/hub/extension/AdvPrint-Pro.crx
+cp "$DIST/AdvPrint-Pro.crx" tool/windows/portable/hub/extension/AdvPrint-Pro.crx
+mkdir -p prebuilt
+cp "$DIST/AdvPrint-Pro.crx" prebuilt/AdvPrint-Pro.crx
+for p in tool/unix/hub/extension/AdvPrint-Pro.crx \
+         tool/windows/portable/hub/extension/AdvPrint-Pro.crx \
+         prebuilt/AdvPrint-Pro.crx \
+         "$STAGE/hub/extension/AdvPrint-Pro.crx"; do
+  cmp -s "$DIST/AdvPrint-Pro.crx" "$p" \
+    || { echo "!! CRX sync FAILED: $p != dist/AdvPrint-Pro.crx"; exit 1; }
+done
+CRXV="$(python3 - "$DIST/AdvPrint-Pro.crx" <<'PYEOF'
+import io, json, struct, sys, zipfile
+d = open(sys.argv[1], "rb").read()
+hlen, = struct.unpack("<I", d[8:12])
+with zipfile.ZipFile(io.BytesIO(d[12 + hlen:])) as z:
+    print(json.loads(z.read("manifest.json").decode())["version"])
+PYEOF
+)"
+[ "$CRXV" = "$V" ] || { echo "!! CRX version $CRXV != hub version $V"; exit 1; }
+echo "   embedded CRX copies synced + verified v$CRXV"
+
 # ---------- 2) unpacked extension zip (Web-store upload / dev load) ----------
 echo "-- extension zip"
 ( cd extension && zip -qr "$DIST/AdvPrint-Pro-Extension-$V.zip" . )

@@ -95,29 +95,32 @@ if _HUB_DIR not in sys.path:
     sys.path.insert(0, _HUB_DIR)
 
 
-VERSION = "3.2.7"
-VERSION_NAME = ("v3.2.7 (THE DEVELOPER API RELEASE. The print API - "
-    "window.advprint in every web page and POST /print over HTTP - is now "
-    "documented A-to-Z: every method, every option, every response field, "
-    "with full worked examples for the real cases - SAME PC MANY PRINTERS "
-    "(receipt on the thermal roll + invoice on the laser, at the same "
-    "time), MANY PCs ONE HUB (the whole LAN printing PDFs and ZPL labels "
-    "concurrently), RAW LABEL printing (ZPL ^XA...^XZ verbatim + the "
-    "ESC/POS markers #big |center| |right| |cut| |drawer| "
-    "|barcode:| |qr:|), SCHEDULED prints (run_at), urgent jobs (priority "
-    "1-9), page ranges + odd/even, n-up, duplex, quality presets AND "
-    "explicit DPI, profiles, watermark reprints and archive-to-file. "
-    "NEW in the code to match the docs 1:1: window.advprint.print() now "
-    "also passes run_at, queue, dedupe, tray and watermark_text to the "
-    "hub (the extension API and the HTTP API have FULL parity), and the "
-    "guide ships in three places - docs/DEVELOPER-API.md, the /docs page "
-    "(section 9) and the in-UI Docs modal (section 9) - so the answers "
-    "are always one click away. Everything from v3.2.6 stays unchanged: "
-    "history/queue clear really cleans, printer details URL no longer "
-    "doubles the path, LAN panel switches + token-carrying Copy URL, "
-    "QR encodes http:// while copy keeps ipp://, the docs button lives "
-    "inside the UI, and the console UI stays LOCAL-ONLY (loopback or own "
-    "IP) while LAN PCs keep FULL print access per the allowed_ips list.")
+VERSION = "3.2.8"
+VERSION_NAME = ("v3.2.8 (THE ipp:// + HTTP-PAGE FIX RELEASE. BUG 1 - the "
+    "IPP landing page printed the protocol TWICE: opening "
+    "http://192.168.1.101:9235/ipp/print in a browser showed "
+    "ipp://http://192.168.1.101:9235/ipp/print because the page prepended "
+    "ipp:// to a URL that already carried http://. The new _ipp_scheme_url() "
+    "helper strips the web scheme first, so the printer URL is now a clean "
+    "ipp://192.168.1.101:9235/ipp/print - the exact form Windows, macOS, "
+    "iOS AirPrint and CUPS accept. BUG 2 - window.advprint.printPdf() and "
+    "every other page-API method worked on https:// sites but were refused "
+    "on http:// pages when the Website API list contained an "
+    "https://host/* pattern: the matcher pinned the SCHEME, so the same "
+    "site over http:// was silently rejected. The host is what you trust, "
+    "not the scheme: v3.2.8 treats http:// and https:// as the SAME host - "
+    "https://reports.example.com/* now also allows "
+    "http://reports.example.com/* (and vice versa), the refusal message "
+    "points to the right editor (Console > Connections > Website API), "
+    "the console hint documents the rule, and docs/DEVELOPER-API.md gained "
+    "a full 'Website API permission' section with the http troubleshooting "
+    "case. Everything from v3.2.7 stays unchanged: the complete developer "
+    "API guide (window.advprint A-to-Z, SAME PC MANY PRINTERS, MANY PCs "
+    "ONE HUB, ZPL ^XA/ESC-POS raw printing, run_at scheduling, priority, "
+    "page ranges, n-up, duplex, quality/DPI, profiles) plus all v3.2.2 - "
+    "v3.2.6 fixes - QR encodes http:// while copy keeps ipp://, printer "
+    "details URL no longer doubles the path, LAN panel token-carrying "
+    "Copy URL, docs button inside the UI, LOCAL-ONLY console.")
 FULL_BRAND = ("AdvPrint Pro (Advanced Printer) by "
               "Bit Dream IT - Innovative Healthcare Solutions")
 BRANDING = ("AdvPrint Pro (Advanced Printer) - Version %s - by "
@@ -4215,12 +4218,42 @@ def crx_package(force=False):
     return None
 
 
+def _ver_lt(a, b):
+    """v3.2.8: True when dotted version string a is OLDER than b.
+    Non-numeric parts compare as 0 ('3.2.8a' < '3.2.8' is NOT claimed
+    older - equal parts win). Pure int comparison, never raises."""
+    def nums(v):
+        out = []
+        for part in str(v or "").split("."):
+            try:
+                out.append(int(re.sub(r"\D", "", part) or 0))
+            except Exception:
+                out.append(0)
+        return out or [0]
+    A, B = nums(a), nums(b)
+    while len(A) < len(B):
+        A.append(0)
+    while len(B) < len(A):
+        B.append(0)
+    return A < B
+
+
 def ext_health():
-    """Compact /health block about the served extension."""
+    """Compact /health block about the served extension.
+    v3.2.8 STALE-CRX GUARD (the Bug 2 delivery trap): the hub serves its
+    embedded .crx at /extension/updates.xml and Chrome auto-updates from
+    it. When that embedded copy is OLDER than the hub itself (it can
+    happen - the v3.2.8 build forgot to re-sync the embedded copy, so
+    the hub kept serving 3.2.6 while the hub code was 3.2.8), Chrome
+    NEVER sees a higher version, NEVER updates, and every browser keeps
+    running the OLD extension with the OLD bugs - the fixed release
+    silently never reaches the page. 'stale: true' makes that state
+    VISIBLE in /health, /extension/info, /extension and the Console."""
     c = crx_package()
     if not c:
         return {"served": False, "id": EXT_CRX_ID}
-    return {"served": True, "id": c["ext_id"], "version": c["version"]}
+    return {"served": True, "id": c["ext_id"], "version": c["version"],
+            "hub_version": VERSION, "stale": _ver_lt(c["version"], VERSION)}
 
 
 # ---- Windows per-user force-install policy (HKCU - no UAC needed;
@@ -5294,6 +5327,8 @@ class Handler(BaseHTTPRequestHandler):
                 "served": bool(c),
                 "extension_id": c["ext_id"] if c else EXT_CRX_ID,
                 "version": c["version"] if c else None,
+                "hub_version": VERSION,
+                "stale": bool(c) and _ver_lt(c["version"], VERSION),
                 "updates_url": ("http://127.0.0.1:%d/extension/updates.xml"
                                 % int(CFG.get("port", 9235))),
                 "crx_url": ("http://127.0.0.1:%d/extension/%s"
@@ -5306,12 +5341,32 @@ class Handler(BaseHTTPRequestHandler):
 
         if route == "/extension":
             c = crx_package()
+            # v3.2.8 STALE-CRX GUARD: an embedded package older than the
+            # hub means every paired browser is stuck on the OLD
+            # extension (Chrome only updates when updates.xml shows a
+            # HIGHER version). Say so, loudly, right on this page.
+            stale = bool(c) and _ver_lt(c["version"], VERSION)
+            stale_html = "" if not stale else (
+                "<p style='background:#fef2f2;border:1px solid #fecaca;"
+                "color:#991b1b;border-radius:8px;padding:12px 16px;"
+                "font-size:14px'><b>&#9888; Stale package - your browsers"
+                " are NOT auto-updating.</b> This hub serves extension"
+                " <b>v%s</b> but the hub itself is <b>v%s</b>. Chrome"
+                " checks updates.xml, sees no higher version and keeps"
+                " the old extension running (old bugs included). Fix:"
+                " re-run the AdvPrint Pro Setup, or copy the current"
+                " <code>AdvPrint-Pro.crx</code> from the release package"
+                " over <code>hub/extension/AdvPrint-Pro.crx</code> - no"
+                " restart needed (the hub re-reads the file when it"
+                " changes).</p>"
+                % (c["version"], VERSION))
             page = ("<!DOCTYPE html><html><head><meta charset='utf-8'>"
                     "<title>AdvPrint Pro - extension server</title>"
                     "</head><body style='font-family:Segoe UI,sans-serif;"
                     "background:#f5f8fc;color:#0f172a;padding:32px'>"
                     "<h2>AdvPrint Pro - self-host extension server"
                     " (v%s)</h2>" % VERSION +
+                    stale_html +
                     "<p>This hub serves its signed browser extension so"
                     " Chrome / Edge / Brave can install and update it"
                     " silently via the ExtensionInstallForcelist"
@@ -8748,7 +8803,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
               <textarea class="inp mono" rows="3" style="width:100%;min-width:0;font-size:11.5px;padding:8px">*://www.htncr.org/*
 https://reports.example.com/*</textarea>
               <div class="frow" style="margin:8px 0 0"><button class="btn blue small">Save site list</button>
-                <span style="font-size:11px;color:var(--muted)">Empty list = the page API is OFF for every website. The extension's own pages are always allowed.</span></div>
+                <span style="font-size:11px;color:var(--muted)">Empty list = the page API is OFF for every website. The extension's own pages are always allowed. v3.2.8: the SCHEME does not matter &mdash; <span class="mono">https://host/*</span> also allows the SAME host over <span class="mono">http://</span> (and the other way round), so a site that serves both always works; <span class="mono">*://host/*</span> or a bare <span class="mono">host</span> stay scheme-free as before.</span></div>
             </div>
           </div>
         </section>
@@ -9054,6 +9109,10 @@ https://reports.example.com/*</textarea>
           <div class="card">
             <div class="card-h">&#128231; Silent install — deploy the CRX to every PC without Chrome Web Store <span class="r">works on every Chromium browser</span></div>
             <div class="card-b">
+              <div class="note orange" id="extStaleWarn" style="display:none;margin:0 0 10px">
+                <b style="display:block;margin-bottom:3px">&#9888; Stale CRX — your browsers are NOT auto-updating</b>
+                <span id="extStaleTxt">The hub serves an older extension than the hub itself. Chrome checks updates.xml, sees no higher version and keeps the OLD extension running (old bugs included — e.g. the http-page API refusal). Fix: re-run the Setup, or copy the current AdvPrint-Pro.crx over hub/extension/AdvPrint-Pro.crx — no restart needed.</span>
+              </div>
               <div class="frow" style="margin-bottom:8px">
                 <span class="chip ok"><span class="d"></span>CRX v3.2.1 READY</span>
                 <span class="mono" style="font-size:11px;color:var(--blue-deep)">AdvPrint-Pro.crx</span>
@@ -10768,6 +10827,25 @@ function renderExt(audit){
   });
   var crxChip = document.querySelector("#p-extension .frow .chip.ok");
   if (crxChip) crxChip.innerHTML = '<span class="d"></span>CRX v' + (BOOT.version || "3.2.1") + " READY";
+  /* v3.2.8 STALE-CRX GUARD: ask the hub which package it really
+   * serves (/extension/info is open, no token). Older than the hub
+   * itself -> Chrome never updates -> browsers keep the old bugs.
+   * Show the red banner AND put the REAL served version in the chip
+   * (BOOT.version is the hub version, not the package version). */
+  fetch(BASE + "/extension/info").then(function(r){ return r.json(); }).then(function(j){
+    if (!j) return;
+    var warn = document.getElementById("extStaleWarn");
+    if (warn && j.stale) {
+      warn.style.display = "block";
+      var t = document.getElementById("extStaleTxt");
+      if (t) t.textContent = "Hub v" + (j.hub_version || BOOT.version || "?") +
+        " serves extension v" + (j.version || "?") + " — Chrome only updates when updates.xml shows a HIGHER version, so every paired browser is stuck on the old extension (old bugs included — e.g. the http-page API refusal of v3.2.7). Fix: re-run the Setup, or copy the current AdvPrint-Pro.crx over hub/extension/AdvPrint-Pro.crx — no restart needed.";
+    }
+    if (j.served && j.version) {
+      var chip = document.querySelector("#p-extension .frow .chip.ok");
+      if (chip) chip.innerHTML = '<span class="d"></span>CRX v' + j.version + " READY";
+    }
+  }).catch(function(){});
   setCnt("extension", audit ? audit.filter(function(a){
     return a.actor && a.actor.indexOf("ext") >= 0; }).length : 0);
 }
@@ -10954,7 +11032,7 @@ async function renderUpdate(res){
    full-page /docs stays available via the "Full guide page" button.
    ============================================================ */
 function docsHtml(){
-  var v = esc(BOOT.version || "3.2.7");
+  var v = esc(BOOT.version || "3.2.8");
   var ip = esc(BOOT.lan_ip || location.hostname || "127.0.0.1");
   var port = esc(String(BOOT.port || location.port || "9235"));
   var base = "http://" + ip + ":" + port;
@@ -13898,6 +13976,33 @@ def lan_share_url(kind="send"):
         return "%s/ipp/print" % base
     return "%s/send?token=%s" % (base, quote(str(CFG["token"] or "")))
 
+
+def _ipp_scheme_url(url):
+    """v3.2.8 BUG FIX 1: convert ANY hub URL into the ipp:// printer URL
+    WITHOUT ever doubling the scheme. v3.2.7 built the landing-page
+    printer URL as 'ipp://' + lan_share_url('ipp') - but that value is an
+    http:// URL, so opening http://<lan-ip>:9235/ipp/print in a browser
+    showed ipp://http://<lan-ip>:9235/ipp/print (protocol TWICE) and
+    Windows/macOS/CUPS refused the pasted address. Strip the web scheme
+    FIRST, then prepend ipp:// so the page always shows the one clean
+    form: ipp://<lan-ip>:9235/ipp/print. Accepts http://, https://, an
+    already-ipp:// URL or a bare host:port/path."""
+    u = str(url or "").strip()
+    low = u.lower()
+    for pfx in ("http://", "https://"):
+        if low.startswith(pfx):
+            u = u[len(pfx):]
+            break
+    if u.lower().startswith("ipp://"):
+        return u
+    return "ipp://" + u
+
+
+def ipp_scheme_bare(url):
+    """v3.2.8: the ipp:// printer URL WITHOUT the ipp:// prefix - for the
+    landing-page template which writes the ipp:// itself inside <code>."""
+    return _ipp_scheme_url(url)[len("ipp://"):]
+
 # ------------------------------------------------------------
 # v2.8.2 LIVE LAN REBIND - fixes "toggled LAN sharing ON but
 # http://<lan-ip>:9235 does not answer". In 2.8.1 the flag was only
@@ -14994,7 +15099,12 @@ def ipp_landing_html():
     URL in a browser (GET /ipp/print). Shared by the main hub listener
     and the standard-port mirror - one source, both ports."""
     host = socket.gethostname()
-    ipp_url = lan_share_url("ipp")
+    # v3.2.8 BUG FIX 1: lan_share_url("ipp") returns the http:// URL -
+    # v3.2.7 pushed it through .replace("ipp://", "") (a no-op) and wrote
+    # the template's ipp:// in FRONT of it -> ipp://http://ip:port/...
+    # (protocol twice). ipp_scheme_bare() strips the web scheme first, so
+    # the page now shows the one clean printer URL: ipp://ip:9235/ipp/print
+    ipp_url = ipp_scheme_bare(lan_share_url("ipp"))
     http_url = "http://%s:%d/ipp/print" % (lan_ip(), int(CFG.get("port", 9235)))
     std = int(CFG.get("ipp_standard_port") or 0)
     std_note = ""
@@ -15045,7 +15155,7 @@ def ipp_landing_html():
  100%% local - powered by AdvPrint Pro %s.</div>
  </div></body></html>""" % (
         _html_escape(host),
-        _html_escape(ipp_url.replace("ipp://", ""), quote=True),
+        _html_escape(ipp_url, quote=True),
         _html_escape(http_url, quote=True),
         _html_escape(http_url, quote=True),
         int(CFG.get("port", 9235)),
