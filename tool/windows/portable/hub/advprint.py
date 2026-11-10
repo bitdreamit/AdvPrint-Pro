@@ -95,41 +95,29 @@ if _HUB_DIR not in sys.path:
     sys.path.insert(0, _HUB_DIR)
 
 
-VERSION = "3.2.6"
-VERSION_NAME = ("v3.2.6 (SEVEN USER-REPORTED BUGS FIXED + THE UI "
-    "SECURITY MODEL. 1) HISTORY / QUEUE CLEAR REALLY CLEANS: "
-    "POST /queue/clear now cancels every waiting job AND removes all "
-    "finished records so the list is actually empty afterwards, honors "
-    "{finished:true} as an alias of POST /history/clear, and the console "
-    "'Clear ALL history' button finally calls the right endpoint (it "
-    "used to call /queue/clear with a body the hub ignored). 2) PRINTER "
-    "DETAILS NO LONGER DOUBLES THE PATH: the hub now returns the bare "
-    "queue slug and the console no longer prepends /ipp/print a second "
-    "time - http://127.0.0.1:9235/ipp/print/ipp/print/<slug> is dead. "
-    "3) LAN PANEL TOP SWITCH WORKS + COPY URL CARRIES THE TOKEN: the "
-    "header Disable/Enable button was never wired and Copy URL copied a "
-    "token-less URL - both fixed, and an extra IPP Enable/Disable toggle "
-    "joins the panel header. 4) LAN-SHARE ROW COPY URL CARRIES THE TOKEN "
-    "too. 5) QR ENCODES http:// - the IPP QR contains the http:// printer "
-    "URL (phone browsers cannot open ipp:// and just Google-search it) "
-    "while the modal display and the Copy button keep the ipp:// URL "
-    "printers expect. 6) THE INSTALL DOC IS NOT BACKDATED: the "
-    "self-host extension page and the /docs install section no longer "
-    "claim v3.0.7, and the console got an in-UI Docs button - the guide "
-    "opens INSIDE THE ONE UI, no extra old-UI tab. 7) SECURITY - THE UI "
-    "IS LOCAL-ONLY: the console, every settings endpoint and all "
-    "management calls answer ONLY on the hub PC itself (loopback or one "
-    "of the machine's own IPs); LAN PCs keep FULL print access (/print, "
-    "/send, /ipp/*, 631 mirror, RAW 9100, /jobs, /health, extension "
-    "updates) exactly per the allowed_ips list - they simply can no "
-    "longer view the UI or change settings. PLUS: LAN sharing now "
-    "auto-enables the IPP printer when switched on, the interactive CLI "
-    "menu is GONE (python tool.py opens the console instead; all "
-    "subcommands still work) and the tray menu is reduced to Dashboard / "
-    "Restart / Exit. Everything from v3.2.5 stays unchanged: set-default "
-    "for real, history/queue selection that survives the poll, "
-    "per-printer IPP queues, honest policy install, honest autostart, "
-    "ALLOWED IPS and the branding-only popup.)")
+VERSION = "3.2.7"
+VERSION_NAME = ("v3.2.7 (THE DEVELOPER API RELEASE. The print API - "
+    "window.advprint in every web page and POST /print over HTTP - is now "
+    "documented A-to-Z: every method, every option, every response field, "
+    "with full worked examples for the real cases - SAME PC MANY PRINTERS "
+    "(receipt on the thermal roll + invoice on the laser, at the same "
+    "time), MANY PCs ONE HUB (the whole LAN printing PDFs and ZPL labels "
+    "concurrently), RAW LABEL printing (ZPL ^XA...^XZ verbatim + the "
+    "ESC/POS markers #big |center| |right| |cut| |drawer| "
+    "|barcode:| |qr:|), SCHEDULED prints (run_at), urgent jobs (priority "
+    "1-9), page ranges + odd/even, n-up, duplex, quality presets AND "
+    "explicit DPI, profiles, watermark reprints and archive-to-file. "
+    "NEW in the code to match the docs 1:1: window.advprint.print() now "
+    "also passes run_at, queue, dedupe, tray and watermark_text to the "
+    "hub (the extension API and the HTTP API have FULL parity), and the "
+    "guide ships in three places - docs/DEVELOPER-API.md, the /docs page "
+    "(section 9) and the in-UI Docs modal (section 9) - so the answers "
+    "are always one click away. Everything from v3.2.6 stays unchanged: "
+    "history/queue clear really cleans, printer details URL no longer "
+    "doubles the path, LAN panel switches + token-carrying Copy URL, "
+    "QR encodes http:// while copy keeps ipp://, the docs button lives "
+    "inside the UI, and the console UI stays LOCAL-ONLY (loopback or own "
+    "IP) while LAN PCs keep FULL print access per the allowed_ips list.")
 FULL_BRAND = ("AdvPrint Pro (Advanced Printer) by "
               "Bit Dream IT - Innovative Healthcare Solutions")
 BRANDING = ("AdvPrint Pro (Advanced Printer) - Version %s - by "
@@ -10966,7 +10954,7 @@ async function renderUpdate(res){
    full-page /docs stays available via the "Full guide page" button.
    ============================================================ */
 function docsHtml(){
-  var v = esc(BOOT.version || "3.2.6");
+  var v = esc(BOOT.version || "3.2.7");
   var ip = esc(BOOT.lan_ip || location.hostname || "127.0.0.1");
   var port = esc(String(BOOT.port || location.port || "9235"));
   var base = "http://" + ip + ":" + port;
@@ -11012,14 +11000,41 @@ function docsHtml(){
   + '<li><b>Job stuck HELD:</b> the printer reports offline — clear the paper jam, then ⚡ Release (or wait: the queue retries by itself).</li>'
   + '<li><b>LAN PC cannot print:</b> check Allowed-IPs (<code>*</code> or their IP), the Windows firewall rule (LAN tab → Test LAN) and that the token is on their side.</li>'
   + '<li><b>Logs:</b> Debug tab → live hub log + <code>hub.log</code> on disk. The A-to-Z self-test: Tools menu → LIVE TEST.</li></ul>'
+  + '<h3 id="d-api">9 · Developer API — print from code (v' + v + ')</h3>'
+  + '<p><b>Two doors, one pipeline</b> — a job from JavaScript and a job from curl land in the same queue, History and audit.</p>'
+  + '<ul><li><b>In every web page</b> (extension injects <code>window.advprint</code>, every method returns a Promise):</li></ul>'
+  + '<code>await window.advprint.status(); await window.advprint.printers(); await window.advprint.printPage({title});'
+  + ' await window.advprint.printPdf(url, {title, printer}); await window.advprint.print({title, printer, copies, priority,'
+  + ' pages, quality, dpi, duplex, paper_size, profile, queue, run_at, text|html|pdfBase64|pdfUrl, lang});</code>'
+  + '<ul><li><b>From any language / any PC on the LAN</b> — POST <code>' + base + '/print</code> with header <code>X-AdvPrint-Token</code> (or ?token=):</li></ul>'
+  + '<code>curl -X POST ' + base + '/print -H "X-AdvPrint-Token: $TOKEN" -H "Content-Type: application/json"'
+  + ' -d \'{"pdf_base64":"JVBERi0…","title":"Invoice 42","printer":"HP LaserJet Pro","copies":2}\'</code>'
+  + '<ul><li><b>Parallel printing:</b> <code>"queue": false</code> prints instantly in its own thread — receipt on the thermal roll +'
+  + ' invoice on the laser at the same time; Queue Mode prints one-by-one, <code>priority: 1</code> first. One call per printer = one'
+  + ' printer; group names fall back to the first ready member.</li>'
+  + '<li><b>Labels:</b> <code>{"text":"^XA…^XZ","lang":"zpl"}</code> goes verbatim to the label printer (ZPL II, latin-1);'
+  + ' plain <code>text</code> builds ESC/POS with the markers <code>#big</code>, <code>|center|</code>, <code>|right|</code>,'
+  + ' <code>|cut|</code>, <code>|drawer|</code>, <code>|barcode:123|</code>, <code>|qr:text|</code>.</li>'
+  + '<li><b>Schedule &amp; control:</b> <code>run_at: "+5m"</code> or ISO datetime · <code>pages: "1-3,5|odd|even"</code> ·'
+  + ' <code>quality: "draft|normal|high|600dpi"</code> · <code>destination: "file"</code> archives as PDF ·'
+  + ' <code>dedupe: false</code> allows identical repeats · <code>reason</code> lands in the audit trail.</li>'
+  + '<li><b>LAN:</b> other PCs print with <code>http://&lt;lan-ip&gt;:' + port + '/print</code> (Allowed-IPs decide; the UI stays'
+  + ' local-only). Per-printer IPP queues: <code>ipp://' + ip + ':' + port + '/ipp/print/&lt;printer-slug&gt;</code>.</li>'
+  + '<li><b>Full guide with every case:</b> install folder <code>docs/DEVELOPER-API.md</code> — one PC many printers, many PCs one hub,'
+  + ' PDF + ZPL at the same time, curl / JS / Python / PHP examples, URL &amp; token map.</li></ul>'
   + '<h3 id="d-notes">Release notes — v' + v + '</h3>'
-  + '<ul><li>History / Queue clear really cleans now; “Clear ALL history” calls the right endpoint.</li>'
-  + '<li>Printer Details no longer builds a doubled <code>/ipp/print/ipp/print/</code> URL.</li>'
-  + '<li>LAN panel: the top Disable/Enable works, Copy URL carries the token, extra IPP Enable/Disable toggle, IPP auto-ON with LAN sharing.</li>'
-  + '<li>IPP QR encodes <code>http://</code> (scannable); display + copy keep <code>ipp://</code>.</li>'
-  + '<li>Install doc no longer backdated; Docs live here in the UI.</li>'
-  + '<li>NEW SECURITY: UI + settings local-only; LAN keeps print access per Allowed-IPs.</li>'
-  + '<li>The numbered CLI tool menu is gone (this console is the tool) and the tray menu is just Dashboard / Restart / Exit.</li></ul>';
+  + '<ul><li><b>NEW — Developer API release:</b> the print API (window.advprint + POST /print) is documented A-to-Z —'
+  + ' every method, every option, every response field, with worked cases: same PC many printers (parallel receipt + invoice),'
+  + ' many PCs one hub, PDF + ZPL ^XA labels at the same time, scheduled prints, urgent priority, page ranges + odd/even,'
+  + ' n-up, duplex, DPI, profiles, watermark reprints. Ships in THREE places: <code>docs/DEVELOPER-API.md</code>,'
+  + ' the /docs page (section 9) and this modal (section 9).</li>'
+  + '<li>window.advprint.print() now also passes <code>run_at</code>, <code>queue</code>, <code>dedupe</code>,'
+  + ' <code>tray</code> and <code>watermark_text</code> — the extension API and the HTTP API have FULL parity.</li>'
+  + '<li>Everything from v3.2.6 stays unchanged: History / Queue clear really cleans; Printer Details no longer doubles the'
+  + ' <code>/ipp/print</code> path; LAN panel top switch works, Copy URL carries the token, IPP auto-ON with LAN sharing +'
+  + ' independent IPP toggle; IPP QR encodes <code>http://</code> (copy keeps <code>ipp://</code>); the UI stays LOCAL-ONLY'
+  + ' (loopback or own IP) while LAN PCs keep full print access per Allowed-IPs; the CLI menu is gone and the tray menu is'
+  + ' Dashboard / Restart / Exit.</li></ul>';
 }
 function openDocs(anchor){
   var box = $("docs-body");
@@ -12219,6 +12234,7 @@ DOCS_HTML = r"""<!DOCTYPE html>
  <a href="#laravel">Laravel / PHP auto print</a>
  <a href="#bangla">Bangla receipts</a>
  <a href="#files">Files &amp; endpoints</a>
+ <a href="#devapi"><b>Developer API (v3.2.7)</b></a>
 </nav>
 
 <h2 id="where">1. Where is every feature (click map)</h2>
@@ -12555,6 +12571,155 @@ AdvPrintService::printPdf($report-&gt;pdf_url,
       <b><code>/debug/report</code></b> (v2.3 - client error reports) -
       header only.</li>
  </ul>
+</div>
+
+<h2 id="devapi">9. Developer API &mdash; <code>window.advprint</code> + <code>POST /print</code> (v3.2.7)</h2>
+<div class="box">
+ <p>Three ways to print, one pipeline. Everything lands in the same
+    queue, History and audit &mdash; a job from JavaScript and a job from
+    <code>curl</code> are identical afterwards.</p>
+ <table>
+ <tr><th style="width:26%">Channel</th><th>How</th><th style="width:22%">Needs extension?</th></tr>
+ <tr><td><code>window.advprint</code></td>
+     <td>injected into every http(s) page; every method returns a Promise
+         with the hub JSON</td><td>yes</td></tr>
+ <tr><td><code>POST /print</code></td>
+     <td>plain HTTP + token &mdash; any language, any PC on the LAN</td>
+     <td><b>no</b></td></tr>
+ <tr><td><code>ipp://&lt;ip&gt;:9235/ipp/print</code> + RAW 9100</td>
+     <td>the hub IS a printer (OS Add-printer, phones, label apps)</td>
+     <td><b>no</b></td></tr>
+ </table>
+</div>
+
+<h3>9a. <code>window.advprint</code> &mdash; every method</h3>
+<div class="box">
+<pre>await window.advprint.status();            // hub health  (GET /health)
+await window.advprint.printers();          // [{name, is_default, status}]
+await window.advprint.history(20);         // last jobs   (GET /jobs)
+await window.advprint.printPage({title});  // print the current page
+await window.advprint.printPdf(url, {title, printer}); // with login cookies
+await window.advprint.printPdfLink(url, 'Title');      // + browser fallback
+await window.advprint.print({
+  title: 'Receipt 12', printer: '', copies: 1,
+  priority: 1,                    // 1 = urgent first (9 = low, default 5)
+  pages: '1-3,5',                 // range - 'odd' / 'even' too
+  per_sheet: 2,                   // n-up (CUPS)
+  quality: 'draft',               // draft|normal|high|'600'|'600dpi'
+  dpi: 600,                       // explicit DPI 72-2400
+  scale_pct: 150, margin_mm: 8,   // html/text renders
+  duplex: 'duplex', paper_size: 'A4', orientation: 'landscape',
+  tray: 'Tray2',                  // CUPS
+  profile: 'Invoice',             // hub print profile
+  destination: 'printer',         // or 'file' = archive as PDF
+  queue: false,                   // false = INSTANT (own thread, parallel)
+  run_at: '+5m',                  // ISO or +Ns/+Nm/+Nh/+Nd   (v3.2.7)
+  dedupe: false,                  // allow identical repeats   (v3.2.7)
+  watermark: true, watermark_text: 'COPY',
+  reason: 'ward copy',            // recorded in the audit trail
+  text: '|center|HELLO',          // payload: exactly ONE of -
+  lang: 'escpos',                 //   text(+lang) | html | pageUrl
+  html: '&lt;h1&gt;Invoice&lt;/h1&gt;',  //   | pdfBase64 | pdfUrl | rawBase64
+  pdfBase64: 'JVBERi0...', pdfUrl: 'https://.../report.pdf'
+});</pre>
+ <p>Resolves with <code>{ok, job_id, kind, copies, queue_mode, instant,
+    auto_queued, duplicate, priority, status, message}</code>; a failure
+    resolves <code>{ok:false, error}</code> (only <code>printPdfLink</code>
+    rejects, after opening its fallback tab). Full camelCase reference:
+    <code>docs/DEVELOPER-API.md</code> in the install folder.</p>
+</div>
+
+<h3>9b. Direct HTTP from any language</h3>
+<div class="box">
+<pre>curl -X POST http://127.0.0.1:9235/print \
+  -H "X-AdvPrint-Token: $TOKEN" -H "Content-Type: application/json" \
+  -d '{"pdf_base64":"JVBERi0...","title":"Invoice 42","printer":"HP LaserJet Pro","copies":2}'
+
+# raw PDF body - no base64 (-33%), options on the query string
+curl -X POST "http://127.0.0.1:9235/print?title=Lab%20report&amp;copies=1" \
+  -H "X-AdvPrint-Token: $TOKEN" -H "Content-Type: application/pdf" \
+  --data-binary @report.pdf
+
+# ZPL label straight to the Zebra (kind=raw = bytes are not PDF)
+curl -X POST "http://127.0.0.1:9235/print?kind=raw&amp;lang=zpl&amp;printer=Zebra%20GK420t" \
+  -H "X-AdvPrint-Token: $TOKEN" -H "Content-Type: application/octet-stream" \
+  --data-binary $'^XA^PW400^LL0160^FO30,30^A0N,36,30^FDHELLO^FS^XZ'</pre>
+ <p>Payload sources (first match wins): raw body (%PDF or kind=raw) &middot;
+    <code>raw_base64</code> &middot; <code>text</code>+<code>lang</code>
+    &middot; <code>pdf_base64</code> &middot; <code>pdf_url</code> (25 MB,
+    private-address guard) &middot; <code>image_base64</code> (JPEG) &middot;
+    <code>html</code> &middot; <code>page_url</code> &middot; plain
+    <code>text</code> (thermal/A4, Bangla via browser engine). Token via
+    header <b>or</b> <code>?token=</code> <b>or</b> JSON
+    <code>"token"</code>; multipart and the CSP form-payload fallback work
+    too. From LAN PCs use <code>http://&lt;lan-ip&gt;:9235/print</code> &mdash;
+    printing follows the Allowed-IPs list, the console UI stays
+    local-only.</p>
+</div>
+
+<h3>9c. One PC, MANY printers &mdash; the real cases</h3>
+<div class="box">
+ <ul>
+  <li><b>Targeting:</b> <code>printer:""</code> = hub destination &middot;
+      exact name (typos self-heal) &middot; group name = first ready member
+      &middot; <code>destination:"file"</code> = archive. One job = one
+      printer: send one call per printer (the dedupe key includes the
+      printer, so the same PDF to 3 printers is 3 jobs, never blocked).</li>
+  <li><b>Parallel printing:</b> Queue Mode prints one-by-one (priority
+      first). <code>"queue": false</code> prints <b>instantly in its own
+      thread</b> &mdash; receipt on the thermal roll + invoice on the laser
+      at the same moment:</li>
+ </ul>
+<pre>await Promise.all([
+  window.advprint.print({title:'Order 12', printer:'XP-80C Thermal',
+                         queue:false, text:'|center|#big MY SHOP\n...\n|cut|'}),
+  window.advprint.print({title:'Invoice 12', printer:'HP LaserJet Pro',
+                         queue:false, pdfBase64: b64})
+]);</pre>
+ <ul>
+  <li><b>What serializes:</b> the FIFO worker (queue mode) &middot; headless
+      renders max 2 at a time &middot; dedupe 5 min window. Instant jobs,
+      raw jobs and LAN callers all run in parallel.</li>
+  <li><b>Many PCs, one hub:</b> every PC POSTs to
+      <code>http://&lt;lan-ip&gt;:9235/print</code> &mdash; each request gets
+      its own thread and job id; a PDF from PC-A and a ZPL label from
+      PC-B print side by side (raw jobs skip the offline probe).</li>
+ </ul>
+</div>
+
+<h3>9d. Raw printing &mdash; ESC/POS receipts &amp; ZPL labels</h3>
+<div class="box">
+ <p><b>ESC/POS markers</b> (text + <code>lang:"escpos"</code>, the
+    default): <code>#big </code> double size &middot;
+    <code>|center|</code> / <code>|right|</code> &middot;
+    <code>|cut|</code> &middot; <code>|drawer|</code> &middot;
+    <code>|barcode:12345|</code> &middot; <code>|qr:text|</code>. The
+    banner, feed and final cut are added automatically; Bangla/Unicode
+    plain text renders through the browser engine.</p>
+ <p><b>ZPL is verbatim:</b> <code>lang:"zpl"</code> encodes the text
+    latin-1 and sends it untouched &mdash; YOU supply the full
+    <code>^XA...^XZ</code>, the <code>^PW</code>/<code>^LL</code> label
+    size and <code>^PQ</code> quantity (or send <code>copies</code>).
+    Delivery: Windows winspool RAW &middot; Linux <code>lp -o raw</code>
+    &middot; upstream IP printer &rarr; direct 9100/631 socket.</p>
+</div>
+
+<h3>9e. URL &amp; token map</h3>
+<div class="box">
+ <table>
+ <tr><th>URL</th><th>Purpose</th><th>Token</th></tr>
+ <tr><td><code>http://127.0.0.1:9235/print</code></td><td>print API (this PC)</td><td>required</td></tr>
+ <tr><td><code>http://&lt;lan-ip&gt;:9235/print</code></td><td>print API from other PCs</td><td>required</td></tr>
+ <tr><td><code>ipp://&lt;ip&gt;:9235/ipp/print</code></td><td>Add-printer URL (OS)</td><td>none</td></tr>
+ <tr><td><code>.../ipp/print/&lt;slug&gt;</code></td><td>per-printer queue (<code>HP LaserJet Pro</code> &rarr; <code>hp-laserjet-pro</code>)</td><td>none</td></tr>
+ <tr><td>TCP 9100</td><td>RAW JetDirect listener</td><td>none</td></tr>
+ <tr><td><code>/send?token=</code></td><td>phone upload portal</td><td>token</td></tr>
+ <tr><td><code>/jobs?limit=</code> &middot; <code>/jobs/{id}</code></td><td>watch jobs</td><td>token</td></tr>
+ <tr><td><code>/ui</code></td><td>console &mdash; local-only PC (v3.2.6)</td><td>token</td></tr>
+ </table>
+ <p><code>ipp://</code> is for the OS Add-printer dialog;
+    <code>http://</code> is for browsers/code (the QR encodes http://
+    since v3.2.6). Every option is also accepted on the query string.</p>
 </div>
 
 <footer>AdvPrint Pro @@VERSION@@ &middot; by Bit Dream IT &middot; MIT license

@@ -80,13 +80,37 @@ await window.advprint.print({
   title: "Receipt 12",
   printer: "XP-80C Thermal",   // omit for default
   copies: 1,
+  priority: 1,                 // 1 urgent .. 9 low (default 5)
+  pages: "1-3,5",              // range - "odd" / "even" too
+  per_sheet: 2,                // n-up (CUPS)
+  quality: "draft",            // draft|normal|high|'600'|'600dpi'
+  dpi: 600,                    // explicit DPI
+  scale_pct: 150, margin_mm: 8,
+  duplex: "duplex",            // simplex|duplex|duplexlong|duplexshort
+  paper_size: "A4", orientation: "landscape", tray: "Tray2",
+  profile: "Invoice",          // hub print profile
+  queue: false,                // false = INSTANT (own thread, parallel)
+  run_at: "+5m",               // ISO datetime or +Ns/+Nm/+Nh/+Nd  (v3.2.7)
+  dedupe: false,               // allow identical repeats            (v3.2.7)
+  watermark: true, watermark_text: "COPY",
+  reason: "ward copy",         // recorded in the audit trail
+  destination: "file",         // save as PDF instead of printing
   text: "|center|MY SHOP\nItem 1   10.00\nTOTAL     10.00"
   // or: html: "<h1>Invoice</h1>"
   // or: pdfBase64: "JVBERi0..."
   // or: pdfUrl:  "https://…/report.pdf"
-  // destination: "file"        // save as PDF instead of printing
+  // or: lang: "escpos" | "zpl"  (raw receipt/label printing)
+  // or: rawBase64: "XlhBCg…"    (pre-built raw bytes)
 });
 ```
+
+**v3.2.7 — FULL API PARITY:** `window.advprint.print()` now also passes
+`run_at`, `queue`, `dedupe`, `tray` and `watermark_text` to the hub —
+the extension API and the direct HTTP API accept exactly the same
+option set. The complete option reference, the response fields and
+every worked case (one PC many printers in parallel, many PCs one hub,
+PDF + ZPL `^XA` labels at the same time, scheduled prints, URL and
+token map) live in **`docs/DEVELOPER-API.md`**.
 
 **POS / kiosk example** — auto-print the current order after checkout:
 

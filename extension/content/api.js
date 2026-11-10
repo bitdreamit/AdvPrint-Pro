@@ -8,8 +8,9 @@
  *   window.advprint.printPdf(url, {title})   -> print a PDF URL (pure)
  *   window.advprint.print({                  -> generic hub print
  *     title, printer, copies, priority, pages, profile, reason,
- *     watermark, lang, rawBase64,
- *     pdfBase64 | pdfUrl | text | html | pageUrl
+ *     watermark, watermark_text, lang, rawBase64,
+ *     pdfBase64 | pdfUrl | text | html | pageUrl,
+ *     run_at, queue, dedupe, tray        (v3.2.7: full HTTP parity)
  *   })
  *   v2.0 extras:
  *     priority: 1 (urgent) .. 9 (low)        -> queue jump
@@ -103,7 +104,7 @@
   /* v2.6.2 SINGLE VERSION SOURCE: the version comes from the DOM
    * attribute stamped by the ISOLATED-world relay (which reads the
    * real manifest). The string below is only a last-resort fallback. */
-  var _apVerFallback = "3.1.3";
+  var _apVerFallback = "3.2.7";
   function _apVersion() {
     try {
       var v = document.documentElement &&

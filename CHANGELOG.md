@@ -1,6 +1,67 @@
 # Changelog - AdvPrint Pro (Advanced Printer)
 by Bit Dream IT - Innovative Healthcare Solutions
 
+## v3.2.7 - THE DEVELOPER API RELEASE (2026-11-10)
+
+Base: v3.2.6 - every fix and the local-only UI security model unchanged.
+This release turns the print API into a documented product surface:
+every method, every option, every response field, with full worked
+examples for the real cases - shipped in THREE places so the answer is
+always one click away.
+
+### The Developer API guide - A-to-Z, with every case
+- NEW `docs/DEVELOPER-API.md` (~600 lines): `window.advprint` method by
+  method (status/printers/history/printPage/printPdf/print/printPdfLink)
+  with the camelCase -> hub mapping, the Promise/timeout/fallback
+  mechanics and error-handling patterns; direct HTTP `POST /print` with
+  the three token placements and FOUR body styles (JSON / raw PDF bytes
+  / raw label bytes `kind=raw` / multipart + the CSP form fallback); the
+  payload-source priority order; the full option reference (priority 1
+  urgent first, pages ranges + odd/even, n-up, quality presets AND
+  explicit DPI, scale, margins, duplex, paper, tray, profiles,
+  destination file, queue:false instant mode, run_at scheduling, dedupe
+  override, reason, watermark); the response fields and the 400/401/403/
+  421/500 error map.
+- THE CASES the guide answers step by step:
+  - SAME PC, MANY PRINTERS - receipt on the thermal roll + invoice on
+    the laser at the same moment (`queue:false` = one thread per job,
+    truly parallel), one call per printer loops (the dedupe key includes
+    the printer, so the same PDF to 3 printers is 3 jobs, never
+    blocked), printer groups as ordered fallback lists.
+  - MANY PCs, ONE HUB - the whole LAN POSTs to
+    `http://<lan-ip>:9235/print` (Allowed-IPs decide, the console UI
+    stays local-only); what actually serializes (FIFO worker, max 2
+    headless renders, dedupe window) vs what runs in parallel (instant
+    threads, raw jobs, every HTTP request).
+  - PDF + ZPL AT THE SAME TIME - raw jobs skip the printer probe and
+    run beside the PDF pipeline; full `^XA...^XZ` label examples in
+    curl/JS/Python (latin-1 verbatim, YOU own `^PW/^LL/^PQ`) and the
+    ESC/POS marker builder (`#big |center| |right| |cut| |drawer|
+    |barcode:| |qr:|`).
+  - Plus: scheduled end-of-day prints (`run_at`), urgent jobs
+    (`priority:1`), duplex booklets + n-up, archive-as-PDF, watermarked
+    reprints with audit reasons, kiosk printer-by-paper routing, and
+    the complete URL & token map (`ipp://` vs `http://`, per-printer
+    queue slugs, 631 mirror, RAW 9100, `/send`, local-only `/ui`).
+- The hub `/docs` page grew **section 9 "Developer API"** (9a methods,
+  9b HTTP, 9c multi-printer cases, 9d raw printing, 9e URL/token map)
+  with a TOC entry; the **in-UI Docs modal** grew the same section 9
+  with the live hub URL/token baked in; `docs/EXTENSION-API.md` and
+  `docs/API.md` now carry the full option table and point at the new
+  guide.
+
+### window.advprint.print() - FULL API PARITY (v3.2.7)
+- The extension now also passes `run_at` (scheduled printing), `queue`
+  (instant mode), `dedupe` (repeat override), `tray` (CUPS tray) and
+  `watermark_text` to the hub - the extension API and the HTTP API
+  accept exactly the same option set (extension/background.js).
+
+### Version 3.2.7 everywhere
+- VERSION.txt, hub VERSION/VERSION_NAME, extension manifest + popup +
+  options + i18n, api.js fallback version, console boot default.
+
+---
+
 ## v3.2.6 - SEVEN BUGS + THE UI SECURITY MODEL (2026-11-10)
 
 Base: v3.2.5 - every v3.2.5 fix unchanged. Seven reported defects fixed,

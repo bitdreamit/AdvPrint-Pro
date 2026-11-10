@@ -2085,6 +2085,15 @@ async function handleApi(msg, sender) {
       if (o.profile) body.profile = o.profile;        // v2.0: hub profile name
       if (o.reason) body.reason = o.reason;           // v2.0: audit reason
       if (o.watermark != null) body.watermark = o.watermark;
+      // v3.2.7 FULL API PARITY: the extension API now carries the same
+      // extra options the HTTP API always had - scheduled printing,
+      // instant mode, dedupe override, tray select and the watermark
+      // text. Documented in docs/DEVELOPER-API.md.
+      if (o.run_at) body.run_at = o.run_at;           // ISO or "+5m" / "+2h"
+      if (o.queue != null) body.queue = o.queue;      // false = instant print
+      if (o.dedupe != null) body.dedupe = o.dedupe;   // false = allow repeats
+      if (o.tray) body.tray = o.tray;                 // CUPS tray select
+      if (o.watermark_text) body.watermark_text = o.watermark_text;
       if (!body.pdf_base64 && !body.pdf_url && body.text == null &&
           body.html == null && !body.page_url && !body.raw_base64) {
         throw new HubError("advprint.print: provide pdfBase64, pdfUrl, text, html, pageUrl or rawBase64");

@@ -13,6 +13,37 @@ Web page ──► Chrome extension ──► AdvPrint Pro hub (localhost:9235) 
 
 ---
 
+## What's new in v3.2.7 (THE DEVELOPER API RELEASE)
+
+The print API — `window.advprint` in every web page and `POST /print`
+over plain HTTP — is now documented A-to-Z, with every option and every
+real case, in THREE places: the new **`docs/DEVELOPER-API.md`** (~600
+lines), the hub `/docs` page (**section 9**) and the **in-UI Docs
+modal** (section 9).
+
+1. **The full guide** — every method (`status`, `printers`, `history`,
+   `printPage`, `printPdf`, `print`, `printPdfLink`), every option
+   (priority 1-urgent-first, page ranges + odd/even, n-up, quality
+   presets AND explicit DPI, scale, margins, duplex, paper, tray,
+   profiles, destination file, `queue:false` instant mode, `run_at`
+   scheduling, dedupe override, watermark), the four HTTP body styles
+   (JSON / raw PDF bytes / raw label bytes / multipart), the payload
+   sources in priority order, the response fields and the error map.
+2. **The real cases, worked end-to-end** — SAME PC MANY PRINTERS
+   (receipt on the thermal roll + invoice on the laser at the same
+   moment), MANY PCs ONE HUB (the whole LAN prints; the UI stays
+   local-only), **PDF + ZPL `^XA` labels at the same time** (verbatim
+   latin-1 ZPL and the ESC/POS marker builder), scheduled prints,
+   urgent jobs, watermarked reprints, kiosk routing — with curl / JS /
+   Python / PHP examples and the complete URL & token map
+   (`ipp://` vs `http://`, per-printer queues, 631 mirror, RAW 9100).
+3. **`window.advprint.print()` now has FULL API PARITY** — it also
+   passes `run_at`, `queue`, `dedupe`, `tray` and `watermark_text`;
+   the browser API and the HTTP API accept exactly the same options.
+
+Details: `docs/RELEASE-NOTES-v3.2.7.md` and
+`docs/AdvPrint-Pro-v3.2.7-A-to-Z-DEV-GUIDE.md`.
+
 ## What's new in v3.2.6 (SEVEN BUGS + THE UI SECURITY MODEL)
 
 Everything below is locked by tests (397 passed) **and** verified live

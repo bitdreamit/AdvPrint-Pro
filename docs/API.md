@@ -178,12 +178,34 @@ One of the payload sources is required. Common optional fields: `title`, `printe
 
 | Source field | Meaning | Notes |
 |---|---|---|
+| `raw_base64` | pre-built ESC/POS/ZPL/PCL bytes | becomes a `raw` job (winspool RAW / `lp -o raw`) |
+| `text` + `lang: escpos\|zpl` | raw receipt/label printing | `zpl` = verbatim `^XA…^XZ` (latin-1); `escpos` = marker builder |
 | `pdf_base64` | Raw PDF bytes, base64 | Must start with `%PDF-` |
-| `pdf_url` | Download a PDF | Max 25 MB, must be a real PDF |
+| `pdf_url` | Download a PDF | Max 25 MB, must be a real PDF, private-address guard |
 | `image_base64` | JPEG bytes, base64 | Wrapped to PDF (`paper: a4|thermal`, `landscape`) |
-| `html` | HTML string | Rendered by headless Chrome/Edge |
-| `page_url` | URL of a page | Rendered by headless Chrome/Edge |
+| `html` | HTML string | Rendered by headless Chrome/Edge (max 2 concurrent) |
+| `page_url` | URL of a page | Rendered by headless Chrome/Edge, private-address guard |
 | `text` | Plain text | `paper:"thermal"` → 80 mm roll; `paper:"a4"` → A4. Markers: `#big `, `|center| ` |
+
+**Every print option** (works in JSON, on the query string, and in
+`window.advprint.print()` — the full annotated reference with worked
+examples lives in [`DEVELOPER-API.md`](DEVELOPER-API.md)):
+
+| Option | Values | Default |
+|---|---|---|
+| `priority` | 1 (urgent) … 9 (low) — the FIFO prints 1 first | 5 |
+| `pages` | `"1-3,5"` · `odd` · `even` | all |
+| `per_sheet` | 1 2 4 6 9 16 (n-up, CUPS) | 1 |
+| `quality` | `draft` `normal` `high` · `"600"` · `"600dpi"` | driver |
+| `dpi` | 72–2400 (wins over `quality`) | — |
+| `scale_pct` / `margin_mm` | 25–400 % / mm (html+text renders) | — |
+| `duplex` | `simplex` `duplex` `duplexlong` `duplexshort` | driver |
+| `paper_size` / `orientation` / `tray` | A4… / landscape / CUPS tray | driver |
+| `profile` | named hub print profile (paper/tray/duplex/copies/printer) | — |
+| `queue` | `false` = instant print in its own thread (parallel; offline printer → auto-queued) | `true` |
+| `run_at` | ISO datetime or `+Ns/+Nm/+Nh/+Nd` | now |
+| `dedupe` | `false` allows identical repeats inside the window | `true` (5 min) |
+| `reason` / `watermark` / `watermark_text` | audit reason / PDF stamp + text (max 24, default `REPRINT`) | — |
 
 ```bash
 curl -X POST http://127.0.0.1:9235/print \

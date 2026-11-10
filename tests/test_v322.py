@@ -270,9 +270,9 @@ def test_v322_lan_tab_carries_platform_guide():
 
 
 def test_v322_version_strings_agree():
-    assert advprint.VERSION == "3.2.6"
+    assert advprint.VERSION == "3.2.7"
     vt = open(os.path.join(ROOT, "VERSION.txt"), encoding="utf-8").read()
-    assert "3.2.6" in vt
+    assert "3.2.7" in vt
     man = json.load(open(os.path.join(ROOT, "extension", "manifest.json"),
                          encoding="utf-8"))
-    assert man["version"] == "3.2.6"
+    assert man["version"] == "3.2.7"
