@@ -1,6 +1,62 @@
 # Changelog - AdvPrint Pro (Advanced Printer)
 by Bit Dream IT - Innovative Healthcare Solutions
 
+## v3.2.9 - THE MULTI-PC IPP RELEASE (2026-11-12)
+
+Base: v3.2.8 - the clean ipp:// URL, the scheme-free Website API rule
+and every earlier fix unchanged. Three real-world multi-PC reports by
+the user on the AI-Lab LAN, all fixed and locked by `tests/test_v329.py`.
+
+### BUG 1 - a per-printer queue refused to connect from other PCs
+Adding `ipp://<ip>:9235/ipp/print/<printer-name>` on a SECOND PC failed
+with "Windows cannot connect", while the generic `/ipp/print` kept
+working. Root cause: `Get-Printer-Attributes` answered with only the
+generic `printer-uri-supported` pair - the client never saw the queue
+URI it had asked for, so the Add-Printer validation refused it. The
+IPP node now echoes the queue end to end:
+- `printer-uri-supported` leads with BOTH forms of the queue URI
+  (`http://ip:9235/ipp/print/<slug>` + `ipp://...`), then the generic pair
+- `printer-name` is the REAL printer name (was the hub hostname),
+  `printer-info` says "AdvPrint Pro queue <name> on <host>"
+- every queue gets its own stable `printer-uuid` (clients remember each
+  queue separately) and `job-uri` under the queue path
+- a queue name that arrives ONLY in the request's `printer-uri`
+  attribute is honoured too (Windows class driver, Android print
+  services) - the job still lands on the right printer
+
+### BUG 2 - one hub, MANY PCs: the node is now professional and optimized
+- accept backlog raised 5 -> 128 on ALL listeners (9235 hub, 631 IPP
+  mirror, RAW 9100): with several PCs/phones printing at once the old
+  backlog refused burst connects (the "works alone, breaks when more
+  than one PC prints" report)
+- every `_IPP_JOBS` session mutation (Send-Document append/counter/
+  join, Cancel-Job flag, Get-Job-Attributes read) now runs under the
+  session lock - parallel PCs can no longer interleave
+- per-printer queue name resolution is memoized (10 s hit / 5 s
+  negative TTL, thread-safe) - N PCs adding printers no longer re-run
+  the OS printer enumeration per request
+- `_write_atomic` temp files are unique per call and virtual-PDF saves
+  are serialized: two jobs for the "File (PDF)" printer in the same
+  second no longer kill each other's `.part` file (one job silently
+  failed with `[Errno 2]`)
+- every ACL 403 now echoes the ACTIVE `allowed_ips` rules, and the IPP
+  landing page states who may print - `*` / exact IP / CIDR / wildcard
+  are enforced identically on 9235, 631 and RAW 9100
+
+### BUG 3 - every LAN PC saw the SAME hub URL
+All pages showed `http://<hub-lan-ip>:9235` (the hub's default-route
+address - on a PC with a VPN/adapter that can be an address the client
+can NOT reach). Now:
+- pages build their URLs from the address THE OPENING DEVICE used
+  (Host header, sanitized) first, then the hub's best IP
+- the LAN panel lists EVERY interface IP of the hub as copyable chips
+  ("Hub addresses" row) so each PC picks its own reachable ip:port
+- `/printers` queue URLs, the queue landing pages, the main IPP landing
+  page (9235 + 631) and the console boot JSON are all per-device
+- the LAN PC hub URL input follows the device that opened the page
+
+Everything from v3.2.8 stays unchanged.
+
 ## v3.2.8 - THE ipp:// + HTTP-PAGE FIX RELEASE (2026-11-11)
 
 Base: v3.2.7 - the complete Developer API guide, full API parity and

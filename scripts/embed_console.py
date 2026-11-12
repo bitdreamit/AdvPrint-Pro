@@ -38,7 +38,7 @@ def main():
     if CLOSE.replace("\n", "") in html[:-1]:
         sys.exit('console.html contains a """ sequence - the r-string '
                  "embed would break; reword that part of the UI source")
-    block = OPEN + html + '"""'
+    block = OPEN + html + CLOSE   # v3.2.9 fix: keep the \n before the closing quotes
     for path in HUBS:
         text = open(path, encoding="utf-8").read()
         i = text.find(OPEN)

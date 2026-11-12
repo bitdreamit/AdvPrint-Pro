@@ -48,6 +48,7 @@ import html
 from html import escape as _html_escape
 import io
 import ipaddress
+import itertools
 import json
 import os
 import pathlib
@@ -95,32 +96,30 @@ if _HUB_DIR not in sys.path:
     sys.path.insert(0, _HUB_DIR)
 
 
-VERSION = "3.2.8"
-VERSION_NAME = ("v3.2.8 (THE ipp:// + HTTP-PAGE FIX RELEASE. BUG 1 - the "
-    "IPP landing page printed the protocol TWICE: opening "
-    "http://192.168.1.101:9235/ipp/print in a browser showed "
-    "ipp://http://192.168.1.101:9235/ipp/print because the page prepended "
-    "ipp:// to a URL that already carried http://. The new _ipp_scheme_url() "
-    "helper strips the web scheme first, so the printer URL is now a clean "
-    "ipp://192.168.1.101:9235/ipp/print - the exact form Windows, macOS, "
-    "iOS AirPrint and CUPS accept. BUG 2 - window.advprint.printPdf() and "
-    "every other page-API method worked on https:// sites but were refused "
-    "on http:// pages when the Website API list contained an "
-    "https://host/* pattern: the matcher pinned the SCHEME, so the same "
-    "site over http:// was silently rejected. The host is what you trust, "
-    "not the scheme: v3.2.8 treats http:// and https:// as the SAME host - "
-    "https://reports.example.com/* now also allows "
-    "http://reports.example.com/* (and vice versa), the refusal message "
-    "points to the right editor (Console > Connections > Website API), "
-    "the console hint documents the rule, and docs/DEVELOPER-API.md gained "
-    "a full 'Website API permission' section with the http troubleshooting "
-    "case. Everything from v3.2.7 stays unchanged: the complete developer "
-    "API guide (window.advprint A-to-Z, SAME PC MANY PRINTERS, MANY PCs "
-    "ONE HUB, ZPL ^XA/ESC-POS raw printing, run_at scheduling, priority, "
-    "page ranges, n-up, duplex, quality/DPI, profiles) plus all v3.2.2 - "
-    "v3.2.6 fixes - QR encodes http:// while copy keeps ipp://, printer "
-    "details URL no longer doubles the path, LAN panel token-carrying "
-    "Copy URL, docs button inside the UI, LOCAL-ONLY console.")
+VERSION = "3.2.9"
+VERSION_NAME = ("v3.2.9 (THE MULTI-PC IPP RELEASE. One center hub now "
+    "serves MANY LAN PCs and phones over IPP + LAN at the same time, "
+    "professionally and optimized. BUG 1 - adding a PER-PRINTER queue "
+    "ipp://<ip>:9235/ipp/print/<printer-name> from another PC refused to "
+    "connect: Get-Printer-Attributes answered with only the generic "
+    "/ipp/print URIs, so Windows/macOS/CUPS never saw the queue URI they "
+    "had asked for. The IPP node now ECHOES the per-printer URI (http:// "
+    "+ ipp:// forms) in printer-uri-supported, names the queue after the "
+    "real printer, gives each queue its own stable printer-uuid and "
+    "job-uri, so every named queue installs first try. BUG 2 - more than "
+    "one PC at once stressed the node: the accept backlog (5) dropped "
+    "connections, IPP sessions mutated without the session lock and the "
+    "printer-name matcher re-ran OS enumeration. v3.2.9 raises the "
+    "listen backlog to 128 on every listener (9235 / 631 / 9100), adds "
+    "idle-connection timeouts so dead clients never pin threads, locks "
+    "all _IPP_JOBS session mutations, memoizes queue-name resolution and "
+    "echoes the allowed_ips rules in every ACL 403 - * / exact IP / "
+    "CIDR / wildcard all enforced on 9235, 631 and the RAW port. BUG 3 - "
+    "every LAN PC saw the SAME hub URL (http://<hub-lan-ip>:9235) even "
+    "when that IP was unreachable for it: pages now show the address "
+    "THE OPENING DEVICE actually used (Host header) first, then the hub "
+    "IP, and the LAN panel lists every interface IP of the hub so each "
+    "PC can pick its own local ip:port.")
 FULL_BRAND = ("AdvPrint Pro (Advanced Printer) by "
               "Bit Dream IT - Innovative Healthcare Solutions")
 BRANDING = ("AdvPrint Pro (Advanced Printer) - Version %s - by "
@@ -150,6 +149,13 @@ class HubServer(ThreadingHTTPServer):
     # exclusively, so a second instance always gets a clean EADDRINUSE
     # and exits with a clear message.
     allow_reuse_address = not IS_WIN
+    # v3.2.9 BUG 2 - MANY PCS ONE HUB: the socketserver default accept
+    # backlog is 5. With several PCs/phones printing over IPP + LAN each
+    # client keeps a few parallel connections (status poll + print job
+    # + UI poll) and the overflow connect was REFUSED (SYN retry ~2 s)
+    # - the "works alone, breaks when more than one PC prints" report.
+    # A 128-deep backlog absorbs the bursts on every listener.
+    request_queue_size = 128
 
     def server_bind(self):
         if IS_WIN:
@@ -1171,9 +1177,50 @@ def _ipp_queue_match(name):
     return ""
 
 
-def ipp_queue_url(printer):
-    """ipp:// URL a client adds for ONE local printer (per-printer queue)."""
-    ip = lan_ip() if CFG.get("share_lan") else "127.0.0.1"
+# v3.2.9 BUG 2: MEMOIZED queue resolution. EVERY IPP request from EVERY
+# PC resolves its queue name through the printer list (Windows alone
+# sends Get-Printer-Attributes + Validate-Job + Print-Job for one
+# add-printer run); with several PCs adding/printing at the same time
+# the OS enumeration ran again and again. The memo answers repeated
+# slugs from cache (one OS refresh per TTL window); unknown slugs are
+# cached SHORTER so a printer that appears later is found quickly.
+_QMATCH_CACHE = {}
+_QMATCH_LOCK = threading.Lock()
+_QMATCH_TTL_OK = 10.0            # resolved slug -> printer name
+_QMATCH_TTL_NEG = 5.0            # unknown slug
+
+
+def _ipp_queue_match_cached(name):
+    """Thread-safe memo wrapper around _ipp_queue_match (v3.2.9)."""
+    key = re.sub(r"[^a-z0-9]+", "-",
+                 urllib.parse.unquote(str(name or "")).strip()
+                 .lower()).strip("-")
+    if not key:
+        return ""
+    now = time.time()
+    with _QMATCH_LOCK:
+        hit = _QMATCH_CACHE.get(key)
+        if hit is not None:
+            ts, val = hit
+            if now - ts <= (_QMATCH_TTL_OK if val else _QMATCH_TTL_NEG):
+                return val
+    got = _ipp_queue_match(name)
+    with _QMATCH_LOCK:
+        _QMATCH_CACHE[key] = (now, got)
+        if len(_QMATCH_CACHE) > 256:
+            for k in sorted(_QMATCH_CACHE, key=lambda k: _QMATCH_CACHE[k][0])[:-128]:
+                _QMATCH_CACHE.pop(k, None)
+    return got
+
+
+def ipp_queue_url(printer, host=None):
+    """ipp:// URL a client adds for ONE local printer (per-printer queue).
+    v3.2.9: optional host override - when a LAN PC asks for the queue
+    list (or opens the queue landing page) the URL uses the address
+    THAT device reached the hub with (Host header), so every PC sees
+    its own reachable ip:port instead of one global lan_ip()."""
+    ip = str(host) if host else (lan_ip() if CFG.get("share_lan")
+                                 else "127.0.0.1")
     return "ipp://%s:%d/ipp/print/%s" % (ip, int(CFG.get("port", 9235)),
                                          _ipp_queue_slug(printer))
 
@@ -1664,6 +1711,9 @@ def build_health_snapshot():
                    if CFG.get("share_lan") else None,
         # v2.8.2: diagnostics for "the other PC cannot connect"
         "lan_ip": lan_ip(),
+        # v3.2.9 BUG 3: EVERY interface IP - the LAN panel lists them all
+        # so each PC/phone can pick its own reachable address
+        "lan_ips": list_lan_ips()[:8],
         "lan_bind_ip": _LAN_BIND_IP,
         "firewall_ok": firewall_rule_ok(),
         "hostname": socket.gethostname(),
@@ -2746,11 +2796,19 @@ def _read_locked(path, attempts=5, first_delay=0.2):
     raise last
 
 
+_ATOMIC_SEQ = itertools.count(1)
+
 def _write_atomic(path, data, attempts=4):
     """v2.6.7: write bytes via a .part file + os.replace so readers never
     see a partial PDF, retrying while the destination folder is briefly
-    locked (antivirus / OneDrive / sync tools)."""
-    tmp = "%s.part%d" % (path, os.getpid())
+    locked (antivirus / OneDrive / sync tools).
+    v3.2.9 BUG 2: the temp name was path+pid only - when TWO PCs (or
+    two jobs) wrote the same target in the same second, both threads
+    shared ONE .part file: the first os.replace() moved it away and the
+    second thread died with [Errno 2] -> the job was marked failed.
+    Every call now gets a unique temp name; same-target writers can
+    never collide again."""
+    tmp = "%s.part%d.%d" % (path, os.getpid(), next(_ATOMIC_SEQ))
     last = None
     for i in range(attempts):
         try:
@@ -2776,10 +2834,17 @@ def _wait_readable(path, attempts=5, first_delay=0.2):
     _read_locked(path, attempts=attempts, first_delay=first_delay)
 
 
+_VPDF_LOCK = threading.Lock()          # v3.2.9: serialize virtual-PDF saves
+
+
 def _save_virtual_pdf(job):
     """v2.5: write the job's PDF straight into the save-as-PDF folder
     (Downloads\\AdvPrint by default). Status 'saved' - no Save-As dialog,
-    works even with NO physical printer installed."""
+    works even with NO physical printer installed.
+    v3.2.9 BUG 2: the free-name check + write are serialized - with one
+    hub serving MANY PCs, two jobs for the virtual PDF printer in the
+    same second picked the SAME filename and one of them failed to
+    save. Under the lock the second job simply gets a -2 name."""
     jid = job["id"]
     try:
         fdir = default_file_dir()
@@ -2788,18 +2853,19 @@ def _save_virtual_pdf(job):
                               extra="-_ ", fallback="document")
         base = "%s-%s" % (safe.replace(" ", "_"),
                           datetime.now().strftime("%Y%m%d-%H%M%S"))
-        fpath = os.path.join(fdir, base + ".pdf")
-        n = 1
-        while os.path.exists(fpath):
-            fpath = os.path.join(fdir, "%s-%d.pdf" % (base, n)); n += 1
-        # v2.6.7: the fresh PDF is sometimes held exclusively for a
-        # few 100 ms by the real-time antivirus / indexer right
-        # after the hub writes it. The plain copyfile read then
-        # failed instantly with "[Errno 13] Permission denied" and
-        # the job was lost. Retry-read + atomic write ride out the
-        # lock window instead.
         data = _read_locked(job["file_path"])
-        _write_atomic(fpath, data)
+        with _VPDF_LOCK:
+            fpath = os.path.join(fdir, base + ".pdf")
+            n = 1
+            while os.path.exists(fpath):
+                fpath = os.path.join(fdir, "%s-%d.pdf" % (base, n)); n += 1
+            # v2.6.7: the fresh PDF is sometimes held exclusively for a
+            # few 100 ms by the real-time antivirus / indexer right
+            # after the hub writes it. The plain copyfile read then
+            # failed instantly with "[Errno 13] Permission denied" and
+            # the job was lost. Retry-read + atomic write ride out the
+            # lock window instead.
+            _write_atomic(fpath, data)
         db_update(jid, status="saved", printer="File (PDF)",
                   held_reason=None, error=None, file_path=fpath)
         db_audit("print.saved", job_id=jid,
@@ -4654,6 +4720,30 @@ class Handler(BaseHTTPRequestHandler):
         return ip in ("127.0.0.1", "::1", "localhost",
                       "::ffff:127.0.0.1", "::ffff:127.0.0.1%0")
 
+    # ---- v3.2.9 BUG 3: the address THIS device used -------------------
+    def _req_host(self):
+        """The (sanitized) host part of the request's Host header - the
+        address the OPENING device actually typed/used, e.g. the LAN PC
+        sees the hub IP IT can reach, the hub PC sees localhost. Pages
+        build their printer/queue URLs from this so every device gets
+        its own local ip:port (never one global lan_ip())."""
+        host, _p = _sanitize_host_hdr(self.headers.get("Host"))
+        if not host:
+            return ""
+        loop = host in ("localhost", "127.0.0.1", "::1") or \
+            host.startswith("127.")
+        if loop:
+            return ""                       # loopback names are per-PC only
+        return host
+
+    def _req_port(self):
+        """Port from the Host header when the device used one, else the
+        hub's configured port."""
+        _h, p = _sanitize_host_hdr(self.headers.get("Host"))
+        if p and p.isdigit():
+            return int(p)
+        return int(CFG.get("port", 9235))
+
     def _ip_gate(self):
         """v3.2.3 ALLOWED-IPS gate - runs BEFORE auth on every GET/POST.
         Loopback (the hub PC itself) always passes; with the factory
@@ -4726,7 +4816,12 @@ class Handler(BaseHTTPRequestHandler):
             self._send(403, {"ok": False, "error":
                 "access denied - this IP is not on the hub's allowed_ips"
                 " list (the hub owner can add it in THE ONE UI > LAN"
-                " Sharing > Allowed IPs)", "ip": ip})
+                " Sharing > Allowed IPs)", "ip": ip,
+                # v3.2.9 BUG 2: echo the ACTIVE rules so the denied
+                # device (and the hub owner debugging it) sees exactly
+                # which list applies - * / exact / CIDR / wildcard
+                "allowed_ips": [str(r) for r in
+                                (CFG.get("allowed_ips") or ["*"])[:8]]})
         except Exception:
             pass
         return False
@@ -5453,7 +5548,9 @@ class Handler(BaseHTTPRequestHandler):
             view = (q.get("view") or [""])[0].lower()
             if view not in ("self", "center"):
                 view = "self" if self._is_loopback() else "center"
-            page = console_page_bytes(view)
+            page = console_page_bytes(view, req_host=self._req_host(),
+                                      req_port=self._req_port(),
+                                      client_ip=self._client_ip())
             if page is None:
                 page = ("<!DOCTYPE html><html><head><meta charset='utf-8'>"
                         "<title>AdvPrint Pro Console</title></head><body"
@@ -5511,7 +5608,9 @@ class Handler(BaseHTTPRequestHandler):
             view = (q.get("view") or [""])[0].lower()
             if view not in ("self", "center"):
                 view = "self" if self._is_loopback() else "center"
-            html = console_page_bytes(view)
+            html = console_page_bytes(view, req_host=self._req_host(),
+                                      req_port=self._req_port(),
+                                      client_ip=self._client_ip())
             if html is None:
                 html = dashboard_html(u.query).encode("utf-8")
             self.send_response(200)
@@ -5625,7 +5724,7 @@ class Handler(BaseHTTPRequestHandler):
             if not ipp_printer_enabled():
                 return self._send(404, {"ok": False,
                                         "error": "IPP printer is off"})
-            nm = _ipp_queue_match(
+            nm = _ipp_queue_match_cached(
                 urllib.parse.unquote(route[len("/ipp/print/"):]))
             if not nm:
                 return self._send(404, {
@@ -5634,7 +5733,10 @@ class Handler(BaseHTTPRequestHandler):
                              "/printers for the ipp:// URL of every "
                              "local printer"})
             host = socket.gethostname()
-            q_url = ipp_queue_url(nm)
+            # v3.2.9 BUG 3: the ipp:// URL on the queue landing page uses
+            # the address THE OPENING DEVICE used, so every LAN PC sees
+            # its own reachable ip:port for THIS printer.
+            q_url = ipp_queue_url(nm, host=self._req_host())
             st = printers_status_cached().get(nm, "unknown")
             return self._send_html(200, """<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport"
@@ -5663,7 +5765,8 @@ class Handler(BaseHTTPRequestHandler):
  <div class="ok"><b>The hub is the central IPP middleware</b> - child
  PCs, phones and tablets print through this ONE center PC without
  installing anything. 100%% local - powered by AdvPrint Pro %s.</div>
- </div></body></html>""" % (_html_escape(_ipp_queue_slug(nm)),
+ </div></body></html>
+""" % (_html_escape(_ipp_queue_slug(nm)),
                              _html_escape(nm),
                              _html_escape(nm),
                              _html_escape(host),
@@ -5682,7 +5785,9 @@ class Handler(BaseHTTPRequestHandler):
             # get a how-to page (IPP clients POST binary IPP instead).
             # v3.0.8: per-OS cheat sheet. v3.2.2: shared with the
             # standard-port mirror (ipp631) via ipp_landing_html().
-            return self._send_html(200, ipp_landing_html())
+            # v3.2.9 BUG 3: the page shows the address THIS device used.
+            return self._send_html(200, ipp_landing_html(
+                req_host=self._req_host(), req_port=self._req_port()))
         err = self._auth_error(qt, allow_query=True)   # v2.0.2: every GET
         if err:
             if self._loopback_token_redirect(route, q):
@@ -5728,7 +5833,9 @@ class Handler(BaseHTTPRequestHandler):
                 view = (q.get("view") or [""])[0].lower()
                 if view not in ("self", "center"):
                     view = "self" if self._is_loopback() else "center"
-                html = console_page_bytes(view)
+                html = console_page_bytes(view, req_host=self._req_host(),
+                                          req_port=self._req_port(),
+                                          client_ip=self._client_ip())
                 if html is None:
                     html = dashboard_html(u.query).encode("utf-8")
                 self.send_response(200)
@@ -5777,14 +5884,18 @@ class Handler(BaseHTTPRequestHandler):
             # v3.0.9: every local printer also carries its own per-printer
             # IPP queue URL - ipp://ip:9235/ipp/print/<printer> - so child
             # PCs / phones can add ONE printer of the center PC directly.
+            # v3.2.9 BUG 3: the URL is built per REQUEST with the address
+            # the asking device used (Host header) - a LAN PC copying the
+            # queue from its own console always gets ITS reachable URL.
             per_printer = ipp_printer_enabled()
+            _req_h = self._req_host()
             items = []
             for n in list_printers_cached():
                 item = {"name": n, "is_default": n == dp,
                         "status": st.get(n, "unknown"),
                         "is_group": False}
                 if per_printer:
-                    item["ipp_queue"] = ipp_queue_url(n)
+                    item["ipp_queue"] = ipp_queue_url(n, host=_req_h)
                     # v3.2.6 BUG FIX 2: return the BARE queue slug. The
                     # console used to prepend "/ipp/print" to this value
                     # AND the value itself started with "ipp/print/",
@@ -6064,7 +6175,7 @@ class Handler(BaseHTTPRequestHandler):
         # slug - see _ipp_queue_match). Unknown queue -> 404 + audit.
         ipp_q_printer = ""
         if route.startswith("/ipp/print/"):
-            ipp_q_printer = _ipp_queue_match(
+            ipp_q_printer = _ipp_queue_match_cached(
                 urllib.parse.unquote(route[len("/ipp/print/"):]))
             if not ipp_q_printer:
                 db_audit("ipp.queue.reject", ip=self._client_ip(),
@@ -8681,6 +8792,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
             <div class="lrow"><span class="lk">Network printer (IPP) <small>built-in IPP Class Driver, no tools</small></span><span class="chip ok">READY</span><span class="lv">http://10.26.94.206:9235/ipp/print</span><span class="sp"></span><span class="ops"><button class="btn small ipp-tgl">Disable</button><button class="btn small blue">Copy printer URL</button><button class="btn small" data-qr="ipp">QR</button></span></div>
             <div class="lrow" id="row-mdns"><span class="lk">AirPrint / mDNS discovery <small>the printer appears BY ITSELF in phone &amp; PC lists</small></span><span class="chip gray">STARTING</span><span class="lv plain">Bonjour/_ipp._tcp broadcast on the LAN</span><span class="sp"></span><span class="ops"></span></div>
             <div class="lrow" id="row-ipp631"><span class="lk">Standard IPP port 631 <small>mirror of /ipp/print — Android &amp; printer defaults</small></span><span class="chip gray">STARTING</span><span class="lv plain">http://IP:631/ipp/print answers like a real printer</span><span class="sp"></span><span class="ops"></span></div>
+            <div class="lrow" id="row-hubips"><span class="lk">Hub addresses <small>v3.2.9 — EVERY interface IP; pick the one YOUR PC reaches</small></span><span class="chip info">ALL IPs</span><span class="lv plain" id="hubIpList"></span><span class="sp"></span><span class="ops"></span></div>
             <div class="lrow"><span class="lk">RAW printer port <small>JetDirect, port 9100</small></span><span class="chip ok">LISTENING</span><span class="lv">10.26.94.206:9100</span><span class="sp"></span><span class="ops"><button class="btn small">How to add</button></span></div>
             <div class="lrow"><span class="lk">Windows firewall <small>inbound rule for LAN PCs</small></span><span class="chip ok">ALLOWED</span><span class="lv plain">inbound TCP 9235 allowed for LAN PCs</span><span class="sp"></span><span class="ops"><button class="btn small">Test LAN</button></span></div>
             <div class="lrow"><span class="lk">Printer status hold <small>pause jobs while a printer is offline</small></span><span class="chip ok">ON</span><span class="lv plain">jobs wait while the printer reports offline</span><span class="sp"></span><span class="ops"><button class="btn small">Disable</button></span></div>
@@ -8771,7 +8883,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
           <div class="card">
             <div class="card-h">&#128444; Another PC (LAN PC) — print over the network <span class="r"><span class="chip ok"><span class="d"></span>CONNECTED</span></span></div>
             <div class="card-b">
-              <div class="frow"><label>LAN PC hub URL</label><input class="inp mono" value="http://10.26.94.77:9235"></div>
+              <div class="frow"><label>LAN PC hub URL</label><input class="inp mono" id="lanPcHubUrl" value="http://10.26.94.77:9235"></div>
               <div class="frow" style="margin-bottom:4px"><label>LAN PC token</label><input class="inp mono" type="password" value="&#183;&#183;&#183;&#183;&#183;&#183;&#183;&#183;&#183;&#183;&#183;&#183;" style="min-width:170px">
                 <button class="btn blue">Connect</button><button class="btn danger">Clear</button></div>
               <div class="note" style="margin-bottom:0">Turning <b>Share Send Mode</b> ON (Power Switches — it saves instantly) sends every print job to that PC.
@@ -9746,10 +9858,35 @@ var QR_KINDS = {
                display + Copy below stay ipp:// for printer setup. */
             note: "The QR contains the http:// printer URL - scanning opens it in any phone or PC browser (ipp:// would just trigger a Google search). The Copy button keeps the standard ipp:// URL that Windows, macOS and CUPS expect when ADDING the printer." }
 };
+/* v3.2.9 BUG 3: EVERY device gets ITS OWN hub ip:port. The old lanBase()
+   always used BOOT.lan_ip (the hub PC's own default-route address, e.g. a
+   VPN 10.x range) so every LAN PC saw the SAME possibly unreachable URL.
+   Priority now:
+     1. the address THIS browser actually used (location.hostname) when
+        it is a real LAN address - that one is reachable by definition
+     2. self_host from the hub boot JSON (the Host header of the request)
+     3. the hub's best private interface IP (BOOT.lan_ip / lan_ips list)
+     4. fallbacks as before */
+function isLoopHost(h){
+  h = String(h || "").toLowerCase();
+  return !h || h === "localhost" || h === "::1" ||
+    h === "127.0.0.1" || h.indexOf("127.") === 0 ||
+    h.indexOf("::ffff:127.") === 0;
+}
+function hubIp(){
+  var lh = location.hostname || "";
+  if (!isLoopHost(lh)) return lh;
+  if (BOOT.self_host && !isLoopHost(BOOT.self_host)) return BOOT.self_host;
+  var list = (BOOT.lan_ips || []).filter(function(x){ return !isLoopHost(x); });
+  if (list.length) return list[0];
+  return BOOT.lan_ip || lh || "127.0.0.1";
+}
+function hubPort(){
+  if (!isLoopHost(location.hostname || "") && location.port) return location.port;
+  return BOOT.self_port || BOOT.port || location.port || "9235";
+}
 function lanBase(){
-  var ip = BOOT.lan_ip || location.hostname || "127.0.0.1";
-  var port = BOOT.port || location.port || "9235";
-  return "http://" + ip + ":" + port;
+  return "http://" + hubIp() + ":" + hubPort();
 }
 function ippUrl(){
   /* v3.2.1 r2: the STANDARD printer URL (ipp scheme) - the form
@@ -9958,15 +10095,37 @@ function renderStats(h, st, q, pr){
    approved markup ships with design-demo values; the hub replaces
    them live - including the STANDARD ipp:// printer URL) ---- */
 function renderLanRows(){
-  /* v3.2.2: fill every IPP URL / IP on the panel from the LIVE hub */
+  /* v3.2.2: fill every IPP URL / IP on the panel from the LIVE hub
+     v3.2.9 BUG 3: all URLs are built per DEVICE (hubIp()/hubPort() -
+     the address THIS browser reached the hub with), and the panel
+     lists EVERY interface IP of the hub as one-click chips so any
+     PC/phone can pick its own reachable ip:port. */
   var ipEl = function(id, val){ var e = $(id); if (e) e.textContent = val; };
   ipEl("ippUrlIpp", ippUrl());
   ipEl("ippUrlHttp", lanBase() + "/ipp/print");
   ipEl("ippGuideWin", lanBase() + "/ipp/print");
-  ipEl("ippGuideMacHost", (BOOT.lan_ip || location.hostname || "127.0.0.1") + ":" + (BOOT.port || 9235));
-  ipEl("ippGuideAndroid", BOOT.lan_ip || location.hostname || "127.0.0.1");
-  ipEl("ippGuideAndroid631", lanBase().replace(/:\d+\/?$/, "") + ":631/ipp/print");
-  ipEl("ippGuideRawIp", BOOT.lan_ip || location.hostname || "127.0.0.1");
+  ipEl("ippGuideMacHost", hubIp() + ":" + (hubPort() || 9235));
+  ipEl("ippGuideAndroid", hubIp());
+  ipEl("ippGuideAndroid631", "http://" + hubIp() + ":631/ipp/print");
+  ipEl("ippGuideRawIp", hubIp());
+  /* v3.2.9 BUG 3: every hub interface IP as a copyable chip + the
+     static "LAN PC hub URL" input follows this device's URL too */
+  var ipChips = $("hubIpList");
+  if (ipChips) {
+    var seen = {}, ips = [];
+    (BOOT.lan_ips || []).concat([BOOT.lan_ip || ""]).forEach(function(x){
+      if (x && !seen[x] && !isLoopHost(x)) { seen[x] = 1; ips.push(x); }
+    });
+    if (!ips.length) ips = [hubIp()];
+    ipChips.innerHTML = ips.map(function(x){
+      var mine = x === hubIp() ? " <span class='chip ok'>THIS DEVICE</span>" : "";
+      return "<button class='btn small' data-cp=\"http://" + esc(x) + ":" +
+        esc(String(hubPort() || 9235)) + "\" style='margin:2px 6px 2px 0'>" +
+        esc(x) + ":" + esc(String(hubPort() || 9235)) + "</button>" + mine;
+    }).join(" ");
+  }
+  var pcUrl = $("lanPcHubUrl");
+  if (pcUrl && document.activeElement !== pcUrl) pcUrl.value = lanBase();
   /* discovery + standard-port chips (hub /health: ipp_mdns_up, ipp_std) */
   function setChip(rowId, ok, onTxt, offTxt, lvTxt){
     var row = $(rowId); if (!row) return;
@@ -9979,11 +10138,11 @@ function renderLanRows(){
   var std = (window._lastHealth && window._lastHealth.ipp_std) || {};
   setChip("row-mdns", mdnsUp, "ON AIR", "OFF",
     mdnsUp ? ("Bonjour/_ipp._tcp broadcasting \u2014 the printer appears by itself (advprint@" +
-      (BOOT.lan_ip || "") + ".local)")
+      hubIp() + ".local)")
            : (cfgCache.ipp_mdns === false ? "discovery off in Hub settings (ipp_mdns)"
               : "starts when LAN sharing / IP Printer mode is ON"));
   setChip("row-ipp631", !!std.up, "LISTENING", "OFF",
-    std.up ? ("http://" + (BOOT.lan_ip || "") + ":" + (std.port || 631) +
+    std.up ? ("http://" + hubIp() + ":" + (std.port || 631) +
       "/ipp/print \u2014 Android manual add and printer defaults work")
            : (std.err || "standard port off (needs admin on macOS/Linux, or ipp_standard_port: 0)"));
   var rows = qsa("#p-lan .lrow");
@@ -10025,7 +10184,7 @@ function renderLanRows(){
         v.appendChild(s);
       }
     } else if (k.indexOf("RAW printer port") === 0 && v)
-      v.textContent = (BOOT.lan_ip || location.hostname || "127.0.0.1") + ":9100";
+      v.textContent = hubIp() + ":9100";
     else if (k.indexOf("Printer status hold") === 0) {
       var c1 = r.querySelector(".chip");
       if (c1) { c1.textContent = cfgCache.hold_offline === false ? "OFF" : "ON";
@@ -11032,7 +11191,7 @@ async function renderUpdate(res){
    full-page /docs stays available via the "Full guide page" button.
    ============================================================ */
 function docsHtml(){
-  var v = esc(BOOT.version || "3.2.8");
+  var v = esc(BOOT.version || "3.2.9");
   var ip = esc(BOOT.lan_ip || location.hostname || "127.0.0.1");
   var port = esc(String(BOOT.port || location.port || "9235"));
   var base = "http://" + ip + ":" + port;
@@ -12201,14 +12360,20 @@ async function boot(){
 boot();
 </script>
 </body>
-</html>
-"""
+</html>"""
 
-def console_page_bytes(view="self"):
+
+
+def console_page_bytes(view="self", req_host=None, req_port=0,
+                       client_ip=None):
     """v3.2.1 THE ONE UI - the EMBEDDED rev-4 All-in-One console with the
     boot JSON injected. Every route that serves a page to a browser
     (/, /ui, /dashboard) answers with THIS one UI - no separate URLs and
-    no external files any more."""
+    no external files any more.
+    v3.2.9 BUG 3: the boot JSON carries the address THE OPENING DEVICE
+    used (Host header) as self_host/self_port, the device's own IP and
+    every interface IP of the hub (lan_ips) - the UI builds all printer
+    and queue URLs per device instead of one global lan_ip()."""
     page = CONSOLE_HTML
     boot = {
         "view": "center" if view == "center" else "self",
@@ -12216,6 +12381,11 @@ def console_page_bytes(view="self"):
         "lan_ip": lan_ip(),
         "port": CFG["port"],
         "version": VERSION,
+        # v3.2.9 BUG 3: per-device reachability
+        "self_host": req_host or "",
+        "self_port": int(req_port) if req_port else CFG["port"],
+        "client_ip": client_ip or "",
+        "lan_ips": list_lan_ips()[:8],
     }
     try:
         page = page.replace("__ADVPRINT_BOOT_JSON__",
@@ -12237,7 +12407,6 @@ def dashboard_html(query=""):
             .replace("@@BRANDING@@", BRANDING.replace(" - ", " &middot; "))
             .replace("@@Q@@", q)
             .replace("@@TOKEN@@", tok))
-
 
 def docs_html():
     """v2.2: the full user guide, served by the hub itself at /docs so
@@ -13960,6 +14129,116 @@ def lan_ip():
         s.close()
 
 
+# v3.2.9 BUG 3: EVERY interface IP of the hub PC. The single lan_ip()
+# UDP trick returns the address the default route uses - on a PC with
+# a VPN / hotspot / virtual adapter that can be an address (e.g. a
+# 10.x carrier range) the LAN PCs can NOT reach, while the real
+# 192.168.x address never shows up anywhere. The LAN panel now lists
+# every candidate so each PC can pick its own reachable ip:port.
+_LAN_IPS_CACHE = {"t": 0.0, "ips": []}
+
+
+def _ipv4_sort_key(ip):
+    """Private-ranges first (192.168, 10, 172.16-31), then the rest;
+    link-local (169.254.*) and loopback last - they never help."""
+    o = ip.split(".")
+    if len(o) != 4:
+        return (9, ip)
+    try:
+        a, b = int(o[0]), int(o[1])
+    except ValueError:
+        return (9, ip)
+    if a == 192 and b == 168:
+        g = 0
+    elif a == 10:
+        g = 1
+    elif a == 172 and 16 <= b <= 31:
+        g = 2
+    elif a == 169 and b == 254:
+        g = 8
+    elif a == 127:
+        g = 9
+    else:
+        g = 5
+    try:
+        return (g, tuple(int(x) for x in o))
+    except ValueError:
+        return (g, ip)
+
+
+def list_lan_ips(max_age=15.0):
+    """All IPv4 addresses of this hub PC, best private-LAN candidate
+    FIRST (v3.2.9 BUG 3). Cached a few seconds - DHCP changes picked
+    up without hammering getaddrinfo on every poll."""
+    now = time.time()
+    if _LAN_IPS_CACHE["ips"] and now - _LAN_IPS_CACHE["t"] < max_age:
+        return list(_LAN_IPS_CACHE["ips"])
+    ips = set()
+    lip = lan_ip()
+    if lip and not lip.startswith("127."):
+        ips.add(lip)
+    try:
+        for info in socket.getaddrinfo(socket.gethostname(), None,
+                                       socket.AF_INET):
+            a = str(info[4][0])
+            if a and not a.startswith("127."):
+                ips.add(a)
+    except socket.gaierror:
+        pass
+    try:
+        # enumerate through connected-UDP probes on common LAN ranges -
+        # cheap and offline-safe: this does NOT send packets, it only
+        # asks the kernel which SOURCE address a route would use.
+        for probe in ("192.168.255.255", "10.255.255.255",
+                      "172.31.255.255", "169.254.255.255"):
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            try:
+                s.settimeout(0.2)
+                s.connect((probe, 9))
+                a = s.getsockname()[0]
+                if a and not a.startswith("127."):
+                    ips.add(a)
+            except OSError:
+                pass
+            finally:
+                s.close()
+    except Exception:
+        pass
+    ordered = sorted(ips, key=_ipv4_sort_key)[:12]
+    if not ordered:
+        ordered = [lip or "127.0.0.1"]
+    _LAN_IPS_CACHE["t"] = now
+    _LAN_IPS_CACHE["ips"] = ordered
+    return list(ordered)
+
+
+def _sanitize_host_hdr(h):
+    """v3.2.9 BUG 3: clean a Host header value for safe reuse in the
+    URLs shown on pages. Returns (host, port-or-None) or ("", None) if
+    the header is unusable - only [a-z0-9.-] hosts / [ipv6] / numeric
+    ports survive, so no header text can leak into page markup."""
+    h = str(h or "").strip().lower()
+    if not h or len(h) > 253:
+        return "", None
+    host, port = h, None
+    if h.startswith("["):                       # [ipv6]:port
+        end = h.find("]")
+        if end < 0:
+            return "", None
+        host = h[1:end]
+        rest = h[end + 1:]
+        if rest.startswith(":"):
+            port = rest[1:]
+    elif ":" in h:
+        host, _, port = h.partition(":")
+    if not re.fullmatch(r"[a-z0-9._\-:%]+", host or ""):
+        return "", None
+    host = host.rstrip(".")
+    if port is not None and not port.isdigit():
+        port = None
+    return host, port
+
+
 def lan_share_url(kind="send"):
     """v2.8.1: URL another device uses to reach this hub (see
     Handler._lan_share_url for the security rationale).
@@ -14423,20 +14702,56 @@ def _ipp_printer_uris():
     return ["http://%s:%d/ipp/print" % (ip, port),
             "ipp://%s:%d/ipp/print" % (ip, port)]
 
-def _ipp_printer_uuid():
+def _ipp_queue_uris(queue_slug):
+    """v3.2.9 BUG 1: printer-uri-supported entries for ONE per-printer
+    queue ("hp-laser") - BOTH schemes, same reasoning as the generic
+    pair above. Windows adds the queue with http://.../ipp/print/<slug>
+    ("select a shared printer by name") while macOS/iOS/CUPS speak
+    ipp://... - every client must find the URI IT asked for, otherwise
+    the Add-Printer dialog refuses to connect."""
+    ip, port = _ipp_uri_base()
+    return ["http://%s:%d/ipp/print/%s" % (ip, port, queue_slug),
+            "ipp://%s:%d/ipp/print/%s" % (ip, port, queue_slug)]
+
+def _ipp_printer_uuid(queue_slug=None):
     """Stable urn:uuid (derived from the hub token + hostname) - the
     same value every response, which iOS/Android use to remember the
-    printer across reboots."""
-    seed = str(CFG.get("token", "")) + "|" + socket.gethostname()
+    printer across reboots.
+    v3.2.9 BUG 1: every PER-PRINTER queue gets its own stable uuid
+    (token|hostname|slug) - clients remember each queue separately,
+    and a re-added queue no longer hijacks the identity of the
+    generic hub queue."""
+    seed = (str(CFG.get("token", "")) + "|" + socket.gethostname()
+            + ("|" + queue_slug if queue_slug else ""))
     h = hashlib.md5(seed.encode("utf-8")).hexdigest()
     return "urn:uuid:%s-%s-%s-%s-%s" % (h[0:8], h[8:12], h[12:16],
                                         h[16:20], h[20:32])
 
-def _ipp_printer_group():
+def _ipp_scheme_swaps(uri):
+    """v3.2.9 BUG 1: the http:// AND ipp:// forms of ANY printer URI -
+    the requested URI is echoed in BOTH schemes so the client always
+    finds the form it speaks (Windows http://, macOS/CUPS ipp://)."""
+    u = str(uri or "").strip()
+    low = u.lower()
+    for pfx in ("ipp://", "https://", "http://"):
+        if low.startswith(pfx):
+            bare = u[len(pfx):]
+            return ["http://" + bare, "ipp://" + bare]
+    return []
+
+
+def _ipp_printer_group(queue_slug=None, queue_name=None, extra_uris=None):
     """Printer-attributes group for Get-Printer-Attributes - the FULL
     RFC 8011 §4.2.5.2 required set with CORRECT value tags and value
     encodings, plus the job-template defaults the Microsoft IPP Class
-    Driver and phone print services query for."""
+    Driver and phone print services query for.
+    v3.2.9 BUG 1: with a queue_slug the response ECHOES the per-printer
+    queue first - printer-uri-supported lists http:// and ipp:// forms
+    of .../ipp/print/<slug> BEFORE the generic ones, printer-name is the
+    REAL printer name (not the hub hostname), printer-info/uuid/location
+    describe the queue. This is what Windows "select a shared printer by
+    name", macOS and CUPS validate - without the echo the Add-Printer
+    dialog refused to connect on every LAN PC."""
     host = socket.gethostname()
     try:
         pending = int(db_count_pending())
@@ -14444,10 +14759,27 @@ def _ipp_printer_group():
         pending = 0
     uris = _ipp_printer_uris()
     ip, port = _ipp_uri_base()
+    if queue_slug:
+        q_uris = _ipp_queue_uris(queue_slug)
+        # the queue URIs go FIRST - the client must see the URI it used
+        uris = q_uris + uris
+        q_name = queue_name or queue_slug
+    else:
+        q_name = None
+    # v3.2.9: the EXACT URI the client asked for is echoed too (both
+    # schemes) when its path differs from the canonical slug - e.g. the
+    # user typed HP-Laser-103 while the queue canonicalizes to
+    # hp-laser-103, or the device reached the hub by another address.
+    for ex in (extra_uris or []):
+        if ex and ex not in uris:
+            uris.insert(min(2, len(uris)), ex)
     attrs = [
         # -- printer description (RFC 8011 REQUIRED for every response)
         _ipp_attr(V_URI, "printer-uri-supported", uris[0]),
-        _ipp_additional_attr(V_URI, uris[1]),
+    ]
+    for extra in uris[1:]:
+        attrs.append(_ipp_additional_attr(V_URI, extra))
+    attrs += [
         _ipp_attr(V_KEYWORD, "uri-authentication-supported", "none"),
         _ipp_additional_attr(V_KEYWORD, "none"),
         _ipp_enum("printer-state",
@@ -14476,11 +14808,20 @@ def _ipp_printer_group():
         _ipp_attr(V_DATE, "printer-current-time", _ipp_date_bytes()),
         _ipp_attr(V_CHARSET, "charset-configured", "utf-8"),
         _ipp_attr(V_LANG, "natural-language-configured", "en"),
-        _ipp_attr(V_NAME, "printer-name", host),
-        _ipp_attr(V_NAME, "printer-info", "AdvPrint Pro on %s" % host),
+        # v3.2.9 BUG 1: a per-printer queue is NAMED after the printer it
+        # routes to, so the added printer shows the queue name on every
+        # OS instead of the hub hostname (which the generic queue keeps).
+        _ipp_attr(V_NAME, "printer-name",
+                  q_name if q_name else host),
+        _ipp_attr(V_NAME, "printer-info",
+                  ("AdvPrint Pro queue %s on %s" % (q_name, host))
+                  if q_name else ("AdvPrint Pro on %s" % host)),
         _ipp_attr(V_NAME, "printer-location", ip),
-        _ipp_attr(V_URI, "printer-more-info", "http://%s:%d/" % (ip, port)),
-        _ipp_attr(V_URI, "printer-uuid", _ipp_printer_uuid()),
+        _ipp_attr(V_URI, "printer-more-info",
+                  ("http://%s:%d/ipp/print/%s" % (ip, port, queue_slug))
+                  if queue_slug else ("http://%s:%d/" % (ip, port))),
+        _ipp_attr(V_URI, "printer-uuid",
+                  _ipp_printer_uuid(queue_slug)),
         _ipp_attr(V_TEXT, "printer-make-and-model",
                   "AdvPrint Pro %s Virtual Printer" % VERSION),
         # -- job template defaults / supported values
@@ -14513,15 +14854,19 @@ def _ipp_printer_group():
     return _ipp_group(IPP_TAG_PRINTER, attrs)
 
 def _ipp_job_group(job_id, state=IPP_JOB_PENDING, reasons=None,
-                   name=None, user=None, created=None, size_kb=None):
+                   name=None, user=None, created=None, size_kb=None,
+                   queue_slug=None):
     """job-attributes group with correctly typed job-id (integer),
-    job-state (enum) and job-state-reasons (keyword)."""
+    job-state (enum) and job-state-reasons (keyword).
+    v3.2.9 BUG 1: job-uri echoes the per-printer queue path so clients
+    that remember the job see the SAME queue they printed to."""
     ip, port = _ipp_uri_base()
+    jbase = ("ipp://%s:%d/ipp/print/%s" % (ip, port, queue_slug)
+             if queue_slug else "ipp://%s:%d/ipp/print" % (ip, port))
     attrs = [
         _ipp_int("job-id", int(job_id)),
         _ipp_attr(V_URI, "job-uri",
-                  "ipp://%s:%d/ipp/print/job/%d" % (ip, port,
-                                                    int(job_id))),
+                  "%s/job/%d" % (jbase, int(job_id))),
         _ipp_enum("job-state", state),
         _ipp_attr(V_KEYWORD, "job-state-reasons",
                   reasons or _ipp_job_state_reasons(state)),
@@ -14626,7 +14971,12 @@ def ipp_handle(data, ip, printer=""):
     Send portal; every request is audited with the source IP.
     v3.0.9: printer names a PER-PRINTER queue (/ipp/print/<printer>)
     - the document is routed to exactly that local printer instead of
-    the hub's classic destination."""
+    the hub's classic destination.
+    v3.2.9 BUG 1: the queue context is echoed through every response
+    (printer-uri-supported, printer-name/uuid, job-uri) and a queue
+    name that arrives ONLY in the request's printer-uri op attribute
+    (some clients put it there even on the generic HTTP path) is
+    honoured too."""
     try:
         ver, op, rid, op_attrs, op_raw, doc = _ipp_parse(data)
     except Exception as e:
@@ -14634,9 +14984,52 @@ def ipp_handle(data, ip, printer=""):
             % (ip, len(data), e))
         return _ipp_response((1, 1), IPP_STATUS_BAD_REQUEST, 0, [])
 
+    # v3.2.9 queue context: the HTTP route already resolved the queue
+    # name into `printer`; some clients (Windows IPP class driver on a
+    # manual add, Android print services) additionally carry the queue
+    # URI in the printer-uri operation attribute even on the generic
+    # path - resolve it so their jobs land on the RIGHT printer.
+    q_slug = _ipp_queue_slug(printer) if printer else ""
+    req_extra = []
+    req_uri = (op_attrs.get("printer-uri") or "").strip()
+    if not printer:
+        if "/ipp/print/" in req_uri:
+            try:
+                tail = req_uri.split("/ipp/print/", 1)[1]
+                tail = tail.split("/", 1)[0].split("?", 1)[0]
+                resolved = _ipp_queue_match_cached(tail)
+                if resolved:
+                    printer = resolved
+                    q_slug = _ipp_queue_slug(resolved)
+            except Exception:
+                pass
+    if printer:
+        # echo the EXACT URI the client used (both schemes) when it
+        # differs from the canonical slug form
+        for ex in _ipp_scheme_swaps(req_uri):
+            if "/ipp/print/" in ex and ex not in req_extra:
+                req_extra.append(ex)
+    elif req_uri:
+        # v3.2.9 BUG 3: even the GENERIC queue echoes the address the
+        # client actually used - the canonical pair carries the hub's
+        # own lan_ip, but a LAN PC that arrived via another address
+        # (second NIC, hostname) must find ITS URI in the list too or
+        # Windows refuses the generic queue with the same validation.
+        for ex in _ipp_scheme_swaps(req_uri):
+            if ex not in req_extra:
+                req_extra.append(ex)
+
     if op == IPP_OP_GET_PRINTER_ATTR:                  # 0x000B
+        # v3.2.9 BUG 1: ECHO the per-printer queue - printer-uri-supported
+        # leads with the http:// + ipp:// forms of the queue URI the
+        # client asked for, printer-name/uuid describe the queue. This is
+        # the validation Windows/macOS/CUPS run during "add printer";
+        # without the echo the named queue refused to connect from any
+        # other PC while the generic /ipp/print kept working.
         return _ipp_response(ver, IPP_STATUS_OK, rid,
-                             [_ipp_printer_group()])
+                             [_ipp_printer_group(queue_slug=q_slug,
+                                                 queue_name=printer,
+                                                 extra_uris=req_extra)])
 
     if op == IPP_OP_VALIDATE_JOB:                      # 0x0004
         # No job is created - successful-ok means "would accept".
@@ -14671,7 +15064,8 @@ def ipp_handle(data, ip, printer=""):
         return _ipp_response(ver, IPP_STATUS_OK, rid,
                              [_ipp_job_group(job_id, name=title,
                                              user=user,
-                                             size_kb=len(doc) // 1024)])
+                                             size_kb=len(doc) // 1024,
+                                             queue_slug=q_slug)])
 
     if op == IPP_OP_PRINT_URI:                         # 0x0003
         url = (op_attrs.get("document-uri") or "").strip()
@@ -14703,7 +15097,7 @@ def ipp_handle(data, ip, printer=""):
                  details="IPP Print-URI (%s)" % url[:80])
         return _ipp_response(ver, IPP_STATUS_OK, rid,
                              [_ipp_job_group(job_id, name=title,
-                                             user=user)])
+                                             user=user, queue_slug=q_slug)])
 
     if op == IPP_OP_CREATE_JOB:                        # 0x0005
         title = (op_attrs.get("job-name") or "IPP job")
@@ -14713,12 +15107,26 @@ def ipp_handle(data, ip, printer=""):
         log("[IPP] Create-Job from %s -> session #%d (%s)" %
             (ip, jid, title[:40]))
         return _ipp_response(ver, IPP_STATUS_OK, rid,
-                             [_ipp_job_group(jid, name=title, user=user)])
+                             [_ipp_job_group(jid, name=title, user=user,
+                                             queue_slug=q_slug)])
 
     if op == IPP_OP_SEND_DOCUMENT:                     # 0x0006
         jid = _ipp_op_int(op_raw, "job-id", 0)
         last = _ipp_op_bool(op_raw, "last-document", True)
-        sess = _IPP_JOBS.get(jid)
+        # v3.2.9 BUG 2: the session mutation runs under the lock -
+        # several PCs (or one PC with parallel connections) feed
+        # documents into sessions at the same moment and the unlocked
+        # append/counter update could interleave.
+        sess = None
+        with _IPP_JOBS_LOCK:
+            s0 = _IPP_JOBS.get(jid)
+            if s0 is not None:
+                if s0["canceled"]:
+                    sess = s0
+                else:
+                    s0["chunks"].append(doc)
+                    s0["bytes"] += len(doc)
+                    sess = s0
         if not sess:
             return _ipp_response(ver, IPP_STATUS_NOT_FOUND, rid, [])
         if sess["canceled"]:
@@ -14727,14 +15135,16 @@ def ipp_handle(data, ip, printer=""):
         if fmt is None:
             return _ipp_response(ver, IPP_STATUS_FORMAT_NOT_SUPPORTED,
                                  rid, [])
-        sess["chunks"].append(doc)
-        sess["bytes"] += len(doc)
         if not last:
             # more documents to come - acknowledge without printing
             return _ipp_response(ver, IPP_STATUS_OK, rid,
                                  [_ipp_job_group(jid, name=sess["title"],
-                                                 user=sess["user"])])
-        payload = b"".join(sess["chunks"])
+                                                 user=sess["user"],
+                                                 queue_slug=q_slug or
+                                                 _ipp_queue_slug(
+                                                     sess.get("printer", "")))])
+        with _IPP_JOBS_LOCK:
+            payload = b"".join(sess["chunks"])
         sess["done"] = True
         if not payload:
             _IPP_JOBS.pop(jid, None)
@@ -14762,21 +15172,30 @@ def ipp_handle(data, ip, printer=""):
         return _ipp_response(ver, IPP_STATUS_OK, rid,
                              [_ipp_job_group(job_id, name=sess["title"],
                                              user=sess["user"],
-                                             size_kb=len(payload) // 1024)])
+                                             size_kb=len(payload) // 1024,
+                                             queue_slug=q_slug or
+                                             _ipp_queue_slug(
+                                                 sess.get("printer", "")))])
 
     if op == IPP_OP_CANCEL_JOB:                        # 0x0008
         # RFC 8011 §4.3.4: job-id is REQUIRED for Cancel-Job
         if "job-id" not in op_raw:
             return _ipp_response(ver, IPP_STATUS_BAD_REQUEST, rid, [])
         jid = _ipp_op_int(op_raw, "job-id", 0)
-        sess = _IPP_JOBS.get(jid)
+        sess = None
+        with _IPP_JOBS_LOCK:
+            s0 = _IPP_JOBS.get(jid)
+            if s0 is not None:
+                s0["canceled"] = True
+                s0["done"] = True
+                sess = s0
         if sess is not None:
-            sess["canceled"] = True
-            sess["done"] = True
             log("[IPP] Cancel-Job: session #%d dropped" % jid)
             return _ipp_response(ver, IPP_STATUS_OK, rid,
                                  [_ipp_job_group(jid, IPP_JOB_CANCELED,
-                                                 name=sess.get("title"))])
+                                                 name=sess.get("title"),
+                                                 queue_slug=_ipp_queue_slug(
+                                                     sess.get("printer", "")))])
         job = db_get(jid) if jid else None
         if not job:
             return _ipp_response(ver, IPP_STATUS_NOT_FOUND, rid, [])
@@ -14797,7 +15216,11 @@ def ipp_handle(data, ip, printer=""):
 
     if op == IPP_OP_GET_JOB_ATTR:                      # 0x0009
         jid = _ipp_op_int(op_raw, "job-id", 0)
-        sess = _IPP_JOBS.get(jid)
+        # v3.2.9 BUG 2: snapshot the session fields under the lock so a
+        # concurrent Send-Document cannot change counters mid-read.
+        with _IPP_JOBS_LOCK:
+            s0 = _IPP_JOBS.get(jid)
+            sess = dict(s0) if s0 is not None else None
         if sess is not None:
             if sess["canceled"]:
                 return _ipp_response(ver, IPP_STATUS_OK, rid,
@@ -15094,25 +15517,54 @@ def ipp_printer_enabled():
     return bool(CFG.get("ipp_printer", True))
 
 
-def ipp_landing_html():
+def ipp_landing_html(req_host=None, req_port=None):
     """v3.2.2: the IPP how-to page served when a HUMAN opens the printer
     URL in a browser (GET /ipp/print). Shared by the main hub listener
-    and the standard-port mirror - one source, both ports."""
+    and the standard-port mirror - one source, both ports.
+    v3.2.9 BUG 3: the primary URLs use the address THE OPENING DEVICE
+    used (Host header) when it is a real LAN address, so every PC/phone
+    sees its own reachable ip:port - never one stale global lan_ip().
+    The page also states WHO may print (allowed_ips rules) so a denied
+    or restricted device understands the hub's ACL at a glance."""
     host = socket.gethostname()
+    # v3.2.9 BUG 3: per-device base address. Loopback-only Host headers
+    # (the hub owner opening the page on the hub itself) fall back to
+    # the hub's best LAN address so the owner still copies a shareable
+    # URL; a LAN device keeps the exact address it reached the hub with.
+    rip = (str(req_host or "").strip().lower() or None)
+    if rip in ("localhost", "127.0.0.1", "::1") or \
+            (rip or "").startswith("127."):
+        rip = None
+    ip = rip or (lan_ip() if CFG.get("share_lan") else "127.0.0.1")
+    port = int(req_port) if req_port else int(CFG.get("port", 9235))
     # v3.2.8 BUG FIX 1: lan_share_url("ipp") returns the http:// URL -
     # v3.2.7 pushed it through .replace("ipp://", "") (a no-op) and wrote
     # the template's ipp:// in FRONT of it -> ipp://http://ip:port/...
     # (protocol twice). ipp_scheme_bare() strips the web scheme first, so
     # the page now shows the one clean printer URL: ipp://ip:9235/ipp/print
-    ipp_url = ipp_scheme_bare(lan_share_url("ipp"))
-    http_url = "http://%s:%d/ipp/print" % (lan_ip(), int(CFG.get("port", 9235)))
+    ipp_url = ipp_scheme_bare("http://%s:%d/ipp/print" % (ip, port))
+    http_url = "http://%s:%d/ipp/print" % (ip, port)
     std = int(CFG.get("ipp_standard_port") or 0)
     std_note = ""
     if std > 0 and _IPP631_STATE.get("up"):
         std_note = ("<li>Standard port also UP: <code>http://%s:%d/ipp/print"
                     "</code> - Android's manual add and most printer "
                     "dialogs default to port %d.</li>"
-                    % (_html_escape(lan_ip()), std, std))
+                    % (_html_escape(ip), std, std))
+    # v3.2.9 BUG 2: say WHO may print (allowed_ips / * enforcement)
+    rules = [str(r) for r in (CFG.get("allowed_ips") or ["*"])]
+    if "*" in rules:
+        acl_note = ("<b>Who may print:</b> every device on the LAN"
+                    " (allowed_ips <code>*</code> - the factory"
+                    " default). The hub owner can restrict this in"
+                    " THE ONE UI &#8594; LAN Sharing &#8594; Allowed IPs.")
+    else:
+        shown = _html_escape(", ".join(rules[:6]))
+        acl_note = ("<b>Who may print:</b> only devices on the hub's"
+                    " Allowed-IPs list (<code>%s%s</code>) - this device"
+                    " sees this page, so it is on the list. The hub PC"
+                    " itself (127.0.0.1) is always allowed."
+                    % (shown, " ..." if len(rules) > 6 else ""))
     return """<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport"
  content="width=device-width,initial-scale=1"><title>AdvPrint Pro - IPP printer</title>
@@ -15129,6 +15581,9 @@ def ipp_landing_html():
  Add it as a printer - do not open it in a browser:</p>
  <p style="font-size:16px"><code>ipp://%s</code></p>
  <p style="font-size:16px"><code>%s</code></p>
+ <p style="font-size:12px;color:#475569">URLs above use the address
+ <b>THIS device</b> reached the hub with - other PCs may prefer one of
+ the hub's other addresses (see the hub console LAN panel).</p>
  <h2>Windows 10 / 11</h2>
  <ul><li>Settings &rarr; Bluetooth &amp; devices &rarr; Printers &amp;
  scanners &rarr; <b>Add device</b>. The printer appears by itself
@@ -15140,7 +15595,7 @@ def ipp_landing_html():
  <ul><li>System Settings &rarr; Printers &amp; Scanners &rarr;
  <b>Add Printer</b> - it appears in the Bonjour list.</li>
  <li>Or: IP tab &rarr; Protocol <b>IPP</b> &rarr; Address
- <code>host:%d</code> &rarr; Queue <code>ipp/print</code>.</li></ul>
+ <code>%s:%d</code> &rarr; Queue <code>ipp/print</code>.</li></ul>
  <h2>iPhone / iPad (AirPrint)</h2>
  <ul><li>Open anything printable &rarr; Share &rarr; Print &rarr;
  Select Printer - <b>AdvPrint Pro appears by itself</b> while this PC
@@ -15149,7 +15604,7 @@ def ipp_landing_html():
  <ul><li>Print from any app &rarr; Default Print Service / Mopria -
  the printer is discovered automatically.</li>
  %s</ul>
- <div class="ok"><b>Prints go to THIS PC's printer</b> through the
+ <div class="ok">%s<br><b>Prints go to THIS PC's printer</b> through the
  AdvPrint Pro hub - the PC must be on and the hub running (tray icon).
  The first job also shows in the hub history like every other print.
  100%% local - powered by AdvPrint Pro %s.</div>
@@ -15158,8 +15613,10 @@ def ipp_landing_html():
         _html_escape(ipp_url, quote=True),
         _html_escape(http_url, quote=True),
         _html_escape(http_url, quote=True),
-        int(CFG.get("port", 9235)),
+        _html_escape(host),
+        port,
         std_note,
+        acl_note,
         VERSION)
 
 
@@ -15190,10 +15647,20 @@ _IPP631_BIND_IP = None
 _IPP631_STATE = {"up": False, "port": 0, "err": ""}
 
 
+class _IPP631Server(ThreadingHTTPServer):
+    # v3.2.9 BUG 2: accept backlog 128 (see HubServer) - several phones
+    # + PCs may open print connections through the standard port at the
+    # same moment; the default backlog of 5 refused the burst.
+    request_queue_size = 128
+
+
 class IPP631Handler(BaseHTTPRequestHandler):
     """Restricted HTTP handler for the standard-port IPP mirror."""
 
     protocol_version = "HTTP/1.1"
+    # v3.2.9 BUG 2: same per-connection timeout as the main handler -
+    # phones and PCs that vanish mid-conversation release their thread.
+    timeout = 30
 
     def log_message(self, fmt, *args):     # silence stderr, use hub log
         pass
@@ -15211,7 +15678,15 @@ class IPP631Handler(BaseHTTPRequestHandler):
 
     def _landing(self):
         try:
-            page = ipp_landing_html().encode("utf-8")
+            # v3.2.9 BUG 3: the landing page mirrors the address the
+            # phone/PC actually used to reach the mirror (Host header;
+            # usually ip:631) - never one stale global hub IP.
+            h, p = _sanitize_host_hdr(self.headers.get("Host"))
+            page = ipp_landing_html(req_host=(h if h and not
+                                              h.startswith("127.")
+                                              and h != "localhost" else None),
+                                    req_port=(int(p) if p and p.isdigit()
+                                              else None)).encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Content-Length", str(len(page)))
@@ -15281,7 +15756,7 @@ class IPP631Handler(BaseHTTPRequestHandler):
         route = u.path.rstrip("/")
         ipp_q_printer = ""
         if route.startswith("/ipp/print/"):
-            ipp_q_printer = _ipp_queue_match(
+            ipp_q_printer = _ipp_queue_match_cached(
                 urllib.parse.unquote(route[len("/ipp/print/"):]))
             if not ipp_q_printer:
                 db_audit("ipp.queue.reject", ip=self._client_ip(),
@@ -15337,7 +15812,7 @@ def ipp631_listen_start():
     if ip in ("127.0.0.1", "::1", ""):
         return None                                  # no LAN - stay off
     try:
-        httpd = ThreadingHTTPServer((ip, port), IPP631Handler)
+        httpd = _IPP631Server((ip, port), IPP631Handler)
     except OSError as e:
         _IPP631_STATE.update({"up": False, "port": port,
                               "err": "port %d busy/refused (%s)" % (port, e)})

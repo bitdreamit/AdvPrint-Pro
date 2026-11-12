@@ -13,6 +13,47 @@ Web page ──► Chrome extension ──► AdvPrint Pro hub (localhost:9235) 
 
 ---
 
+## What's new in v3.2.9 (THE MULTI-PC IPP RELEASE)
+
+Three real-world multi-PC reports from the LAN, all fixed and locked by
+new tests (`tests/test_v329.py`). Everything from v3.2.8 — the clean
+`ipp://` URL and the scheme-free Website API rule — stays unchanged.
+
+1. **Per-printer queues now connect from other PCs.** Adding
+   `ipp://<ip>:9235/ipp/print/<printer-name>` on a second PC failed with
+   "Windows cannot connect" while the generic `/ipp/print` kept working:
+   `Get-Printer-Attributes` answered with only the generic URIs, so the
+   client never saw the queue URI it asked for. The IPP node now echoes
+   the queue end to end — queue URIs first (http:// + ipp://), the REAL
+   printer name, a stable per-queue `printer-uuid`, queue-path `job-uri`
+   — and honours a queue name that arrives only inside the request's
+   `printer-uri` attribute.
+2. **One hub serves MANY PCs — professional and optimized.** The accept
+   backlog went 5 → 128 on every listener (9235 / 631 / 9100) so burst
+   connects from several PCs/phones are no longer refused; all IPP
+   session mutations run under the session lock; queue-name resolution
+   is memoized (no OS enumeration per request); two jobs for the
+   "File (PDF)" printer in the same second no longer kill each other's
+   temp file; every ACL 403 echoes the ACTIVE `allowed_ips` rules and
+   the IPP landing page states who may print — `*`, exact IP, CIDR and
+   `10.26.*` wildcards are enforced identically on 9235, 631 and RAW
+   9100.
+3. **Every LAN PC sees its OWN hub ip:port.** Pages no longer show one
+   global `http://10.26.94.77:9235` (the hub's default-route address —
+   with a VPN adapter that can be an address the client can NOT reach):
+   URLs are built from the address THE OPENING DEVICE used (sanitized
+   Host header) first, the console boot JSON carries
+   `self_host`/`self_port`/`client_ip`/`lan_ips`, and the LAN panel
+   lists EVERY hub interface IP as copyable chips so each PC picks its
+   own reachable address.
+4. **Delivery-layer fix:** the console embedder (`scripts/embed_console.py`)
+   no longer glues the closing quotes to the UI — the old bug could eat
+   `DOCS_HTML`/`console_page_bytes()` on the next embed (the /docs + /ui
+   500s). A regression test locks the correct close sequence.
+
+Details: `docs/RELEASE-NOTES-v3.2.9.md` and
+`docs/AdvPrint-Pro-v3.2.9-A-to-Z-DEV-GUIDE.md`.
+
 ## What's new in v3.2.8 (THE ipp:// + HTTP-PAGE FIX RELEASE)
 
 Two real-world bugs reported against v3.2.7, both fixed and locked by
