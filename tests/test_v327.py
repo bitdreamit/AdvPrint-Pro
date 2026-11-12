@@ -63,17 +63,17 @@ CHANGELOG = open(os.path.join(ROOT, "CHANGELOG.md"),
 # ---------------------------------------------------------------
 
 def test_version_327_everywhere():
-    assert advprint.VERSION == "3.3.0"
-    assert advprint.VERSION_NAME.startswith("v3.3.0")
-    assert "ANY-PC INVITE + DUAL-STACK LISTENER RELEASE" in advprint.VERSION_NAME
-    assert re.search(r"3\.3\.0", VERSION_TXT), VERSION_TXT
-    assert MANIFEST["version"] == "3.3.0"
-    assert 'v3.3.0</span>' in open(os.path.join(
+    assert advprint.VERSION == "3.3.1"
+    assert advprint.VERSION_NAME.startswith("v3.3.1")
+    assert "LAN PC + WINDOWS IPP CONNECTION RELEASE" in advprint.VERSION_NAME
+    assert re.search(r"3\.3\.1", VERSION_TXT), VERSION_TXT
+    assert MANIFEST["version"] == "3.3.1"
+    assert 'v3.3.1</span>' in open(os.path.join(
         EXT, "popup.html"), encoding="utf-8").read()
-    assert "v3.3.0" in open(os.path.join(
+    assert "v3.3.1" in open(os.path.join(
         EXT, "options.html"), encoding="utf-8").read()
-    assert 'var _apVerFallback = "3.3.0";' in APIJS_SRC
-    assert 'BOOT.version || "3.3.0"' in CONSOLE
+    assert 'var _apVerFallback = "3.3.1";' in APIJS_SRC
+    assert 'BOOT.version || "3.3.1"' in CONSOLE
     assert "## v3.2.7 - THE DEVELOPER API RELEASE" in CHANGELOG
 
 

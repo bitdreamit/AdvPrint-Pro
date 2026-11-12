@@ -1,4 +1,4 @@
-"""v3.3.0 - THE ANY-PC INVITE + DUAL-STACK LISTENER RELEASE.
+"""v3.3.1 - THE ANY-PC INVITE + DUAL-STACK LISTENER RELEASE.
 
 Locks the three user-reported bugs end to end:
 
@@ -6,13 +6,13 @@ BUG 1 - the one-click invite /connect?t=<token> pointed the OTHER PC at
   the WRONG hub: the page built the peer URL from the serving hub's own
   lan_ip() guess (never the address the visitor typed), and a user who
   opened the invite ON the hub PC itself silently added the hub to
-  ITSELF ("it redirect own pc"). v3.3.0: per-device peer URL (Host
+  ITSELF ("it redirect own pc"). v3.3.1: per-device peer URL (Host
   header), a self-invite EXPLAINER page for loopback visitors, POST
   /peer-connect refuses self-invites, the page probes the visiting
   PC's own hub, and the ?t= mismatch explains a DIFFERENT PC's hub.
 
 BUG 2 - every LAN listener (9235 LAN, 631 mirror, RAW 9100) bound ONE
-  IPv4 address and never spoke IPv6. v3.3.0: bind_listener_sockets()
+  IPv4 address and never spoke IPv6. v3.3.1: bind_listener_sockets()
   binds one IPv4 socket per interface IP + one [::] socket (V6ONLY),
   partial binds degrade gracefully, _bind_signature() drives automatic
   rebinds, health/boot expose raw_addrs / ipp_std.addrs /
@@ -21,12 +21,12 @@ BUG 2 - every LAN listener (9235 LAN, 631 mirror, RAW 9100) bound ONE
 BUG 3 - per-printer IPP queues must work for ANY printer that exists:
   the old [^a-z0-9] slug folded every non-ASCII printer name (Bangla,
   Arabic, CJK) to the single slug "printer", so those queues collided.
-  v3.3.0: Unicode-aware slugs (percent-encoded in URLs/URIs), the
+  v3.3.1: Unicode-aware slugs (percent-encoded in URLs/URIs), the
   collision-tolerant _ipp_queue_key() join key, a forced printer-list
   refresh on negative matches, live queues listed in the 404, and the
   mDNS per-printer cap 12 -> 24.
 
-Also locked: version coherence 3.3.0 everywhere, byte-identical hub
+Also locked: version coherence 3.3.1 everywhere, byte-identical hub
 copies, and the new release docs.
 """
 import json
@@ -131,37 +131,37 @@ def _vals(group, name):
 
 
 # ---------------------------------------------------------------
-# 1. version coherence 3.3.0
+# 1. version coherence 3.3.1
 # ---------------------------------------------------------------
 
 def test_version_330_everywhere():
-    assert advprint.VERSION == "3.3.0"
-    assert advprint.VERSION_NAME.startswith("v3.3.0")
-    assert "ANY-PC INVITE" in advprint.VERSION_NAME
-    assert "3.3.0" in VERSION_TXT
-    assert MANIFEST["version"] == "3.3.0"
-    assert 'var _apVerFallback = "3.3.0";' in open(
+    assert advprint.VERSION == "3.3.1"
+    assert advprint.VERSION_NAME.startswith("v3.3.1")
+    assert "LAN PC" in advprint.VERSION_NAME
+    assert "3.3.1" in VERSION_TXT
+    assert MANIFEST["version"] == "3.3.1"
+    assert 'var _apVerFallback = "3.3.1";' in open(
         os.path.join(EXT, "content", "api.js"), encoding="utf-8").read()
-    assert 'BOOT.version || "3.3.0"' in CONSOLE
-    assert "## v3.3.0 - THE ANY-PC INVITE + DUAL-STACK LISTENER RELEASE" \
+    assert 'BOOT.version || "3.3.1"' in CONSOLE
+    assert "## v3.3.1 - THE LAN PC + WINDOWS IPP CONNECTION RELEASE" \
         in CHANGELOG
-    assert 'VIProductVersion "3.3.0.0"' in NSI
-    assert "AdvPrint-Pro-Setup-3.3.0.exe" in NSI
+    assert 'VIProductVersion "3.3.1.0"' in NSI
+    assert "AdvPrint-Pro-Setup-3.3.1.exe" in NSI
     # old fallback gone from the live UI source
     assert 'BOOT.version || "3.2.9"' not in CONSOLE
 
 
 def test_release_docs_330_exist():
-    notes = open(os.path.join(ROOT, "docs", "RELEASE-NOTES-v3.3.0.md"),
+    notes = open(os.path.join(ROOT, "docs", "RELEASE-NOTES-v3.3.1.md"),
                  encoding="utf-8").read()
-    assert "redirect own pc" in notes
-    assert "bind_listener_sockets" in notes
-    assert "IPv6" in notes
+    assert "uri-security-supported" in notes
+    assert "_lp_refresh_sync" in notes
+    assert "peer_hubs" in notes
     guide = open(os.path.join(ROOT,
-                 "docs", "AdvPrint-Pro-v3.3.0-A-to-Z-DEV-GUIDE.md"),
+                 "docs", "AdvPrint-Pro-v3.3.1-A-to-Z-DEV-GUIDE.md"),
                  encoding="utf-8").read()
-    assert "_ipp_queue_key" in guide
-    assert "_bind_signature" in guide
+    assert "_ipp_printer_group" in guide
+    assert "_share_send_forward" in guide
     assert "scripts/embed_console.py" in guide
 
 
@@ -204,7 +204,7 @@ def test_connect_page_loopback_host_falls_back(monkeypatch):
 
 
 def test_connect_page_lists_other_addresses(monkeypatch):
-    """v3.3.0 BUG 1+2: every hub interface IP (v4 AND v6) appears as a
+    """v3.3.1 BUG 1+2: every hub interface IP (v4 AND v6) appears as a
     'use this' chip so the visitor can swap the peer URL."""
     monkeypatch.setattr(advprint, "list_lan_ips",
                         lambda *a, **k: ["192.168.1.101", "10.26.94.206"])
@@ -447,7 +447,7 @@ def test_health_snapshot_new_address_fields():
 
 
 def test_boot_json_carries_lan_ips6(hub):
-    """The /ui boot JSON exposes the IPv6 address list (v3.3.0 BUG 2)."""
+    """The /ui boot JSON exposes the IPv6 address list (v3.3.1 BUG 2)."""
     code, body = hub.get("/ui")
     assert code == 200
     html = body.decode("utf-8")
@@ -506,7 +506,7 @@ def test_mdns_services_cap_raised(monkeypatch):
 
 
 def test_host_ok_accepts_bracketed_ipv6():
-    """v3.3.0 BUG 2 (found by the smoke): with a [::] listener live, an
+    """v3.3.1 BUG 2 (found by the smoke): with a [::] listener live, an
     IPv6 client sends Host "[::1]" - the old split(":")[0] turned that
     into "[" and rejected every IPv6 client with 421."""
     f = advprint.Handler.__new__(advprint.Handler)
@@ -584,34 +584,42 @@ def test_queue_match_tolerates_every_slug_style(monkeypatch):
 
 def test_negative_match_forces_printer_list_refresh(monkeypatch):
     """A printer added AFTER the list was cached is found immediately:
-    the negative answer triggers ONE forced re-enum (rate-limited) and
-    the RETRY inside the same call already resolves the queue."""
+    the negative answer triggers ONE forced SYNCHRONOUS re-enum
+    (rate-limited) and the RETRY inside the same call already resolves
+    the queue (v3.3.1 mechanism - the old async kick left the cache
+    empty and the retry missed)."""
     state = {"printers": ["Old Printer"], "refreshes": 0}
 
-    def fake_list(max_age=30.0):
-        if max_age == 0.0:
-            state["refreshes"] += 1
+    def fake_list():
+        state["refreshes"] += 1
+        if state["refreshes"] >= 2:
             state["printers"] = ["Old Printer", "New Printer"]
         return list(state["printers"])
 
-    monkeypatch.setattr(advprint, "list_printers_cached", fake_list)
+    monkeypatch.setattr(advprint, "list_printers", fake_list)
     advprint._QMATCH_CACHE.clear()
     advprint._QMATCH_LAST_FORCE["t"] = 0.0
+    advprint._LP_SYNC_TS[0] = 0.0
+    advprint._LP_CACHE["t"] = 0.0
+    advprint._LP_CACHE["v"] = []
     # 1) the very first call already finds the new printer: the negative
-    #    match on the stale list forces the refresh and retries at once
+    #    match on the stale list forces the SYNCHRONOUS refresh and
+    #    retries at once (one OS enum for the initial fill, one for the
+    #    forced refresh)
     assert advprint._ipp_queue_match_cached("new-printer") == "New Printer"
-    assert state["refreshes"] == 1
     # 2) the forced refresh is rate-limited: a truly unknown queue inside
     #    the 3 s window does NOT spend another OS re-enum
+    n = state["refreshes"]
     advprint._QMATCH_CACHE.clear()
     assert advprint._ipp_queue_match_cached("unknown-queue") == ""
-    assert state["refreshes"] == 1
+    assert state["refreshes"] == n
     # 3) after the rate-limit window passes, one more forced refresh
     import time as _time
+    advprint._QMATCH_LAST_FORCE["t"] = _time.time() - 10.0
+    advprint._LP_SYNC_TS[0] = _time.time() - 10.0
     advprint._QMATCH_CACHE.clear()
-    advprint._QMATCH_LAST_FORCE["t"] = _time.time() - 4.0
     assert advprint._ipp_queue_match_cached("unknown-queue") == ""
-    assert state["refreshes"] == 2
+    assert state["refreshes"] == n + 1
 
 
 def test_404_lists_active_queues(monkeypatch):

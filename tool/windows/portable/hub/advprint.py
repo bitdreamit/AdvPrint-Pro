@@ -96,30 +96,39 @@ if _HUB_DIR not in sys.path:
     sys.path.insert(0, _HUB_DIR)
 
 
-VERSION = "3.3.0"
-VERSION_NAME = ("v3.3.0 (THE ANY-PC INVITE + DUAL-STACK LISTENER RELEASE. "
-    "BUG 1 - the one-click invite /connect?t=<token> pointed the OTHER PC "
-    "at the WRONG hub: the page built the peer URL from the serving PC's "
-    "own lan_ip() guess instead of the address the visitor actually used, "
-    "and a user who opened the invite on the hub PC itself silently added "
-    "the hub to ITSELF (the \"it redirects own pc\" report). The invite "
-    "page now uses the request's own Host address, refuses self-invites "
-    "on both the page and POST /peer-connect, probes the visiting PC's "
-    "own hub and explains a token from a DIFFERENT hub. BUG 2 - every LAN "
-    "listener (9235 LAN, 631 mirror, RAW 9100) bound ONE IPv4 address "
-    "(lan_ip()) and never spoke IPv6: PCs on the hub's other adapters "
-    "could not connect at all. v3.3.0 binds EVERY interface on BOTH "
-    "stacks (one IPv4 socket per interface IP + one [::] socket, "
-    "IPV6_V6ONLY), the mDNS announce adds the AAAA record, the LAN panel "
-    "lists IPv4 AND IPv6 addresses and the RAW/631 rows show the real "
-    "bound sockets. BUG 3 - per-printer IPP queues must work for ANY "
-    "printer that exists: the old [^a-z0-9] slug folded every non-ASCII "
-    "printer name (Bangla, Arabic, CJK) to the single slug 'printer', so "
-    "those queues collided and were never separately active. Slugs are "
-    "Unicode-aware now, queue matching tolerates every slug style via a "
-    "join key, a negative queue match force-refreshes the OS printer "
-    "list (new printers get their queue in seconds, not minutes) and the "
-    "unknown-queue 404 lists the queues that ARE live.")
+VERSION = "3.3.1"
+VERSION_NAME = ("v3.3.1 (THE LAN PC + WINDOWS IPP CONNECTION RELEASE. "
+    "BUG 1 - Windows answered \"Windows couldn't connect to the printer\" "
+    "when any PC added ipp://<hub>:9235/ipp/print or a per-printer queue: "
+    "RFC 8011 requires printer-uri-supported, uri-authentication-supported "
+    "AND uri-security-supported to be three parallel 1setOf lists with the "
+    "SAME value count, but the printer group emitted two fixed auth values "
+    "and NO security list - every echoed client URI broke the cardinality "
+    "and the Microsoft IPP Class Driver refused the printer. v3.3.1 builds "
+    "the full parallel triple (\"none\" per plain-http URI) so the same "
+    "printer that worked for CUPS/phones now also passes Windows' strict "
+    "Add-Printer validation. BUG 2 - per-printer IPP queues 404ed right "
+    "after hub start: the queue resolver only read the ASYNC printer cache, "
+    "which is empty until the background OS enumeration lands; v3.3.1 "
+    "enumerates synchronously (rate-limited) when the cache is empty, so "
+    "ipp://ip:9235/ipp/print/<printer> works the second the hub is up. "
+    "BUG 3 - the ONE UI 'Another PC (LAN PC)' card was a demo mockup: "
+    "Connect read the SELF PC URL field and only toasted, Clear toasted a "
+    "demo string, the CONNECTED chip was hardcoded and every refresh "
+    "overwrote the URL input with this hub's own address - the reported "
+    "\"share send mode auto-redirects to my own ip\" bug. v3.3.1 makes the "
+    "card REAL: Connect probes the OTHER PC's hub server-side (POST "
+    "/peer-probe, token included) and saves {url, token} into peer_hubs, "
+    "Clear wipes the pairing, the chip shows CONNECTED / OFFLINE from live "
+    "probes, and the LAN PC switch 'Share Send Mode' now EXISTS and saves "
+    "instantly. BUG 4 - Share Send Mode sends EVERY print job to the LAN PC "
+    "(config key share_send_all): when that PC is unreachable the job is "
+    "HELD with a readable reason instead of printing locally behind the "
+    "user's back - 'Print now' overrides; virtual PDF printers and raw/"
+    "receipt jobs stay local. peer_forwarding alone keeps the v2.9.1 "
+    "offline-fallback behaviour unchanged.) ")
+
+
 FULL_BRAND = ("AdvPrint Pro (Advanced Printer) by "
               "Bit Dream IT - Innovative Healthcare Solutions")
 BRANDING = ("AdvPrint Pro (Advanced Printer) - Version %s - by "
@@ -169,7 +178,7 @@ MAX_BODY = 40 * 1024 * 1024                 # 40 MB hard cap on request body
 MAX_PDF = 25 * 1024 * 1024                  # 25 MB cap for downloaded pdf_url
 HISTORY_DEFAULT = 100                       # Ultraprint-style: last 100 jobs
 LEGACY_TOKEN = "PrintHub-2024"              # pre-2.0 default (old installs)
-LEGACY_DATA_DIR = ".printhub"               # pre-2.6 data folder (migrated)
+LEGACY_DATA_DIR = ".printhub"
 
 
 def _env(name, default=""):
@@ -225,6 +234,10 @@ CFG = {
     "reprint_reason_required": False,
     "peer_hubs": [],                  # [{"url": "http://ip:9235", "token": "..."}]
     "peer_forwarding": False,         # forward jobs to a live peer hub
+    "share_send_all": False,          # v3.3.1 SHARE SEND MODE - forward
+                                      #  EVERY print job to the LAN PC
+                                      #  (not only when the printer is
+                                      #  offline like peer_forwarding)
     "share_lan": False,               # v2.1: listen on 0.0.0.0 so OTHER PCs
                                       #  on the LAN can print through this
                                       #  PC's printers (token always required)
@@ -343,6 +356,7 @@ CONFIG_KEYS = ("token", "token_header_only", "allowed_origins",
                "max_retries", "retry_base_seconds", "dedupe_minutes",
                "hold_offline", "audit_enabled", "reprint_watermark",
                "reprint_reason_required", "peer_hubs", "peer_forwarding",
+               "share_send_all",          # v3.3.1 Share Send Mode switch
                "share_lan", "escpos_codepage", "thermal_text_engine",
                "log_max_mb", "log_backups", "debug", "instant_auto_queue",
                "printer", "file_dir", "sumatra_path",
@@ -367,6 +381,7 @@ CONFIG_TYPES = {"token_header_only": bool, "allowed_origins": list,
                 "raw_printer_port": int,
                 "reprint_watermark": bool, "reprint_reason_required": bool,
                 "peer_hubs": list, "peer_forwarding": bool,
+                "share_send_all": bool,
                 "log_max_mb": int, "log_backups": int,
                 "debug": bool, "instant_auto_queue": bool,
                 "sumatra_path": str,   # v2.5: manual SumatraPDF.exe override
@@ -1185,16 +1200,52 @@ def _ipp_queue_key(name):
                   flags=re.UNICODE)
 
 
+def _lp_refresh_sync(force=False):
+    """v3.3.1 BUG 2: SYNCHRONOUS one-shot printer enumeration.
+    list_printers_cached() only KICKS a background refresh and answers
+    from the (initially empty) cache - so a LAN PC adding a per-printer
+    queue ipp://ip:9235/ipp/print/HP-Laser right after the hub started
+    got 404 "unknown per-printer IPP queue" until the background refresh
+    happened to finish. Rate-limited to one OS enumeration per 2 s so a
+    client retry storm cannot hammer PowerShell/lpstat; force=True
+    (used by the negative-match retry, which has its own 3 s gate)
+    skips that window - otherwise the forced refresh would be a no-op
+    whenever the empty-cache path had just run."""
+    now = time.time()
+    with _SWR_LOCK:
+        if _SWR_BUSY.get("printers-list"):
+            return                      # a refresh is already running
+        _SWR_BUSY["printers-list"] = True
+        if not force and now - _LP_SYNC_TS[0] < 2.0 and _LP_CACHE["v"]:
+            _SWR_BUSY["printers-list"] = False
+            return
+        _LP_SYNC_TS[0] = now
+    try:
+        _lp_refresh()
+    finally:
+        with _SWR_LOCK:
+            _SWR_BUSY["printers-list"] = False
+
+
 def _ipp_queue_match(name):
     """Resolve a per-printer queue name (raw name, URL-encoded, dash slug
     or Unicode slug) back to the REAL local printer name. Returns ''
     (empty string) for no match. v3.3.0 BUG 3: the compare runs through
     _ipp_queue_key so the slug STYLE does not matter - only the letters
-    and digits of the name do."""
+    and digits of the name do.
+    v3.3.1 BUG 2: when the printer-name cache is EMPTY (fresh hub start)
+    the OS enumeration now runs synchronously first - the queue match can
+    no longer miss a printer that exists just because the async refresh
+    has not landed yet."""
     name = urllib.parse.unquote(str(name or "")).strip()
     want = _ipp_queue_key(name)
     if not want:
         return ""
+    # v3.3.1 BUG 2: resolve against the CURRENT printer list - sync
+    # (rate-limited) when the cache is empty OR older than the 30 s
+    # window, never blind-trusting a stale list for a miss
+    if not _LP_CACHE["v"] or time.time() - _LP_CACHE["t"] > 30.0:
+        _lp_refresh_sync()
     for n in list_printers_cached(max_age=30.0):
         if _ipp_queue_key(n) == want:
             return n
@@ -1239,7 +1290,13 @@ def _ipp_queue_match_cached(name):
         try:
             if now - _QMATCH_LAST_FORCE["t"] >= 3.0:
                 _QMATCH_LAST_FORCE["t"] = now
-                list_printers_cached(max_age=0.0)   # forced OS re-enum
+                # v3.3.1 BUG 2: the old forced refresh only KICKED a
+                # background OS re-enum and re-read the still-empty
+                # cache - the unknown slug memoized a negative answer
+                # even though the printer existed. The synchronous
+                # enum answers immediately (force: its own 3 s gate
+                # already rate-limits this path).
+                _lp_refresh_sync(force=True)
                 got = _ipp_queue_match(name)
         except Exception:
             pass
@@ -1505,6 +1562,7 @@ def _swr_refresh(key, fn):
 
 
 _LP_CACHE = {"t": 0.0, "v": []}      # printer NAMES
+_LP_SYNC_TS = [0.0]                  # v3.3.1 BUG 2: last synchronous enum
 _DP_CACHE = {"t": 0.0, "v": None}    # default printer name
 
 
@@ -1730,6 +1788,12 @@ def build_health_snapshot():
         "instant_auto_queue": bool(
             CFG.get("instant_auto_queue", True)),
         "share_lan": bool(CFG.get("share_lan")),
+        # v3.3.1 SHARE SEND MODE / LAN PC card: live peer state so the
+        # console chip shows CONNECTED / OFFLINE and the switch shows
+        # the real power state (no more hardcoded demo values)
+        "peer_forwarding": bool(CFG.get("peer_forwarding")),
+        "share_send_all": bool(CFG.get("share_send_all")),
+        "peer_hubs_count": len(CFG.get("peer_hubs") or []),
         # v3.2.3 ALLOWED IPS: live state for the LAN tab card
         "allowed_ips": list(CFG.get("allowed_ips") or ["*"]),
         "acl_restricted": "*" not in (CFG.get("allowed_ips") or ["*"]),
@@ -3016,6 +3080,80 @@ def _retry_or_dead(job, err):
 # puts the peer on a 60 s skip list.
 _PEER_FAIL_TS = {}
 
+
+def _share_send_forward(job):
+    """v3.3.1 SHARE SEND MODE - send EVERY print job to the LAN PC.
+    Returns (True, None) when a peer hub accepted the document, or
+    (False, reason) when every peer failed - the worker HOLDS the job in
+    that case so nothing prints locally behind the user's back ('Print
+    now' on the queue row overrides the hold and prints on this PC).
+    Virtual PDF printers (Microsoft Print to PDF) and raw/ESC-POS jobs
+    stay local: saving a PDF file or driving a locally-attached receipt
+    printer on ANOTHER PC makes no sense."""
+    prname = job.get("printer") or ""
+    if job.get("kind") == "raw":
+        return False, ("raw/receipt jobs stay on this PC - Share Send"
+                       " Mode forwards document (PDF) prints only")
+    if is_virtual_pdf_printer(
+            prname or CFG.get("printer") or default_printer() or ""):
+        return False, "virtual PDF printer stays local"
+    peers = CFG.get("peer_hubs") or []
+    if not peers:
+        return False, ("Share Send Mode is ON but no LAN PC is connected"
+                       " - add one in Connections > Another PC (LAN PC)")
+    try:
+        with open(job["file_path"], "rb") as f:
+            data = f.read()
+    except OSError as e:
+        return False, "document file unreadable: %s" % str(e)[:80]
+    want = job.get("printer") or ""
+    errs = []
+    for peer in peers:
+        url = (peer.get("url") or "").rstrip("/")
+        if not url:
+            continue
+        if time.time() - _PEER_FAIL_TS.get(url, 0) < 60:
+            errs.append("%s was recently unreachable" % url)
+            continue
+        headers = {"X-AdvPrint-Token": peer.get("token") or "",
+                   "User-Agent": "AdvPrintPro/%s" % VERSION}
+        try:
+            req = urllib.request.Request(url + "/health", headers=headers)
+            with urllib.request.urlopen(req, timeout=3) as r:
+                if not (r.getcode() == 200):
+                    raise RuntimeError("health check HTTP %s" % r.getcode())
+            payload = json.dumps({
+                "pdf_base64": base64.b64encode(data).decode("ascii"),
+                "title": job.get("title") or "share send",
+                "printer": want, "copies": job.get("copies") or 1,
+                "kind": job.get("kind") or "a4",
+                "source": "share-send:%s" % CFG["port"]}).encode()
+            req = urllib.request.Request(
+                url + "/print", data=payload, headers=dict(
+                    headers, **{"Content-Type": "application/json"}))
+            with urllib.request.urlopen(req, timeout=15) as r:
+                resp = json.loads(r.read().decode("utf-8", "replace"))
+            if resp.get("ok"):
+                _PEER_FAIL_TS.pop(url, None)
+                db_update(job["id"], status="forwarded", peer=url,
+                          error=None, held_reason=None, duration_ms=None)
+                db_audit("job.forwarded", job_id=job["id"], printer=want,
+                         details="Share Send Mode: forwarded to %s"
+                                 " (remote job %s)" % (url,
+                                                       resp.get("job_id")))
+                log("[SHARE] job #%d sent to LAN PC %s (remote job %s)"
+                    % (job["id"], url, resp.get("job_id")))
+                return True, None
+            errs.append("%s rejected: %s" % (url,
+                        str(resp.get("error") or "unknown")[:60]))
+        except Exception as e:
+            _PEER_FAIL_TS[url] = time.time()
+            errs.append("%s: %s" % (url, str(e)[:60]))
+            continue
+    return False, ("LAN PC hub unreachable - job held until it answers"
+                   " (%s)" % "; ".join(errs[:2]) if errs else
+                   "no usable LAN PC peer")
+
 def _try_peer_forward(job):
     """Offline/unknown printer + peer_forwarding on: send the document to
     the first ALIVE peer hub that has the printer. Dead peers are skipped
@@ -3190,6 +3328,29 @@ def worker():
                 # v2.9: resolve the destination ONCE - ANY printer: per-job
                 # name, OS default, selected printer or the upstream IP printer.
                 dkind, dest = resolve_dest(job.get("printer") or "")
+                # v3.3.1 SHARE SEND MODE - every job goes to the LAN PC.
+                # peer_forwarding alone (v2.9.1 M4) only forwards when the
+                # printer is REALLY down; share_send_all (the Connections >
+                # LAN PC card switch) sends EVERY printable job to the peer
+                # hub - exactly the UI promise "Turning Share Send Mode ON
+                # sends every print job to that PC. OFF (default) prints on
+                # the Self PC above." When the LAN PC cannot take the job it
+                # is HELD (nothing prints locally behind the user's back);
+                # 'Print now' overrides and prints on this PC.
+                if dkind != "ip" and CFG.get("share_send_all") and \
+                        CFG.get("peer_forwarding") and \
+                        (CFG.get("peer_hubs") or []):
+                    sent, hold_why = _share_send_forward(job)
+                    if sent:
+                        continue
+                    if is_virtual_pdf_printer(
+                            job.get("printer") or CFG.get("printer")
+                            or default_printer() or "") or \
+                            job.get("kind") == "raw":
+                        pass          # local-only job classes: fall through
+                    else:
+                        _hold_job(job, hold_why)
+                        continue
                 # HOLD: printer offline / out of paper / error state (raw jobs
                 # skip the status check - receipt printers rarely report state)
                 if CFG.get("hold_offline", True) and job.get("kind") != "raw":
@@ -7058,6 +7219,67 @@ class Handler(BaseHTTPRequestHandler):
                                     "printer": nm, "error": detail})
 
         # POST /config - update v2.0 settings at runtime (persists)
+        if route == "/peer-probe":
+            # v3.3.1 BUG 4: the console "Another PC (LAN PC)" card Connect
+            # button asks THIS hub to probe the OTHER PC's hub server-side
+            # (with the token) - a browser fetch() would fight CORS and
+            # mixed-content rules, and the result is needed BEFORE the
+            # peer entry is saved. Returns the peer's version/hostname/
+            # share_lan state; never saves anything (the save is the
+            # follow-up POST /config with peer_hubs).
+            # v3.3.1 BUG 4: the console "Another PC (LAN PC)" card Connect
+            # button asks THIS hub to probe the OTHER PC's hub server-side
+            # (with the token) - a browser fetch() would fight CORS and
+            # mixed-content rules, and the result is needed BEFORE the
+            # peer entry is saved. Returns the peer's version/hostname/
+            # share_lan state; never saves anything (the save is the
+            # follow-up POST /config with peer_hubs).
+            url = str((body or {}).get("url") or "").strip()
+            token = str((body or {}).get("token") or "")
+            u = urllib.parse.urlparse(url)
+            if u.scheme not in ("http", "https") or not u.netloc:
+                return self._send(400, {"ok": False,
+                                        "error": "URL must look like http://192.168.1.101:9235"})
+            host = (u.hostname or "").lower().rstrip(".")
+            try:
+                ipobj = ipaddress.ip_address(host)
+                if not (ipobj.is_private or ipobj.is_loopback
+                        or ipobj.is_link_local) and host not in (
+                        "localhost",):
+                    return self._send(400, {
+                        "ok": False,
+                        "error": "peer hubs must be LAN addresses "
+                                 "(192.168.x / 10.x / 172.16-31.x / "
+                                 "localhost) - not '%s'" % host[:60]})
+            except ValueError:
+                pass                      # hostname - allowed (hub PCs use
+                                          # machine names too)
+            out = {"ok": True, "url": url, "up": False}
+            try:
+                req = urllib.request.Request(
+                    url.rstrip("/") + "/health",
+                    headers={"X-AdvPrint-Token": token,
+                             "User-Agent": "AdvPrintPro/%s" % VERSION})
+                with urllib.request.urlopen(req, timeout=4) as r:
+                    data = json.loads(r.read().decode("utf-8", "replace"))
+                out["up"] = bool(data.get("ok"))
+                out["version"] = str(data.get("version") or "")[:20]
+                out["hostname"] = str(data.get("hostname") or "")[:60]
+                out["share_lan"] = bool(data.get("share_lan"))
+                out["token_ok"] = (data.get("token_hint") or "") == \
+                    (token[-4:] if len(token) >= 4 else "!!")
+                if not out["share_lan"]:
+                    out["note"] = "that hub has LAN Sharing OFF - enable it there before sending jobs"
+            except Exception as e:
+                out["up"] = False
+                out["error"] = ("no answer from %s (%s) - check the"
+                                " URL, the other PC's firewall and its"
+                                " LAN Sharing"
+                                % (url[:60], str(e)[:60]))
+            db_audit("peer.probe", actor="console",
+                     details="%s -> %s" % (url[:60],
+                                           "up" if out["up"] else "down"))
+            return self._send(200, out)
         if route == "/config":
             changed = []
             # v2.9.1 (audit M6 fix): ATOMIC config apply. The old loop did
@@ -9013,14 +9235,18 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
                 automatically from the running hub (one-click fix). Same profile is used by every tab in this console.</div>
             </div>
           </div>
-          <div class="card">
-            <div class="card-h">&#128444; Another PC (LAN PC) — print over the network <span class="r"><span class="chip ok"><span class="d"></span>CONNECTED</span></span></div>
+          <div class="card" id="lanPcCard">
+            <div class="card-h">&#128444; Another PC (LAN PC) — print over the network <span class="r"><span class="chip gray" id="lanPcChip"><span class="d"></span>OFFLINE</span></span></div>
             <div class="card-b">
-              <div class="frow"><label>LAN PC hub URL</label><input class="inp mono" id="lanPcHubUrl" value="http://10.26.94.77:9235"></div>
-              <div class="frow" style="margin-bottom:4px"><label>LAN PC token</label><input class="inp mono" type="password" value="&#183;&#183;&#183;&#183;&#183;&#183;&#183;&#183;&#183;&#183;&#183;&#183;" style="min-width:170px">
-                <button class="btn blue">Connect</button><button class="btn danger">Clear</button></div>
-              <div class="note" style="margin-bottom:0">Turning <b>Share Send Mode</b> ON (Power Switches — it saves instantly) sends every print job to that PC.
-                OFF (default) prints on the Self PC above. Receiving is the OTHER PC's switch (Share Receive Mode).</div>
+              <div class="frow"><label>LAN PC hub URL</label><input class="inp mono" id="lanPcHubUrl" placeholder="http://192.168.1.101:9235" style="min-width:220px"></div>
+              <div class="frow"><label>LAN PC token</label><input class="inp mono" type="password" id="lanPcToken" placeholder="the OTHER PC's hub token" style="min-width:170px"></div>
+              <div class="frow" style="margin-bottom:4px">
+                <button class="btn blue" id="lanPcConnect">Connect</button><button class="btn danger" id="lanPcClear">Clear</button>
+                <span class="mono" id="lanPcState" style="font-size:12px;color:var(--blue-deep)"></span></div>
+              <div class="tgl" id="lanPcSendRow"><span class="sw"><span class="switch" id="lanPcSendSw"></span></span>
+                <div><b>Share Send Mode — send every print job to that PC</b>
+                  <p>ON (saves instantly): every job this PC prints is sent to the LAN PC above and printed THERE. OFF (default): prints on the Self PC above. Receiving is the OTHER PC's switch (Share Receive Mode = its LAN Sharing). When the LAN PC is offline the jobs are HELD (nothing prints locally behind your back — Print now overrides).</p></div></div>
+              <div class="note" style="margin-bottom:0">Connect saves the LAN PC's <span class="mono">hub URL + token</span> into this hub (<span class="mono">peer_hubs</span>) — no config.json editing. One-click alternative: the OTHER PC opens the invite link (<span class="mono">/connect?t=&#8230;</span>) from this console's LAN Sharing card.</div>
             </div>
           </div>
           <div class="card">
@@ -10267,8 +10493,13 @@ function renderLanRows(){
         esc(disp) + ":" + esc(String(hubPort() || 9235)) + "</button>" + mine;
     }).join(" ");
   }
-  var pcUrl = $("lanPcHubUrl");
-  if (pcUrl && document.activeElement !== pcUrl) pcUrl.value = lanBase();
+  /* v3.3.1 BUG 3: the "LAN PC hub URL" input is the OTHER PC's address -
+     it is NOT touched by the live renderer any more. The old code
+     overwrote it with this hub's own URL (lanBase()) on every refresh,
+     so the address the user typed for the other PC vanished and pressing
+     Connect always probed/saved THIS PC - the reported "share send mode
+     auto-redirects to my own ip" bug. The field is only filled from the
+     saved peer entry in loadConnections(). */
   /* discovery + standard-port chips (hub /health: ipp_mdns_up, ipp_std) */
   function setChip(rowId, ok, onTxt, offTxt, lvTxt){
     var row = $(rowId); if (!row) return;
@@ -11032,7 +11263,36 @@ async function loadConnections(){
       }
     }
     setCnt("connections", peers.length);
-    var chipLan = document.querySelector("#p-connections .card .chip.ok");
+    /* v3.3.1 BUG 4: render the "Another PC (LAN PC)" card from LIVE
+       data - the old card was a hardcoded demo mockup (CONNECTED chip,
+       a fake ip and dots in the token field) that no button updated. */
+    var card = $("lanPcCard");
+    if (card) {
+      var saved = (cfgCache.peer_hubs || [])[0] || null;
+      var live = peers.length ? peers[0] : null;
+      var chip = $("lanPcChip"), st = $("lanPcState");
+      var urlIn = $("lanPcHubUrl"), tokIn = $("lanPcToken");
+      if (urlIn && document.activeElement !== urlIn)
+        urlIn.value = saved ? saved.url : "";
+      if (tokIn && document.activeElement !== tokIn)
+        tokIn.value = saved ? (saved.token || "") : "";
+      if (chip) {
+        if (saved) {
+          chip.textContent = live && live.up ? "CONNECTED" : "OFFLINE";
+          chip.className = "chip " + (live && live.up ? "ok" : "err");
+        } else {
+          chip.textContent = "NOT CONFIGURED";
+          chip.className = "chip gray";
+        }
+      }
+      if (st) st.textContent = live && live.version
+        ? ("peer v" + live.version + (live.share_lan ? "" :
+           " \u00b7 LAN sharing OFF on that PC")) : "";
+      var sw = $("lanPcSendSw");
+      if (sw && !sw._touched)
+        sw.classList.toggle("on",
+          !!(cfgCache.peer_forwarding && cfgCache.share_send_all));
+    }
   } catch (e) { /* panel stays as-is */ }
   /* website API permission textarea mirrors ext_api_sites */
   var ta = document.querySelector("#p-connections textarea");
@@ -11341,7 +11601,7 @@ async function renderUpdate(res){
    full-page /docs stays available via the "Full guide page" button.
    ============================================================ */
 function docsHtml(){
-  var v = esc(BOOT.version || "3.3.0");
+  var v = esc(BOOT.version || "3.3.1");
   var ip = esc(BOOT.lan_ip || location.hostname || "127.0.0.1");
   var port = esc(String(BOOT.port || location.port || "9235"));
   var base = "http://" + ip + ":" + port;
@@ -11825,10 +12085,78 @@ function bindButtons(){
   btnLike("#p-connections", /Detect token/i, function(){
     var inp = qsa("#p-connections input[type=password]")[0];
     if (inp) { inp.value = TOKEN; toast("Token filled from the running hub", "ok"); } });
-  btnIn("#p-connections", "Connect", function(){
-    var url = qsa("#p-connections input.inp.mono")[0].value.trim();
-    if (url && url !== BASE) { toast("This console is served BY the hub \u2014 " + BASE + " is already connected", "ok"); }
-    else toast("Connected \u2014 hub answered", "ok"); });
+  /* v3.3.1 BUG 4: the "Another PC (LAN PC)" card is REAL now. The old
+     handler read input.inp.mono[0] - the SELF PC hub URL - and only
+     toasted, so Share Send Mode had nothing to send to and the card
+     always "connected" to this PC itself ("why it redirect own ip").
+     The new handlers act on the LAN PC card's own fields:
+       Connect = probe the OTHER PC's hub (through this hub's server,
+       no CORS problems) and save {url, token} into peer_hubs;
+       Clear   = wipe peer_hubs + both send switches. */
+  var lanPcProbe = function(url, token){
+    return api("/peer-probe", { method: "POST", body: { url: url, token: token } });
+  };
+  var lanPcRender = function(state){
+    var chip = $("lanPcChip"), st = $("lanPcState");
+    if (!chip) return;
+    if (state && state.configured) {
+      chip.textContent = state.up ? "CONNECTED" : "OFFLINE";
+      chip.className = "chip " + (state.up ? "ok" : "err");
+      st.textContent = state.version ? ("peer v" + state.version +
+        (state.share_lan ? "" : " \u00b7 LAN sharing OFF on that PC")) : "";
+    } else {
+      chip.textContent = "NOT CONFIGURED";
+      chip.className = "chip gray";
+      st.textContent = "";
+    }
+    var sw = $("lanPcSendSw");
+    if (sw) sw.classList.toggle("on",
+      !!(cfgCache.peer_forwarding && cfgCache.share_send_all));
+  };
+  $("lanPcConnect") && ($("lanPcConnect").onclick = function(){
+    var url = ($("lanPcHubUrl") || {}).value || "";
+    var tok = ($("lanPcToken") || {}).value || "";
+    url = url.trim();
+    if (!/^https?:\/\/[A-Za-z0-9_.:\[\]-]+(:\d+)?\/?$/.test(url))
+      return toast("Enter the OTHER PC's hub URL first, e.g. http://192.168.1.101:9235", "warn");
+    if (!tok) return toast("Enter the OTHER PC's hub token (its console shows it)", "warn");
+    $("lanPcState").textContent = "connecting \u2026";
+    lanPcProbe(url, tok).then(function(r){
+      if (!r.ok) throw new Error(r.error || "probe failed");
+      var peers = [{ url: url, token: tok, name: r.hostname || "LAN PC" }];
+      var body = { peer_hubs: peers, peer_forwarding: true };
+      api("/config", { method: "POST", body: body })
+        .then(function(){
+          cfgCache.peer_forwarding = true;
+          toast("LAN PC saved \u2014 " + url + " (v" + (r.version || "?") +
+                "). Flip Share Send Mode ON to send every job there.",
+                r.up ? "ok" : "warn");
+          lanPcRender({ configured: true, up: !!r.up, version: r.version,
+                        share_lan: r.share_lan });
+          poll();
+        })
+        .catch(function(e){ $("lanPcState").textContent = "";
+          toast(e.message, "err"); });
+    }).catch(function(e){
+      $("lanPcState").textContent = "";
+      toast("LAN PC did not answer: " + e.message +
+            " \u2014 check the URL, the firewall on the other PC, and that its LAN Sharing is ON", "err");
+    });
+  });
+  $("lanPcClear") && ($("lanPcClear").onclick = function(){
+    api("/config", { method: "POST", body: { peer_hubs: [],
+                                             peer_forwarding: false,
+                                             share_send_all: false } })
+      .then(function(){
+        cfgCache.peer_forwarding = false; cfgCache.share_send_all = false;
+        if ($("lanPcHubUrl")) $("lanPcHubUrl").value = "";
+        if ($("lanPcToken")) $("lanPcToken").value = "";
+        lanPcRender({ configured: false });
+        toast("LAN PC pairing cleared \u2014 jobs print on the Self PC again", "warn");
+        poll();
+      })
+      .catch(function(e){ toast(e.message, "err"); });
+  });
   btnLike("#p-connections", /Shift all waiting/i, function(){
     var inp = qsa("#p-connections .frow input.inp.mono")[1];
     var peer = inp ? inp.value.trim() : "";
@@ -11836,7 +12164,8 @@ function bindButtons(){
     api("/queue/shift", { method: "POST", body: { peer: peer } })
       .then(function(){ toast("Queue shifted to " + peer, "ok"); poll(); })
       .catch(function(e){ toast(e.message, "err"); }); });
-  btnLike("#p-connections", /Clear/i, function(){ toast("LAN PC pairing cleared (demo value)", "warn"); });
+  /* v3.3.1: the LAN PC Clear button is bound by id above - the old demo
+     toast ("cleared (demo value)") is gone. */
   /* hub panel */
   btnLike("#p-hub", /Apply hub settings/i, function(){ ACTIONS["save-hub"](); });
   btnLike("#p-hub", /Reload from hub/i, function(){ refreshHubPanel(); toast("Reloaded from hub", "ok"); });
@@ -12357,6 +12686,30 @@ function bindSwitches(){
         toast("Minimize to tray is the desktop-app default", "warn");
         return;
       }
+    }
+    /* v3.3.1 SHARE SEND MODE switch (Connections > LAN PC card) -
+       saves BOTH keys instantly, exactly like the note promises. */
+    if (s.id === "lanPcSendSw") {
+      s._touched = true;
+      setTimeout(function(){ s._touched = false; }, 1200);
+      var want = !s.classList.contains("on");
+      var peers = (cfgCache.peer_hubs_count || 0);
+      if (want && !peers) {
+        toast("Connect the LAN PC first - enter its hub URL + token and press Connect", "warn");
+        return;                      /* switch stays OFF */
+      }
+      s.classList.toggle("on", want);
+      api("/config", { method: "POST", body: { peer_forwarding: want,
+                                               share_send_all: want } })
+        .then(function(){
+          cfgCache.peer_forwarding = want; cfgCache.share_send_all = want;
+          toast(want ? "Share Send Mode ON \u2014 every print job now goes to the LAN PC"
+                     : "Share Send Mode OFF \u2014 jobs print on the Self PC again",
+                want ? "ok" : "warn");
+        })
+        .catch(function(e){ s.classList.toggle("on", !want);
+          toast(e.message, "err"); });
+      return;
     }
     s.classList.toggle("on");
     if (scope === "p-dropzone") {          /* save immediately */
@@ -15103,22 +15456,39 @@ def _ipp_printer_group(queue_slug=None, queue_name=None, extra_uris=None):
         q_name = queue_name or queue_slug
     else:
         q_name = None
-    # v3.2.9: the EXACT URI the client asked for is echoed too (both
-    # schemes) when its path differs from the canonical slug - e.g. the
-    # user typed HP-Laser-103 while the queue canonicalizes to
-    # hp-laser-103, or the device reached the hub by another address.
+    # v3.3.1 BUG 1 (THE "Windows couldn't connect to the printer" FIX):
+    # RFC 8011 requires printer-uri-supported, uri-authentication-supported
+    # AND uri-security-supported to be THREE PARALLEL 1setOf attributes
+    # with the SAME number of values - one auth/security keyword per URI.
+    # v3.3.0 built only two fixed auth values and omitted
+    # uri-security-supported entirely, so every echo of a LAN client's
+    # own URI (4 URIs vs 2 auth values, no security list) failed the
+    # Microsoft IPP Class Driver validation - Windows answered
+    # "Windows couldn't connect to the printer" while CUPS/phones kept
+    # working. Both schemes are plain http (no TLS on this hub), so the
+    # security value is "none" for every URI; the same rule the MS class
+    # driver itself ships with for http:// printers.
+    auths, secs = [], []
     for ex in (extra_uris or []):
         if ex and ex not in uris:
             uris.insert(min(2, len(uris)), ex)
+    for _u in uris:
+        auths.append("none")
+        secs.append("none")
     attrs = [
         # -- printer description (RFC 8011 REQUIRED for every response)
         _ipp_attr(V_URI, "printer-uri-supported", uris[0]),
     ]
     for extra in uris[1:]:
         attrs.append(_ipp_additional_attr(V_URI, extra))
+    attrs.append(_ipp_attr(V_KEYWORD, "uri-authentication-supported",
+                           auths[0]))
+    for extra in auths[1:]:
+        attrs.append(_ipp_additional_attr(V_KEYWORD, extra))
+    attrs.append(_ipp_attr(V_KEYWORD, "uri-security-supported", secs[0]))
+    for extra in secs[1:]:
+        attrs.append(_ipp_additional_attr(V_KEYWORD, extra))
     attrs += [
-        _ipp_attr(V_KEYWORD, "uri-authentication-supported", "none"),
-        _ipp_additional_attr(V_KEYWORD, "none"),
         _ipp_enum("printer-state",
                   IPP_JOB_PROCESSING if pending else IPP_JOB_PENDING),
         _ipp_attr(V_KEYWORD, "printer-state-reasons", "none"),

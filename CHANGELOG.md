@@ -1,6 +1,86 @@
 # Changelog - AdvPrint Pro (Advanced Printer)
 by Bit Dream IT - Innovative Healthcare Solutions
 
+## v3.3.1 - THE LAN PC + WINDOWS IPP CONNECTION RELEASE (2026-11-12)
+
+Base: v3.3.0 (any-PC invite + dual-stack listeners) with every earlier
+fix unchanged. Four user reports from the real two-PC lab, all fixed
+and locked by `tests/test_v331.py` plus the live repro
+`scripts/repro_v331_ipp.py` (a real Windows-11-style IPP session from a
+simulated LAN client).
+
+### BUG 1 - Windows: "couldn't connect to the printer" on BOTH IPP URLs
+Adding `ipp://<hub>:9235/ipp/print` OR
+`ipp://<hub>:9235/ipp/print/<printer>` from another PC failed with the
+Microsoft Add-Printer error while CUPS/phones kept working. Root cause:
+RFC 8011 requires `printer-uri-supported`,
+`uri-authentication-supported` AND `uri-security-supported` to be three
+PARALLEL 1setOf attributes with the SAME number of values - one auth +
+one security keyword per URI. The v3.3.0 printer group emitted two
+fixed auth values and NO `uri-security-supported` at all, so every
+response that echoed the LAN client's own URI (4 URIs vs 2 auth values,
+no security list) failed the Microsoft IPP Class Driver validation.
+Now `_ipp_printer_group()` builds the full parallel triple ("none" per
+plain-http URI - the same value the Microsoft class driver itself uses
+for http:// printers), for the generic queue, for every per-printer
+queue and for every echoed extra URI.
+
+### BUG 2 - per-printer IPP queues 404ed right after hub start
+`ipp://ip:9235/ipp/print/<printer>` answered "unknown per-printer IPP
+queue" until the ASYNC printer cache happened to fill (the queue
+resolver only read `list_printers_cached()`, which returns the empty
+cache and merely KICKS a background refresh). A LAN PC adding a queue
+in the first seconds after hub start always hit the 404. Now
+`_lp_refresh_sync()` runs the OS enumeration SYNCHRONOUSLY (rate-
+limited to one per 2 s) when the cache is empty, and the negative-
+match force-refresh in `_ipp_queue_match_cached()` uses the same
+synchronous refresh - the queue resolves the moment the hub is up.
+
+### BUG 3 - the "Another PC (LAN PC)" card was a demo mockup
+The ONE UI Connections card showed a hardcoded CONNECTED chip, a fake
+IP and dots in the token field; **Connect read the SELF PC hub URL
+field** (`input.inp.mono[0]`) and only toasted - the reported
+"share send mode auto-redirects to my own ip" - and Clear toasted
+"(demo value)". Worse, the live renderer overwrote the LAN PC URL
+input with this hub's own address on every refresh, so the OTHER PC's
+address the user typed vanished. Now the card is REAL:
+- `#lanPcHubUrl` / `#lanPcToken` are user-owned fields, only filled
+  from the saved peer entry - never overwritten with the own URL
+- **Connect** probes the OTHER PC's hub server-side (`POST
+  /peer-probe`, token included - no CORS, no mixed-content pain) and
+  saves `{url, token, name}` into `peer_hubs` + `peer_forwarding: true`
+  in one atomic `/config` write; the chip flips to CONNECTED with the
+  peer's version, or stays OFFLINE with a readable error
+- **Clear** wipes `peer_hubs`, `peer_forwarding` AND `share_send_all`
+- the chip renders from `/peers` + `/config` live data (CONNECTED /
+  OFFLINE / NOT CONFIGURED)
+- a REAL **Share Send Mode** power switch exists in the card and saves
+  instantly (flip = POST /config with both keys); it refuses to turn ON
+  while no LAN PC is connected
+
+### BUG 4 - Share Send Mode now sends EVERY job to the LAN PC
+`peer_forwarding` alone only forwarded jobs when the printer was REALLY
+down (the v2.9.1 M4 fix - behaviour unchanged). The new config key
+`share_send_all` (the switch above) forwards EVERY printable job to the
+first alive peer hub; the job is marked `forwarded` with the remote job
+id. When the LAN PC is unreachable or rejects the job, the job is HELD
+with a readable reason ("LAN PC hub unreachable - job held until it
+answers") - nothing prints locally behind the user's back; **Print
+now** overrides and prints on this PC. Virtual PDF printers (Microsoft
+Print to PDF) and raw/ESC-POS receipt jobs stay local - saving a PDF
+file or driving a locally-attached receipt printer on ANOTHER PC makes
+no sense.
+
+### New: POST /peer-probe
+Token-gated management endpoint used by the console Connect button:
+probes `<url>/health` server-side with the given token and returns
+`{up, version, hostname, share_lan, token_ok}` plus a readable error
+when the peer is down. LAN-only: non-private hosts are refused (400).
+
+### Health JSON additions
+`peer_forwarding`, `share_send_all`, `peer_hubs_count` - the ONE UI
+chip and switch render the REAL state (no more hardcoded demo values).
+
 ## v3.3.0 - THE ANY-PC INVITE + DUAL-STACK LISTENER RELEASE (2026-11-12)
 
 Base: v3.2.9 - the multi-PC IPP release (per-printer queue echo, 128

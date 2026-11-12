@@ -958,14 +958,18 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
                 automatically from the running hub (one-click fix). Same profile is used by every tab in this console.</div>
             </div>
           </div>
-          <div class="card">
-            <div class="card-h">&#128444; Another PC (LAN PC) — print over the network <span class="r"><span class="chip ok"><span class="d"></span>CONNECTED</span></span></div>
+          <div class="card" id="lanPcCard">
+            <div class="card-h">&#128444; Another PC (LAN PC) — print over the network <span class="r"><span class="chip gray" id="lanPcChip"><span class="d"></span>OFFLINE</span></span></div>
             <div class="card-b">
-              <div class="frow"><label>LAN PC hub URL</label><input class="inp mono" id="lanPcHubUrl" value="http://10.26.94.77:9235"></div>
-              <div class="frow" style="margin-bottom:4px"><label>LAN PC token</label><input class="inp mono" type="password" value="&#183;&#183;&#183;&#183;&#183;&#183;&#183;&#183;&#183;&#183;&#183;&#183;" style="min-width:170px">
-                <button class="btn blue">Connect</button><button class="btn danger">Clear</button></div>
-              <div class="note" style="margin-bottom:0">Turning <b>Share Send Mode</b> ON (Power Switches — it saves instantly) sends every print job to that PC.
-                OFF (default) prints on the Self PC above. Receiving is the OTHER PC's switch (Share Receive Mode).</div>
+              <div class="frow"><label>LAN PC hub URL</label><input class="inp mono" id="lanPcHubUrl" placeholder="http://192.168.1.101:9235" style="min-width:220px"></div>
+              <div class="frow"><label>LAN PC token</label><input class="inp mono" type="password" id="lanPcToken" placeholder="the OTHER PC's hub token" style="min-width:170px"></div>
+              <div class="frow" style="margin-bottom:4px">
+                <button class="btn blue" id="lanPcConnect">Connect</button><button class="btn danger" id="lanPcClear">Clear</button>
+                <span class="mono" id="lanPcState" style="font-size:12px;color:var(--blue-deep)"></span></div>
+              <div class="tgl" id="lanPcSendRow"><span class="sw"><span class="switch" id="lanPcSendSw"></span></span>
+                <div><b>Share Send Mode — send every print job to that PC</b>
+                  <p>ON (saves instantly): every job this PC prints is sent to the LAN PC above and printed THERE. OFF (default): prints on the Self PC above. Receiving is the OTHER PC's switch (Share Receive Mode = its LAN Sharing). When the LAN PC is offline the jobs are HELD (nothing prints locally behind your back — Print now overrides).</p></div></div>
+              <div class="note" style="margin-bottom:0">Connect saves the LAN PC's <span class="mono">hub URL + token</span> into this hub (<span class="mono">peer_hubs</span>) — no config.json editing. One-click alternative: the OTHER PC opens the invite link (<span class="mono">/connect?t=&#8230;</span>) from this console's LAN Sharing card.</div>
             </div>
           </div>
           <div class="card">
@@ -2212,8 +2216,13 @@ function renderLanRows(){
         esc(disp) + ":" + esc(String(hubPort() || 9235)) + "</button>" + mine;
     }).join(" ");
   }
-  var pcUrl = $("lanPcHubUrl");
-  if (pcUrl && document.activeElement !== pcUrl) pcUrl.value = lanBase();
+  /* v3.3.1 BUG 3: the "LAN PC hub URL" input is the OTHER PC's address -
+     it is NOT touched by the live renderer any more. The old code
+     overwrote it with this hub's own URL (lanBase()) on every refresh,
+     so the address the user typed for the other PC vanished and pressing
+     Connect always probed/saved THIS PC - the reported "share send mode
+     auto-redirects to my own ip" bug. The field is only filled from the
+     saved peer entry in loadConnections(). */
   /* discovery + standard-port chips (hub /health: ipp_mdns_up, ipp_std) */
   function setChip(rowId, ok, onTxt, offTxt, lvTxt){
     var row = $(rowId); if (!row) return;
@@ -2977,7 +2986,36 @@ async function loadConnections(){
       }
     }
     setCnt("connections", peers.length);
-    var chipLan = document.querySelector("#p-connections .card .chip.ok");
+    /* v3.3.1 BUG 4: render the "Another PC (LAN PC)" card from LIVE
+       data - the old card was a hardcoded demo mockup (CONNECTED chip,
+       a fake ip and dots in the token field) that no button updated. */
+    var card = $("lanPcCard");
+    if (card) {
+      var saved = (cfgCache.peer_hubs || [])[0] || null;
+      var live = peers.length ? peers[0] : null;
+      var chip = $("lanPcChip"), st = $("lanPcState");
+      var urlIn = $("lanPcHubUrl"), tokIn = $("lanPcToken");
+      if (urlIn && document.activeElement !== urlIn)
+        urlIn.value = saved ? saved.url : "";
+      if (tokIn && document.activeElement !== tokIn)
+        tokIn.value = saved ? (saved.token || "") : "";
+      if (chip) {
+        if (saved) {
+          chip.textContent = live && live.up ? "CONNECTED" : "OFFLINE";
+          chip.className = "chip " + (live && live.up ? "ok" : "err");
+        } else {
+          chip.textContent = "NOT CONFIGURED";
+          chip.className = "chip gray";
+        }
+      }
+      if (st) st.textContent = live && live.version
+        ? ("peer v" + live.version + (live.share_lan ? "" :
+           " \u00b7 LAN sharing OFF on that PC")) : "";
+      var sw = $("lanPcSendSw");
+      if (sw && !sw._touched)
+        sw.classList.toggle("on",
+          !!(cfgCache.peer_forwarding && cfgCache.share_send_all));
+    }
   } catch (e) { /* panel stays as-is */ }
   /* website API permission textarea mirrors ext_api_sites */
   var ta = document.querySelector("#p-connections textarea");
@@ -3286,7 +3324,7 @@ async function renderUpdate(res){
    full-page /docs stays available via the "Full guide page" button.
    ============================================================ */
 function docsHtml(){
-  var v = esc(BOOT.version || "3.3.0");
+  var v = esc(BOOT.version || "3.3.1");
   var ip = esc(BOOT.lan_ip || location.hostname || "127.0.0.1");
   var port = esc(String(BOOT.port || location.port || "9235"));
   var base = "http://" + ip + ":" + port;
@@ -3770,10 +3808,78 @@ function bindButtons(){
   btnLike("#p-connections", /Detect token/i, function(){
     var inp = qsa("#p-connections input[type=password]")[0];
     if (inp) { inp.value = TOKEN; toast("Token filled from the running hub", "ok"); } });
-  btnIn("#p-connections", "Connect", function(){
-    var url = qsa("#p-connections input.inp.mono")[0].value.trim();
-    if (url && url !== BASE) { toast("This console is served BY the hub \u2014 " + BASE + " is already connected", "ok"); }
-    else toast("Connected \u2014 hub answered", "ok"); });
+  /* v3.3.1 BUG 4: the "Another PC (LAN PC)" card is REAL now. The old
+     handler read input.inp.mono[0] - the SELF PC hub URL - and only
+     toasted, so Share Send Mode had nothing to send to and the card
+     always "connected" to this PC itself ("why it redirect own ip").
+     The new handlers act on the LAN PC card's own fields:
+       Connect = probe the OTHER PC's hub (through this hub's server,
+       no CORS problems) and save {url, token} into peer_hubs;
+       Clear   = wipe peer_hubs + both send switches. */
+  var lanPcProbe = function(url, token){
+    return api("/peer-probe", { method: "POST", body: { url: url, token: token } });
+  };
+  var lanPcRender = function(state){
+    var chip = $("lanPcChip"), st = $("lanPcState");
+    if (!chip) return;
+    if (state && state.configured) {
+      chip.textContent = state.up ? "CONNECTED" : "OFFLINE";
+      chip.className = "chip " + (state.up ? "ok" : "err");
+      st.textContent = state.version ? ("peer v" + state.version +
+        (state.share_lan ? "" : " \u00b7 LAN sharing OFF on that PC")) : "";
+    } else {
+      chip.textContent = "NOT CONFIGURED";
+      chip.className = "chip gray";
+      st.textContent = "";
+    }
+    var sw = $("lanPcSendSw");
+    if (sw) sw.classList.toggle("on",
+      !!(cfgCache.peer_forwarding && cfgCache.share_send_all));
+  };
+  $("lanPcConnect") && ($("lanPcConnect").onclick = function(){
+    var url = ($("lanPcHubUrl") || {}).value || "";
+    var tok = ($("lanPcToken") || {}).value || "";
+    url = url.trim();
+    if (!/^https?:\/\/[A-Za-z0-9_.:\[\]-]+(:\d+)?\/?$/.test(url))
+      return toast("Enter the OTHER PC's hub URL first, e.g. http://192.168.1.101:9235", "warn");
+    if (!tok) return toast("Enter the OTHER PC's hub token (its console shows it)", "warn");
+    $("lanPcState").textContent = "connecting \u2026";
+    lanPcProbe(url, tok).then(function(r){
+      if (!r.ok) throw new Error(r.error || "probe failed");
+      var peers = [{ url: url, token: tok, name: r.hostname || "LAN PC" }];
+      var body = { peer_hubs: peers, peer_forwarding: true };
+      api("/config", { method: "POST", body: body })
+        .then(function(){
+          cfgCache.peer_forwarding = true;
+          toast("LAN PC saved \u2014 " + url + " (v" + (r.version || "?") +
+                "). Flip Share Send Mode ON to send every job there.",
+                r.up ? "ok" : "warn");
+          lanPcRender({ configured: true, up: !!r.up, version: r.version,
+                        share_lan: r.share_lan });
+          poll();
+        })
+        .catch(function(e){ $("lanPcState").textContent = "";
+          toast(e.message, "err"); });
+    }).catch(function(e){
+      $("lanPcState").textContent = "";
+      toast("LAN PC did not answer: " + e.message +
+            " \u2014 check the URL, the firewall on the other PC, and that its LAN Sharing is ON", "err");
+    });
+  });
+  $("lanPcClear") && ($("lanPcClear").onclick = function(){
+    api("/config", { method: "POST", body: { peer_hubs: [],
+                                             peer_forwarding: false,
+                                             share_send_all: false } })
+      .then(function(){
+        cfgCache.peer_forwarding = false; cfgCache.share_send_all = false;
+        if ($("lanPcHubUrl")) $("lanPcHubUrl").value = "";
+        if ($("lanPcToken")) $("lanPcToken").value = "";
+        lanPcRender({ configured: false });
+        toast("LAN PC pairing cleared \u2014 jobs print on the Self PC again", "warn");
+        poll();
+      })
+      .catch(function(e){ toast(e.message, "err"); });
+  });
   btnLike("#p-connections", /Shift all waiting/i, function(){
     var inp = qsa("#p-connections .frow input.inp.mono")[1];
     var peer = inp ? inp.value.trim() : "";
@@ -3781,7 +3887,8 @@ function bindButtons(){
     api("/queue/shift", { method: "POST", body: { peer: peer } })
       .then(function(){ toast("Queue shifted to " + peer, "ok"); poll(); })
       .catch(function(e){ toast(e.message, "err"); }); });
-  btnLike("#p-connections", /Clear/i, function(){ toast("LAN PC pairing cleared (demo value)", "warn"); });
+  /* v3.3.1: the LAN PC Clear button is bound by id above - the old demo
+     toast ("cleared (demo value)") is gone. */
   /* hub panel */
   btnLike("#p-hub", /Apply hub settings/i, function(){ ACTIONS["save-hub"](); });
   btnLike("#p-hub", /Reload from hub/i, function(){ refreshHubPanel(); toast("Reloaded from hub", "ok"); });
@@ -4302,6 +4409,30 @@ function bindSwitches(){
         toast("Minimize to tray is the desktop-app default", "warn");
         return;
       }
+    }
+    /* v3.3.1 SHARE SEND MODE switch (Connections > LAN PC card) -
+       saves BOTH keys instantly, exactly like the note promises. */
+    if (s.id === "lanPcSendSw") {
+      s._touched = true;
+      setTimeout(function(){ s._touched = false; }, 1200);
+      var want = !s.classList.contains("on");
+      var peers = (cfgCache.peer_hubs_count || 0);
+      if (want && !peers) {
+        toast("Connect the LAN PC first - enter its hub URL + token and press Connect", "warn");
+        return;                      /* switch stays OFF */
+      }
+      s.classList.toggle("on", want);
+      api("/config", { method: "POST", body: { peer_forwarding: want,
+                                               share_send_all: want } })
+        .then(function(){
+          cfgCache.peer_forwarding = want; cfgCache.share_send_all = want;
+          toast(want ? "Share Send Mode ON \u2014 every print job now goes to the LAN PC"
+                     : "Share Send Mode OFF \u2014 jobs print on the Self PC again",
+                want ? "ok" : "warn");
+        })
+        .catch(function(e){ s.classList.toggle("on", !want);
+          toast(e.message, "err"); });
+      return;
     }
     s.classList.toggle("on");
     if (scope === "p-dropzone") {          /* save immediately */
