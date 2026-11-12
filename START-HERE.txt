@@ -1,72 +1,75 @@
-AdvPrint Pro (Advanced Printer) v3.3.1 - START HERE
+AdvPrint Pro (Advanced Printer) v3.3.0 - START HERE
+====================================================
 by Bit Dream IT - Innovative Healthcare Solutions
 
-QUICK NOTE ON v3.3.1 - THE LAN PC + WINDOWS IPP CONNECTION RELEASE
-==================================================================
+QUICK NOTE ON v3.3.0 - THE ANY-PC INVITE + DUAL-STACK LISTENER RELEASE
+--------------------------------------------------------------------
+1) THE INVITE LINK CONNECTS THE RIGHT PC NOW. Opening
+   http://<hub-ip>:9235/connect?t=<token> no longer points at the
+   serving PC's own lan_ip() guess - the page uses the address YOU
+   typed (and saves exactly that peer URL). Opening the invite ON the
+   hub PC itself shows an explainer page instead of adding the hub to
+   itself, POST /peer-connect refuses self-invites, the page probes
+   the visiting PC's own hub before you click, and a token that
+   belongs to a DIFFERENT PC's hub is explained in plain words.
+2) EVERY LISTENER ANSWERS IPv4 AND IPv6 ON EVERY INTERFACE. The 9235
+   LAN hub, the 631 IPP mirror and the RAW 9100 port bind one socket
+   per interface IP plus one [::] socket each - a VPN/second-NIC PC no
+   longer goes deaf on its other addresses, and IPv6-only LANs work.
+   The LAN panel shows the REAL bound sockets (Hub addresses chips,
+   RAW + 631 rows), and interface changes rebind automatically.
+   allowed_ips still gates every socket exactly as before.
+3) PER-PRINTER IPP QUEUES WORK FOR ANY PRINTER THAT EXISTS. Unicode
+   printer names (Bangla / Arabic / CJK) get their own distinct,
+   percent-encoded queue slugs; matching tolerates dash / underscore /
+   %20 styles; a newly added printer's queue goes live in seconds; the
+   unknown-queue 404 lists the queues that ARE live; mDNS announces up
+   to 24 per-printer queues (+ the AAAA record for IPv6).
+4) IMPORTANT UPGRADE STEP: the extension is auto-updated FROM THE HUB
+   (updates.xml) - after updating the hub, check
+   http://127.0.0.1:9235/extension/info : it must show
+   "stale": false and version 3.3.0. If it shows "stale": true, re-run
+   the installer (or restart the hub once) - the embedded CRX was not
+   synced; Chrome then silently updates the extension to 3.3.0.
 
-This release fixes the four reports from the two-PC lab:
-
-1. WINDOWS NOW CONNECTS: adding ipp://<hub>:9235/ipp/print or
-   ipp://<hub>:9235/ipp/print/<printer> from another PC failed with
-   "Windows couldn't connect to the printer". The hub's IPP answer was
-   missing the uri-security-supported attribute and carried fewer
-   authentication values than printer URIs - Microsoft's strict IPP
-   Class Driver refuses such printers. Fixed (RFC 8011 parallel triple).
-
-2. PER-PRINTER QUEUES WORK INSTANTLY: ipp://<hub>:9235/ipp/print/<name>
-   no longer 404s in the first seconds after the hub starts.
-
-3. THE LAN PC CARD IS REAL: Connections > "Another PC (LAN PC)" now
-   actually saves the other PC (URL + token -> Connect), shows the live
-   CONNECTED/OFFLINE chip and Clear really clears. It no longer rewrites
-   the URL field with your own PC's address.
-
-4. SHARE SEND MODE WORKS: flip the new switch in the LAN PC card and
-   EVERY print job goes to that PC. If that PC is offline the job is
-   HELD (nothing prints locally behind your back) - Print now overrides.
-
-HOW TO UPDATE (5 minutes)
-=========================
-1. Windows: run AdvPrint-Pro-Setup-3.3.1.exe - it installs over the
-   old folder and keeps your printers, history and token.
-2. Start AdvPrint Pro. The tray tooltip shows "v3.3.1 - running on
+UPGRADE IN 3 STEPS (from any v3.x)
+----------------------------------
+1. Close the old hub (tray icon -> Exit) and run the new
+   AdvPrint-Pro-Setup-3.3.0.exe - it installs over the old folder and
+   keeps config.json, the queue database and your rules.
+2. Start AdvPrint Pro. The tray tooltip shows "v3.3.0 - running on
    http://127.0.0.1:9235".
-3. Reload the extension: chrome://extensions -> AdvPrint Pro -> the
-   reload icon. Check the popup shows "stale": false and version 3.3.1.
-   Linux .deb: sudo dpkg -i advprint-pro_3.3.1_all.deb.
+3. Chrome updates the extension by itself from the hub within a minute
+   (chrome://extensions -> AdvPrint Pro -> 3.3.0). Linux .deb: sudo
+   dpkg -i advprint-pro_3.3.0_all.deb.
 
-CONNECT TWO PCs IN 60 SECONDS
-=============================
-On the PC that should PRINT (the client):
-- Open the console (http://127.0.0.1:9235/ui) -> Connections.
-- In "Another PC (LAN PC)" enter the OTHER PC's hub URL
-  (http://192.168.1.101:9235) and ITS token, press Connect.
-- Flip "Share Send Mode" ON - every job now prints on that PC.
-On the PC that RECEIVES (the hub PC): LAN Sharing must be ON
-(LAN Sharing card > Enable). The one-click invite link
-(http://<hub-ip>:9235/connect?t=<token>) also configures the client PC
-automatically when opened there.
+QUICK VERIFY (2 minutes)
+------------------------
+- Console: http://127.0.0.1:9235/ui - LAN Sharing card shows "Hub
+  addresses" chips (IPv4 AND IPv6 where available), the RAW row shows
+  every bound 9100 socket.
+- Invite: LAN card -> "Connect another PC" -> Copy invite link -> open
+  it on the OTHER PC. The page says which PC's hub it adds and probes
+  that PC's own hub first. Open it on the hub PC itself and you get
+  the "this invite is for the OTHER PC" explainer - never a self-add.
+- Per-printer queues: http://127.0.0.1:9235/printers lists
+  ipp://<ip>:9235/ipp/print/<printer> for EVERY printer, Unicode
+  names included. Add one on another PC - it connects first try.
+- IPv6: on an IPv6-capable PC, netstat -ano | findstr ":9100" shows
+  0.0.0.0/your-IPv4 AND [::] rows - both answer.
 
-WHAT TO CHECK FIRST (30 seconds)
-================================
-- http://127.0.0.1:9235/health must show "ok": true, "stale": false and
-  version 3.3.1. If it shows "stale": true, re-run
-  scripts/embed_console.py - the UI in the hub is older than
-  console.html; Chrome then silently updates the extension to 3.3.1.
+DOCUMENTATION (all local, A-to-Z)
+---------------------------------
+- README.md            - features, install, API, LAN/IPP modes
+- docs/DEVELOPER-API.md          - window.advprint JS API
+- docs/AdvPrint-Pro-v3.3.0-A-to-Z-DEV-GUIDE.md - build + release guide
+- docs/RELEASE-NOTES-v3.3.0.md   - this release, all three bugs
+- docs/PrintHub-Pro-Full-Guide.html - step-by-step visual manual
+- CHANGELOG.md                   - every release since v1.0.0
+- Console (127.0.0.1:9235/ui) -> Docs button - the same guide in-UI
 
-FULL PACKAGE CONTENTS
-=====================
-- AdvPrint-Pro-Setup-3.3.1.exe    Windows installer (NSIS, portable +
-                                  embedded Python - no prerequisites)
-- AdvPrint-Pro-v3.3.1.zip        portable zip (same files, no installer)
-- advprint-pro_3.3.1_all.deb     Linux (Debian/Ubuntu) package
-- extension/                     load-unpacked Chrome extension (MV3)
-- AdvPrint-Pro.crx               packed CRX3 (enterprise policy install)
-- docs/AdvPrint-Pro-v3.3.1-A-to-Z-DEV-GUIDE.md - build + release guide
-- docs/RELEASE-NOTES-v3.3.1.md   - this release, all four bugs
-- docs/                          older guides + release notes
-
-Need help? Open the console (tray icon > Open dashboard) - every
-setting shows a live hint, and the Docs button opens the full guide.
-
-- Bit Dream IT - Innovative Healthcare Solutions
+SUPPORT
+-------
+MIT license - 100% local - no cloud, no tracking.
+Bit Dream IT - Innovative Healthcare Solutions
+https://github.com/bitdreamit/AdvPrint-Pro

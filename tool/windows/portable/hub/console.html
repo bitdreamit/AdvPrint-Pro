@@ -764,6 +764,18 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
           </div>
 
           <div class="card">
+            <div class="card-h">&#128101; Other PCs &amp; devices from a different IP <span class="r">their printers appear below with a source badge</span></div>
+            <div class="card-b">
+              <div class="frow" style="margin-bottom:0">
+                <span class="tgl"><span class="sw"><span class="switch" id="showRemoteSw"></span></span></span>
+                <b>Show other PCs (LAN / IPP)</b>
+                <span class="note" style="margin:0 0 0 8px">Lists the paired LAN PC's printers (Connections &rarr; Another PC) with a
+                  <b>LAN PC &middot; IPP</b> badge, its ip:port and a ipp:// URL per device &mdash; test-page them right from here.</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
             <div class="card-h">&#127919; Print destination <span class="r">where jobs go when no rule matches · per-job printer always wins</span></div>
             <div class="card-b">
               <div class="frow" style="margin-bottom:8px">
@@ -958,18 +970,23 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
                 automatically from the running hub (one-click fix). Same profile is used by every tab in this console.</div>
             </div>
           </div>
-          <div class="card" id="lanPcCard">
-            <div class="card-h">&#128444; Another PC (LAN PC) — print over the network <span class="r"><span class="chip gray" id="lanPcChip"><span class="d"></span>OFFLINE</span></span></div>
+          <div class="card">
+            <div class="card-h">&#128444; Another PC (LAN PC) — print over the network
+              <span class="r"><span class="chip gray" id="lanPcChip"><span class="d"></span>OFFLINE</span></span></div>
             <div class="card-b">
-              <div class="frow"><label>LAN PC hub URL</label><input class="inp mono" id="lanPcHubUrl" placeholder="http://192.168.1.101:9235" style="min-width:220px"></div>
-              <div class="frow"><label>LAN PC token</label><input class="inp mono" type="password" id="lanPcToken" placeholder="the OTHER PC's hub token" style="min-width:170px"></div>
-              <div class="frow" style="margin-bottom:4px">
-                <button class="btn blue" id="lanPcConnect">Connect</button><button class="btn danger" id="lanPcClear">Clear</button>
-                <span class="mono" id="lanPcState" style="font-size:12px;color:var(--blue-deep)"></span></div>
-              <div class="tgl" id="lanPcSendRow"><span class="sw"><span class="switch" id="lanPcSendSw"></span></span>
-                <div><b>Share Send Mode — send every print job to that PC</b>
-                  <p>ON (saves instantly): every job this PC prints is sent to the LAN PC above and printed THERE. OFF (default): prints on the Self PC above. Receiving is the OTHER PC's switch (Share Receive Mode = its LAN Sharing). When the LAN PC is offline the jobs are HELD (nothing prints locally behind your back — Print now overrides).</p></div></div>
-              <div class="note" style="margin-bottom:0">Connect saves the LAN PC's <span class="mono">hub URL + token</span> into this hub (<span class="mono">peer_hubs</span>) — no config.json editing. One-click alternative: the OTHER PC opens the invite link (<span class="mono">/connect?t=&#8230;</span>) from this console's LAN Sharing card.</div>
+              <div class="frow"><label>LAN PC hub URL</label><input class="inp mono" id="lanPcHubUrl"
+                placeholder="http://192.168.1.101:9235" style="min-width:230px"></div>
+              <div class="frow" style="margin-bottom:4px"><label>LAN PC token</label><input class="inp mono" id="lanPcToken" type="password"
+                placeholder="the other PC's hub token" style="min-width:170px">
+                <button class="btn blue" id="lanPcConnect">Connect</button><button class="btn danger" id="lanPcClear">Clear</button></div>
+              <div class="note" id="lanPcStatus" style="margin-bottom:6px">Enter the <b>OTHER PC's</b> hub URL and token, then Connect.
+                The pairing is saved on this PC — it survives page reloads and hub restarts.</div>
+              <div class="frow" style="margin-bottom:0;border-top:1px solid var(--line);padding-top:8px">
+                <span class="tgl"><span class="sw"><span class="switch" id="shareSendSw"></span></span></span>
+                <b>Share Send Mode</b>
+                <span class="note" style="margin:0 0 0 8px">ON sends <b>every print job</b> to that PC &middot; OFF (default) prints on the Self PC above.
+                  Receiving is the OTHER PC's side (its LAN sharing stays ON).</span>
+              </div>
             </div>
           </div>
           <div class="card">
@@ -2216,13 +2233,13 @@ function renderLanRows(){
         esc(disp) + ":" + esc(String(hubPort() || 9235)) + "</button>" + mine;
     }).join(" ");
   }
-  /* v3.3.1 BUG 3: the "LAN PC hub URL" input is the OTHER PC's address -
-     it is NOT touched by the live renderer any more. The old code
-     overwrote it with this hub's own URL (lanBase()) on every refresh,
-     so the address the user typed for the other PC vanished and pressing
-     Connect always probed/saved THIS PC - the reported "share send mode
-     auto-redirects to my own ip" bug. The field is only filled from the
-     saved peer entry in loadConnections(). */
+  /* v3.3.2 BUG 4 (the "it redirects to my own IP" report): the LAN PC
+     hub URL input is NEVER auto-filled with this PC's address any more -
+     the old line overwrote whatever the user typed for the OTHER PC with
+     lanBase() on every poll, so Connect always saw the SELF URL. The
+     saved pairing now restores the OTHER PC's URL through loadLanPeer()
+     below, and the token field stays empty (the token lives in
+     config.json and is never rendered back). */
   /* discovery + standard-port chips (hub /health: ipp_mdns_up, ipp_std) */
   function setChip(rowId, ok, onTxt, offTxt, lvTxt){
     var row = $(rowId); if (!row) return;
@@ -2442,6 +2459,70 @@ function renderAcl(){
   if (inp) inp.addEventListener("keydown", function(e){
     if (e.key === "Enter") { e.preventDefault(); addOne(); } });
 })();
+
+/* ---- v3.3.2 SHARE SEND MODE - the LAN PC card ----
+   The card reads the PERSISTED pairing (GET /peer/status) on every
+   poll, so a page reload / hub restart always shows the real state -
+   the v3.3.1 bug was a transient JS flag that vanished on reload and
+   made the Share Send switch demand "Connect the LAN PC first" even
+   for a paired PC. Connect/Clear talk to /peer/pair + /peer/unpair;
+   NOTHING navigates the browser anywhere, so there is no way to end
+   up redirected at this PC's own IP. */
+var lanPeerState = null;
+
+function renderLanPeer(st){
+  st = st || {};
+  lanPeerState = st;
+  var chipEl = $("lanPcChip"), line = $("lanPcStatus");
+  var url = $("lanPcHubUrl"), tok = $("lanPcToken"), sw = $("shareSendSw");
+  if (st.configured) {
+    if (url && document.activeElement !== url) url.value = st.url || "";
+    if (tok && document.activeElement !== tok) tok.placeholder =
+      "saved \u2014 leave blank to keep";
+  } else {
+    if (url && document.activeElement !== url) url.value = "";
+    if (tok && document.activeElement !== tok) tok.placeholder =
+      "the other PC's hub token";
+  }
+  if (sw) sw.classList.toggle("on", !!st.share_send);
+  var p = st.peer;
+  if (!st.configured) {
+    if (chipEl) { chipEl.className = "chip gray";
+      chipEl.innerHTML = '<span class="d"></span>OFFLINE'; }
+    if (line) line.innerHTML = "Enter the <b>OTHER PC's</b> hub URL and token, then Connect. " +
+      "The pairing is saved on this PC \u2014 it survives page reloads and hub restarts.";
+    return;
+  }
+  if (p && p.alive) {
+    if (chipEl) { chipEl.className = "chip ok";
+      chipEl.innerHTML = '<span class="d"></span>CONNECTED'; }
+    if (line) line.innerHTML =
+      "peer v" + esc(p.version || "?") + (p.peer_host ? " \u00b7 " + esc(p.peer_host) : "") +
+      " \u00b7 LAN sharing <b>" + (p.share_lan ? "ON" : "OFF") + "</b> on that PC" +
+      " \u00b7 IP printer <b>" + (p.ipp_printer ? "ON" : "OFF") + "</b> there" +
+      (p.printers && p.printers.length
+        ? " \u00b7 " + p.printers.length + " printer" + (p.printers.length > 1 ? "s" : "")
+        : "") +
+      " \u00b7 Share Send " + (st.share_send
+        ? "<b>ON \u2014 every job goes to that PC</b>" : "OFF (prints on the Self PC)");
+  } else {
+    if (chipEl) { chipEl.className = "chip err";
+      chipEl.innerHTML = '<span class="d"></span>OFFLINE'; }
+    if (line) line.innerHTML =
+      "paired with " + esc(st.url || "?") + " \u2014 the PC did NOT answer" +
+      (p && p.error ? " (" + esc(p.error) + ")" : "") +
+      ". Check that AdvPrint Pro runs THERE, LAN sharing is ON and the firewall allows port 9235.";
+  }
+}
+
+function loadLanPeer(){
+  api("/peer/status").then(function(st){
+    renderLanPeer(st);
+    renderRemotePrinters(st);
+  }).catch(function(){ /* keep the last known state */ });
+}
+/* alias used by the Connect/Clear handlers */
+function loadRemoteState(){ loadLanPeer(); }
 function renderRecent(jobs){
   var tbl = document.querySelector("#p-dashboard table.tbl");
   if (!tbl) return;
@@ -2532,6 +2613,85 @@ function renderPrinters(list){
       (off.length > 1 ? " \u00b7 +" + (off.length - 1) + " more" : "");
   } else if (chipOff) chipOff.style.display = "none";
 }
+
+/* ---- v3.3.2 REMOTE DEVICES in the printers list ----
+   The "Show other PCs (LAN / IPP)" switch (show_remote_printers) appends
+   the PAIRED LAN PC's devices as extra cards: every device shows its
+   own IP source badge (LAN PC / IPP) and the ipp:// URL the OTHER PC
+   answers on, so printers "from a different IP" are visible right here
+   and can be test-printed through the peer hub. Set Default is
+   disabled on remote cards (an OS default belongs to that other PC). */
+function renderRemotePrinters(st){
+  st = st || lanPeerState || {};
+  var grid = document.querySelector("#p-printers .pgrid");
+  if (!grid) return;
+  qsa("#p-printers .pcard[data-remote]").forEach(function(c){ c.remove(); });
+  if (!cfgCache.show_remote_printers) return;
+  var p = st.peer;
+  if (!st.configured || !p || !p.alive) return;
+  var t0 = grid.querySelector(".pcard");
+  if (!t0) return;
+  (p.printers || []).forEach(function(pr){
+    var c = t0.cloneNode(true);
+    c.setAttribute("data-remote", "1");
+    var badge = c.querySelector(".badge");
+    if (badge) badge.remove();
+    var b = document.createElement("span");
+    b.className = "badge"; b.style.background = "#e0e7ff"; b.style.color = "#3730a3";
+    b.textContent = "LAN PC \u00b7 IPP";
+    c.insertBefore(b, c.firstChild);
+    c.classList.toggle("off", pr.status !== "ready");
+    c.querySelector(".nm").textContent = pr.name;
+    c.querySelector(".mdl").textContent =
+      "on the other PC (" + (st.url || "").replace(/^https?:\/\//, "") + ")" +
+      (pr.is_default ? " \u00b7 ITS OS default" : "");
+    var stEl = c.querySelector(".st");
+    if (stEl) stEl.innerHTML = "<span>State <b>" + esc(pr.status || "unknown") +
+      "</b></span><span>Source <b>LAN PC</b></span><span>" +
+      chip(pr.status === "ready" ? "ready" : pr.status) + "</span>";
+    var url = c.querySelector(".url");
+    if (url) { url.innerHTML = ""; url.appendChild(document.createTextNode(pr.ipp || ""));
+      var cp = document.createElement("button"); cp.className = "cp"; cp.textContent = "COPY";
+      cp.setAttribute("data-cp", pr.ipp || ""); url.appendChild(cp);
+      url.style.display = ""; }
+    var ops = c.querySelector(".ops");
+    if (ops) ops.innerHTML =
+      '<button class="btn blue" data-prtest="' + esc(pr.name) + '">Test Page</button>' +
+      '<button class="btn" disabled style="opacity:.5" title="Set Default belongs to the PC that owns this printer">Set Default</button>' +
+      '<button class="btn" data-prdet="' + esc(pr.name) + '">Details</button>';
+    grid.appendChild(c);
+  });
+  /* wire the remote-card buttons (delegated - the grid re-renders) */
+  qsa("#p-printers .pcard[data-remote] button").forEach(function(btn){
+    var tp = btn.getAttribute("data-prtest");
+    if (tp && !btn.dataset.bound) {
+      btn.dataset.bound = "1";
+      btn.addEventListener("click", function(){
+        toast("Sending a test page to " + tp + " on the LAN PC ...");
+        /* v3.3.2: the HUB relays the test page to the peer (server side,
+           no cross-origin browser call, no token in the page) */
+        api("/peer/test-page", { method: "POST", body: { printer: tp } })
+          .then(function(j){
+            toast("Test page queued on the LAN PC (job " +
+                  (j.job_id || "?") + ")", "ok"); })
+          .catch(function(e){ toast("Test page failed: " + e.message, "err"); });
+      });
+    }
+    var det = btn.getAttribute("data-prdet");
+    if (det && !btn.dataset.bound) {
+      btn.dataset.bound = "1";
+      btn.addEventListener("click", function(){
+        var pr = null;
+        ((lanPeerState && lanPeerState.peer && lanPeerState.peer.printers) || [])
+          .forEach(function(x){ if (x.name === det) pr = x; });
+        if (!pr) return;
+        toast(det + " \u2014 " + (pr.ipp || "") + " \u2014 lives on " +
+              ((lanPeerState && lanPeerState.url) || "the other PC"), "ok");
+      });
+    }
+  });
+}
+
 
 /* ---- queue + history ---- */
 var lastJobs = [];
@@ -2986,36 +3146,7 @@ async function loadConnections(){
       }
     }
     setCnt("connections", peers.length);
-    /* v3.3.1 BUG 4: render the "Another PC (LAN PC)" card from LIVE
-       data - the old card was a hardcoded demo mockup (CONNECTED chip,
-       a fake ip and dots in the token field) that no button updated. */
-    var card = $("lanPcCard");
-    if (card) {
-      var saved = (cfgCache.peer_hubs || [])[0] || null;
-      var live = peers.length ? peers[0] : null;
-      var chip = $("lanPcChip"), st = $("lanPcState");
-      var urlIn = $("lanPcHubUrl"), tokIn = $("lanPcToken");
-      if (urlIn && document.activeElement !== urlIn)
-        urlIn.value = saved ? saved.url : "";
-      if (tokIn && document.activeElement !== tokIn)
-        tokIn.value = saved ? (saved.token || "") : "";
-      if (chip) {
-        if (saved) {
-          chip.textContent = live && live.up ? "CONNECTED" : "OFFLINE";
-          chip.className = "chip " + (live && live.up ? "ok" : "err");
-        } else {
-          chip.textContent = "NOT CONFIGURED";
-          chip.className = "chip gray";
-        }
-      }
-      if (st) st.textContent = live && live.version
-        ? ("peer v" + live.version + (live.share_lan ? "" :
-           " \u00b7 LAN sharing OFF on that PC")) : "";
-      var sw = $("lanPcSendSw");
-      if (sw && !sw._touched)
-        sw.classList.toggle("on",
-          !!(cfgCache.peer_forwarding && cfgCache.share_send_all));
-    }
+    var chipLan = document.querySelector("#p-connections .card .chip.ok");
   } catch (e) { /* panel stays as-is */ }
   /* website API permission textarea mirrors ext_api_sites */
   var ta = document.querySelector("#p-connections textarea");
@@ -3324,7 +3455,7 @@ async function renderUpdate(res){
    full-page /docs stays available via the "Full guide page" button.
    ============================================================ */
 function docsHtml(){
-  var v = esc(BOOT.version || "3.3.1");
+  var v = esc(BOOT.version || "3.3.2");
   var ip = esc(BOOT.lan_ip || location.hostname || "127.0.0.1");
   var port = esc(String(BOOT.port || location.port || "9235"));
   var base = "http://" + ip + ":" + port;
@@ -3803,83 +3934,58 @@ function bindButtons(){
      Printer status hold -> hold_offline) */
   btnLike("#p-lan", /How to add/i, function(){ openQR("ipp"); });
   /* connections */
+  /* v3.3.2: the LAN PC card's Connect/Clear bind FIRST (ids), so the
+     generic "Connect"/"Clear" matchers below can never swallow them
+     again - the v3.3.0-era generic handler read the SELF PC URL field
+     for the LAN card too, which is exactly the "auto redirect own ip"
+     behaviour the user reported. */
+  var lanPcBtn = $("lanPcConnect");
+  if (lanPcBtn && !lanPcBtn.dataset.bound) {
+    lanPcBtn.dataset.bound = "1";
+    lanPcBtn.addEventListener("click", function(){
+      var urlEl = $("lanPcHubUrl"), tokEl = $("lanPcToken");
+      var url = (urlEl && urlEl.value || "").trim();
+      var tok = (tokEl && tokEl.value || "").trim();
+      if (!url || !tok) return toast(
+        "Enter the OTHER PC's hub URL (e.g. http://192.168.1.101:9235) and its token, then Connect", "warn");
+      toast("Probing " + url + " ...");
+      api("/peer/pair", { method: "POST", body: { url: url, token: tok } })
+        .then(function(st){
+          renderLanPeer(st);
+          if (tokEl) tokEl.value = "";
+          var p = st.peer || {};
+          toast(p.alive
+            ? "Connected to the LAN PC (" + (p.version || "?") + ") - Share Send Mode is ready"
+            : "Saved, but that PC did not answer just now", p.alive ? "ok" : "warn");
+          loadRemoteState();
+        })
+        .catch(function(e){ toast(e.message, "err"); });
+    });
+  }
+  var lanPcClr = $("lanPcClear");
+  if (lanPcClr && !lanPcClr.dataset.bound) {
+    lanPcClr.dataset.bound = "1";
+    lanPcClr.addEventListener("click", function(){
+      api("/peer/unpair", { method: "POST", body: {} })
+        .then(function(st){
+          renderLanPeer(st);
+          var u = $("lanPcHubUrl"), t = $("lanPcToken");
+          if (u) u.value = ""; if (t) t.value = "";
+          toast("LAN PC pairing cleared - Share Send Mode OFF", "warn");
+          loadRemoteState();
+        })
+        .catch(function(e){ toast(e.message, "err"); });
+    });
+  }
   btnLike("#p-connections", /Save settings/i, function(){ ACTIONS["save-sites"](); });
   btnLike("#p-connections", /Save site list/i, function(){ ACTIONS["save-sites"](); });
   btnLike("#p-connections", /Detect token/i, function(){
     var inp = qsa("#p-connections input[type=password]")[0];
     if (inp) { inp.value = TOKEN; toast("Token filled from the running hub", "ok"); } });
-  /* v3.3.1 BUG 4: the "Another PC (LAN PC)" card is REAL now. The old
-     handler read input.inp.mono[0] - the SELF PC hub URL - and only
-     toasted, so Share Send Mode had nothing to send to and the card
-     always "connected" to this PC itself ("why it redirect own ip").
-     The new handlers act on the LAN PC card's own fields:
-       Connect = probe the OTHER PC's hub (through this hub's server,
-       no CORS problems) and save {url, token} into peer_hubs;
-       Clear   = wipe peer_hubs + both send switches. */
-  var lanPcProbe = function(url, token){
-    return api("/peer-probe", { method: "POST", body: { url: url, token: token } });
-  };
-  var lanPcRender = function(state){
-    var chip = $("lanPcChip"), st = $("lanPcState");
-    if (!chip) return;
-    if (state && state.configured) {
-      chip.textContent = state.up ? "CONNECTED" : "OFFLINE";
-      chip.className = "chip " + (state.up ? "ok" : "err");
-      st.textContent = state.version ? ("peer v" + state.version +
-        (state.share_lan ? "" : " \u00b7 LAN sharing OFF on that PC")) : "";
-    } else {
-      chip.textContent = "NOT CONFIGURED";
-      chip.className = "chip gray";
-      st.textContent = "";
-    }
-    var sw = $("lanPcSendSw");
-    if (sw) sw.classList.toggle("on",
-      !!(cfgCache.peer_forwarding && cfgCache.share_send_all));
-  };
-  $("lanPcConnect") && ($("lanPcConnect").onclick = function(){
-    var url = ($("lanPcHubUrl") || {}).value || "";
-    var tok = ($("lanPcToken") || {}).value || "";
-    url = url.trim();
-    if (!/^https?:\/\/[A-Za-z0-9_.:\[\]-]+(:\d+)?\/?$/.test(url))
-      return toast("Enter the OTHER PC's hub URL first, e.g. http://192.168.1.101:9235", "warn");
-    if (!tok) return toast("Enter the OTHER PC's hub token (its console shows it)", "warn");
-    $("lanPcState").textContent = "connecting \u2026";
-    lanPcProbe(url, tok).then(function(r){
-      if (!r.ok) throw new Error(r.error || "probe failed");
-      var peers = [{ url: url, token: tok, name: r.hostname || "LAN PC" }];
-      var body = { peer_hubs: peers, peer_forwarding: true };
-      api("/config", { method: "POST", body: body })
-        .then(function(){
-          cfgCache.peer_forwarding = true;
-          toast("LAN PC saved \u2014 " + url + " (v" + (r.version || "?") +
-                "). Flip Share Send Mode ON to send every job there.",
-                r.up ? "ok" : "warn");
-          lanPcRender({ configured: true, up: !!r.up, version: r.version,
-                        share_lan: r.share_lan });
-          poll();
-        })
-        .catch(function(e){ $("lanPcState").textContent = "";
-          toast(e.message, "err"); });
-    }).catch(function(e){
-      $("lanPcState").textContent = "";
-      toast("LAN PC did not answer: " + e.message +
-            " \u2014 check the URL, the firewall on the other PC, and that its LAN Sharing is ON", "err");
-    });
-  });
-  $("lanPcClear") && ($("lanPcClear").onclick = function(){
-    api("/config", { method: "POST", body: { peer_hubs: [],
-                                             peer_forwarding: false,
-                                             share_send_all: false } })
-      .then(function(){
-        cfgCache.peer_forwarding = false; cfgCache.share_send_all = false;
-        if ($("lanPcHubUrl")) $("lanPcHubUrl").value = "";
-        if ($("lanPcToken")) $("lanPcToken").value = "";
-        lanPcRender({ configured: false });
-        toast("LAN PC pairing cleared \u2014 jobs print on the Self PC again", "warn");
-        poll();
-      })
-      .catch(function(e){ toast(e.message, "err"); });
-  });
+  btnIn("#p-connections", "Connect", function(){
+    var url = qsa("#p-connections input.inp.mono")[0].value.trim();
+    if (url && url !== BASE) { toast("This console is served BY the hub \u2014 " + BASE + " is already connected", "ok"); }
+    else toast("Connected \u2014 hub answered", "ok"); });
   btnLike("#p-connections", /Shift all waiting/i, function(){
     var inp = qsa("#p-connections .frow input.inp.mono")[1];
     var peer = inp ? inp.value.trim() : "";
@@ -3887,8 +3993,6 @@ function bindButtons(){
     api("/queue/shift", { method: "POST", body: { peer: peer } })
       .then(function(){ toast("Queue shifted to " + peer, "ok"); poll(); })
       .catch(function(e){ toast(e.message, "err"); }); });
-  /* v3.3.1: the LAN PC Clear button is bound by id above - the old demo
-     toast ("cleared (demo value)") is gone. */
   /* hub panel */
   btnLike("#p-hub", /Apply hub settings/i, function(){ ACTIONS["save-hub"](); });
   btnLike("#p-hub", /Reload from hub/i, function(){ refreshHubPanel(); toast("Reloaded from hub", "ok"); });
@@ -4374,6 +4478,44 @@ function bindSwitches(){
   document.addEventListener("click", function(ev){
     var s = ev.target.closest ? ev.target.closest(".switch") : null;
     if (!s) return;
+    /* v3.3.2 SHARE SEND MODE (Connections LAN PC card) - saves itself
+       the moment it is flipped, reads the PERSISTED pairing (never a
+       transient JS flag), and reverting ON-without-peer is impossible
+       server-side too (POST /config validates share_send). */
+    if (s.id === "shareSendSw") {
+      var want = !s.classList.contains("on");
+      if (want && !(lanPeerState && lanPeerState.configured)) {
+        toast("Connect the LAN PC first \u2014 enter its hub URL + token and press Connect", "warn");
+        return;
+      }
+      s.classList.toggle("on", want);
+      api("/config", { method: "POST", body: { share_send: want } })
+        .then(function(){
+          if (lanPeerState) lanPeerState.share_send = want;
+          toast(want ? "Share Send Mode ON \u2014 every print job now goes to the LAN PC"
+                     : "Share Send Mode OFF \u2014 jobs print on the Self PC again",
+                want ? "warn" : "ok");
+          loadLanPeer();
+        })
+        .catch(function(e){ s.classList.toggle("on", !want);
+          toast(e.message, "err"); });
+      return;
+    }
+    /* v3.3.2 remote devices switch (Printers panel) */
+    if (s.id === "showRemoteSw") {
+      var wantR = !s.classList.contains("on");
+      s.classList.toggle("on", wantR);
+      api("/config", { method: "POST", body: { show_remote_printers: wantR } })
+        .then(function(){
+          cfgCache.show_remote_printers = wantR;
+          if (wantR) { toast("Other PCs' devices shown below (LAN PC \u00b7 IPP badge)", "ok"); loadLanPeer(); }
+          else { qsa("#p-printers .pcard[data-remote]").forEach(function(c){ c.remove(); });
+                 toast("Remote devices hidden", "warn"); }
+        })
+        .catch(function(e){ s.classList.toggle("on", !wantR);
+          toast(e.message, "err"); });
+      return;
+    }
     /* only switches inside toggle rows / form rows / the rule editor
        are controls - per-browser state table cells stay read-only */
     var zone = s.closest(".tgl, .f-row, #rulemodal");
@@ -4409,30 +4551,6 @@ function bindSwitches(){
         toast("Minimize to tray is the desktop-app default", "warn");
         return;
       }
-    }
-    /* v3.3.1 SHARE SEND MODE switch (Connections > LAN PC card) -
-       saves BOTH keys instantly, exactly like the note promises. */
-    if (s.id === "lanPcSendSw") {
-      s._touched = true;
-      setTimeout(function(){ s._touched = false; }, 1200);
-      var want = !s.classList.contains("on");
-      var peers = (cfgCache.peer_hubs_count || 0);
-      if (want && !peers) {
-        toast("Connect the LAN PC first - enter its hub URL + token and press Connect", "warn");
-        return;                      /* switch stays OFF */
-      }
-      s.classList.toggle("on", want);
-      api("/config", { method: "POST", body: { peer_forwarding: want,
-                                               share_send_all: want } })
-        .then(function(){
-          cfgCache.peer_forwarding = want; cfgCache.share_send_all = want;
-          toast(want ? "Share Send Mode ON \u2014 every print job now goes to the LAN PC"
-                     : "Share Send Mode OFF \u2014 jobs print on the Self PC again",
-                want ? "ok" : "warn");
-        })
-        .catch(function(e){ s.classList.toggle("on", !want);
-          toast(e.message, "err"); });
-      return;
     }
     s.classList.toggle("on");
     if (scope === "p-dropzone") {          /* save immediately */
@@ -4551,6 +4669,11 @@ async function poll(){
     renderExt(audit);
     renderSettings(cfgCache);
     renderExtPrefs((cfgCache.ext_prefs || {}));
+    /* v3.3.2 SHARE SEND MODE + remote devices: the LAN PC card and the
+       "Show other PCs" switch read the persisted hub state every poll */
+    loadLanPeer();
+    var srsw = $("showRemoteSw");
+    if (srsw) srsw.classList.toggle("on", !!cfgCache.show_remote_printers);
     /* v3.2.3 SWITCH FIX part 2: the hub panel now refreshes from the
        live config on every poll - the inputs no longer keep the static
        demo values, and a switch save cannot write them into config.json */

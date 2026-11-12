@@ -1,85 +1,83 @@
 # Changelog - AdvPrint Pro (Advanced Printer)
 by Bit Dream IT - Innovative Healthcare Solutions
 
-## v3.3.1 - THE LAN PC + WINDOWS IPP CONNECTION RELEASE (2026-11-12)
+## v3.3.2 - SHARE SEND MODE + WINDOWS IPP ADD-FIX RELEASE (2026-11-12)
 
-Base: v3.3.0 (any-PC invite + dual-stack listeners) with every earlier
-fix unchanged. Four user reports from the real two-PC lab, all fixed
-and locked by `tests/test_v331.py` plus the live repro
-`scripts/repro_v331_ipp.py` (a real Windows-11-style IPP session from a
-simulated LAN client).
+Base: v3.3.0 (the any-PC invite / dual-stack listener release) with the
+v3.3.1 LAN-PC work redone properly. Every fix is locked by
+`tests/test_v332.py`. Four real-world reports from the LAN, all fixed:
 
-### BUG 1 - Windows: "couldn't connect to the printer" on BOTH IPP URLs
-Adding `ipp://<hub>:9235/ipp/print` OR
-`ipp://<hub>:9235/ipp/print/<printer>` from another PC failed with the
-Microsoft Add-Printer error while CUPS/phones kept working. Root cause:
-RFC 8011 requires `printer-uri-supported`,
-`uri-authentication-supported` AND `uri-security-supported` to be three
-PARALLEL 1setOf attributes with the SAME number of values - one auth +
-one security keyword per URI. The v3.3.0 printer group emitted two
-fixed auth values and NO `uri-security-supported` at all, so every
-response that echoed the LAN client's own URI (4 URIs vs 2 auth values,
-no security list) failed the Microsoft IPP Class Driver validation.
-Now `_ipp_printer_group()` builds the full parallel triple ("none" per
-plain-http URI - the same value the Microsoft class driver itself uses
-for http:// printers), for the generic queue, for every per-printer
-queue and for every echoed extra URI.
+### BUG 1 - Windows "couldn't connect to the printer" (IPP add, any PC)
+Adding `ipp://<hub-ip>:9235/ipp/print` (or a per-printer queue) from
+another PC failed with the Microsoft IPP Class Driver error. Root
+cause: the Get-Printer-Attributes response was missing the RFC 8011
+REQUIRED `uri-security-supported` printer description attribute - the
+strict MS parser refuses the whole response when a required attribute
+is absent. Also locked down:
+- `uri-authentication-supported` and `uri-security-supported` now carry
+  EXACTLY ONE value per `printer-uri-supported` entry (RFC parity rule;
+  the old code hardcoded two "none" values, which broke the moment a
+  client URI was echoed into the list on a multi-adapter hub)
+- additional IPP values (empty name) belong to the attribute right
+  before them - all auth values are emitted before the security values,
+  never interleaved
+- the v3.0.8 strict wire lint (tests/test_ipp.py) covers the new
+  attribute and the parity rule for the generic AND per-printer queues
 
-### BUG 2 - per-printer IPP queues 404ed right after hub start
-`ipp://ip:9235/ipp/print/<printer>` answered "unknown per-printer IPP
-queue" until the ASYNC printer cache happened to fill (the queue
-resolver only read `list_printers_cached()`, which returns the empty
-cache and merely KICKS a background refresh). A LAN PC adding a queue
-in the first seconds after hub start always hit the 404. Now
-`_lp_refresh_sync()` runs the OS enumeration SYNCHRONOUSLY (rate-
-limited to one per 2 s) when the cache is empty, and the negative-
-match force-refresh in `_ipp_queue_match_cached()` uses the same
-synchronous refresh - the queue resolves the moment the hub is up.
+### BUG 2 - tokenless IPP Print-Job > 1 MB died mid-transmit
+`_preauth_gate()` answered 401 BEFORE reading a >1 MB body without a
+token. Windows speaks IPP without any token (like a physical network
+printer) and its Print-Job bodies are routinely over 1 MB, so the
+still-transmitting client got a connection abort and every real print
+died even when the add had succeeded. IPP routes (`/ipp/print`,
+`/ipp/print/<queue>`, `/ipp`) are exempt now; the hub keeps its own
+IPP guards (ipp_printer switch, browser-Origin refusal, 25 MB body cap,
+per-request audit with the source IP).
 
-### BUG 3 - the "Another PC (LAN PC)" card was a demo mockup
-The ONE UI Connections card showed a hardcoded CONNECTED chip, a fake
-IP and dots in the token field; **Connect read the SELF PC hub URL
-field** (`input.inp.mono[0]`) and only toasted - the reported
-"share send mode auto-redirects to my own ip" - and Clear toasted
-"(demo value)". Worse, the live renderer overwrote the LAN PC URL
-input with this hub's own address on every refresh, so the OTHER PC's
-address the user typed vanished. Now the card is REAL:
-- `#lanPcHubUrl` / `#lanPcToken` are user-owned fields, only filled
-  from the saved peer entry - never overwritten with the own URL
-- **Connect** probes the OTHER PC's hub server-side (`POST
-  /peer-probe`, token included - no CORS, no mixed-content pain) and
-  saves `{url, token, name}` into `peer_hubs` + `peer_forwarding: true`
-  in one atomic `/config` write; the chip flips to CONNECTED with the
-  peer's version, or stays OFFLINE with a readable error
-- **Clear** wipes `peer_hubs`, `peer_forwarding` AND `share_send_all`
-- the chip renders from `/peers` + `/config` live data (CONNECTED /
-  OFFLINE / NOT CONFIGURED)
-- a REAL **Share Send Mode** power switch exists in the card and saves
-  instantly (flip = POST /config with both keys); it refuses to turn ON
-  while no LAN PC is connected
+### BUG 3 - unknown per-printer queue hard-404'd the whole add flow
+A queue name that did not match any local printer (slightly mistyped,
+or "device address" typed by hand) answered a JSON 404 to
+Get-Printer-Attributes -> "Windows couldn't connect to the printer"
+again. Now the add VALIDATES: Get-Printer-Attributes / Validate-Job
+answer as the generic queue with the requested name as printer-name and
+the client URI echoed (the add succeeds), Print-Job prints on the hub's
+default destination with an audit note, and the browser landing page of
+an unknown queue is the generic how-to page instead of raw JSON.
 
-### BUG 4 - Share Send Mode now sends EVERY job to the LAN PC
-`peer_forwarding` alone only forwarded jobs when the printer was REALLY
-down (the v2.9.1 M4 fix - behaviour unchanged). The new config key
-`share_send_all` (the switch above) forwards EVERY printable job to the
-first alive peer hub; the job is marked `forwarded` with the remote job
-id. When the LAN PC is unreachable or rejects the job, the job is HELD
-with a readable reason ("LAN PC hub unreachable - job held until it
-answers") - nothing prints locally behind the user's back; **Print
-now** overrides and prints on this PC. Virtual PDF printers (Microsoft
-Print to PDF) and raw/ESC-POS receipt jobs stay local - saving a PDF
-file or driving a locally-attached receipt printer on ANOTHER PC makes
-no sense.
+### BUG 4 - SHARE SEND MODE ("auto redirect own ip") is REAL now
+The Connections panel's "Another PC (LAN PC)" card was a demo mockup:
+its Connect button read the SELF PC URL field (hence "it redirects own
+ip") and a reload wiped everything. Rebuilt end to end:
+- `POST /peer/pair {url, token}`: validates the URL, REFUSES self-pairs
+  (loopback / this hub's own IPs on its own port), probes the OTHER PC
+  with its token, requires its LAN sharing ON, and persists the pairing
+  as the `lan-pc` peer_hubs entry in config.json - reloads and hub
+  restarts keep it
+- `GET /peer/status`: the card's state source on every poll - pairing,
+  live probe (peer version, ITS LAN sharing / IP printer state, its
+  printer list, latency) and the switch state; probes cached 8 s
+- `POST /peer/unpair`: the Clear button - forgets the pairing, Share
+  Send OFF
+- Share Send Mode switch (in the card, saves instantly): `POST /config
+  {share_send}`; server-side rejects ON without a persisted pairing
+  (the exact "Connect the LAN PC first" state can no longer be a
+  transient UI lie), and when ON the worker forwards EVERY new job to
+  the paired PC first (peer lacks the printer -> prints locally with an
+  audit note)
+- the LAN PC hub URL input is NEVER auto-filled with this PC's own
+  address any more (the "auto redirect own ip" root cause); the saved
+  OTHER-PC URL is restored from config instead, the token is never
+  rendered back
+- `POST /peer/test-page {printer}`: prints a test page on the paired
+  PC's named printer through a server-side relay (no cross-origin
+  browser call, no token in the page)
 
-### New: POST /peer-probe
-Token-gated management endpoint used by the console Connect button:
-probes `<url>/health` server-side with the given token and returns
-`{up, version, hostname, share_lan, token_ok}` plus a readable error
-when the peer is down. LAN-only: non-private hosts are refused (400).
-
-### Health JSON additions
-`peer_forwarding`, `share_send_all`, `peer_hubs_count` - the ONE UI
-chip and switch render the REAL state (no more hardcoded demo values).
+### Printers panel - devices from a different IP
+New "Show other PCs (LAN / IPP)" switch (`show_remote_printers`): the
+paired LAN PC's devices appear as extra cards with a LAN PC / IPP
+badge, the source ip:port, the device's own `ipp://` URL and Test Page
+/ Set Default (disabled - the default belongs to that other PC) /
+Details actions.
 
 ## v3.3.0 - THE ANY-PC INVITE + DUAL-STACK LISTENER RELEASE (2026-11-12)
 

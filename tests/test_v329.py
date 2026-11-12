@@ -24,7 +24,7 @@ BUG 3 - every LAN PC saw the SAME hub URL (the hub's default-route
   header) first, the boot JSON carries self_host/self_port/client_ip/
   lan_ips, and the LAN panel lists every hub interface IP as chips.
 
-Also locked: version coherence 3.3.1 everywhere, byte-identical hub
+Also locked: version coherence 3.3.0 everywhere, byte-identical hub
 copies, the fixed scripts/embed_console.py close sequence, and the new
 release docs.
 """
@@ -128,21 +128,21 @@ def _vals(group, name):
 
 
 # ---------------------------------------------------------------
-# 1. version coherence 3.3.1
+# 1. version coherence 3.3.0
 # ---------------------------------------------------------------
 
 def test_version_329_everywhere():
-    assert advprint.VERSION == "3.3.1"
-    assert advprint.VERSION_NAME.startswith("v3.3.1")
-    assert "LAN PC + WINDOWS IPP CONNECTION RELEASE" in advprint.VERSION_NAME
-    assert "3.3.1" in VERSION_TXT
-    assert MANIFEST["version"] == "3.3.1"
-    assert 'var _apVerFallback = "3.3.1";' in open(
+    assert advprint.VERSION == "3.3.2"
+    assert advprint.VERSION_NAME.startswith("v3.3.2")
+    assert "SHARE SEND MODE + WINDOWS IPP ADD-FIX RELEASE" in advprint.VERSION_NAME
+    assert "3.3.2" in VERSION_TXT
+    assert MANIFEST["version"] == "3.3.2"
+    assert 'var _apVerFallback = "3.3.2";' in open(
         os.path.join(EXT, "content", "api.js"), encoding="utf-8").read()
-    assert 'BOOT.version || "3.3.1"' in CONSOLE
+    assert 'BOOT.version || "3.3.2"' in CONSOLE
     assert "## v3.2.9 - THE MULTI-PC IPP RELEASE" in CHANGELOG
-    assert 'VIProductVersion "3.3.1.0"' in NSI
-    assert "AdvPrint-Pro-Setup-3.3.1.exe" in NSI
+    assert 'VIProductVersion "3.3.2.0"' in NSI
+    assert "AdvPrint-Pro-Setup-3.3.2.exe" in NSI
 
 
 def test_release_docs_329_exist():

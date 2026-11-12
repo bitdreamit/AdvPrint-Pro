@@ -145,13 +145,30 @@ def test_virtual_pdf_printer_queue_saves_file(hub, printers, ipp_on,
     assert row["status"] == "saved"
 
 
-def test_unknown_queue_404(hub, printers, ipp_on):
+def test_unknown_queue_answered_as_generic(hub, printers, ipp_on):
+    """v3.3.2 BUG 3: an UNKNOWN per-printer queue no longer hard-404s the
+    whole add-printer flow - Windows validates with Get-Printer-Attributes
+    and a JSON 404 answered "Windows couldn't connect to the printer" for
+    every slightly mistyped / not-yet-known name. Now: Print-Job is
+    ACCEPTED (HTTP 200 + IPP successful-ok) and prints on the hub's
+    default destination with an audit note, and Get-Printer-Attributes
+    answers with the requested name as printer-name (the add succeeds)."""
     code, payload = hub.req(
         "POST", "/ipp/print/no-such-printer",
         token=None, raw=_print_job_bytes(),
         content_type="application/ipp")
-    assert code == 404
-    assert "unknown per-printer IPP queue" in str(payload)
+    assert code == 200
+    status = int.from_bytes(payload[2:4], "big")
+    assert status == 0x0000, "Print-Job on unknown queue must succeed"
+    # Get-Printer-Attributes on the same unknown queue answers too
+    code2, payload2 = hub.req(
+        "POST", "/ipp/print/no-such-printer", token=None,
+        raw=bytes((1, 1)) + (0x000B).to_bytes(2, "big") +
+        (1).to_bytes(4, "big") + bytes([0x01]) + b"\x03",
+        content_type="application/ipp")
+    assert code2 == 200
+    status2 = int.from_bytes(payload2[2:4], "big")
+    assert status2 == 0x0000, "GPA on unknown queue must answer the add"
 
 
 def test_per_queue_landing_page(hub, printers, ipp_on):
@@ -161,8 +178,13 @@ def test_per_queue_landing_page(hub, printers, ipp_on):
     assert "OneNote (Desktop)" in html
     assert ("ipp://192.168.1.50:%d/ipp/print/onenote-desktop"
             % advprint.CFG["port"]) in html
-    code, _ = hub.get("/ipp/print/no-such-printer", token=None)
-    assert code == 404
+    # v3.3.2 BUG 3: an unknown queue gets the GENERIC how-to landing
+    # page (HTML 200), not a JSON 404 - a browser or phone that typed a
+    # slightly wrong name still sees the printer page
+    code2, page2 = hub.get("/ipp/print/no-such-printer", token=None)
+    assert code2 == 200
+    html2 = page2.decode("utf-8") if isinstance(page2, bytes) else str(page2)
+    assert "IPP network printer" in html2
 
 
 def test_printers_answers_queue_metadata(hub, printers, ipp_on):

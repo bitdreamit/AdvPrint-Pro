@@ -201,8 +201,7 @@ check("unknown queue 404s WITH the live queue list",
 
 code, page = get("/health")
 d = json.loads(page.decode("utf-8"))
-check("health reports the current version %s" % advprint.VERSION,
-      d.get("version") == advprint.VERSION)
+check("health reports version 3.3.0", d.get("version") == "3.3.0")
 
 print()
 if fail:

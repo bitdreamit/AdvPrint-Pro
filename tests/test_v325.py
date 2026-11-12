@@ -171,13 +171,15 @@ def test_v325_perprinter_ipp_url_works_live(hub):
             body = body.decode("utf-8", "replace")
         assert nm in body and "Add it as a printer" in body
         assert slug in body          # the page shows the SAME URL
-    # unknown queue -> honest 404
+    # v3.3.2 BUG 3: unknown queue -> the GENERIC how-to landing page
+    # (HTML 200), not a JSON 404 - a browser or phone that typed a
+    # slightly wrong name still sees the printer page
     c3, err = hub.get("/ipp/print/does-not-exist", token=None)
     if isinstance(err, bytes):
         err = err.decode("utf-8", "replace")
     if not isinstance(err, str):
         err = json.dumps(err)
-    assert c3 == 404 and "unknown per-printer IPP queue" in err
+    assert c3 == 200 and "IPP network printer" in err
 
 
 # ------------------------------------------------------------
@@ -265,21 +267,21 @@ def test_v325_sums_cover_the_setup_exe():
         lines = open(sums_path, encoding="utf-8").read().strip().splitlines()
         assert len(lines) == 4, \
             "SHA256SUMS must cover CRX + extension zip + DEB + Setup EXE"
-        assert any("AdvPrint-Pro-Setup-3.3.1.exe" in l for l in lines)
+        assert any("AdvPrint-Pro-Setup-3.3.2.exe" in l for l in lines)
 
 
 # ------------------------------------------------------------
 # version coherence
 # ------------------------------------------------------------
 def test_v325_versions_agree():
-    assert advprint.VERSION == "3.3.1"
-    assert advprint.VERSION_NAME.startswith("v3.3.1")
+    assert advprint.VERSION == "3.3.2"
+    assert advprint.VERSION_NAME.startswith("v3.3.2")
     man = json.load(open(os.path.join(EXT, "manifest.json"),
                          encoding="utf-8"))
-    assert man["version"] == "3.3.1"
+    assert man["version"] == "3.3.2"
     vt = open(os.path.join(ROOT, "VERSION.txt"), encoding="utf-8").read()
-    assert "3.3.1" in vt
+    assert "3.3.2" in vt
     nsi = open(os.path.join(ROOT, "installer", "setup.nsi"),
                encoding="utf-8").read()
-    assert 'VIProductVersion "3.3.1.0"' in nsi
-    assert "AdvPrint-Pro-Setup-3.3.1.exe" in nsi
+    assert 'VIProductVersion "3.3.2.0"' in nsi
+    assert "AdvPrint-Pro-Setup-3.3.2.exe" in nsi

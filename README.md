@@ -13,30 +13,6 @@ Web page ──► Chrome extension ──► AdvPrint Pro hub (localhost:9235) 
 
 ---
 
-## What's new in v3.3.1 (THE LAN PC + WINDOWS IPP CONNECTION RELEASE)
-
-Four user reports from the real two-PC lab, all fixed and locked by
-`tests/test_v331.py`. Everything from v3.3.0 stays unchanged.
-
-1. **Windows adds the IPP printer again.** Adding
-   `ipp://<hub>:9235/ipp/print` or a per-printer queue from another PC
-   failed with "Windows couldn't connect to the printer": the hub's IPP
-   response omitted `uri-security-supported` and carried fewer
-   authentication values than URIs, so the Microsoft IPP Class Driver
-   refused the printer. The response now carries the full RFC 8011
-   parallel triple (URI / auth / security, one entry per URI).
-2. **Per-printer queues work right after hub start** (no more 404 from
-   the async printer cache - the queue resolver enumerates
-   synchronously when the cache is empty).
-3. **The "Another PC (LAN PC)" card is real.** Connect probes the OTHER
-   PC's hub (server-side, token included) and saves the pairing;
-   Clear wipes it; the chip shows the live state. The old card read the
-   SELF PC URL and silently rewrote the input with the own address.
-4. **Share Send Mode sends EVERY print job to the LAN PC** (new switch
-   in the card). When that PC is unreachable jobs are HELD - nothing
-   prints locally behind your back; Print now overrides. Virtual PDF
-   printers and receipt/raw jobs stay local.
-
 ## What's new in v3.3.0 (THE ANY-PC INVITE + DUAL-STACK LISTENER RELEASE)
 
 Three more real-world LAN reports, all fixed and locked by
