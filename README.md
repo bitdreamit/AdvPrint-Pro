@@ -13,46 +13,36 @@ Web page ──► Chrome extension ──► AdvPrint Pro hub (localhost:9235) 
 
 ---
 
-## What's new in v3.2.9 (THE MULTI-PC IPP RELEASE)
+## What's new in v3.3.0 (THE ANY-PC INVITE + DUAL-STACK LISTENER RELEASE)
 
-Three real-world multi-PC reports from the LAN, all fixed and locked by
-new tests (`tests/test_v329.py`). Everything from v3.2.8 — the clean
-`ipp://` URL and the scheme-free Website API rule — stays unchanged.
+Three more real-world LAN reports, all fixed and locked by
+`tests/test_v330.py`. Everything from v3.2.9 - the multi-PC IPP release
+- stays unchanged.
 
-1. **Per-printer queues now connect from other PCs.** Adding
-   `ipp://<ip>:9235/ipp/print/<printer-name>` on a second PC failed with
-   "Windows cannot connect" while the generic `/ipp/print` kept working:
-   `Get-Printer-Attributes` answered with only the generic URIs, so the
-   client never saw the queue URI it asked for. The IPP node now echoes
-   the queue end to end — queue URIs first (http:// + ipp://), the REAL
-   printer name, a stable per-queue `printer-uuid`, queue-path `job-uri`
-   — and honours a queue name that arrives only inside the request's
-   `printer-uri` attribute.
-2. **One hub serves MANY PCs — professional and optimized.** The accept
-   backlog went 5 → 128 on every listener (9235 / 631 / 9100) so burst
-   connects from several PCs/phones are no longer refused; all IPP
-   session mutations run under the session lock; queue-name resolution
-   is memoized (no OS enumeration per request); two jobs for the
-   "File (PDF)" printer in the same second no longer kill each other's
-   temp file; every ACL 403 echoes the ACTIVE `allowed_ips` rules and
-   the IPP landing page states who may print — `*`, exact IP, CIDR and
-   `10.26.*` wildcards are enforced identically on 9235, 631 and RAW
-   9100.
-3. **Every LAN PC sees its OWN hub ip:port.** Pages no longer show one
-   global `http://10.26.94.77:9235` (the hub's default-route address —
-   with a VPN adapter that can be an address the client can NOT reach):
-   URLs are built from the address THE OPENING DEVICE used (sanitized
-   Host header) first, the console boot JSON carries
-   `self_host`/`self_port`/`client_ip`/`lan_ips`, and the LAN panel
-   lists EVERY hub interface IP as copyable chips so each PC picks its
-   own reachable address.
-4. **Delivery-layer fix:** the console embedder (`scripts/embed_console.py`)
-   no longer glues the closing quotes to the UI — the old bug could eat
-   `DOCS_HTML`/`console_page_bytes()` on the next embed (the /docs + /ui
-   500s). A regression test locks the correct close sequence.
-
-Details: `docs/RELEASE-NOTES-v3.2.9.md` and
-`docs/AdvPrint-Pro-v3.2.9-A-to-Z-DEV-GUIDE.md`.
+1. **The invite page connects the RIGHT PC.** Opening
+   `http://<hub-ip>:9235/connect?t=<token>` built the peer URL from the
+   serving PC's own `lan_ip()` guess and a user who opened the invite on
+   the hub PC itself silently added the hub to ITSELF. The page now uses
+   the address the VISITOR typed (Host header), refuses self-invites on
+   the page AND on `POST /peer-connect`, probes the visiting PC's own
+   hub before you click (no more raw browser error when the other PC has
+   no hub yet), explains a token that belongs to a DIFFERENT PC's hub,
+   and offers every hub address (IPv4 + IPv6) as "use this" chips.
+2. **Every listener answers on IPv4 AND IPv6, on every interface.** The
+   9235 LAN hub, the 631 IPP mirror and the RAW 9100 port each bound ONE
+   IPv4 address (`lan_ip()`) - deaf on all the PC's other adapters, and
+   silent on IPv6. Now one IPv4 socket per interface IP plus one `[::]`
+   socket (IPV6_V6ONLY) on every port; the LAN panel shows the real
+   bound sockets; the interface-set changes trigger a clean rebind; mDNS
+   announces AAAA. The `allowed_ips` ACL gates every socket exactly as
+   before.
+3. **Per-printer IPP queues work for ANY printer that exists.** The old
+   slug folded every non-ASCII printer name (Bangla, Arabic, CJK) to the
+   single slug `printer`, so those queues collided. Slugs are
+   Unicode-aware now (percent-encoded in URLs), matching tolerates every
+   slug style (dash / underscore / %20), a new printer's queue goes live
+   in seconds (negative matches force a printer-list refresh) and the
+   unknown-queue 404 lists the queues that ARE live.
 
 ## What's new in v3.2.8 (THE ipp:// + HTTP-PAGE FIX RELEASE)
 

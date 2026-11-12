@@ -96,30 +96,30 @@ if _HUB_DIR not in sys.path:
     sys.path.insert(0, _HUB_DIR)
 
 
-VERSION = "3.2.9"
-VERSION_NAME = ("v3.2.9 (THE MULTI-PC IPP RELEASE. One center hub now "
-    "serves MANY LAN PCs and phones over IPP + LAN at the same time, "
-    "professionally and optimized. BUG 1 - adding a PER-PRINTER queue "
-    "ipp://<ip>:9235/ipp/print/<printer-name> from another PC refused to "
-    "connect: Get-Printer-Attributes answered with only the generic "
-    "/ipp/print URIs, so Windows/macOS/CUPS never saw the queue URI they "
-    "had asked for. The IPP node now ECHOES the per-printer URI (http:// "
-    "+ ipp:// forms) in printer-uri-supported, names the queue after the "
-    "real printer, gives each queue its own stable printer-uuid and "
-    "job-uri, so every named queue installs first try. BUG 2 - more than "
-    "one PC at once stressed the node: the accept backlog (5) dropped "
-    "connections, IPP sessions mutated without the session lock and the "
-    "printer-name matcher re-ran OS enumeration. v3.2.9 raises the "
-    "listen backlog to 128 on every listener (9235 / 631 / 9100), adds "
-    "idle-connection timeouts so dead clients never pin threads, locks "
-    "all _IPP_JOBS session mutations, memoizes queue-name resolution and "
-    "echoes the allowed_ips rules in every ACL 403 - * / exact IP / "
-    "CIDR / wildcard all enforced on 9235, 631 and the RAW port. BUG 3 - "
-    "every LAN PC saw the SAME hub URL (http://<hub-lan-ip>:9235) even "
-    "when that IP was unreachable for it: pages now show the address "
-    "THE OPENING DEVICE actually used (Host header) first, then the hub "
-    "IP, and the LAN panel lists every interface IP of the hub so each "
-    "PC can pick its own local ip:port.")
+VERSION = "3.3.0"
+VERSION_NAME = ("v3.3.0 (THE ANY-PC INVITE + DUAL-STACK LISTENER RELEASE. "
+    "BUG 1 - the one-click invite /connect?t=<token> pointed the OTHER PC "
+    "at the WRONG hub: the page built the peer URL from the serving PC's "
+    "own lan_ip() guess instead of the address the visitor actually used, "
+    "and a user who opened the invite on the hub PC itself silently added "
+    "the hub to ITSELF (the \"it redirects own pc\" report). The invite "
+    "page now uses the request's own Host address, refuses self-invites "
+    "on both the page and POST /peer-connect, probes the visiting PC's "
+    "own hub and explains a token from a DIFFERENT hub. BUG 2 - every LAN "
+    "listener (9235 LAN, 631 mirror, RAW 9100) bound ONE IPv4 address "
+    "(lan_ip()) and never spoke IPv6: PCs on the hub's other adapters "
+    "could not connect at all. v3.3.0 binds EVERY interface on BOTH "
+    "stacks (one IPv4 socket per interface IP + one [::] socket, "
+    "IPV6_V6ONLY), the mDNS announce adds the AAAA record, the LAN panel "
+    "lists IPv4 AND IPv6 addresses and the RAW/631 rows show the real "
+    "bound sockets. BUG 3 - per-printer IPP queues must work for ANY "
+    "printer that exists: the old [^a-z0-9] slug folded every non-ASCII "
+    "printer name (Bangla, Arabic, CJK) to the single slug 'printer', so "
+    "those queues collided and were never separately active. Slugs are "
+    "Unicode-aware now, queue matching tolerates every slug style via a "
+    "join key, a negative queue match force-refreshes the OS printer "
+    "list (new printers get their queue in seconds, not minutes) and the "
+    "unknown-queue 404 lists the queues that ARE live.")
 FULL_BRAND = ("AdvPrint Pro (Advanced Printer) by "
               "Bit Dream IT - Innovative Healthcare Solutions")
 BRANDING = ("AdvPrint Pro (Advanced Printer) - Version %s - by "
@@ -1159,20 +1159,44 @@ def list_printers():
 # client typed after Add Printer just works.
 # ------------------------------------------------------------
 def _ipp_queue_slug(name):
-    """URL path form of a printer name ("HP Laser 103" -> hp-laser-103)."""
-    return re.sub(r"[^a-z0-9]+", "-", (name or "").strip().lower()).strip("-") \
-        or "printer"
+    """URL path form of a printer name. v3.3.0 BUG 3: UNICODE-aware -
+    the old [^a-z0-9] slug folded EVERY non-ASCII printer name (Bangla,
+    Arabic, CJK - common in real labs and shops) to the single slug
+    "printer", so all those printers shared ONE queue and none of them
+    was separately addressable. Word characters (\\w, Unicode letters
+    included) are kept now
+    ("\u09aa\u09cd\u09b0\u09bf\u09a8\u09cd\u099f\u09be\u09b0 \u09e7" -> "\u09aa\u09cd\u09b0\u09bf\u09a8\u09cd\u099f\u09be\u09b0-\u09e7"),
+    while ASCII names slug exactly as before ("HP Laser 103" ->
+    hp-laser-103) so queues added by older releases keep resolving."""
+    return re.sub(r"[^\w]+", "-", (name or "").strip().lower(),
+                  flags=re.UNICODE).strip("-") or "printer"
+
+
+def _ipp_queue_key(name):
+    """Collision-tolerant compare key for queue resolution: EVERY
+    non-word character AND underscores are removed (spaces, dashes,
+    punctuation), Unicode word characters kept, lowercased.
+    "HP Laser 103", "hp-laser-103", "hp_laser_103" and "HP  Laser___103!"
+    all key to hplaser103 - so a queue the client added under the OLD
+    dash slug keeps resolving after the v3.3.0 slug change, and
+    whatever slug style the client sends (Windows %20-spaces, CUPS
+    dashes, phones typing freely) all lands on the same printer."""
+    return re.sub(r"[\W_]+", "", str(name or "").strip().lower(),
+                  flags=re.UNICODE)
 
 
 def _ipp_queue_match(name):
-    """Resolve a per-printer queue name (raw, URL-encoded or slug) back to
-    the REAL local printer name. Returns '' (empty string) for no match."""
+    """Resolve a per-printer queue name (raw name, URL-encoded, dash slug
+    or Unicode slug) back to the REAL local printer name. Returns ''
+    (empty string) for no match. v3.3.0 BUG 3: the compare runs through
+    _ipp_queue_key so the slug STYLE does not matter - only the letters
+    and digits of the name do."""
     name = urllib.parse.unquote(str(name or "")).strip()
-    want = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+    want = _ipp_queue_key(name)
     if not want:
         return ""
     for n in list_printers_cached(max_age=30.0):
-        if re.sub(r"[^a-z0-9]+", "-", (n or "").strip().lower()).strip("-") == want:
+        if _ipp_queue_key(n) == want:
             return n
     return ""
 
@@ -1188,13 +1212,19 @@ _QMATCH_CACHE = {}
 _QMATCH_LOCK = threading.Lock()
 _QMATCH_TTL_OK = 10.0            # resolved slug -> printer name
 _QMATCH_TTL_NEG = 5.0            # unknown slug
+_QMATCH_LAST_FORCE = {"t": 0.0}  # v3.3.0 BUG 3: last forced refresh
 
 
 def _ipp_queue_match_cached(name):
-    """Thread-safe memo wrapper around _ipp_queue_match (v3.2.9)."""
-    key = re.sub(r"[^a-z0-9]+", "-",
-                 urllib.parse.unquote(str(name or "")).strip()
-                 .lower()).strip("-")
+    """Thread-safe memo wrapper around _ipp_queue_match (v3.2.9).
+    v3.3.0 BUG 3: a NEGATIVE answer force-refreshes the OS printer list
+    ONCE (rate-limited to one refresh per 3 s) before the negative memo
+    is stored - a printer added on the hub PC gets its own queue within
+    seconds, instead of waiting out the 30 s list cache AND the 5 s
+    negative memo. 'Any printer that exists' is separately active
+    immediately, which is exactly what the per-printer queue promise
+    means."""
+    key = _ipp_queue_key(urllib.parse.unquote(str(name or "")))
     if not key:
         return ""
     now = time.time()
@@ -1205,6 +1235,14 @@ def _ipp_queue_match_cached(name):
             if now - ts <= (_QMATCH_TTL_OK if val else _QMATCH_TTL_NEG):
                 return val
     got = _ipp_queue_match(name)
+    if not got:
+        try:
+            if now - _QMATCH_LAST_FORCE["t"] >= 3.0:
+                _QMATCH_LAST_FORCE["t"] = now
+                list_printers_cached(max_age=0.0)   # forced OS re-enum
+                got = _ipp_queue_match(name)
+        except Exception:
+            pass
     with _QMATCH_LOCK:
         _QMATCH_CACHE[key] = (now, got)
         if len(_QMATCH_CACHE) > 256:
@@ -1213,16 +1251,37 @@ def _ipp_queue_match_cached(name):
     return got
 
 
+def _active_queue_hint(limit=6):
+    """v3.3.0 BUG 3: a 404 for an unknown per-printer queue lists the
+    queues that ARE live right now - 'any printer that exists' becomes
+    discoverable from the error itself instead of a dead end."""
+    try:
+        names = [n for n in list_printers_cached(max_age=30.0) if n][:limit]
+    except Exception:
+        names = []
+    if not names:
+        return ""
+    try:
+        return " Active queues right now: " + \
+            ", ".join(_ipp_queue_slug(n) for n in names) + "."
+    except Exception:
+        return ""
+
+
 def ipp_queue_url(printer, host=None):
     """ipp:// URL a client adds for ONE local printer (per-printer queue).
     v3.2.9: optional host override - when a LAN PC asks for the queue
     list (or opens the queue landing page) the URL uses the address
     THAT device reached the hub with (Host header), so every PC sees
-    its own reachable ip:port instead of one global lan_ip()."""
+    its own reachable ip:port instead of one global lan_ip().
+    v3.3.0 BUG 3: the slug is percent-encoded, so a Unicode printer name
+    produces a valid URL (ipp://ip:9235/ipp/print/%E0%A6%AA...) instead
+    of an invalid bare-Unicode path. ASCII slugs are left untouched."""
     ip = str(host) if host else (lan_ip() if CFG.get("share_lan")
                                  else "127.0.0.1")
     return "ipp://%s:%d/ipp/print/%s" % (ip, int(CFG.get("port", 9235)),
-                                         _ipp_queue_slug(printer))
+                                         quote(_ipp_queue_slug(printer),
+                                               safe=""))
 
 def default_printer():
     """Return the OS default printer name (best effort)."""
@@ -1678,7 +1737,10 @@ def build_health_snapshot():
         "ipp_url": ("http://%s:%d/ipp/print" % (lan_ip(), CFG["port"]))
                    if CFG.get("share_lan") else None,
         "raw_printer_port": int(CFG.get("raw_printer_port") or 0),
-        "raw_active": bool(_RAW_TCP is not None),
+        "raw_active": bool(_RAW_SOCKS),
+        # v3.3.0 BUG 2: the sockets the RAW port actually listens on
+        # (every interface, IPv4 + IPv6) - the LAN panel shows the truth
+        "raw_addrs": list(_RAW_BINDS),
         # v2.9: print destination - ANY printer (default / selected / IP)
         "dest_mode": (CFG.get("dest_mode")
                       or ("selected" if CFG.get("printer")
@@ -1705,7 +1767,9 @@ def build_health_snapshot():
         "ipp_mdns_up": bool(_mdns_state.get("sock") is not None),
         "ipp_std": {"up": bool(_IPP631_STATE.get("up")),
                     "port": int(_IPP631_STATE.get("port") or 0),
-                    "err": _IPP631_STATE.get("err") or ""},
+                    "err": _IPP631_STATE.get("err") or "",
+                    # v3.3.0 BUG 2: the bound sockets (IPv4 + IPv6)
+                    "addrs": list(_IPP631_BINDS)},
         "lan_active": bool(BOUND_LAN),
         "lan_url": ("http://%s:%d" % (lan_ip(), CFG["port"]))
                    if CFG.get("share_lan") else None,
@@ -1714,7 +1778,11 @@ def build_health_snapshot():
         # v3.2.9 BUG 3: EVERY interface IP - the LAN panel lists them all
         # so each PC/phone can pick its own reachable address
         "lan_ips": list_lan_ips()[:8],
-        "lan_bind_ip": _LAN_BIND_IP,
+        # v3.3.0 BUG 2: the IPv6 half + the sockets the LAN listener is
+        # actually bound on (one per interface, v4 + v6)
+        "lan_ips6": list_lan_ips6()[:6],
+        "lan_bind_addrs": list(_LAN_BINDS),
+        "lan_bind_ip": (_LAN_BINDS[0] if _LAN_BINDS else None),
         "firewall_ok": firewall_rule_ok(),
         "hostname": socket.gethostname(),
         "success_rate": st.get("success_rate") if st else None,
@@ -4545,9 +4613,17 @@ class Handler(BaseHTTPRequestHandler):
         host = (self.headers.get("Host") or "").strip().lower()
         if not host:
             return True          # HTTP/1.0 clients may omit it (curl legacy)
-        hostname = host.split(":")[0].strip("[]")
+        # v3.3.0 BUG 2: parse BRACKETED IPv6 hosts correctly - the old
+        # split(":")[0] turned "[::1]" into "[" and rejected every IPv6
+        # client with 421 the moment the hub gained a [::] listener.
+        if host.startswith("["):
+            end = host.find("]")
+            hostname = host[1:end] if end > 0 else host[1:]
+        else:
+            hostname = host.split(":")[0]
+        hostname = hostname.strip("[]").strip("%")
         if hostname in ("localhost", "localhost.localdomain",
-                        "127.0.0.1", "::1", "::ffff:127.0.0.1"):
+                        "127.0.0.1", "::1", "::ffff:127.0.0.1", "::"):
             return True
         if hostname.endswith(".local") or hostname.endswith(".localdomain"):
             return True
@@ -5145,6 +5221,45 @@ class Handler(BaseHTTPRequestHandler):
                 ["The invite link carried no usable token."],
                 show_dashboard=False))
         norm = "%s://%s" % (u.scheme.lower(), u.netloc.lower())
+        # v3.3.0 BUG 1: never let a hub add ITSELF. The invite carries no
+        # "which hub" marker beyond its own address, so a user who opened
+        # the link on the hub PC (own LAN IP or localhost) ended up with a
+        # peer_hubs entry pointing the hub at ITSELF - the "it redirects
+        # own pc" report. If the peer URL is THIS hub, refuse with
+        # instructions instead of writing garbage config.
+        _ph = (u.hostname or "").lower().rstrip(".")
+        _own = {"localhost", "127.0.0.1", "::1"}
+        try:
+            _own.add(str(lan_ip() or "").lower())
+        except Exception:
+            pass
+        try:
+            _own.add(socket.gethostname().lower())
+        except Exception:
+            pass
+        try:
+            for _o in list_lan_ips():
+                _own.add(str(_o).lower())
+        except Exception:
+            pass
+        if _ph and _ph in _own and \
+                (u.port or int(CFG.get("port", 9235))) == \
+                int(CFG.get("port", 9235)):
+            db_audit("peer.connect.denied", ip=ip,
+                     details="self-invite blocked: %s" % url[:100])
+            log("[PEER] DENIED self-invite (%s) - the invite was opened"
+                " on the hub PC itself" % url[:80])
+            return self._html_response(400, peer_connect_result_html(
+                False, "That is this hub's own invite",
+                ["You opened the invite link ON the hub PC itself - the"
+                 " entry would point this hub at ITSELF, so nothing was"
+                 " saved.",
+                 "Open the link on the OTHER PC you want to print FROM"
+                 " (any browser there) and click the connect button on"
+                 " that page.",
+                 "Tip: the invite URL is on the hub console - LAN"
+                 " Sharing > Connect another PC > Copy invite link."],
+                show_dashboard=False))
         # dedupe: same peer URL -> replace the entry
         peers = [p for p in (CFG.get("peer_hubs") or [])
                  if str(p.get("url") or "").rstrip("/").lower()
@@ -5667,9 +5782,19 @@ class Handler(BaseHTTPRequestHandler):
             iname = (q.get("n") or [""])[0]
             if not CFG.get("token") or \
                     not hmac.compare_digest(str(it), str(CFG["token"])):
+                # v3.3.0 BUG 1: the old text blamed an "old or mistyped"
+                # link - but the REAL confusion (user report) is opening
+                # the invite on the WRONG PC: every AdvPrint hub has its
+                # own token, so a token copied from a DIFFERENT PC's
+                # console fails exactly like a stale one. Say both.
                 page = connect_error_html(
-                    "The ?t= parameter does not match this hub's token -"
-                    " the invite link is old or mistyped.").encode("utf-8")
+                    "The ?t= parameter does not match THIS hub's token -"
+                    " the invite link is old, mistyped, or it belongs to"
+                    " a DIFFERENT PC's hub. Every AdvPrint Pro hub has"
+                    " its own token: open the invite link that was"
+                    " copied on the PC you want to CONNECT TO (its"
+                    " console > LAN Sharing > Connect another PC > Copy"
+                    " invite link).").encode("utf-8")
                 self.send_response(403)
                 self._cors()
                 self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -5699,7 +5824,15 @@ class Handler(BaseHTTPRequestHandler):
             db_audit("peer.invite", actor="lan", ip=self._client_ip(),
                      details="invite page opened (peer name=%s)"
                              % str(iname or "?")[:60])
-            page = connect_page_html(str(it), iname).encode("utf-8")
+            # v3.3.0 BUG 1: the page is built from the address the VISITOR
+            # actually used (Host header), not the serving PC's lan_ip()
+            # guess - and when the visitor IS the hub PC itself (loopback)
+            # it gets the self-invite explainer instead of a form that
+            # would add this hub to itself.
+            page = connect_page_html(
+                str(it), iname,
+                req_host=self._req_host(), req_port=self._req_port(),
+                visitor_is_hub=self._is_loopback()).encode("utf-8")
             self.send_response(200)
             self._cors()
             self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -5731,7 +5864,7 @@ class Handler(BaseHTTPRequestHandler):
                     "ok": False,
                     "error": "unknown per-printer IPP queue - see GET "
                              "/printers for the ipp:// URL of every "
-                             "local printer"})
+                             "local printer" + _active_queue_hint()})
             host = socket.gethostname()
             # v3.2.9 BUG 3: the ipp:// URL on the queue landing page uses
             # the address THE OPENING DEVICE used, so every LAN PC sees
@@ -6186,7 +6319,7 @@ class Handler(BaseHTTPRequestHandler):
                     "ok": False,
                     "error": "unknown per-printer IPP queue - see GET "
                              "/printers for the ipp:// URL of every "
-                             "local printer"})
+                             "local printer" + _active_queue_hint()})
             route = "/ipp/print"
         if route in ("/ipp/print", "/ipp", "/ipp/"):
             if not ipp_printer_enabled():
@@ -8792,7 +8925,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
             <div class="lrow"><span class="lk">Network printer (IPP) <small>built-in IPP Class Driver, no tools</small></span><span class="chip ok">READY</span><span class="lv">http://10.26.94.206:9235/ipp/print</span><span class="sp"></span><span class="ops"><button class="btn small ipp-tgl">Disable</button><button class="btn small blue">Copy printer URL</button><button class="btn small" data-qr="ipp">QR</button></span></div>
             <div class="lrow" id="row-mdns"><span class="lk">AirPrint / mDNS discovery <small>the printer appears BY ITSELF in phone &amp; PC lists</small></span><span class="chip gray">STARTING</span><span class="lv plain">Bonjour/_ipp._tcp broadcast on the LAN</span><span class="sp"></span><span class="ops"></span></div>
             <div class="lrow" id="row-ipp631"><span class="lk">Standard IPP port 631 <small>mirror of /ipp/print — Android &amp; printer defaults</small></span><span class="chip gray">STARTING</span><span class="lv plain">http://IP:631/ipp/print answers like a real printer</span><span class="sp"></span><span class="ops"></span></div>
-            <div class="lrow" id="row-hubips"><span class="lk">Hub addresses <small>v3.2.9 — EVERY interface IP; pick the one YOUR PC reaches</small></span><span class="chip info">ALL IPs</span><span class="lv plain" id="hubIpList"></span><span class="sp"></span><span class="ops"></span></div>
+            <div class="lrow" id="row-hubips"><span class="lk">Hub addresses <small>v3.3.0 — EVERY interface IP, IPv4 + IPv6; pick the one YOUR PC reaches</small></span><span class="chip info">ALL IPs</span><span class="lv plain" id="hubIpList"></span><span class="sp"></span><span class="ops"></span></div>
             <div class="lrow"><span class="lk">RAW printer port <small>JetDirect, port 9100</small></span><span class="chip ok">LISTENING</span><span class="lv">10.26.94.206:9100</span><span class="sp"></span><span class="ops"><button class="btn small">How to add</button></span></div>
             <div class="lrow"><span class="lk">Windows firewall <small>inbound rule for LAN PCs</small></span><span class="chip ok">ALLOWED</span><span class="lv plain">inbound TCP 9235 allowed for LAN PCs</span><span class="sp"></span><span class="ops"><button class="btn small">Test LAN</button></span></div>
             <div class="lrow"><span class="lk">Printer status hold <small>pause jobs while a printer is offline</small></span><span class="chip ok">ON</span><span class="lv plain">jobs wait while the printer reports offline</span><span class="sp"></span><span class="ops"><button class="btn small">Disable</button></span></div>
@@ -9881,12 +10014,18 @@ function hubIp(){
   if (list.length) return list[0];
   return BOOT.lan_ip || lh || "127.0.0.1";
 }
+/* v3.3.0 BUG 2: an IPv6 host literal needs square brackets inside a URL
+   ("http://[fe80::1]:9235") - hubIp() returns the bare address. */
+function hubHost(h){
+  h = String(h || "");
+  return (h.indexOf(":") >= 0) ? "[" + h + "]" : h;
+}
 function hubPort(){
   if (!isLoopHost(location.hostname || "") && location.port) return location.port;
   return BOOT.self_port || BOOT.port || location.port || "9235";
 }
 function lanBase(){
-  return "http://" + hubIp() + ":" + hubPort();
+  return "http://" + hubHost(hubIp()) + ":" + hubPort();
 }
 function ippUrl(){
   /* v3.2.1 r2: the STANDARD printer URL (ipp scheme) - the form
@@ -10108,20 +10247,24 @@ function renderLanRows(){
   ipEl("ippGuideAndroid", hubIp());
   ipEl("ippGuideAndroid631", "http://" + hubIp() + ":631/ipp/print");
   ipEl("ippGuideRawIp", hubIp());
-  /* v3.2.9 BUG 3: every hub interface IP as a copyable chip + the
-     static "LAN PC hub URL" input follows this device's URL too */
+  /* v3.2.9 BUG 3 + v3.3.0 BUG 2: every hub interface IP as a copyable
+     chip - IPv4 AND IPv6 now - plus the static "LAN PC hub URL" input
+     follows this device's URL too */
   var ipChips = $("hubIpList");
   if (ipChips) {
     var seen = {}, ips = [];
-    (BOOT.lan_ips || []).concat([BOOT.lan_ip || ""]).forEach(function(x){
+    (BOOT.lan_ips || []).concat(BOOT.lan_ips6 || [])
+      .concat([BOOT.lan_ip || ""]).forEach(function(x){
       if (x && !seen[x] && !isLoopHost(x)) { seen[x] = 1; ips.push(x); }
     });
     if (!ips.length) ips = [hubIp()];
     ipChips.innerHTML = ips.map(function(x){
+      var v6 = String(x).indexOf(":") >= 0;
+      var disp = v6 ? "[" + x + "]" : x;
       var mine = x === hubIp() ? " <span class='chip ok'>THIS DEVICE</span>" : "";
-      return "<button class='btn small' data-cp=\"http://" + esc(x) + ":" +
+      return "<button class='btn small' data-cp=\"http://" + esc(disp) + ":" +
         esc(String(hubPort() || 9235)) + "\" style='margin:2px 6px 2px 0'>" +
-        esc(x) + ":" + esc(String(hubPort() || 9235)) + "</button>" + mine;
+        esc(disp) + ":" + esc(String(hubPort() || 9235)) + "</button>" + mine;
     }).join(" ");
   }
   var pcUrl = $("lanPcHubUrl");
@@ -10141,9 +10284,13 @@ function renderLanRows(){
       hubIp() + ".local)")
            : (cfgCache.ipp_mdns === false ? "discovery off in Hub settings (ipp_mdns)"
               : "starts when LAN sharing / IP Printer mode is ON"));
+  /* v3.3.0 BUG 2: the chip shows the REAL bound sockets (IPv4 + IPv6) */
+  var stdA = (std && std.addrs) || [];
   setChip("row-ipp631", !!std.up, "LISTENING", "OFF",
-    std.up ? ("http://" + hubIp() + ":" + (std.port || 631) +
-      "/ipp/print \u2014 Android manual add and printer defaults work")
+    std.up ? ("http://" + hubHost(hubIp()) + ":" + (std.port || 631) +
+      "/ipp/print \u2014 IPv4 + IPv6 on every interface" +
+      (stdA.length ? " (" + stdA.join(", ") + ")" : "") +
+      " \u2014 Android manual add and printer defaults work")
            : (std.err || "standard port off (needs admin on macOS/Linux, or ipp_standard_port: 0)"));
   var rows = qsa("#p-lan .lrow");
   rows.forEach(function(r){
@@ -10183,9 +10330,12 @@ function renderLanRows(){
           lanBase() + "/ipp/print";
         v.appendChild(s);
       }
-    } else if (k.indexOf("RAW printer port") === 0 && v)
-      v.textContent = hubIp() + ":9100";
-    else if (k.indexOf("Printer status hold") === 0) {
+    } else if (k.indexOf("RAW printer port") === 0 && v) {
+      /* v3.3.0 BUG 2: show the REAL bound sockets (IPv4 + IPv6 on every
+         interface) instead of one lan_ip guess */
+      var rw = (window._lastHealth && window._lastHealth.raw_addrs) || [];
+      v.textContent = rw.length ? rw.join("  \u00b7  ") : (hubHost(hubIp()) + ":9100");
+    } else if (k.indexOf("Printer status hold") === 0) {
       var c1 = r.querySelector(".chip");
       if (c1) { c1.textContent = cfgCache.hold_offline === false ? "OFF" : "ON";
         c1.className = "chip " + (cfgCache.hold_offline === false ? "gray" : "ok"); }
@@ -11191,7 +11341,7 @@ async function renderUpdate(res){
    full-page /docs stays available via the "Full guide page" button.
    ============================================================ */
 function docsHtml(){
-  var v = esc(BOOT.version || "3.2.9");
+  var v = esc(BOOT.version || "3.3.0");
   var ip = esc(BOOT.lan_ip || location.hostname || "127.0.0.1");
   var port = esc(String(BOOT.port || location.port || "9235"));
   var base = "http://" + ip + ":" + port;
@@ -12360,7 +12510,11 @@ async function boot(){
 boot();
 </script>
 </body>
-</html>"""
+</html>
+"""
+
+
+
 
 
 
@@ -12373,7 +12527,9 @@ def console_page_bytes(view="self", req_host=None, req_port=0,
     v3.2.9 BUG 3: the boot JSON carries the address THE OPENING DEVICE
     used (Host header) as self_host/self_port, the device's own IP and
     every interface IP of the hub (lan_ips) - the UI builds all printer
-    and queue URLs per device instead of one global lan_ip()."""
+    and queue URLs per device instead of one global lan_ip().
+    v3.3.0 BUG 2: lan_ips6 (the IPv6 addresses) join the boot JSON so
+    the LAN panel lists BOTH stacks."""
     page = CONSOLE_HTML
     boot = {
         "view": "center" if view == "center" else "self",
@@ -12386,6 +12542,8 @@ def console_page_bytes(view="self", req_host=None, req_port=0,
         "self_port": int(req_port) if req_port else CFG["port"],
         "client_ip": client_ip or "",
         "lan_ips": list_lan_ips()[:8],
+        # v3.3.0 BUG 2: IPv6 addresses for the LAN panel chips
+        "lan_ips6": list_lan_ips6()[:6],
     }
     try:
         page = page.replace("__ADVPRINT_BOOT_JSON__",
@@ -14212,6 +14370,153 @@ def list_lan_ips(max_age=15.0):
     return list(ordered)
 
 
+# v3.3.0 BUG 2: the IPv6 half of the address list. link-local fe80::
+# needs a zone id and is useless in a printer URL; loopback ::1 is the
+# PC itself - so only GLOBAL (2000::/3) and unique-local (fc00::/7)
+# addresses are offered. Empty on IPv4-only PCs and that is fine.
+_LAN_IPS6_CACHE = {"t": 0.0, "ips": []}
+
+
+def list_lan_ips6(max_age=15.0):
+    """Usable IPv6 addresses of this hub PC (global + unique-local,
+    no ::1, no fe80 link-local). Cached a few seconds like
+    list_lan_ips(). Returns [] when the PC has no usable IPv6."""
+    now = time.time()
+    if _LAN_IPS6_CACHE["ips"] and now - _LAN_IPS6_CACHE["t"] < max_age:
+        return list(_LAN_IPS6_CACHE["ips"])
+    ips = []
+    try:
+        for info in socket.getaddrinfo(socket.gethostname(), None,
+                                       socket.AF_INET6):
+            a = str(info[4][0]).split("%")[0].lower()
+            if not a or a == "::1" or a.startswith("fe80:") or \
+                    a.startswith("::ffff:"):
+                continue
+            if a not in ips:
+                ips.append(a)
+    except socket.gaierror:
+        pass
+    except OSError:
+        pass
+    _LAN_IPS6_CACHE["t"] = now
+    _LAN_IPS6_CACHE["ips"] = ips[:12]
+    return list(ips[:12])
+
+
+# ------------------------------------------------------------
+# v3.3.0 BUG 2: DUAL-STACK, EVERY-INTERFACE LISTENERS.
+# The old LAN listeners (9235 LAN, 631 mirror, RAW 9100) each bound
+# exactly ONE address - lan_ip(), the default-route IPv4 - so a hub PC
+# with several adapters (Ethernet + Wi-Fi + VPN + virtual NICs) went
+# DEAF on every other address, and no listener ever spoke IPv6 ("the
+# other PC cannot connect", "row printer show only ipv6 why not also
+# ipv4"). bind_listener_sockets() now binds:
+#   IPv4: one listening socket per non-loopback interface IP - specific
+#         binds never conflict with each other, nor with the 127.0.0.1
+#         loopback hub on the same port.
+#   IPv6: one [::] socket with IPV6_V6ONLY=1 - answers every IPv6
+#         address of this PC (and future ones) without stealing IPv4
+#         traffic from the v4 sockets.
+# The ACL (allowed_ips) still gates every connection at the
+# application layer, exactly as before - widening the bind does not
+# widen who may DO anything.
+# ------------------------------------------------------------
+def _sock_label(sock):
+    """Human label of a bound listening socket for logs + health."""
+    try:
+        host, port = sock.getsockname()[:2]
+        if ":" in str(host):
+            return "[%s]:%d" % (host, port)
+        return "%s:%d" % (host, int(port))
+    except Exception:
+        return "?"
+
+
+def _bind_signature():
+    """The bind set the listeners SHOULD be on right now. The ensure()
+    refreshers compare this against what is actually bound - DHCP, a
+    Wi-Fi join or a VPN tunnel changing the interface set triggers a
+    clean rebind (the old code rebinds only when lan_ip() moved, which
+    misses new adapters entirely)."""
+    ips = tuple(sorted(i for i in list_lan_ips()
+                       if i and not i.startswith("127.")))
+    try:
+        v6 = bool(socket.has_dualstack_ipv6())
+    except AttributeError:
+        v6 = False
+    return (ips, v6)
+
+
+def bind_listener_sockets(port, label):
+    """Bind BOTH stacks on EVERY interface for one port. Returns
+    (sockets, errors); raises OSError only when NOT ONE socket could
+    bind - a partial set (v4 only, or v6 only) is still a working
+    listener."""
+    socks, errs = [], []
+    # ---- IPv6: one socket, every address, no v4 takeover ----
+    try:
+        dual = socket.has_dualstack_ipv6()
+    except AttributeError:
+        dual = False
+    if dual:
+        s6 = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+        try:
+            s6.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            try:
+                s6.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
+            except OSError:
+                pass
+            s6.bind(("::", port))
+            s6.listen(128)
+            socks.append(s6)
+        except OSError as e:
+            try:
+                s6.close()
+            except OSError:
+                pass
+            errs.append("[::]:%d (%s)" % (port, e))
+    # ---- IPv4: one socket per real interface IP ----
+    for ip in list_lan_ips():
+        if not ip or ip == "127.0.0.1":
+            continue                  # the loopback hub owns exactly 127.0.0.1
+        s4 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            s4.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            s4.bind((ip, port))
+            s4.listen(128)
+            socks.append(s4)
+        except OSError as e:
+            try:
+                s4.close()
+            except OSError:
+                pass
+            errs.append("%s:%d (%s)" % (ip, port, e))
+    if not socks:
+        raise OSError("%s listeners: no bindable address on port %d (%s)"
+                      % (label, port, "; ".join(errs) or "none"))
+    return socks, errs
+
+
+def _httpd_on(sock, handler, server_cls):
+    """server_cls instance on an ALREADY-BOUND listening socket (the
+    dual-stack helper owns bind+listen, so the server skips its own
+    bind - and HubServer's Windows-exclusive server_bind is never
+    needed here)."""
+    srv = server_cls(("127.0.0.1", 0), handler, bind_and_activate=False)
+    try:
+        srv.socket.close()
+    except OSError:
+        pass
+    srv.socket = sock
+    try:
+        srv.server_address = sock.getsockname()
+    except Exception:
+        pass
+    srv.server_activate()                   # listen(backlog) on our socket
+    srv.daemon_threads = True
+    return srv
+
+
 def _sanitize_host_hdr(h):
     """v3.2.9 BUG 3: clean a Host header value for safe reuse in the
     URLs shown on pages. Returns (host, port-or-None) or ("", None) if
@@ -14295,49 +14600,73 @@ def ipp_scheme_bare(url):
 # second listener: instantly, zero downtime, and a failed LAN bind
 # can never take local printing down.
 # ------------------------------------------------------------
-_LAN_HTTPD = None                 # the second (LAN) listener, or None
-_LAN_THREAD = None
-_LAN_BIND_IP = None               # LAN IP the second listener is on
+_LAN_HTTPDS = []                  # v3.3.0 BUG 2: one server per stack
+_LAN_THREADS = []
+_LAN_BINDS = []                   # labels of the sockets actually bound
+_LAN_BIND_SIG = None              # interface set the binds were made on
 
 def lan_listen_active():
     """True while the dedicated LAN listener is serving."""
-    return _LAN_HTTPD is not None
+    return bool(_LAN_HTTPDS)
 
 def lan_listen_start():
-    """Bind the LAN listener to this PC's CURRENT LAN IP. Returns an
-    error string, or None on success. Never touches the loopback hub:
-    if this bind fails, 127.0.0.1 keeps answering."""
-    global _LAN_HTTPD, _LAN_THREAD, _LAN_BIND_IP, BOUND_LAN
-    if _LAN_HTTPD is not None:
+    """Bind the LAN listener on EVERY interface, IPv4 AND IPv6
+    (bind_listener_sockets). Returns an error string, or None on
+    success. Never touches the loopback hub: if no bind succeeds,
+    127.0.0.1 keeps answering.
+    v3.3.0 BUG 2: the old single lan_ip() bind went deaf on every
+    other adapter of the PC (VPN, second NIC, virtual switches) and
+    never answered IPv6 at all - the "other PC cannot connect" and
+    "listening shows only ipv6 / why not also ipv4" reports."""
+    global _LAN_HTTPDS, _LAN_THREADS, _LAN_BINDS, _LAN_BIND_SIG, BOUND_LAN
+    if _LAN_HTTPDS:
         return None
     if _env("HOST"):
         # Power user pinned the main bind with ADVPRINT_HOST (e.g.
         # 0.0.0.0): that listener already covers the LAN - do not open
         # a second one, trust the boot-time BOUND_LAN value.
         return None
-    ip = lan_ip()
-    if ip in ("127.0.0.1", "::1", ""):
-        return ("no LAN IP found (Wi-Fi/Ethernet disconnected?) - "
-                "connect to the network and toggle LAN sharing again")
     port = int(CFG.get("port", 9235))
     try:
-        httpd = HubServer((ip, port), Handler)
+        socks, errs = bind_listener_sockets(port, "LAN hub")
     except OSError as e:
-        return ("cannot bind %s:%d (%s) - another program may own the "
-                "port, or the network card just changed" % (ip, port, e))
-    except Exception as e:
-        return "cannot bind %s:%d (%s)" % (ip, port, e)
-    httpd.daemon_threads = True
-    _LAN_HTTPD = httpd
-    _LAN_BIND_IP = ip
-    _LAN_THREAD = threading.Thread(
-        target=httpd.serve_forever, kwargs={"poll_interval": 0.2},
-        name="advprint-lan", daemon=True)
-    _LAN_THREAD.start()
+        return ("no LAN address to bind (%s) - connect to the network"
+                " and toggle LAN sharing again" % e)
+    opened = []
+    for s in socks:
+        try:
+            httpd = _httpd_on(s, Handler, HubServer)
+        except Exception as e:
+            try:
+                s.close()
+            except OSError:
+                pass
+            errs.append("%s: %s" % (_sock_label(s), e))
+            continue
+        opened.append(httpd)
+    if not opened:
+        for s in socks:
+            try:
+                s.close()
+            except OSError:
+                pass
+        return ("cannot bind %s:%d (%s) - another program may own the"
+                " port, or the network card just changed"
+                % (lan_ip(), port, "; ".join(errs)))
+    _LAN_HTTPDS = opened
+    _LAN_BINDS = [_sock_label(s) for s in socks[:len(opened)]]
+    for httpd in opened:
+        t = threading.Thread(target=httpd.serve_forever,
+                             kwargs={"poll_interval": 0.2},
+                             name="advprint-lan", daemon=True)
+        _LAN_THREADS.append(t)
+        t.start()
+    _LAN_BIND_SIG = _bind_signature()
     BOUND_LAN = True
-    log("[LAN] listener UP on http://%s:%d - other PCs and phones can "
-        "print now (the loopback listener was never touched)"
-        % (ip, port))
+    log("[LAN] listeners UP on %s - other PCs and phones can print now"
+        " (IPv4 + IPv6; the loopback listener was never touched)%s"
+        % (", ".join(_LAN_BINDS),
+           " (failed: %s)" % "; ".join(errs) if errs else ""))
     try:
         build_health_snapshot()
     except Exception:
@@ -14345,26 +14674,28 @@ def lan_listen_start():
     return None
 
 def lan_listen_stop():
-    """Stop the dedicated LAN listener (loopback hub keeps running)."""
-    global _LAN_HTTPD, _LAN_THREAD, _LAN_BIND_IP, BOUND_LAN
-    httpd = _LAN_HTTPD
-    if httpd is None:
+    """Stop the dedicated LAN listeners (loopback hub keeps running)."""
+    global _LAN_HTTPDS, _LAN_THREADS, _LAN_BINDS, _LAN_BIND_SIG, BOUND_LAN
+    httpds = _LAN_HTTPDS
+    if not httpds:
         return
-    _LAN_HTTPD = None
-    _LAN_THREAD = None
-    _LAN_BIND_IP = None
+    _LAN_HTTPDS = []
+    _LAN_THREADS = []
+    _LAN_BINDS = []
+    _LAN_BIND_SIG = None
     if not _env("HOST"):
         BOUND_LAN = False
     def _closer():
-        try:
-            httpd.shutdown()          # exits serve_forever (its own thread)
-        except Exception:
-            pass
-        try:
-            httpd.server_close()      # release the port
-        except Exception:
-            pass
-        log("[LAN] listener stopped - this PC only (127.0.0.1) again")
+        for httpd in httpds:
+            try:
+                httpd.shutdown()      # exits serve_forever (its own thread)
+            except Exception:
+                pass
+            try:
+                httpd.server_close()  # release the port
+            except Exception:
+                pass
+        log("[LAN] listeners stopped - this PC only (127.0.0.1) again")
     threading.Thread(target=_closer, daemon=True,
                      name="advprint-lan-stop").start()
     try:
@@ -14382,7 +14713,7 @@ def lan_listen_ensure():
     if _env("HOST"):
         return
     want = bool(CFG.get("share_lan")) or ipp_printer_enabled()
-    if want and _LAN_HTTPD is None:
+    if want and not _LAN_HTTPDS:
         err = lan_listen_start()
         if err:
             log("[LAN] auto-start: %s" % err)
@@ -14390,13 +14721,15 @@ def lan_listen_ensure():
             log("[IPP] printer mode ON: LAN listener started so phones "
                 "and PCs can reach /ipp/print (turn OFF 'IP Printer "
                 "mode' to stop it)")
-    elif want and _LAN_BIND_IP and _LAN_BIND_IP != lan_ip():
-        # DHCP handed this PC a new address - follow it automatically.
-        log("[LAN] LAN IP changed %s -> %s - rebinding the LAN listener"
-            % (_LAN_BIND_IP, lan_ip()))
+    elif want and _LAN_BIND_SIG is not None and \
+            _LAN_BIND_SIG != _bind_signature():
+        # v3.3.0 BUG 2: follow the INTERFACE SET, not just the default
+        # route - a new Wi-Fi/VPN adapter is picked up automatically.
+        log("[LAN] interface set changed %s -> %s - rebinding the LAN"
+            " listeners" % (str(_LAN_BIND_SIG[0]), str(_bind_signature()[0])))
         lan_listen_stop()
         lan_listen_start()
-    elif not want and _LAN_HTTPD is not None:
+    elif not want and _LAN_HTTPDS:
         lan_listen_stop()
 
 # ------------------------------------------------------------
@@ -14434,9 +14767,10 @@ def lan_listen_ensure():
 # with config.json: "ipp_printer": false / "raw_printer_port": 0.
 # ------------------------------------------------------------
 
-_RAW_TCP = None                   # the RAW JetDirect listener, or None
-_RAW_THREAD = None
-_RAW_BIND_IP = None
+_RAW_SOCKS = []                   # v3.3.0 BUG 2: one listener per stack
+_RAW_THREADS = []
+_RAW_BINDS = []                   # labels of the sockets actually bound
+_RAW_BIND_SIG = None
 
 IPP_VERSION_STR = "1.1"
 IPP_MIME = "application/ipp"
@@ -14708,10 +15042,13 @@ def _ipp_queue_uris(queue_slug):
     pair above. Windows adds the queue with http://.../ipp/print/<slug>
     ("select a shared printer by name") while macOS/iOS/CUPS speak
     ipp://... - every client must find the URI IT asked for, otherwise
-    the Add-Printer dialog refuses to connect."""
+    the Add-Printer dialog refuses to connect.
+    v3.3.0 BUG 3: the slug is percent-encoded (Unicode printer names
+    produce valid URIs)."""
     ip, port = _ipp_uri_base()
-    return ["http://%s:%d/ipp/print/%s" % (ip, port, queue_slug),
-            "ipp://%s:%d/ipp/print/%s" % (ip, port, queue_slug)]
+    qs = quote(str(queue_slug or ""), safe="")
+    return ["http://%s:%d/ipp/print/%s" % (ip, port, qs),
+            "ipp://%s:%d/ipp/print/%s" % (ip, port, qs)]
 
 def _ipp_printer_uuid(queue_slug=None):
     """Stable urn:uuid (derived from the hub token + hostname) - the
@@ -15409,36 +15746,30 @@ def _raw_conn_handler(conn, addr):
             pass
 
 def raw_listen_active():
-    return _RAW_TCP is not None
+    return bool(_RAW_SOCKS)
 
 def raw_listen_start():
-    """Bind the RAW JetDirect listener to this PC's LAN IP (never
-    0.0.0.0). Returns an error string or None."""
-    global _RAW_TCP, _RAW_THREAD, _RAW_BIND_IP
+    """Bind the RAW JetDirect listener on EVERY interface, IPv4 AND
+    IPv6 (bind_listener_sockets). Returns an error string or None.
+    v3.3.0 BUG 2: the old single lan_ip() bind made the RAW printer
+    port deaf on every other adapter and silent on IPv6 - now every
+    interface IP of this PC accepts JetDirect jobs on both stacks,
+    still gated by the same allowed_ips ACL per connection."""
+    global _RAW_SOCKS, _RAW_THREADS, _RAW_BINDS, _RAW_BIND_SIG
     port = int(CFG.get("raw_printer_port") or 0)
     if port <= 0 or not CFG.get("share_lan"):
         return None
-    if _RAW_TCP is not None:
+    if _RAW_SOCKS:
         return None
-    ip = lan_ip()
-    if ip in ("127.0.0.1", "::1", ""):
-        return None                                  # no LAN - stay off
     try:
-        srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        srv.bind((ip, port))
-        srv.listen(4)
+        socks, errs = bind_listener_sockets(port, "RAW 9100")
     except OSError as e:
-        try:
-            srv.close()
-        except Exception:
-            pass
-        return "cannot bind RAW %s:%d (%s)" % (ip, port, e)
-    _RAW_TCP = srv
-    _RAW_BIND_IP = ip
+        return "cannot bind RAW %s" % e
+    _RAW_SOCKS = socks
+    _RAW_BINDS = [_sock_label(s) for s in socks]
 
-    def _accept_loop():
-        while _RAW_TCP is srv:
+    def _accept_loop(srv):
+        while _RAW_SOCKS and srv in _RAW_SOCKS:
             try:
                 conn, addr = srv.accept()
             except OSError:
@@ -15477,39 +15808,48 @@ def raw_listen_start():
         except OSError:
             pass
 
-    _RAW_THREAD = threading.Thread(target=_accept_loop, daemon=True,
-                                   name="advprint-raw-accept")
-    _RAW_THREAD.start()
-    log("[RAW9100] JetDirect printer port UP on %s:%d - other PCs can add"
-        " this PC as a Standard TCP/IP port printer" % (ip, port))
+    for s in socks:
+        t = threading.Thread(target=_accept_loop, args=(s,), daemon=True,
+                             name="advprint-raw-accept")
+        _RAW_THREADS.append(t)
+        t.start()
+    _RAW_BIND_SIG = _bind_signature()
+    log("[RAW9100] JetDirect printer port UP on %s - other PCs can add"
+        " this PC as a Standard TCP/IP port printer (IPv4 + IPv6)%s"
+        % (", ".join(_RAW_BINDS),
+           " (failed: %s)" % "; ".join(errs) if errs else ""))
     return None
 
 def raw_listen_stop():
-    global _RAW_TCP, _RAW_THREAD, _RAW_BIND_IP
-    srv = _RAW_TCP
-    if srv is None:
+    global _RAW_SOCKS, _RAW_THREADS, _RAW_BINDS, _RAW_BIND_SIG
+    socks = _RAW_SOCKS
+    if not socks:
         return
-    _RAW_TCP = None
-    _RAW_THREAD = None
-    _RAW_BIND_IP = None
-    try:
-        srv.close()          # accept loop exits on the OSError
-    except OSError:
-        pass
+    _RAW_SOCKS = []
+    _RAW_THREADS = []
+    _RAW_BINDS = []
+    _RAW_BIND_SIG = None
+    for srv in socks:
+        try:
+            srv.close()          # accept loops exit on the OSError
+        except OSError:
+            pass
     log("[RAW9100] printer port stopped")
 
 def raw_listen_ensure():
     """Health-refresher hook (runs every 3 s): start/stop/rebind the
-    RAW listener following share_lan + raw_printer_port + DHCP."""
+    RAW listeners following share_lan + raw_printer_port + the live
+    interface set (v3.3.0 BUG 2: DHCP / Wi-Fi / VPN changes)."""
     want = bool(CFG.get("share_lan")) and \
         int(CFG.get("raw_printer_port") or 0) > 0
-    if want and _RAW_TCP is None:
+    if want and not _RAW_SOCKS:
         err = raw_listen_start()
         if err:
             log("[RAW9100] auto-start: %s" % err)
-    elif not want and _RAW_TCP is not None:
+    elif not want and _RAW_SOCKS:
         raw_listen_stop()
-    elif want and _RAW_BIND_IP and _RAW_BIND_IP != lan_ip():
+    elif want and _RAW_BIND_SIG is not None and \
+            _RAW_BIND_SIG != _bind_signature():
         raw_listen_stop()
         raw_listen_start()
 
@@ -15641,10 +15981,31 @@ def ipp_landing_html(req_host=None, req_port=None):
 # only disables the MIRROR, never the hub. Control: config.json
 # "ipp_standard_port": 631 (default) | other port | 0 = off.
 # ------------------------------------------------------------
-_IPP631_HTTPD = None
-_IPP631_THREAD = None
-_IPP631_BIND_IP = None
+_IPP631_HTTPDS = []               # v3.3.0 BUG 2: one server per stack
+_IPP631_THREADS = []
+_IPP631_BINDS = []                # labels of the sockets actually bound
+_IPP631_BIND_SIG = None
 _IPP631_STATE = {"up": False, "port": 0, "err": ""}
+
+
+def _ipp631_server_on(sock):
+    """_IPP631Server on an ALREADY-BOUND listening socket - the dual-stack
+    helper owns bind+listen (v3.3.0 BUG 2), so the server skips its own
+    socket creation entirely."""
+    srv = _IPP631Server(("127.0.0.1", 0), IPP631Handler,
+                        bind_and_activate=False)
+    try:
+        srv.socket.close()
+    except OSError:
+        pass
+    srv.socket = sock
+    try:
+        srv.server_address = sock.getsockname()
+    except Exception:
+        pass
+    srv.server_activate()
+    srv.daemon_threads = True
+    return srv
 
 
 class _IPP631Server(ThreadingHTTPServer):
@@ -15733,7 +16094,20 @@ class IPP631Handler(BaseHTTPRequestHandler):
             return self._landing()
         # everything else belongs on the main hub port
         port = int(CFG.get("port", 9235))
-        ip = _IPP631_BIND_IP or lan_ip() or "127.0.0.1"
+        # v3.3.0 BUG 2: redirect to THIS socket's own address first (the
+        # client reached the mirror on it, so it is reachable), else the
+        # first bound listener, else the best LAN IP
+        redir_host = ""
+        try:
+            h0 = _sanitize_host_hdr(self.headers.get("Host"))[0]
+            if h0 and h0 not in ("localhost", "127.0.0.1", "::1") and \
+                    not h0.startswith("127."):
+                redir_host = h0
+        except Exception:
+            redir_host = ""
+        if not redir_host and _IPP631_BINDS:
+            redir_host = _IPP631_BINDS[0].rsplit(":", 1)[0].strip("[]")
+        ip = redir_host or lan_ip() or "127.0.0.1"
         self._redirect("http://%s:%d%s" % (ip, port, self.path))
 
     def do_POST(self):
@@ -15763,7 +16137,9 @@ class IPP631Handler(BaseHTTPRequestHandler):
                          site="lan", details="631 mirror: unknown "
                          "per-printer IPP queue %r" % route[:120])
                 return self._send_json(404, {
-                    "ok": False, "error": "unknown per-printer IPP queue"})
+                    "ok": False,
+                    "error": "unknown per-printer IPP queue"
+                             + _active_queue_hint()})
             route = "/ipp/print"
         if route not in ("/ipp/print", "/ipp", "/ipp/") or \
                 not ipp_printer_enabled():
@@ -15800,71 +16176,102 @@ class IPP631Handler(BaseHTTPRequestHandler):
 
 
 def ipp631_listen_start():
-    """Bind the standard-port IPP mirror to the LAN IP. Returns an
-    error string or None."""
-    global _IPP631_HTTPD, _IPP631_THREAD, _IPP631_BIND_IP
+    """Bind the standard-port IPP mirror on EVERY interface, IPv4 AND
+    IPv6 (bind_listener_sockets). Returns an error string or None.
+    v3.3.0 BUG 2: the old single lan_ip() bind answered on ONE address
+    only - phones/PCs on the hub's other adapters (and anything on
+    IPv6) found port 631 closed even though the hub was up."""
+    global _IPP631_HTTPDS, _IPP631_THREADS, _IPP631_BINDS, _IPP631_BIND_SIG
     port = int(CFG.get("ipp_standard_port") or 0)
     if port <= 0 or not ipp_printer_enabled():
         return None
-    if _IPP631_HTTPD is not None:
+    if _IPP631_HTTPDS:
         return None
-    ip = lan_ip()
-    if ip in ("127.0.0.1", "::1", ""):
-        return None                                  # no LAN - stay off
     try:
-        httpd = _IPP631Server((ip, port), IPP631Handler)
+        socks, errs = bind_listener_sockets(port, "IPP mirror")
     except OSError as e:
         _IPP631_STATE.update({"up": False, "port": port,
                               "err": "port %d busy/refused (%s)" % (port, e)})
-        return ("cannot bind IPP mirror %s:%d (%s) - on macOS/Linux the "
+        return ("cannot bind IPP mirror (%s) - on macOS/Linux the "
                 "standard port needs root; the hub's own port still "
-                "works everywhere" % (ip, port, e))
-    except Exception as e:
-        _IPP631_STATE.update({"up": False, "port": port, "err": str(e)})
-        return "cannot bind IPP mirror %s:%d (%s)" % (ip, port, e)
-    httpd.daemon_threads = True
-    _IPP631_HTTPD = httpd
-    _IPP631_BIND_IP = ip
-    _IPP631_THREAD = threading.Thread(
-        target=httpd.serve_forever, kwargs={"poll_interval": 0.2},
-        name="advprint-ipp631", daemon=True)
-    _IPP631_THREAD.start()
+                "works everywhere" % e)
+    opened = []
+    for s in socks:
+        try:
+            httpd = _ipp631_server_on(s)
+        except Exception as e:
+            try:
+                s.close()
+            except OSError:
+                pass
+            errs.append("%s: %s" % (_sock_label(s), e))
+            continue
+        opened.append(httpd)
+    if not opened:
+        for s in socks:
+            try:
+                s.close()
+            except OSError:
+                pass
+        _IPP631_STATE.update({"up": False, "port": port,
+                              "err": "; ".join(errs) or "bind failed"})
+        return "cannot bind IPP mirror %d (%s)" % (port, "; ".join(errs))
+    _IPP631_HTTPDS = opened
+    _IPP631_BINDS = [_sock_label(s) for s in socks[:len(opened)]]
+    for httpd in opened:
+        t = threading.Thread(target=httpd.serve_forever,
+                             kwargs={"poll_interval": 0.2},
+                             name="advprint-ipp631", daemon=True)
+        _IPP631_THREADS.append(t)
+        t.start()
+    _IPP631_BIND_SIG = _bind_signature()
     _IPP631_STATE.update({"up": True, "port": port, "err": ""})
-    log("[IPP631] standard-port printer UP on http://%s:%d/ipp/print - "
-        "Android manual add and printer dialogs that assume port %d "
-        "work now" % (ip, port, port))
+    log("[IPP631] standard-port printer UP on %s /ipp/print - Android"
+        " manual add and printer dialogs that assume port %d work now"
+        " (IPv4 + IPv6)%s"
+        % (", ".join(_IPP631_BINDS), port,
+           " (failed: %s)" % "; ".join(errs) if errs else ""))
     return None
 
 
 def ipp631_listen_stop():
-    global _IPP631_HTTPD, _IPP631_THREAD, _IPP631_BIND_IP
-    httpd = _IPP631_HTTPD
-    if httpd is None:
+    global _IPP631_HTTPDS, _IPP631_THREADS, _IPP631_BINDS, _IPP631_BIND_SIG
+    httpds = _IPP631_HTTPDS
+    if not httpds:
         return
-    _IPP631_HTTPD = None
-    _IPP631_THREAD = None
-    _IPP631_BIND_IP = None
+    _IPP631_HTTPDS = []
+    _IPP631_THREADS = []
+    _IPP631_BINDS = []
+    _IPP631_BIND_SIG = None
     _IPP631_STATE.update({"up": False, "port": 0, "err": ""})
-    try:
-        httpd.shutdown()
-        httpd.server_close()
-    except OSError:
-        pass
+    # synchronous close (the ensure() rebind path may follow instantly -
+    # the new binds must not race the old sockets still being open)
+    for httpd in httpds:
+        try:
+            httpd.shutdown()
+        except Exception:
+            pass
+        try:
+            httpd.server_close()
+        except Exception:
+            pass
     log("[IPP631] standard-port printer stopped")
 
 
 def ipp631_listen_ensure():
     """Health-refresher hook: start/stop/rebind the 631 mirror
-    following ipp_printer + ipp_standard_port + DHCP changes."""
+    following ipp_printer + ipp_standard_port + the live interface set
+    (v3.3.0 BUG 2: DHCP / Wi-Fi / VPN changes too)."""
     want_port = int(CFG.get("ipp_standard_port") or 0)
     want = want_port > 0 and ipp_printer_enabled()
-    if want and _IPP631_HTTPD is None:
+    if want and not _IPP631_HTTPDS:
         err = ipp631_listen_start()
         if err:
             log("[IPP631] auto-start: %s" % err)
-    elif not want and _IPP631_HTTPD is not None:
+    elif not want and _IPP631_HTTPDS:
         ipp631_listen_stop()
-    elif want and _IPP631_BIND_IP and _IPP631_BIND_IP != lan_ip():
+    elif want and _IPP631_BIND_SIG is not None and \
+            _IPP631_BIND_SIG != _bind_signature():
         ipp631_listen_stop()
         ipp631_listen_start()
     if want and _IPP631_STATE.get("up"):
@@ -15898,6 +16305,7 @@ _MDNS_GROUP = "224.0.0.251"
 _MDNS_TTL = 4500                    # advertised record TTL (75 min)
 _MDNS_ANNOUNCE_EVERY = 1500         # proactive re-announce cadence (25 min)
 _MDNS_QTYPE_A = 1
+_MDNS_QTYPE_AAAA = 28               # v3.3.0 BUG 2: IPv6 answer record
 _MDNS_QTYPE_PTR = 12
 _MDNS_QTYPE_TXT = 16
 _MDNS_QTYPE_SRV = 33
@@ -15954,12 +16362,14 @@ def _mdns_txt_records(rp="ipp/print", ty="AdvPrint Pro",
 def _mdns_services():
     """v3.0.9: every advertised service as (instance, rp, ty, note).
     Service 0 = the classic central queue (ipp/print). Then ONE service
-    per LOCAL printer with rp=ipp/print/<slug>, capped at 12 printers so
-    the UDP announce packet stays far below the 9000 byte mDNS cap."""
+    per LOCAL printer with rp=ipp/print/<slug>, capped at 24 printers so
+    the UDP announce packet stays far below the 9000 byte mDNS cap
+    (v3.3.0 BUG 3: was 12 - larger labs/shops have more printers, and
+    EVERY printer that exists must be separately discoverable)."""
     out = [(_mdns_instance_name(), "ipp/print", "AdvPrint Pro",
             "AdvPrint Pro print hub")]
     try:
-        for n in list_printers_cached(max_age=30.0)[:12]:
+        for n in list_printers_cached(max_age=30.0)[:24]:
             if not n:
                 continue
             out.append(("%s @ %s" % (n, _mdns_host_target().split(".")[0]),
@@ -15980,11 +16390,13 @@ def _mdns_rr(name, rtype, ttl, rdata, flush=False):
             len(rdata).to_bytes(2, "big") + rdata)
 
 
-def _mdns_rrset(ip, ttl=_MDNS_TTL):
+def _mdns_rrset(ip, ttl=_MDNS_TTL, ip6=None):
     """All records that describe this hub as an IPP printer.
     v3.0.9: announces the central queue PLUS one service per local
     printer (per-printer ipp:// queues) - phones and PCs see every
-    printer of the center PC by itself. One shared A record."""
+    printer of the center PC by itself. One shared A record.
+    v3.3.0 BUG 2: one shared AAAA record too, so IPv6-capable clients
+    (modern phones, IPv6-only LANs) can reach the hub over IPv6."""
     target = _mdns_host_target()
     port = int(CFG.get("port", 9235))
     srv = ((0).to_bytes(2, "big") + (0).to_bytes(2, "big") +
@@ -16004,6 +16416,13 @@ def _mdns_rrset(ip, ttl=_MDNS_TTL):
                                 flush=True))
     records.append(_mdns_rr(target, _MDNS_QTYPE_A, ttl,
                             socket.inet_aton(ip), flush=True))
+    if ip6:
+        try:
+            records.append(_mdns_rr(target, _MDNS_QTYPE_AAAA, ttl,
+                                    socket.inet_pton(socket.AF_INET6, ip6),
+                                    flush=True))
+        except (OSError, socket.error):
+            pass                    # AAAA is best-effort, never fatal
     return records
 
 
@@ -16051,13 +16470,14 @@ def _mdns_parse_questions(pkt):
     return out
 
 
-def _mdns_announce(ip, ttl=_MDNS_TTL):
-    """Unsolicited multicast announce (RFC 6762 §8.3)."""
+def _mdns_announce(ip, ttl=_MDNS_TTL, ip6=None):
+    """Unsolicited multicast announce (RFC 6762 §8.3). v3.3.0 BUG 2:
+    carries the AAAA record when the hub has a usable IPv6."""
     sock = _mdns_state["sock"]
     if sock is None:
         return
     try:
-        pkt = _mdns_packet(_mdns_rrset(ip, ttl))
+        pkt = _mdns_packet(_mdns_rrset(ip, ttl, ip6=ip6))
         sock.sendto(pkt, (_MDNS_GROUP, _MDNS_PORT))
         _mdns_state["last_announce"] = time.time()
         _mdns_state["announced"] = ttl > 0
@@ -16083,6 +16503,8 @@ def _ipp_mdns_loop():
             ip = lan_ip() if want else None
             if ip in ("127.0.0.1", "::1", ""):
                 want, ip = False, None
+            # v3.3.0 BUG 2: one usable IPv6 for the AAAA record
+            ip6 = (list_lan_ips6() or [None])[0] if want else None
             sock = _mdns_state["sock"]
             if want and sock is None:
                 _mdns_state["announced"] = False
@@ -16100,7 +16522,7 @@ def _ipp_mdns_loop():
                         _mdns_state["err_logged"] = True
                     _mdns_state["sock"] = None
             elif not want and sock is not None:
-                _mdns_announce(ip or "0.0.0.0", ttl=0)   # goodbye
+                _mdns_announce(ip or "0.0.0.0", ttl=0, ip6=ip6)   # goodbye
                 try:
                     sock.close()
                 except OSError:
@@ -16110,18 +16532,20 @@ def _ipp_mdns_loop():
                 log("[MDNS] discovery stopped")
             sock = _mdns_state["sock"]
             if sock is not None:
-                if ip and _mdns_state["ip"] != ip:
-                    _mdns_announce(ip, ttl=0)            # IP changed
+                if ip and (_mdns_state["ip"] != ip or
+                           _mdns_state.get("ip6") != ip6):
+                    _mdns_announce(ip, ttl=0, ip6=ip6)   # IP changed
                     _mdns_state["announced"] = False
                 _mdns_state["ip"] = ip
+                _mdns_state["ip6"] = ip6
                 if ip and (not _mdns_state["announced"] or
                            time.time() - _mdns_state["last_announce"]
                            >= _MDNS_ANNOUNCE_EVERY):
-                    _mdns_announce(ip)
+                    _mdns_announce(ip, ip6=ip6)
                 sock.settimeout(2.0)
                 try:
                     pkt, addr = sock.recvfrom(9000)
-                    _mdns_answer_query(pkt, addr, ip)
+                    _mdns_answer_query(pkt, addr, ip, ip6=ip6)
                 except socket.timeout:
                     pass
                 except OSError:
@@ -16159,11 +16583,11 @@ def _mdns_socket_open():
     return s
 
 
-def _mdns_answer_query(pkt, addr, ip):
+def _mdns_answer_query(pkt, addr, ip, ip6=None):
     """Answer a query with the records that match its questions.
     v3.0.9: knows every per-printer service instance, so a client
     asking for ONE printer's SRV/TXT gets exactly that queue's
-    rp=ipp/print/<printer> answer."""
+    rp=ipp/print/<printer> answer. v3.3.0 BUG 2: AAAA answers too."""
     sock = _mdns_state["sock"]
     if sock is None or not ip:
         return
@@ -16195,7 +16619,7 @@ def _mdns_answer_query(pkt, addr, ip):
         qdcount += 1
         echoed += raw
         if qtype in (_MDNS_QTYPE_PTR, _MDNS_QTYPE_ANY):
-            answers += [r for r in _mdns_rrset(ip) if r]
+            answers += [r for r in _mdns_rrset(ip, ip6=ip6) if r]
             full_set_sent = True
             break               # PTR/ANY -> full record set (all queues)
         if qtype == _MDNS_QTYPE_SRV:
@@ -16214,6 +16638,15 @@ def _mdns_answer_query(pkt, addr, ip):
         elif qtype == _MDNS_QTYPE_A and name == target:
             answers.append(_mdns_rr(target, _MDNS_QTYPE_A, _MDNS_TTL,
                                     socket.inet_aton(ip), flush=True))
+        elif qtype == _MDNS_QTYPE_AAAA and name == target and ip6:
+            try:
+                answers.append(_mdns_rr(target, _MDNS_QTYPE_AAAA,
+                                        _MDNS_TTL,
+                                        socket.inet_pton(socket.AF_INET6,
+                                                         ip6),
+                                        flush=True))
+            except (OSError, socket.error):
+                pass
     if not answers:
         return
     reply = _mdns_packet(answers, questions=echoed, qdcount=qdcount)
@@ -16936,10 +17369,57 @@ def esc_html(s):
 DEFAULT_PEER_PORT = 9235   # the peer PC's own hub port (default install)
 
 
-def connect_page_html(token, name):
+def connect_page_html(token, name, req_host="", req_port=None,
+                      visitor_is_hub=False):
+    """v2.8.1 ONE-CLICK LAN INVITE page.
+    v3.3.0 BUG 1: the hub URL shown on the page (and saved into the
+    visiting PC's peer_hubs) is built from the address the VISITOR
+    actually used - the request's Host header - never from the serving
+    hub's own lan_ip() guess, which could be an adapter the visitor
+    cannot reach or simply the wrong identity when two labs share one
+    token. A visitor who opened the invite ON the hub PC itself gets
+    connect_self_html() instead of a form that would add the hub to
+    itself; the page also probes the VISITING PC's own hub (127.0.0.1)
+    so "click Connect" can never die with a raw browser error when the
+    other PC has no hub running yet."""
     host = socket.gethostname()
-    peer_url = "http://%s:%d" % (lan_ip(), CFG["port"])
     who = str(name or host)[:60]
+    rh = str(req_host or "").strip().lower()
+    if rh in ("localhost", "::1") or rh.startswith("127."):
+        rh = ""
+    peer_host = rh or (lan_ip() if CFG.get("share_lan") else "127.0.0.1")
+    peer_port = int(req_port) if req_port else int(CFG.get("port", 9235))
+    peer_url = "http://%s:%d" % (peer_host, peer_port)
+    if visitor_is_hub:
+        return connect_self_html(peer_url, who, token)
+    # v3.3.0 BUG 2: offer EVERY address of this hub (IPv4 + IPv6) so the
+    # visitor can swap the ip:port if the one they typed is not the best
+    # route to this PC on their segment.
+    alt4 = []
+    try:
+        alt4 = [i for i in list_lan_ips() if i and not i.startswith("127.")]
+    except Exception:
+        alt4 = []
+    alt6 = []
+    try:
+        alt6 = list_lan_ips6()
+    except Exception:
+        alt6 = []
+    alt_rows = ""
+    for a in alt4:
+        alt_rows += ("<div class='alt'><span class='mono'>http://%s:%d"
+                     "</span><button class='btn gray' data-alt=\"http://%s:%d\">"
+                     "use this</button></div>"
+                     % (esc_html(a), peer_port, esc_html(a), peer_port))
+    for a in alt6:
+        alt_rows += ("<div class='alt'><span class='mono'>http://[%s]:%d"
+                     "</span><button class='btn gray' data-alt=\"http://[%s]:%d\">"
+                     "use this</button></div>"
+                     % (esc_html(a), peer_port, esc_html(a), peer_port))
+    if alt_rows:
+        alt_rows = ("<details><summary>Other addresses of this hub"
+                    " (pick one YOUR PC reaches)</summary>" + alt_rows +
+                    "</details>")
     return """<!DOCTYPE html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>AdvPrint Pro - connect to this printer hub</title><style>
@@ -16960,6 +17440,13 @@ def connect_page_html(token, name):
  .brand{font-size:11px;color:#94a3b8;text-align:center;margin-top:14px}
  .warn{background:#fef9c3;border:1px solid #fde047;color:#854d0e;
        border-radius:10px;padding:10px 14px;font-size:14px}
+ #localHubState{border-radius:10px;padding:10px 14px;font-size:13.5px;
+       margin:10px 0;background:#f8fafc;border:1px solid #e2e8f0}
+ #localHubState.ok{background:#ecfdf5;border-color:#a7f3d0;color:#065f46}
+ #localHubState.warn{background:#fef9c3;border-color:#fde047;color:#854d0e}
+ .alt{display:flex;gap:8px;align-items:center;margin:6px 0}
+ .alt .mono{flex:1}
+ .alt button{padding:6px 10px;font-size:12px}
 </style></head><body><div class="box">
  <h1>Connect to &#8220;@@WHO@@&#8221;'s printer hub?</h1>
  <p>The PC that showed you this link shares its printers over the
@@ -16967,17 +17454,21 @@ def connect_page_html(token, name):
     adds it to YOUR PC's printer-hub list (peer_hubs) - afterwards you
     can send print jobs to its printers from your own dashboard.</p>
  <div class="kv">Peer PC: <b>@@WHO@@</b><br>
-  Hub URL: <span class="mono">@@URL@@</span></div>
- <form method="post" action="http://127.0.0.1:@@PORT@@/peer-connect">
-  <input type="hidden" name="url" value="@@URL@@">
+  Hub URL: <span class="mono" id="peerUrl">@@URL@@</span></div>
+ <div id="localHubState">Checking your PC's own AdvPrint hub
+   (127.0.0.1:@@DPORT@@) ...</div>
+ <form method="post" id="peerForm"
+       action="http://127.0.0.1:@@DPORT@@/peer-connect">
+  <input type="hidden" name="url" id="fUrl" value="@@URL@@">
   <input type="hidden" name="token" value="@@TOK@@">
   <input type="hidden" name="name" value="@@WHO@@">
   <input type="hidden" name="confirm" value="1">
-  <button type="submit">Add &#8220;@@WHO@@&#8221; as a LAN print peer</button>
+  <button type="submit" id="peerBtn">Add &#8220;@@WHO@@&#8221; as a LAN print peer</button>
  </form>
  <p class="warn">Nothing is sent to the internet - this only writes the
     peer entry into your local AdvPrint Pro config. You can remove it
     any time from your dashboard's LAN card (or config.json).</p>
+ @@ALTS@@
  <details><summary>Manual alternative (if your hub runs on another port)</summary>
   <p>Paste this into <span class="mono">peer_hubs</span> in your
      <span class="mono">config.json</span> and restart the hub:</p>
@@ -16987,11 +17478,155 @@ def connect_page_html(token, name):
  </details>
  <div class="brand">AdvPrint Pro v@@VERSION@@ - by Bit Dream IT -
    100% local - no cloud, no tracking</div>
-</div></body></html>""" \
+</div>
+<script>
+(function(){
+  var DPORT = @@DPORT@@;
+  var st = document.getElementById("localHubState");
+  var form = document.getElementById("peerForm");
+  var btn = document.getElementById("peerBtn");
+  var fUrl = document.getElementById("fUrl");
+  var up = null;
+  function set(t, cls){ st.textContent = t;
+    st.className = cls ? cls : ""; }
+  /* v3.3.0 BUG 1: probe the VISITING PC's own hub first - the old page
+     just POSTed into the void and the browser answered with a raw
+     "127.0.0.1 refused to connect" error page. */
+  fetch("http://127.0.0.1:" + DPORT + "/health", { mode: "cors" })
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(j){
+      if (j && j.ok) {
+        up = true;
+        set("Your PC's hub is running (AdvPrint Pro v" + (j.version || "?") +
+            ") - the button below connects THIS PC to it.", "ok");
+      } else { probeFail(); }
+    })
+    .catch(function(){ probeFail(); });
+  function probeFail(){
+    up = false;
+    set("No AdvPrint hub answered on THIS PC (127.0.0.1:" + DPORT + ")." +
+        " Install / start AdvPrint Pro here first, then click the" +
+        " button - or add the peer manually (config.json, see below).",
+        "warn");
+  }
+  /* "use this" chips: swap the peer URL the form will save */
+  var altBtns = document.querySelectorAll("button[data-alt]");
+  for (var i = 0; i < altBtns.length; i++) {
+    altBtns[i].addEventListener("click", function(ev){
+      ev.preventDefault();
+      fUrl.value = this.getAttribute("data-alt");
+      document.getElementById("peerUrl").textContent = fUrl.value;
+      set("Peer URL set to " + fUrl.value +
+          " - click the connect button to save it.", "");
+    });
+  }
+  form.addEventListener("submit", function(ev){
+    if (up === true) return;            /* hub up: normal form POST */
+    ev.preventDefault();
+    set("Connecting ...", "");
+    btn.disabled = true;
+    var fd = new URLSearchParams();
+    fd.append("url", fUrl.value);
+    fd.append("token", "@@TOK@@");
+    fd.append("name", "@@WHO@@");
+    fd.append("confirm", "1");
+    /* last-chance live POST: the GET probe can be blocked by the
+       browser's private-network rules even when the hub IS up. */
+    fetch("http://127.0.0.1:" + DPORT + "/peer-connect",
+          { method: "POST", mode: "cors", body: fd })
+      .then(function(r){ return r.text().then(function(t){
+        return { ok: r.ok, text: t }; }); })
+      .then(function(res){
+        if (res.ok && res.text) {
+          document.open(); document.write(res.text); document.close();
+          return;
+        }
+        fail(); })
+      .catch(function(){ fail(); });
+    function fail(){
+      btn.disabled = false;
+      set("Could not reach YOUR PC's hub on 127.0.0.1:" + DPORT +
+          " - nothing was saved. Install / start AdvPrint Pro on this" +
+          " PC, then open this invite again (or use the config.json" +
+          " snippet below).", "warn");
+    }
+  });
+})();
+</script></body></html>""" \
         .replace("@@WHO@@", esc_html(who)) \
         .replace("@@URL@@", esc_html(peer_url)) \
         .replace("@@TOK@@", quote(token or "")) \
-        .replace("@@PORT@@", str(DEFAULT_PEER_PORT)) \
+        .replace("@@DPORT@@", str(DEFAULT_PEER_PORT)) \
+        .replace("@@ALTS@@", alt_rows) \
+        .replace("@@VERSION@@", VERSION)
+
+
+def connect_self_html(peer_url, who, token=""):
+    """v3.3.0 BUG 1: what a visitor sees when the invite link is opened
+    ON the hub PC itself (loopback). The old page happily offered the
+    "Add ... as a LAN print peer" button - clicking it wrote the hub
+    into its OWN peer_hubs (the 'it redirect own pc' bug report). This
+    page explains the one correct move instead: carry the link to the
+    OTHER PC."""
+    invite = peer_url + "/connect?t=" + quote(token or "") + \
+        "&n=" + quote(socket.gethostname() or "")
+    return """<!DOCTYPE html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AdvPrint Pro - this invite is for the OTHER PC</title><style>
+ body{font:15px/1.55 "Segoe UI",system-ui,sans-serif;background:#f5f8fc;
+      color:#0f172a;margin:0;padding:24px}
+ .box{max-width:560px;margin:6vh auto;background:#fff;border:1px solid #e2e8f0;
+      border-radius:14px;padding:24px;box-shadow:0 8px 30px #0f172a14}
+ h1{font-size:19px;margin:0 0 6px} p{color:#475569;margin:8px 0}
+ .kv{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;
+     padding:10px 14px;margin:10px 0;font-size:14px}
+ .mono{font-family:Consolas,monospace;font-size:13px;word-break:break-all}
+ ol{color:#475569;line-height:1.7} code{background:#f1f5f9;border:1px solid
+     #e2e8f0;border-radius:4px;padding:1px 6px;font-size:12.5px}
+ button{border:none;border-radius:10px;background:#1d4ed8;color:#fff;
+        font:700 15px "Segoe UI",system-ui;padding:12px 18px;cursor:pointer}
+ .brand{font-size:11px;color:#94a3b8;text-align:center;margin-top:14px}
+ .ok{background:#ecfdf5;border:1px solid #a7f3d0;border-radius:10px;
+     padding:10px 14px;font-size:13.5px;color:#065f46}
+</style></head><body><div class="box">
+ <h1>You opened this invite ON the hub PC &#8220;@@WHO@@&#8221;</h1>
+ <p>This link is meant for a <b>DIFFERENT PC</b>: opening it there and
+    clicking its button adds <b>this hub</b> to that PC's peer list.
+    Opening it here would connect this PC to itself - so nothing was
+    done.</p>
+ <div class="kv">This hub: <span class="mono">@@URL@@</span></div>
+ <ol><li>Copy the invite link below.</li>
+     <li>Open it in any browser on the <b>other PC</b> (the one that
+         should print THROUGH this hub).</li>
+     <li>Click &#8220;Add ... as a LAN print peer&#8221; on THAT PC -
+         it configures itself.</li></ol>
+ <div class="kv"><span class="mono" id="inv">@@INVITE@@</span><br>
+  <button id="cp">Copy invite link</button></div>
+ <p class="ok">Tip: the same link is always on this PC's console -
+    LAN Sharing &gt; Connect another PC &gt; <b>Copy invite link</b>
+    (and a QR code next to it for phones).</p>
+ <div class="brand">AdvPrint Pro v@@VERSION@@ - by Bit Dream IT -
+   100% local - no cloud, no tracking</div>
+</div>
+<script>
+(function(){
+  var b = document.getElementById("cp");
+  b.addEventListener("click", function(){
+    var t = document.getElementById("inv").textContent;
+    function fb(){ var ta = document.createElement("textarea");
+      ta.value = t; document.body.appendChild(ta); ta.select();
+      try { document.execCommand("copy"); } catch (e) {}
+      document.body.removeChild(ta); b.textContent = "Copied"; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(t).then(function(){
+        b.textContent = "Copied"; }, fb);
+    } else { fb(); }
+  });
+})();
+</script></body></html>""" \
+        .replace("@@WHO@@", esc_html(who)) \
+        .replace("@@URL@@", esc_html(peer_url)) \
+        .replace("@@INVITE@@", esc_html(invite)) \
         .replace("@@VERSION@@", VERSION)
 
 

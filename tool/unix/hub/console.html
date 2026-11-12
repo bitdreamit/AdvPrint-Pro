@@ -870,7 +870,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
             <div class="lrow"><span class="lk">Network printer (IPP) <small>built-in IPP Class Driver, no tools</small></span><span class="chip ok">READY</span><span class="lv">http://10.26.94.206:9235/ipp/print</span><span class="sp"></span><span class="ops"><button class="btn small ipp-tgl">Disable</button><button class="btn small blue">Copy printer URL</button><button class="btn small" data-qr="ipp">QR</button></span></div>
             <div class="lrow" id="row-mdns"><span class="lk">AirPrint / mDNS discovery <small>the printer appears BY ITSELF in phone &amp; PC lists</small></span><span class="chip gray">STARTING</span><span class="lv plain">Bonjour/_ipp._tcp broadcast on the LAN</span><span class="sp"></span><span class="ops"></span></div>
             <div class="lrow" id="row-ipp631"><span class="lk">Standard IPP port 631 <small>mirror of /ipp/print — Android &amp; printer defaults</small></span><span class="chip gray">STARTING</span><span class="lv plain">http://IP:631/ipp/print answers like a real printer</span><span class="sp"></span><span class="ops"></span></div>
-            <div class="lrow" id="row-hubips"><span class="lk">Hub addresses <small>v3.2.9 — EVERY interface IP; pick the one YOUR PC reaches</small></span><span class="chip info">ALL IPs</span><span class="lv plain" id="hubIpList"></span><span class="sp"></span><span class="ops"></span></div>
+            <div class="lrow" id="row-hubips"><span class="lk">Hub addresses <small>v3.3.0 — EVERY interface IP, IPv4 + IPv6; pick the one YOUR PC reaches</small></span><span class="chip info">ALL IPs</span><span class="lv plain" id="hubIpList"></span><span class="sp"></span><span class="ops"></span></div>
             <div class="lrow"><span class="lk">RAW printer port <small>JetDirect, port 9100</small></span><span class="chip ok">LISTENING</span><span class="lv">10.26.94.206:9100</span><span class="sp"></span><span class="ops"><button class="btn small">How to add</button></span></div>
             <div class="lrow"><span class="lk">Windows firewall <small>inbound rule for LAN PCs</small></span><span class="chip ok">ALLOWED</span><span class="lv plain">inbound TCP 9235 allowed for LAN PCs</span><span class="sp"></span><span class="ops"><button class="btn small">Test LAN</button></span></div>
             <div class="lrow"><span class="lk">Printer status hold <small>pause jobs while a printer is offline</small></span><span class="chip ok">ON</span><span class="lv plain">jobs wait while the printer reports offline</span><span class="sp"></span><span class="ops"><button class="btn small">Disable</button></span></div>
@@ -1959,12 +1959,18 @@ function hubIp(){
   if (list.length) return list[0];
   return BOOT.lan_ip || lh || "127.0.0.1";
 }
+/* v3.3.0 BUG 2: an IPv6 host literal needs square brackets inside a URL
+   ("http://[fe80::1]:9235") - hubIp() returns the bare address. */
+function hubHost(h){
+  h = String(h || "");
+  return (h.indexOf(":") >= 0) ? "[" + h + "]" : h;
+}
 function hubPort(){
   if (!isLoopHost(location.hostname || "") && location.port) return location.port;
   return BOOT.self_port || BOOT.port || location.port || "9235";
 }
 function lanBase(){
-  return "http://" + hubIp() + ":" + hubPort();
+  return "http://" + hubHost(hubIp()) + ":" + hubPort();
 }
 function ippUrl(){
   /* v3.2.1 r2: the STANDARD printer URL (ipp scheme) - the form
@@ -2186,20 +2192,24 @@ function renderLanRows(){
   ipEl("ippGuideAndroid", hubIp());
   ipEl("ippGuideAndroid631", "http://" + hubIp() + ":631/ipp/print");
   ipEl("ippGuideRawIp", hubIp());
-  /* v3.2.9 BUG 3: every hub interface IP as a copyable chip + the
-     static "LAN PC hub URL" input follows this device's URL too */
+  /* v3.2.9 BUG 3 + v3.3.0 BUG 2: every hub interface IP as a copyable
+     chip - IPv4 AND IPv6 now - plus the static "LAN PC hub URL" input
+     follows this device's URL too */
   var ipChips = $("hubIpList");
   if (ipChips) {
     var seen = {}, ips = [];
-    (BOOT.lan_ips || []).concat([BOOT.lan_ip || ""]).forEach(function(x){
+    (BOOT.lan_ips || []).concat(BOOT.lan_ips6 || [])
+      .concat([BOOT.lan_ip || ""]).forEach(function(x){
       if (x && !seen[x] && !isLoopHost(x)) { seen[x] = 1; ips.push(x); }
     });
     if (!ips.length) ips = [hubIp()];
     ipChips.innerHTML = ips.map(function(x){
+      var v6 = String(x).indexOf(":") >= 0;
+      var disp = v6 ? "[" + x + "]" : x;
       var mine = x === hubIp() ? " <span class='chip ok'>THIS DEVICE</span>" : "";
-      return "<button class='btn small' data-cp=\"http://" + esc(x) + ":" +
+      return "<button class='btn small' data-cp=\"http://" + esc(disp) + ":" +
         esc(String(hubPort() || 9235)) + "\" style='margin:2px 6px 2px 0'>" +
-        esc(x) + ":" + esc(String(hubPort() || 9235)) + "</button>" + mine;
+        esc(disp) + ":" + esc(String(hubPort() || 9235)) + "</button>" + mine;
     }).join(" ");
   }
   var pcUrl = $("lanPcHubUrl");
@@ -2219,9 +2229,13 @@ function renderLanRows(){
       hubIp() + ".local)")
            : (cfgCache.ipp_mdns === false ? "discovery off in Hub settings (ipp_mdns)"
               : "starts when LAN sharing / IP Printer mode is ON"));
+  /* v3.3.0 BUG 2: the chip shows the REAL bound sockets (IPv4 + IPv6) */
+  var stdA = (std && std.addrs) || [];
   setChip("row-ipp631", !!std.up, "LISTENING", "OFF",
-    std.up ? ("http://" + hubIp() + ":" + (std.port || 631) +
-      "/ipp/print \u2014 Android manual add and printer defaults work")
+    std.up ? ("http://" + hubHost(hubIp()) + ":" + (std.port || 631) +
+      "/ipp/print \u2014 IPv4 + IPv6 on every interface" +
+      (stdA.length ? " (" + stdA.join(", ") + ")" : "") +
+      " \u2014 Android manual add and printer defaults work")
            : (std.err || "standard port off (needs admin on macOS/Linux, or ipp_standard_port: 0)"));
   var rows = qsa("#p-lan .lrow");
   rows.forEach(function(r){
@@ -2261,9 +2275,12 @@ function renderLanRows(){
           lanBase() + "/ipp/print";
         v.appendChild(s);
       }
-    } else if (k.indexOf("RAW printer port") === 0 && v)
-      v.textContent = hubIp() + ":9100";
-    else if (k.indexOf("Printer status hold") === 0) {
+    } else if (k.indexOf("RAW printer port") === 0 && v) {
+      /* v3.3.0 BUG 2: show the REAL bound sockets (IPv4 + IPv6 on every
+         interface) instead of one lan_ip guess */
+      var rw = (window._lastHealth && window._lastHealth.raw_addrs) || [];
+      v.textContent = rw.length ? rw.join("  \u00b7  ") : (hubHost(hubIp()) + ":9100");
+    } else if (k.indexOf("Printer status hold") === 0) {
       var c1 = r.querySelector(".chip");
       if (c1) { c1.textContent = cfgCache.hold_offline === false ? "OFF" : "ON";
         c1.className = "chip " + (cfgCache.hold_offline === false ? "gray" : "ok"); }
@@ -3269,7 +3286,7 @@ async function renderUpdate(res){
    full-page /docs stays available via the "Full guide page" button.
    ============================================================ */
 function docsHtml(){
-  var v = esc(BOOT.version || "3.2.9");
+  var v = esc(BOOT.version || "3.3.0");
   var ip = esc(BOOT.lan_ip || location.hostname || "127.0.0.1");
   var port = esc(String(BOOT.port || location.port || "9235"));
   var base = "http://" + ip + ":" + port;

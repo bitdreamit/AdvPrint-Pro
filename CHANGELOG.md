@@ -1,6 +1,78 @@
 # Changelog - AdvPrint Pro (Advanced Printer)
 by Bit Dream IT - Innovative Healthcare Solutions
 
+## v3.3.0 - THE ANY-PC INVITE + DUAL-STACK LISTENER RELEASE (2026-11-12)
+
+Base: v3.2.9 - the multi-PC IPP release (per-printer queue echo, 128
+backlog, per-device hub URLs) with every earlier fix unchanged. Three
+new real-world reports from the LAN, all fixed and locked by
+`tests/test_v330.py`.
+
+### BUG 1 - the invite page connected the WRONG PC ("it redirect own pc")
+Opening `http://<hub-ip>:9235/connect?t=<token>` on another PC showed a
+page that pointed at the serving PC's own `lan_ip()` guess - and a user
+who opened the invite ON the hub PC itself got a form that silently
+added the hub to ITS OWN `peer_hubs`. Fixed end to end:
+- the invite page builds the hub URL from the address THE VISITOR
+  actually used (sanitized Host header, v3.2.9's per-device rule) - the
+  exact `ip:port` the user typed is the exact peer that gets saved
+- a loopback visitor gets a NEW self-invite explainer page
+  (`connect_self_html`) instead of the add-to-self form: what happened,
+  and the 3 steps to connect the other PC for real
+- `POST /peer-connect` REFUSES a self-invite (peer URL == this hub's
+  own LAN IPs / hostname / localhost on the hub's port) with a clear
+  result page - nothing is written to config.json
+- the page probes the VISITING PC's own hub (127.0.0.1:9235/health)
+  before you click: green "your PC's hub is running" or a readable
+  warning + manual `peer_hubs` snippet instead of a raw browser
+  connection error; the submit is retried over fetch and failures are
+  explained inline
+- a `?t=` mismatch now explains the real cause: the token may belong to
+  a DIFFERENT PC's hub (the exact confusion behind the report)
+- the page lists the hub's OTHER addresses (IPv4 + IPv6) as one-click
+  "use this" chips when the typed address is not the best route
+
+### BUG 2 - every listener answers on IPv4 AND IPv6, every interface
+The LAN hub (9235), the standard IPP mirror (631) and the RAW JetDirect
+port (9100) each bound exactly ONE IPv4 address (`lan_ip()`) - on a PC
+with several adapters the hub was DEAF on all the others, and nothing
+ever listened on IPv6. Now:
+- new `bind_listener_sockets()`: one IPv4 socket per non-loopback
+  interface IP + one `[::]` socket with `IPV6_V6ONLY=1` (backlog 128 on
+  every socket; partial binds degrade gracefully, never fatal)
+- the LAN panel "Hub addresses" chips and the RAW / 631 rows show the
+  REAL bound sockets (health: `raw_addrs`, `ipp_std.addrs`,
+  `lan_bind_addrs`, boot: `lan_ips6`); URLs wrap IPv6 in brackets
+- the ensure() refreshers rebind when the INTERFACE SET changes (new
+  Wi-Fi/VPN adapter picked up automatically, not just when `lan_ip()`
+  moves)
+- mDNS announces an AAAA record (and answers AAAA queries) when the hub
+  has a usable global/ULA IPv6 - IPv6-only LANs can discover + print
+- the ACL story is unchanged: `allowed_ips` (`*` / exact / CIDR /
+  wildcard) gates every connection on every bound socket, the UI stays
+  loopback/own-IP only
+
+### BUG 3 - per-printer IPP queues work for ANY printer that exists
+The old queue slug folded every non-ASCII character away, so Bangla /
+Arabic / CJK printer names ALL collapsed to the single slug `printer` -
+those queues collided and none was separately addressable. Now:
+- `_ipp_queue_slug` is Unicode-aware (`\w`): distinct slugs for every
+  script, percent-encoded in the `ipp://` URL and the IPP
+  `printer-uri-supported` echo
+- queue matching runs through a collision-tolerant JOIN key - dash /
+  underscore / space / %20 variants all resolve to the same printer,
+  and queues added before v3.3.0 keep working after the upgrade
+- a negative queue match force-refreshes the OS printer list ONCE
+  (rate-limited): a printer added on the hub PC gets its own queue in
+  seconds instead of after the 30 s list cache + 5 s negative memo
+- the unknown-queue 404 lists the queues that ARE live right now, and
+  the mDNS announce cap went 12 -> 24 printers so bigger labs see every
+  queue in their printer picker
+
+Everything from v3.2.9 stays unchanged.
+
+## v3.2.9 - THE MULTI-PC IPP RELEASE (2026-11-12)
+
 ## v3.2.9 - THE MULTI-PC IPP RELEASE (2026-11-12)
 
 Base: v3.2.8 - the clean ipp:// URL, the scheme-free Website API rule

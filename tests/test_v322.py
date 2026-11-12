@@ -56,8 +56,12 @@ def _ipp_print_job(printer_uri, title="v322-mirror-probe"):
 
 def test_v322_ipp_mirror_serves_print_job(hub, monkeypatch):
     """http://<lan-ip>:9631/ipp/print must answer a real IPP Print-Job
-    with 0x0000 successful-ok (the Android manual-add path)."""
+    with 0x0000 successful-ok (the Android manual-add path).
+    v3.3.0: the mirror binds EVERY interface IP from list_lan_ips()
+    (v4 + [::]) - point BOTH address helpers at the loopback alias."""
     monkeypatch.setattr(advprint, "lan_ip", lambda: "127.0.0.2")
+    monkeypatch.setattr(advprint, "list_lan_ips",
+                        lambda *a, **k: ["127.0.0.2"])
     old = advprint.CFG.get("ipp_standard_port")
     advprint.CFG["ipp_standard_port"] = 9631
     try:
@@ -88,8 +92,12 @@ def test_v322_ipp_mirror_serves_print_job(hub, monkeypatch):
 
 def test_v322_ipp_mirror_landing_and_redirect(hub, monkeypatch):
     """GET /ipp/print on the mirror = the how-to page; everything else
-    redirects to the main hub port."""
+    redirects to the main hub port.
+    v3.3.0: the mirror binds EVERY interface IP from list_lan_ips()
+    (v4 + [::]) - point BOTH address helpers at the loopback alias."""
     monkeypatch.setattr(advprint, "lan_ip", lambda: "127.0.0.2")
+    monkeypatch.setattr(advprint, "list_lan_ips",
+                        lambda *a, **k: ["127.0.0.2"])
     old = advprint.CFG.get("ipp_standard_port")
     advprint.CFG["ipp_standard_port"] = 9632
     try:
@@ -270,9 +278,9 @@ def test_v322_lan_tab_carries_platform_guide():
 
 
 def test_v322_version_strings_agree():
-    assert advprint.VERSION == "3.2.9"
+    assert advprint.VERSION == "3.3.0"
     vt = open(os.path.join(ROOT, "VERSION.txt"), encoding="utf-8").read()
-    assert "3.2.9" in vt
+    assert "3.3.0" in vt
     man = json.load(open(os.path.join(ROOT, "extension", "manifest.json"),
                          encoding="utf-8"))
-    assert man["version"] == "3.2.9"
+    assert man["version"] == "3.3.0"

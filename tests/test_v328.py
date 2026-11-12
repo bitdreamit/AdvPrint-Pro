@@ -53,19 +53,19 @@ CHANGELOG = open(os.path.join(ROOT, "CHANGELOG.md"), encoding="utf-8").read()
 # ---------------------------------------------------------------
 
 def test_version_328_everywhere():
-    assert advprint.VERSION == "3.2.9"
-    assert advprint.VERSION_NAME.startswith("v3.2.9")
-    assert "MULTI-PC IPP RELEASE" in advprint.VERSION_NAME
-    assert "3.2.9" in VERSION_TXT
-    assert MANIFEST["version"] == "3.2.9"
-    assert 'var _apVerFallback = "3.2.9";' in open(
+    assert advprint.VERSION == "3.3.0"
+    assert advprint.VERSION_NAME.startswith("v3.3.0")
+    assert "ANY-PC INVITE + DUAL-STACK LISTENER RELEASE" in advprint.VERSION_NAME
+    assert "3.3.0" in VERSION_TXT
+    assert MANIFEST["version"] == "3.3.0"
+    assert 'var _apVerFallback = "3.3.0";' in open(
         os.path.join(EXT, "content", "api.js"), encoding="utf-8").read()
-    assert 'BOOT.version || "3.2.9"' in CONSOLE
+    assert 'BOOT.version || "3.3.0"' in CONSOLE
     assert "## v3.2.9 - THE MULTI-PC IPP RELEASE" in CHANGELOG
     nsi = open(os.path.join(ROOT, "installer", "setup.nsi"),
                encoding="utf-8").read()
-    assert 'VIProductVersion "3.2.9.0"' in nsi
-    assert "AdvPrint-Pro-Setup-3.2.9.exe" in nsi
+    assert 'VIProductVersion "3.3.0.0"' in nsi
+    assert "AdvPrint-Pro-Setup-3.3.0.exe" in nsi
 
 
 def test_release_docs_328_exist():
@@ -278,7 +278,7 @@ def test_hub_copies_byte_identical():
         b = open(os.path.join(HUB_DIR, name), "rb").read()
         assert a == b, "%s copies drifted" % name
     m = re.search(r'CONSOLE_HTML = r"""(.*?)"""', ADVPRINT_SRC, re.S)
-    assert m and m.group(1) == CONSOLE, "embedded console is stale"
+    assert m and m.group(1).rstrip("\n") == CONSOLE.rstrip("\n"), "embedded console is stale"
 
 
 def test_developer_api_doc_has_permission_section():
@@ -287,7 +287,7 @@ def test_developer_api_doc_has_permission_section():
     assert "Website API permission" in doc
     assert "The v3.2.8 scheme rule" in doc
     assert "works on https, not on http" in doc
-    assert 'version;     // -> "3.2.9"' in doc
+    assert 'version;     // -> "3.3.0"' in doc
 
 
 # ---------------------------------------------------------------

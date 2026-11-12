@@ -29,7 +29,7 @@ from conftest import wait_until  # noqa: E402
 def test_health_open_no_token(hub):
     code, d = hub.get("/health", token=None)
     assert code == 200 and d["ok"] is True
-    assert d["version"] == "3.2.9"
+    assert d["version"] == "3.3.0"
     assert d["v2"] is True
     assert "100% local" in d["branding"]
 
@@ -539,13 +539,13 @@ def test_v1_database_migration(tmp_path):
 
 
 def test_version_anchors():
-    assert advprint.VERSION == "3.2.9"
+    assert advprint.VERSION == "3.3.0"
     # repo/package layout: tool/windows/portable/hub -> root/extension
     root = os.path.dirname(os.path.dirname(os.path.dirname(
         os.path.dirname(os.path.dirname(advprint.__file__)))))
     ext = os.path.join(root, "extension", "manifest.json")
     with open(ext) as f:
-        assert json.load(f)["version"] == "3.2.9"
+        assert json.load(f)["version"] == "3.3.0"
 
 
 def test_log_rotation(tmp_path):
@@ -1062,7 +1062,7 @@ def test_v26_token_current_loopback_only(hub):
     code, d = hub.get("/token/current")
     assert code == 200 and d["ok"] is True
     assert d["token"] == hub.token
-    assert d["app"] == "AdvPrint Pro" and d["version"] == "3.2.9"
+    assert d["app"] == "AdvPrint Pro" and d["version"] == "3.3.0"
 
 
 def test_v26_token_current_rejects_remote(hub):
@@ -1136,8 +1136,8 @@ def test_v261_tray_module_ships_and_parses():
 
 
 def test_v261_version_single_source():
-    assert advprint.VERSION == "3.2.9"
-    assert advprint.VERSION_NAME.startswith("v3.2.9")
+    assert advprint.VERSION == "3.3.0"
+    assert advprint.VERSION_NAME.startswith("v3.3.0")
 
 
 def test_v261_cli_cmd_full_path():
@@ -1306,7 +1306,7 @@ def test_v264_setup_exe_kills_zombie_hubs():
     assert "Stop-Process -Name AdvPrintPro" in stopps
     assert "Stop-Process -Name PrintHubPro" in stopps
     assert "sc.exe delete AdvPrint" in stopps
-    assert 'VIProductVersion "3.2.9.0"' in src
+    assert 'VIProductVersion "3.3.0.0"' in src
 
 
 # ---------------- v2.6.8: printer-name self-heal + menu guard ----------
@@ -1589,7 +1589,7 @@ def _v280_pdf(tmp_path, name="z.pdf", big="AdvPrint Pro v2.8 test"):
 
 
 def test_v280_version_and_config_keys():
-    assert advprint.VERSION == "3.2.9"
+    assert advprint.VERSION == "3.3.0"
     for k in ("drop_enabled", "drop_dir", "drop_delete"):
         assert k in advprint.CFG and k in advprint.CONFIG_KEYS
         assert k in advprint.CONFIG_TYPES
@@ -1815,7 +1815,7 @@ def test_v280_source_wiring_restart_tray_tool_installer():
     nsi = open(os.path.join(root, "installer", "setup.nsi"),
                encoding="utf-8").read()
     assert "hub-stop.ps1" in nsi
-    assert "3.2.9" in nsi and "${IfNot} ${Silent}" in nsi
+    assert "3.3.0" in nsi and "${IfNot} ${Silent}" in nsi
     # extension dual profile
     ext = os.path.join(root, "extension")
     bg = open(os.path.join(ext, "background.js"), encoding="utf-8").read()
@@ -1829,7 +1829,7 @@ def test_v280_source_wiring_restart_tray_tool_installer():
     # background.js + the ONE UI Connections tab
     assert "127.0.0.1:9235" in opt and "ONE UI" in opt
     man = json.load(open(os.path.join(ext, "manifest.json")))
-    assert man["version"] == "3.2.9"
+    assert man["version"] == "3.3.0"
 
 
 def test_v280_lan_profile_never_auto_heals():
@@ -1926,16 +1926,29 @@ def test_v281_qr_endpoint_needs_token(hub):
 
 
 def test_v281_connect_page_ok(hub, cfg_reset):
+    """v3.3.0: a visitor ON the hub PC (loopback client) gets the
+    self-invite EXPLAINER - never a form that adds the hub to itself.
+    The LAN-visitor form page is verified separately via
+    connect_page_html() with a real visitor address."""
     advprint.CFG["share_lan"] = True
     code, body = hub.get(
         "/connect?t=%s&n=LAB-PC" % advprint.CFG["token"], token=None,
         headers={"Accept": "text/html"})
     assert code == 200
     html = body.decode("utf-8", "replace")
-    assert "Add" in html and "LAB-PC" in html
-    assert "/peer-connect" in html
-    assert advprint.CFG["token"] in html      # hidden token input
-    assert "127.0.0.1" in html                # form posts to the peer's own hub
+    assert "OTHER PC" in html and "LAB-PC" in html
+    assert "/peer-connect" not in html        # NO add-to-self form
+    assert "hub PC" in html
+    assert advprint.CFG["token"] in html      # the invite link to carry
+    assert "127.0.0.1" not in html.split("<script")[0]
+    # the LAN-visitor page keeps the one-click form (peer URL = visitor's
+    # address, token input, form POSTs to the visitor's own loopback hub)
+    page = advprint.connect_page_html(advprint.CFG["token"], "LAB-PC",
+                                      req_host="192.168.1.104",
+                                      req_port=advprint.CFG["port"])
+    assert "/peer-connect" in page and "LAB-PC" in page
+    assert advprint.CFG["token"] in page
+    assert "127.0.0.1" in page
 
 
 def test_v281_connect_page_rejects_bad_token(hub, cfg_reset):
@@ -2082,8 +2095,8 @@ def test_v281_setup_nsi_version():
         root = os.path.dirname(root)
     nsi = open(os.path.join(root, "installer", "setup.nsi"),
                encoding="utf-8", errors="replace").read()
-    assert 'VIProductVersion "3.2.9.0"' in nsi
-    assert "AdvPrint-Pro-Setup-3.2.9.exe" in nsi
+    assert 'VIProductVersion "3.3.0.0"' in nsi
+    assert "AdvPrint-Pro-Setup-3.3.0.exe" in nsi
 
 
 # ============================================================
@@ -2102,12 +2115,21 @@ def test_v282_share_lan_applies_live(hub):
         code, h = hub.get("/health")
         if err is None:
             # bind succeeded: the LAN listener is really serving
+            # (v3.3.0: EVERY interface, IPv4 + IPv6 - the health report
+            # carries the bound socket LIST instead of one lan_ip)
             assert h["lan_active"] is True
-            assert h["lan_bind_ip"] == h["lan_ip"]
-            assert h["lan_bind_ip"] != "127.0.0.1"
-            # ...and it actually answers HTTP on the LAN IP itself
-            u = "http://%s:%d/health" % (h["lan_bind_ip"],
-                                         advprint.CFG["port"])
+            assert h["lan_bind_addrs"], "no bound LAN listener reported"
+            assert any(not a.startswith("[") or True
+                       for a in h["lan_bind_addrs"])
+            # ...and it actually answers HTTP on a bound address
+            # (probe the first IPv4 bind - the [::] label works too but
+            # the sandbox LAN IP can be a public-range address, which
+            # _host_ok() allows only for lan_ip itself)
+            labels = [a for a in h["lan_bind_addrs"]
+                      if not a.startswith("[")]
+            label = labels[0] if labels else \
+                "%s:%d" % (h["lan_ip"], advprint.CFG["port"])
+            u = "http://%s/health" % label
             with urllib.request.urlopen(u, timeout=5) as r:
                 body = json.loads(r.read().decode("utf-8", "replace"))
             assert body["app"] == advprint.APP_NAME
@@ -2401,10 +2423,10 @@ def test_v290_qr_svg_supports_ipp_kind(hub):
 def test_v290_raw_listener_disabled_without_lan_sharing():
     """The RAW 9100 listener must never start while LAN sharing is off
     and must never bind 0.0.0.0 - it follows share_lan + its config."""
-    assert advprint._RAW_TCP is None                 # never started here
+    assert advprint._RAW_SOCKS == []                 # never started here
     err = advprint.raw_listen_start()                # share_lan False -> no-op
     assert err is None
-    assert advprint._RAW_TCP is None
+    assert advprint._RAW_SOCKS == []
 
 
 

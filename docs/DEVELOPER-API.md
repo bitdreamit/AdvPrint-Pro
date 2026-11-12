@@ -83,7 +83,7 @@ from JavaScript and a job sent with `curl` are identical afterwards.
 
 ```js
 window.advprint.status();    // -> Promise<health JSON>
-window.advprint.version;     // -> "3.2.9" (the extension version)
+window.advprint.version;     // -> "3.3.0" (the extension version)
 ```
 
 ### 2.1.1 Website API permission — WHO may call the API (read once!)
