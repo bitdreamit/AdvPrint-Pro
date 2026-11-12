@@ -96,30 +96,34 @@ if _HUB_DIR not in sys.path:
     sys.path.insert(0, _HUB_DIR)
 
 
-VERSION = "3.3.2"
-VERSION_NAME = ("v3.3.2 (SHARE SEND MODE + WINDOWS IPP ADD-FIX RELEASE. "
-    "BUG 1 - the Windows add-printer root cause: the Get-Printer-Attributes "
-    "response was missing the RFC 8011 REQUIRED uri-security-supported "
-    "attribute, so the Microsoft IPP Class Driver answered \"Windows "
-    "couldn't connect to the printer\" on EVERY add attempt from another "
-    "PC even though every other attribute was correct; uri-* value parity "
-    "is now 1:1 with printer-uri-supported (additional values never "
-    "interleave on the wire). BUG 2 - the preauth gate answered 401 "
-    "BEFORE reading a tokenless IPP Print-Job body over 1 MB, aborting "
-    "the connection mid-transmit: native IPP routes are exempt now (the "
-    "hub keeps its own IPP guards). BUG 3 - an unknown per-printer queue "
-    "hard-404'd the whole add flow; it answers as the generic queue now "
-    "(add succeeds, documents fall back to the hub destination with an "
-    "audit note). SHARE SEND MODE - the Connections panel's \"Another PC "
-    "(LAN PC)\" card is REAL now: Connect probes and persists the OTHER "
-    "PC's hub URL + token as the lan-pc peer_hubs entry (survives reloads "
-    "and restarts), the Share Send switch posts /config {share_send} and "
-    "every new job then prints on THAT PC; the LAN PC URL input is never "
-    "overwritten with this PC's own address again (the \"auto redirect "
-    "own ip\" report) and /peer/pair refuses self-pairs. The Printers "
-    "panel gains a \"Show other PCs (LAN / IPP)\" switch that lists the "
-    "paired PC's devices with a LAN PC / IPP badge and a ipp:// URL per "
-    "device, test-page relayed through the hub.")
+VERSION = "3.3.3"
+VERSION_NAME = ("v3.3.3 (SHARE SEND POPUP-FIX + PEERS-ONLINE RELEASE. "
+    "BUG 1 - the false \"Connect the LAN PC first\" popup when flipping "
+    "Share Send Mode ON: the console blocked the flip while lanPeerState "
+    "was still null - which is EVERY page load until the first /peer/"
+    "status answer lands behind seven sequential poll calls (printers "
+    "alone can take seconds on Windows WMI) - even though the pairing "
+    "was persisted and the server would have accepted it. The client no "
+    "longer blocks: the POST goes out, the server (the persisted truth) "
+    "decides, and an in-flight flip is guarded against the 3 s poll. BUG "
+    "2 - the Other PCs (peers) table showed EVERY peer OFFLINE forever "
+    "and its Shift queue buttons stayed disabled: /peers answers with "
+    "`alive` while the table read `p.up` (undefined). The hub now sends "
+    "`up` AND `alive`, plus the entry's name/label (rows said \"PC\" for "
+    "every peer), and the table refreshes on every poll instead of only "
+    "at page load. BUG 3 - the SAME PC listed twice in the peers table: "
+    "peer_hubs entries are now deduped by normalized URL on every write "
+    "path (pair, invite-connect, /config), /peers dedupes defensively, "
+    "and an invite link for an ALREADY-PAIRED PC updates the lan-pc "
+    "entry in place instead of silently unpairing Share Send Mode. BUG 4 "
+    "- Shift queue was doubly broken: the console sent {peer: url} while "
+    "the endpoint read `target`, and \"Shift all waiting\" read the SELF "
+    "PC token field as the peer URL (the LAN PC card had shifted the "
+    "qsa() indexes); the input kept its static demo value http://10.26."
+    "94.77:9235 forever. The input now has id=shiftTarget, is prefilled "
+    "with the LAN PC's URL, both sides agree on `target` (peer accepted "
+    "as alias) and the demo value is gone. On top: Share Send switch "
+    "mirrors cfgCache.share_send at boot (no OFF-rendered-while-ON).")
 FULL_BRAND = ("AdvPrint Pro (Advanced Printer) by "
               "Bit Dream IT - Innovative Healthcare Solutions")
 BRANDING = ("AdvPrint Pro (Advanced Printer) - Version %s - by "
@@ -3048,6 +3052,8 @@ def _try_peer_forward(job, force=False):
             (CFG.get("peer_hubs") or [])
     else:
         peers = CFG.get("peer_hubs") or []
+    peers = _dedupe_peer_hubs(peers)   # v3.3.3: same-URL entries never
+                                       # get the job twice
     if not peers:
         return False
     try:
@@ -5309,12 +5315,24 @@ class Handler(BaseHTTPRequestHandler):
                  "Tip: the invite URL is on the hub console - LAN"
                  " Sharing > Connect another PC > Copy invite link."],
                 show_dashboard=False))
-        # dedupe: same peer URL -> replace the entry
+        # dedupe: same peer URL -> replace the entry.
+        # v3.3.3 POPUP FIX: if the SAME hub is already paired as the
+        # Connections "lan-pc" entry, the invite must UPDATE that entry
+        # in place (keep the lan-pc name). The old code deleted the
+        # lan-pc entry and appended a plain host-named one, so Share
+        # Send Mode silently lost its pairing and the switch answered
+        # "Connect the LAN PC first" even though the SAME PC was still
+        # connected - the v3.3.2 popup report.
+        was_lan_pc = any(
+            str(p.get("name") or "") == LAN_PC_PEER_NAME and
+            _peer_url_norm(p.get("url")) == _peer_url_norm(norm)
+            for p in (CFG.get("peer_hubs") or []))
         peers = [p for p in (CFG.get("peer_hubs") or [])
-                 if str(p.get("url") or "").rstrip("/").lower()
-                 != norm.rstrip("/").lower()]
+                 if _peer_url_norm(p.get("url"))
+                 != _peer_url_norm(norm)]
         entry = {"url": "%s://%s" % (u.scheme, u.netloc), "token": token,
-                 "name": name or host}
+                 "name": LAN_PC_PEER_NAME if was_lan_pc
+                 else (name or host)}
         # friendly live check (never blocks the save)
         ver, note = None, ""
         try:
@@ -7242,7 +7260,9 @@ class Handler(BaseHTTPRequestHandler):
                                 else:
                                     raise ValueError(
                                         "peer_hubs entries must be objects")
-                            val = cleaned
+                            # v3.3.3 DUPLICATE-PEER FIX: never store two
+                            # entries for the same hub URL
+                            val = _dedupe_peer_hubs(cleaned)
                         elif key == "rules_mirror":
                             # v3.2.0 ONE UI: central rule manager entries
                             # are DICTS - a generic [str(x)] would corrupt
@@ -7309,6 +7329,8 @@ class Handler(BaseHTTPRequestHandler):
             if updates:
                 CFG.update(updates)
                 changed = list(updates.keys())
+                if "peer_hubs" in updates:
+                    _PEER_CACHE["t"] = 0.0   # v3.3.3: probe the new list now
                 disk = {k: CFG[k] for k in CONFIG_KEYS}
                 write_config_file(disk)
                 db_audit("config.changed", ip=ip, site=site,
@@ -7812,7 +7834,12 @@ class Handler(BaseHTTPRequestHandler):
         # PC's hub over the LAN ("individual shift" via ids, "full shift"
         # via scope=all). Queue on/off stays /queue/pause + /queue/resume.
         if route == "/queue/shift":
-            target = str(body.get("target") or "").strip().rstrip("/")
+            # v3.3.3: accept `peer` as an alias for `target` - the console's
+            # Shift buttons sent {peer: url} while this endpoint read only
+            # `target`, so the URL was silently ignored (the endpoint then
+            # guessed the first live peer).
+            target = str(body.get("target") or body.get("peer")
+                         or "").strip().rstrip("/")
             ids = [int(x) for x in (body.get("ids") or [])
                    if str(x).isdigit()]
             scope = str(body.get("scope") or
@@ -7827,7 +7854,8 @@ class Handler(BaseHTTPRequestHandler):
                 target = live[0]["url"]
             if not peer_tok:
                 for p in CFG.get("peer_hubs") or []:
-                    if (p.get("url") or "").rstrip("/") == target:
+                    if _peer_url_norm(p.get("url")) == \
+                            _peer_url_norm(target):
                         peer_tok = p.get("token") or ""
                         break
             picked = [j for j in db_list(500)
@@ -7919,10 +7947,73 @@ def redacted_config():
 
 _PEER_CACHE = {"t": 0.0, "v": []}
 
+def _peer_url_norm(url):
+    """v3.3.3: the dedupe key for peer_hubs entries - scheme://host:port
+    with a lowercased host and no trailing slash/path. http://IP:9235,
+    http://ip:9235/ and HTTP://IP:9235/ipp are the SAME peer."""
+    u = str(url or "").strip().rstrip("/")
+    if not u:
+        return ""
+    m = re.match(r"^(https?)://([^/?]+)", u, re.I)
+    if not m:
+        return u.lower()
+    return "%s://%s" % (m.group(1).lower(), m.group(2).lower())
+
+def _dedupe_peer_hubs(peers):
+    """v3.3.3 DUPLICATE-PEER FIX: collapse peer_hubs entries that point
+    at the SAME hub URL. The user-visible bug: the Connections peers
+    table showed http://192.168.1.101:9235 TWICE (one row from the LAN
+    PC card's lan-pc pairing, one from an older invite / config.json
+    entry) and the duplicate probed with a stale token. When the group
+    contains the lan-pc entry, THAT entry wins - its name is
+    load-bearing (_lan_pc_peer() reads it, and a lost pairing makes the
+    Share Send switch pop "Connect the LAN PC first" again); otherwise
+    the first occurrence wins. A dropped entry's name survives as the
+    kept entry's label when the kept one has none."""
+    out, by_key = [], {}
+    for p in peers or []:
+        if not isinstance(p, dict):
+            continue
+        key = _peer_url_norm(p.get("url"))
+        if not key:
+            continue
+        if key in by_key:
+            prev_i = by_key[key]
+            prev = out[prev_i]
+            # a lan-pc entry always displaces a non-lan-pc one for the
+            # same hub (migration: v3.3.2 could store the invite entry
+            # first, lan-pc second)
+            prev_is_lan = str(prev.get("name") or "") == LAN_PC_PEER_NAME
+            p_is_lan = str(p.get("name") or "") == LAN_PC_PEER_NAME
+            if p_is_lan and not prev_is_lan:
+                out[prev_i] = p
+                prev = p
+            # the dropped entry's display name survives as the kept
+            # entry's LABEL - never overwrite the kept entry's `name`
+            # (lan-pc MUST stay lan-pc, or _lan_pc_peer() finds nothing
+            # and Share Send Mode pops "Connect the LAN PC first" again)
+            if prev is not None and not (prev.get("label") or ""):
+                cand = str(p.get("label") or "")
+                if not cand and str(p.get("name") or "") not in \
+                        ("", LAN_PC_PEER_NAME):
+                    cand = str(p["name"])[:60]
+                if cand:
+                    prev["label"] = cand
+            continue
+        by_key[key] = len(out)
+        out.append(p)
+    return out
+
 def probe_peers(timeout=3):
     """Health-probe every configured peer hub; dead ones are reported
-    (and later skipped by the forwarding logic). Cached 15 s."""
-    peers = CFG.get("peer_hubs") or []
+    (and later skipped by the forwarding logic). Cached 15 s.
+    v3.3.3: entries are deduped by normalized URL first (the user
+    report "same PC listed twice, both OFFLINE"), each entry now ALSO
+    carries `up` (the console's peers table read p.up while the old
+    code sent only `alive`, so every row rendered OFFLINE and the
+    Shift-queue button stayed disabled forever) and the entry's
+    name/label so the table can show WHICH PC the row is."""
+    peers = _dedupe_peer_hubs(CFG.get("peer_hubs") or [])
     if not peers:
         return []
     if time.time() - _PEER_CACHE["t"] < 15 and _PEER_CACHE["v"]:
@@ -7930,8 +8021,10 @@ def probe_peers(timeout=3):
     out = []
     for peer in peers:
         url = (peer.get("url") or "").rstrip("/")
-        entry = {"url": url, "alive": False, "version": None,
-                 "latency_ms": None}
+        entry = {"url": url, "up": False, "alive": False, "version": None,
+                 "latency_ms": None,
+                 "name": str(peer.get("name") or "")[:60],
+                 "label": str(peer.get("label") or "")[:60]}
         if url:
             t0 = time.time()
             try:
@@ -7941,7 +8034,7 @@ def probe_peers(timeout=3):
                              "User-Agent": "AdvPrintPro/%s" % VERSION})
                 with urllib.request.urlopen(req, timeout=timeout) as r:
                     data = json.loads(r.read().decode("utf-8", "replace"))
-                entry["alive"] = True
+                entry["alive"] = entry["up"] = True
                 entry["version"] = data.get("version")
                 entry["latency_ms"] = int((time.time() - t0) * 1000)
             except Exception as e:
@@ -8130,10 +8223,24 @@ def _peer_pair(self, body, ip):
             "error": "the other PC answered but its LAN sharing is OFF"
                      " - enable it there first (LAN card > Enable),"
                      " then connect again"})
+    # v3.3.3 DUPLICATE-PEER FIX: drop EVERY entry that already points at
+    # this URL (any name) before inserting the fresh lan-pc pairing. The
+    # old code only removed entries NAMED "lan-pc", so an entry for the
+    # same hub saved earlier by an invite link (name = the PC's host
+    # name) survived -> the peers table listed the SAME PC twice (the
+    # user report: "http://192.168.1.101:9235 ... OFFLINE" x2).
+    keep_label = ""
+    for p in (CFG.get("peer_hubs") or []):
+        if _peer_url_norm(p.get("url")) == _peer_url_norm(url) and \
+                not label and p.get("label"):
+            keep_label = str(p["label"])[:60]
+            break
     peers = [p for p in (CFG.get("peer_hubs") or [])
-             if str(p.get("name") or "") != LAN_PC_PEER_NAME]
+             if str(p.get("name") or "") != LAN_PC_PEER_NAME and
+             _peer_url_norm(p.get("url")) != _peer_url_norm(url)]
     peers.insert(0, {"url": url, "token": token, "name": LAN_PC_PEER_NAME,
-                     "label": label or probe["peer_host"] or "LAN PC"})
+                     "label": label or keep_label or probe["peer_host"]
+                     or "LAN PC"})
     CFG["peer_hubs"] = peers
     try:
         write_config_file({k: CFG[k] for k in CONFIG_KEYS})
@@ -9447,11 +9554,15 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
               <div class="h3sec">Other PCs (peers)</div>
               <table class="tbl" style="font-size:11.5px">
                 <tr><th>PC (hub URL)</th><th>Status</th><th>Version</th><th style="width:160px"></th></tr>
-                <tr><td class="mono doc" style="max-width:230px;font-size:10.5px">http://10.26.94.77:9235 · Storage-Room-PC</td><td><span class="chip ok"><span class="d"></span>ONLINE</span></td><td>v3.1.2</td><td><button class="btn small">&#8646; Shift queue</button></td></tr>
-                <tr><td class="mono doc" style="max-width:230px;font-size:10.5px">http://10.26.94.71:9235 · SHOP-PC</td><td><span class="chip err"><span class="d"></span>OFFLINE</span></td><td>v3.0.8</td><td><button class="btn small" disabled style="opacity:.5">Shift queue</button></td></tr>
+                <!-- v3.3.3: the two DEMO rows (Storage-Room-PC / SHOP-PC
+                     with fake 10.26.94.x addresses) are gone - they
+                     flashed fake peers on every page load until the
+                     first /peers answer replaced them. loadConnections()
+                     renders the real rows (or "no peer hubs configured"). -->
+                <tr><td class="mono doc" style="font-size:10.5px;color:var(--muted)">loading&hellip;</td><td></td><td></td><td></td></tr>
               </table>
               <div class="frow" style="margin:10px 0 0"><label style="min-width:auto">Shift whole queue to</label>
-                <input class="inp mono" style="min-width:200px;font-size:11px" value="http://10.26.94.77:9235">
+                <input class="inp mono" id="shiftTarget" style="min-width:200px;font-size:11px" value="">
                 <button class="btn blue">Shift all waiting</button></div>
             </div>
           </div>
@@ -10916,6 +11027,9 @@ function renderAcl(){
    NOTHING navigates the browser anywhere, so there is no way to end
    up redirected at this PC's own IP. */
 var lanPeerState = null;
+var _shareSendPending = false;   /* v3.3.3: a Share Send flip is in
+   flight - poll/render skips mirroring the switch until it lands, so
+   the 3 s poll can never visually revert what the user just clicked */
 
 function renderLanPeer(st){
   st = st || {};
@@ -10931,7 +11045,7 @@ function renderLanPeer(st){
     if (tok && document.activeElement !== tok) tok.placeholder =
       "the other PC's hub token";
   }
-  if (sw) sw.classList.toggle("on", !!st.share_send);
+  if (sw && !_shareSendPending) sw.classList.toggle("on", !!st.share_send);
   var p = st.peer;
   if (!st.configured) {
     if (chipEl) { chipEl.className = "chip gray";
@@ -11571,17 +11685,38 @@ async function loadDropzone(){
 async function loadConnections(){
   try {
     var peers = (await api("/peers")).peers || [];
+    /* v3.3.3 DEFENSIVE DEDUPE: the hub already collapses same-URL peer
+       entries - this only guards against a stale config.json that was
+       written by an older build (the user report: the SAME PC listed
+       twice, both rows OFFLINE). First occurrence wins. */
+    var seen = {}, uniq = [];
+    peers.forEach(function(p){
+      var k = (p.url || "").replace(/\/+$/, "").toLowerCase();
+      if (k && seen[k]) return;
+      seen[k] = 1; uniq.push(p);
+    });
+    peers = uniq;
     var tbl = document.querySelector("#p-connections table.tbl");
     if (tbl) {
       var tmpl = null;
       qsa("tr", tbl).forEach(function(tr){ if (tr.querySelector("td")) { if (!tmpl) tmpl = tr.cloneNode(true); tr.remove(); } });
       peers.forEach(function(p){
         var tr = tmpl.cloneNode(true), td = tr.querySelectorAll("td");
-        td[0].textContent = (p.url || "") + " \u00b7 " + (p.name || "PC");
-        td[1].innerHTML = p.up ? '<span class="chip ok"><span class="d"></span>ONLINE</span>'
+        /* v3.3.3 OFFLINE-BUG FIX: the server answered /peers with the
+           field name `alive`, but this table read `p.up` - undefined on
+           EVERY response, so every peer rendered OFFLINE and its Shift
+           queue button stayed disabled forever (the "conected hub
+           online and on but other pc show offline why" report). Both
+           sides now agree: the hub sends `up` AND `alive`. */
+        var up = !!(p.up || p.alive);
+        /* v3.3.3: show WHICH PC the row is (the server now returns the
+           entry's name/label; every row used to read "\u00b7 PC") */
+        var who = (p.label || p.name || "PC");
+        td[0].textContent = (p.url || "") + " \u00b7 " + who;
+        td[1].innerHTML = up ? '<span class="chip ok"><span class="d"></span>ONLINE</span>'
           : '<span class="chip err"><span class="d"></span>OFFLINE</span>';
         td[2].textContent = p.version ? "v" + p.version : "\u2014";
-        td[3].innerHTML = '<button class="btn small"' + (p.up ? "" : " disabled") +
+        td[3].innerHTML = '<button class="btn small"' + (up ? "" : " disabled") +
           ' data-shift="' + esc(p.url || "") + '">\u21C6 Shift queue</button>';
         tbl.appendChild(tr);
       });
@@ -11593,6 +11728,20 @@ async function loadConnections(){
       }
     }
     setCnt("connections", peers.length);
+    /* v3.3.3 SHIFT TARGET: the input kept its static demo value
+       (http://10.26.94.77:9235 - a PC from the design mockup) forever
+       and "Shift all waiting" read the SELF PC TOKEN field instead of
+       this input (the LAN PC card had shifted the qsa() indexes). The
+       input now has id=shiftTarget and is prefilled with the LAN PC's
+       URL, else the first ONLINE peer. */
+    var stInp = $("shiftTarget");
+    if (stInp && document.activeElement !== stInp) {
+      var lanUrl = (lanPeerState && lanPeerState.configured && lanPeerState.url) || "";
+      var alivePeer = null;
+      peers.forEach(function(p){ if (!alivePeer && (p.up || p.alive)) alivePeer = p; });
+      var pre = lanUrl || (alivePeer && alivePeer.url) || "";
+      if (pre && (!stInp.value || /10\.26\.94\./.test(stInp.value))) stInp.value = pre;
+    }
     var chipLan = document.querySelector("#p-connections .card .chip.ok");
   } catch (e) { /* panel stays as-is */ }
   /* website API permission textarea mirrors ext_api_sites */
@@ -11674,7 +11823,7 @@ function renderExt(audit){
     rows.slice(0, 6).forEach(function(r2){
       var tr = tmpl.cloneNode(true), td = tr.querySelectorAll("td");
       td[0].innerHTML = "<b>" + esc(r2.who) + "</b>";
-      td[1].textContent = "v" + (BOOT.version || "3.2.1");
+      td[1].textContent = "v" + (BOOT.version || "3.3.3");
       td[2].textContent = r2.at ? r2.at.slice(11, 19) : "\u2014";
       td[3].innerHTML = '<span class="chip ok"><span class="d"></span>PAIRED</span>';
       tbl.appendChild(tr);
@@ -11696,7 +11845,7 @@ function renderExt(audit){
       m2.textContent = BASE + "/extension/updates.xml";
   });
   var crxChip = document.querySelector("#p-extension .frow .chip.ok");
-  if (crxChip) crxChip.innerHTML = '<span class="d"></span>CRX v' + (BOOT.version || "3.2.1") + " READY";
+  if (crxChip) crxChip.innerHTML = '<span class="d"></span>CRX v' + (BOOT.version || "3.3.3") + " READY";
   /* v3.2.8 STALE-CRX GUARD: ask the hub which package it really
    * serves (/extension/info is open, no token). Older than the hub
    * itself -> Chrome never updates -> browsers keep the old bugs.
@@ -11902,7 +12051,7 @@ async function renderUpdate(res){
    full-page /docs stays available via the "Full guide page" button.
    ============================================================ */
 function docsHtml(){
-  var v = esc(BOOT.version || "3.3.2");
+  var v = esc(BOOT.version || "3.3.3");
   var ip = esc(BOOT.lan_ip || location.hostname || "127.0.0.1");
   var port = esc(String(BOOT.port || location.port || "9235"));
   var base = "http://" + ip + ":" + port;
@@ -12288,7 +12437,7 @@ function bindButtons(){
     var cx = t.getAttribute && t.getAttribute("data-cancel");
     if (cx) { try { await api("/jobs/" + cx + "/cancel", { method: "POST" }); poll(); } catch (e) { toast(e.message, "err"); } }
     var sh = t.getAttribute && t.getAttribute("data-shift");
-    if (sh) { try { await api("/queue/shift", { method: "POST", body: { peer: sh } });
+    if (sh) { try { await api("/queue/shift", { method: "POST", body: { target: sh, scope: "all" } });
         toast("Queue shifted to " + sh, "ok"); poll(); } catch (e) { toast(e.message, "err"); } }
     var tool = t.closest && t.closest("[data-tool]");
     if (tool) { runTool(tool.dataset.tool); return; }
@@ -12434,10 +12583,15 @@ function bindButtons(){
     if (url && url !== BASE) { toast("This console is served BY the hub \u2014 " + BASE + " is already connected", "ok"); }
     else toast("Connected \u2014 hub answered", "ok"); });
   btnLike("#p-connections", /Shift all waiting/i, function(){
-    var inp = qsa("#p-connections .frow input.inp.mono")[1];
+    /* v3.3.3: read the REAL shift-target input (id=shiftTarget). The
+       old qsa(...)[1] hit the Self PC token field after the LAN PC
+       card was inserted above it, and the body used the key `peer`
+       while the endpoint reads `target` - so Shift all waiting either
+       did nothing useful or fired at a garbage "URL". */
+    var inp = $("shiftTarget");
     var peer = inp ? inp.value.trim() : "";
     if (!peer) return toast("Enter the peer hub URL first", "warn");
-    api("/queue/shift", { method: "POST", body: { peer: peer } })
+    api("/queue/shift", { method: "POST", body: { target: peer, scope: "all" } })
       .then(function(){ toast("Queue shifted to " + peer, "ok"); poll(); })
       .catch(function(e){ toast(e.message, "err"); }); });
   /* hub panel */
@@ -12928,14 +13082,22 @@ function bindSwitches(){
     /* v3.3.2 SHARE SEND MODE (Connections LAN PC card) - saves itself
        the moment it is flipped, reads the PERSISTED pairing (never a
        transient JS flag), and reverting ON-without-peer is impossible
-       server-side too (POST /config validates share_send). */
+       server-side too (POST /config validates share_send).
+       v3.3.3 POPUP FIX: the old client-side pre-check
+       ("Connect the LAN PC first" toast when lanPeerState was not yet
+       loaded) fired on a normal page load - lanPeerState stays null
+       until the FIRST /peer/status answer, and that answer waits behind
+       seven sequential poll calls (health, stats, queue, printers,
+       jobs, audit, config - printers can take seconds on Windows WMI).
+       So a user who flipped Share Send right after opening the console
+       got the false popup EVEN THOUGH the pairing was saved and the
+       server would have accepted the flip. The client no longer blocks:
+       the POST goes out and the SERVER (the persisted truth) decides;
+       on 400 the switch reverts and the server's real message shows. */
     if (s.id === "shareSendSw") {
       var want = !s.classList.contains("on");
-      if (want && !(lanPeerState && lanPeerState.configured)) {
-        toast("Connect the LAN PC first \u2014 enter its hub URL + token and press Connect", "warn");
-        return;
-      }
       s.classList.toggle("on", want);
+      _shareSendPending = true;
       api("/config", { method: "POST", body: { share_send: want } })
         .then(function(){
           if (lanPeerState) lanPeerState.share_send = want;
@@ -12945,7 +13107,8 @@ function bindSwitches(){
           loadLanPeer();
         })
         .catch(function(e){ s.classList.toggle("on", !want);
-          toast(e.message, "err"); });
+          toast(e.message, "err"); })
+        .then(function(){ _shareSendPending = false; });
       return;
     }
     /* v3.3.2 remote devices switch (Printers panel) */
@@ -13086,7 +13249,7 @@ function applyCenterView(){
 /* ============================================================
    POLL + BOOT
    ============================================================ */
-var VERSION_TXT = BOOT.version || "";
+var VERSION_TXT = BOOT.version || "3.3.3";
 async function poll(){
   try {
     var h = await api("/health");
@@ -13116,9 +13279,21 @@ async function poll(){
     renderExt(audit);
     renderSettings(cfgCache);
     renderExtPrefs((cfgCache.ext_prefs || {}));
+    /* v3.3.3 SHARE SEND MIRROR: the switch used to render OFF until the
+       first /peer/status answer even when share_send was already ON in
+       config.json (the boot window again) - flip-and-popup bait. The
+       /config value arrives in the main poll body, mirror it here;
+       loadLanPeer below re-mirrors it with the authoritative value. */
+    var sssw = $("shareSendSw");
+    if (sssw && !_shareSendPending) sssw.classList.toggle("on", !!cfgCache.share_send);
     /* v3.3.2 SHARE SEND MODE + remote devices: the LAN PC card and the
        "Show other PCs" switch read the persisted hub state every poll */
     loadLanPeer();
+    /* v3.3.3: the peers table now refreshes on every poll too - it only
+       rendered on page load before, so a peer that came online stayed
+       OFFLINE in the table until a manual reload. /peers is cached
+       15 s server-side, so this costs the hub nothing. */
+    loadConnections();
     var srsw = $("showRemoteSw");
     if (srsw) srsw.classList.toggle("on", !!cfgCache.show_remote_printers);
     /* v3.2.3 SWITCH FIX part 2: the hub panel now refreshes from the

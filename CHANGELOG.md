@@ -1,6 +1,83 @@
 # Changelog - AdvPrint Pro (Advanced Printer)
 by Bit Dream IT - Innovative Healthcare Solutions
 
+## v3.3.3 - SHARE SEND POPUP-FIX + PEERS-ONLINE RELEASE (2026-11-12)
+
+Base: v3.3.2 (user-verified "v3.3.2 version work fine"). Four new
+real-world reports from the same LAN, each locked by `tests/test_v333.py`:
+
+### BUG 1 - false popup: Share Send Mode "cant be on"
+Flipping the Connections LAN PC card's Share Send switch popped
+"Connect the LAN PC first - enter its hub URL + token and press
+Connect" EVEN THOUGH the card showed CONNECTED and the pairing was
+saved. Root cause (console.html): the switch handler pre-checked the
+in-memory `lanPeerState` and blocked the flip while it was still null.
+`lanPeerState` stays null until the FIRST `/peer/status` answer - and
+that answer waits behind seven sequential poll calls (health, stats,
+queue, printers, jobs, audit, config; /printers alone can take seconds
+on Windows WMI), so clicking Share Send right after opening the console
+always hit the false popup. Fix: the client no longer blocks - the POST
+goes out and the SERVER (which reads the persisted lan-pc pairing)
+decides; on 400 the switch reverts and the server's real message shows.
+The 3 s poll can no longer visually revert an in-flight flip
+(`_shareSendPending` guard), and the switch mirrors
+`cfgCache.share_send` from the main poll body so a saved ON state never
+renders OFF during the boot window.
+
+### BUG 2 - peers table: "conected hub online and on but other pc show offline"
+The Other PCs (peers) table showed every peer OFFLINE forever and every
+Shift queue button stayed disabled - while the LAN PC card above showed
+CONNECTED for the SAME PC. Root cause: the `/peers` endpoint answers
+with the field name `alive`, but the console table read `p.up`
+(undefined on every response). Fixed on BOTH sides: the hub now sends
+`up` AND `alive`, the table reads `p.up || p.alive`. Two more lies in
+the same table fixed: every row read "\u00b7 PC" because the endpoint
+never returned the entry's name/label (it does now, so the row shows
+which PC it is), and the table only rendered at page load - a peer that
+came online stayed OFFLINE until a manual reload (now refreshed on
+every poll; `/peers` is cached 15 s server-side, so this costs
+nothing).
+
+### BUG 3 - the SAME PC listed twice (duplicate peer rows)
+The peers table listed `http://192.168.1.101:9235` TWICE. Root cause:
+the LAN PC card's Connect (`/peer/pair`) removed only entries NAMED
+"lan-pc", so an entry for the same hub saved earlier by an invite link
+(name = the PC's host name) survived next to the fresh pairing; the
+duplicate probed with a stale token. Fixed everywhere: peer_hubs
+entries are deduped by normalized URL (scheme://host:port, lowercased)
+on every write path - `/peer/pair`, invite `/peer/connect`, POST
+/config peer_hubs cleaning - `/peers` dedupes defensively at read time,
+and job forwarding (`_try_peer_forward`) can never hand the same job to
+the same hub twice. Bonus fix in the invite flow: opening an invite
+link for an ALREADY-PAIRED PC used to DELETE the lan-pc entry and
+append a plain host-named one - silently unpairing Share Send Mode so
+the switch later answered "Connect the LAN PC first" (the v3.3.2
+popup's second root cause). The invite now updates the lan-pc entry in
+place.
+
+### BUG 4 - Shift queue was doubly broken
+The "Shift whole queue to" input kept its static demo value
+(http://10.26.94.77:9235 - a PC from the design mockup) forever, and
+"Shift all waiting" read `qsa(...)[1]` - which, after the LAN PC card
+was inserted above it, is the SELF PC TOKEN field, so the shift fired
+at a garbage "URL". Plus both console Shift buttons sent
+`{peer: url}` while the endpoint reads `target` - the URL was silently
+ignored and the endpoint guessed the first live peer. Fixed: the input
+has `id=shiftTarget`, is prefilled with the LAN PC's URL (else the
+first ONLINE peer), the handlers read it by id and send
+`{target, scope:"all"}`, and `/queue/shift` accepts `peer` as an alias
+for `target` (older consoles keep working).
+
+### Verification
+- `tests/test_v333.py`: 21 checks - /peers `up`+`alive`+name/label +
+  dedupe, /peer/pair same-URL dedupe (no duplicate rows), invite
+  preserves the lan-pc pairing, share_send validation still refuses
+  ON-without-peer, /queue/shift accepts target AND peer, shift token
+  lookup by normalized URL, console.html contains no blocking
+  pre-check + has shiftTarget + polls loadConnections.
+- full pytest suite green; console.html JS node --check clean.
+
+
 ## v3.3.2 - SHARE SEND MODE + WINDOWS IPP ADD-FIX RELEASE (2026-11-12)
 
 Base: v3.3.0 (the any-PC invite / dual-stack listener release) with the

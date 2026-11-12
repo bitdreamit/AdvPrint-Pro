@@ -28,7 +28,7 @@ EXT = os.path.join(ROOT, "extension")
 def test_v324_manifest_opens_the_popup():
     man = json.load(open(os.path.join(EXT, "manifest.json"),
                          encoding="utf-8"))
-    assert man["version"] == "3.3.2"
+    assert man["version"] == "3.3.3"
     act = man.get("action", {})
     assert act.get("default_popup") == "popup.html", \
         "v3.2.6 must open the toolbar popup again"
@@ -149,18 +149,18 @@ def test_v324_nsis_packs_popup():
                encoding="utf-8").read()
     assert 'File "/oname=popup.html" "../extension/popup.html"' in nsi
     assert 'File "/oname=popup.js" "../extension/popup.js"' in nsi
-    assert 'OutFile "../dist/AdvPrint-Pro-Setup-3.3.2.exe"' in nsi
-    assert 'VIProductVersion "3.3.2.0"' in nsi
+    assert 'OutFile "../dist/AdvPrint-Pro-Setup-3.3.3.exe"' in nsi
+    assert 'VIProductVersion "3.3.3.0"' in nsi
 
 
 # ------------------------------------------------------------
 # version coherence: one version everywhere
 # ------------------------------------------------------------
 def test_v324_version_coherence():
-    assert advprint.VERSION == "3.3.2"
-    assert advprint.VERSION_NAME.startswith("v3.3.2")
+    assert advprint.VERSION == "3.3.3"
+    assert advprint.VERSION_NAME.startswith("v3.3.3")
     vt = open(os.path.join(ROOT, "VERSION.txt"), encoding="utf-8").read()
-    assert "3.3.2" in vt
+    assert "3.3.3" in vt
     man = json.load(open(os.path.join(EXT, "manifest.json"),
                          encoding="utf-8"))
     assert man["version"] == advprint.VERSION
@@ -170,7 +170,7 @@ def test_v324_version_coherence():
 
 def test_v324_hub_still_reports_324():
     """/health keeps reporting the live VERSION (popup shows it)."""
-    assert advprint.VERSION == "3.3.2"
+    assert advprint.VERSION == "3.3.3"
     # the ACL feature from v3.2.3 is still wired
     assert advprint.CFG.get("allowed_ips") == ["*"]
     assert hasattr(advprint, "ip_allowed_by_list")

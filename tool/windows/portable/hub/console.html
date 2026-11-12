@@ -1000,11 +1000,15 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
               <div class="h3sec">Other PCs (peers)</div>
               <table class="tbl" style="font-size:11.5px">
                 <tr><th>PC (hub URL)</th><th>Status</th><th>Version</th><th style="width:160px"></th></tr>
-                <tr><td class="mono doc" style="max-width:230px;font-size:10.5px">http://10.26.94.77:9235 · Storage-Room-PC</td><td><span class="chip ok"><span class="d"></span>ONLINE</span></td><td>v3.1.2</td><td><button class="btn small">&#8646; Shift queue</button></td></tr>
-                <tr><td class="mono doc" style="max-width:230px;font-size:10.5px">http://10.26.94.71:9235 · SHOP-PC</td><td><span class="chip err"><span class="d"></span>OFFLINE</span></td><td>v3.0.8</td><td><button class="btn small" disabled style="opacity:.5">Shift queue</button></td></tr>
+                <!-- v3.3.3: the two DEMO rows (Storage-Room-PC / SHOP-PC
+                     with fake 10.26.94.x addresses) are gone - they
+                     flashed fake peers on every page load until the
+                     first /peers answer replaced them. loadConnections()
+                     renders the real rows (or "no peer hubs configured"). -->
+                <tr><td class="mono doc" style="font-size:10.5px;color:var(--muted)">loading&hellip;</td><td></td><td></td><td></td></tr>
               </table>
               <div class="frow" style="margin:10px 0 0"><label style="min-width:auto">Shift whole queue to</label>
-                <input class="inp mono" style="min-width:200px;font-size:11px" value="http://10.26.94.77:9235">
+                <input class="inp mono" id="shiftTarget" style="min-width:200px;font-size:11px" value="">
                 <button class="btn blue">Shift all waiting</button></div>
             </div>
           </div>
@@ -2469,6 +2473,9 @@ function renderAcl(){
    NOTHING navigates the browser anywhere, so there is no way to end
    up redirected at this PC's own IP. */
 var lanPeerState = null;
+var _shareSendPending = false;   /* v3.3.3: a Share Send flip is in
+   flight - poll/render skips mirroring the switch until it lands, so
+   the 3 s poll can never visually revert what the user just clicked */
 
 function renderLanPeer(st){
   st = st || {};
@@ -2484,7 +2491,7 @@ function renderLanPeer(st){
     if (tok && document.activeElement !== tok) tok.placeholder =
       "the other PC's hub token";
   }
-  if (sw) sw.classList.toggle("on", !!st.share_send);
+  if (sw && !_shareSendPending) sw.classList.toggle("on", !!st.share_send);
   var p = st.peer;
   if (!st.configured) {
     if (chipEl) { chipEl.className = "chip gray";
@@ -3124,17 +3131,38 @@ async function loadDropzone(){
 async function loadConnections(){
   try {
     var peers = (await api("/peers")).peers || [];
+    /* v3.3.3 DEFENSIVE DEDUPE: the hub already collapses same-URL peer
+       entries - this only guards against a stale config.json that was
+       written by an older build (the user report: the SAME PC listed
+       twice, both rows OFFLINE). First occurrence wins. */
+    var seen = {}, uniq = [];
+    peers.forEach(function(p){
+      var k = (p.url || "").replace(/\/+$/, "").toLowerCase();
+      if (k && seen[k]) return;
+      seen[k] = 1; uniq.push(p);
+    });
+    peers = uniq;
     var tbl = document.querySelector("#p-connections table.tbl");
     if (tbl) {
       var tmpl = null;
       qsa("tr", tbl).forEach(function(tr){ if (tr.querySelector("td")) { if (!tmpl) tmpl = tr.cloneNode(true); tr.remove(); } });
       peers.forEach(function(p){
         var tr = tmpl.cloneNode(true), td = tr.querySelectorAll("td");
-        td[0].textContent = (p.url || "") + " \u00b7 " + (p.name || "PC");
-        td[1].innerHTML = p.up ? '<span class="chip ok"><span class="d"></span>ONLINE</span>'
+        /* v3.3.3 OFFLINE-BUG FIX: the server answered /peers with the
+           field name `alive`, but this table read `p.up` - undefined on
+           EVERY response, so every peer rendered OFFLINE and its Shift
+           queue button stayed disabled forever (the "conected hub
+           online and on but other pc show offline why" report). Both
+           sides now agree: the hub sends `up` AND `alive`. */
+        var up = !!(p.up || p.alive);
+        /* v3.3.3: show WHICH PC the row is (the server now returns the
+           entry's name/label; every row used to read "\u00b7 PC") */
+        var who = (p.label || p.name || "PC");
+        td[0].textContent = (p.url || "") + " \u00b7 " + who;
+        td[1].innerHTML = up ? '<span class="chip ok"><span class="d"></span>ONLINE</span>'
           : '<span class="chip err"><span class="d"></span>OFFLINE</span>';
         td[2].textContent = p.version ? "v" + p.version : "\u2014";
-        td[3].innerHTML = '<button class="btn small"' + (p.up ? "" : " disabled") +
+        td[3].innerHTML = '<button class="btn small"' + (up ? "" : " disabled") +
           ' data-shift="' + esc(p.url || "") + '">\u21C6 Shift queue</button>';
         tbl.appendChild(tr);
       });
@@ -3146,6 +3174,20 @@ async function loadConnections(){
       }
     }
     setCnt("connections", peers.length);
+    /* v3.3.3 SHIFT TARGET: the input kept its static demo value
+       (http://10.26.94.77:9235 - a PC from the design mockup) forever
+       and "Shift all waiting" read the SELF PC TOKEN field instead of
+       this input (the LAN PC card had shifted the qsa() indexes). The
+       input now has id=shiftTarget and is prefilled with the LAN PC's
+       URL, else the first ONLINE peer. */
+    var stInp = $("shiftTarget");
+    if (stInp && document.activeElement !== stInp) {
+      var lanUrl = (lanPeerState && lanPeerState.configured && lanPeerState.url) || "";
+      var alivePeer = null;
+      peers.forEach(function(p){ if (!alivePeer && (p.up || p.alive)) alivePeer = p; });
+      var pre = lanUrl || (alivePeer && alivePeer.url) || "";
+      if (pre && (!stInp.value || /10\.26\.94\./.test(stInp.value))) stInp.value = pre;
+    }
     var chipLan = document.querySelector("#p-connections .card .chip.ok");
   } catch (e) { /* panel stays as-is */ }
   /* website API permission textarea mirrors ext_api_sites */
@@ -3227,7 +3269,7 @@ function renderExt(audit){
     rows.slice(0, 6).forEach(function(r2){
       var tr = tmpl.cloneNode(true), td = tr.querySelectorAll("td");
       td[0].innerHTML = "<b>" + esc(r2.who) + "</b>";
-      td[1].textContent = "v" + (BOOT.version || "3.2.1");
+      td[1].textContent = "v" + (BOOT.version || "3.3.3");
       td[2].textContent = r2.at ? r2.at.slice(11, 19) : "\u2014";
       td[3].innerHTML = '<span class="chip ok"><span class="d"></span>PAIRED</span>';
       tbl.appendChild(tr);
@@ -3249,7 +3291,7 @@ function renderExt(audit){
       m2.textContent = BASE + "/extension/updates.xml";
   });
   var crxChip = document.querySelector("#p-extension .frow .chip.ok");
-  if (crxChip) crxChip.innerHTML = '<span class="d"></span>CRX v' + (BOOT.version || "3.2.1") + " READY";
+  if (crxChip) crxChip.innerHTML = '<span class="d"></span>CRX v' + (BOOT.version || "3.3.3") + " READY";
   /* v3.2.8 STALE-CRX GUARD: ask the hub which package it really
    * serves (/extension/info is open, no token). Older than the hub
    * itself -> Chrome never updates -> browsers keep the old bugs.
@@ -3455,7 +3497,7 @@ async function renderUpdate(res){
    full-page /docs stays available via the "Full guide page" button.
    ============================================================ */
 function docsHtml(){
-  var v = esc(BOOT.version || "3.3.2");
+  var v = esc(BOOT.version || "3.3.3");
   var ip = esc(BOOT.lan_ip || location.hostname || "127.0.0.1");
   var port = esc(String(BOOT.port || location.port || "9235"));
   var base = "http://" + ip + ":" + port;
@@ -3841,7 +3883,7 @@ function bindButtons(){
     var cx = t.getAttribute && t.getAttribute("data-cancel");
     if (cx) { try { await api("/jobs/" + cx + "/cancel", { method: "POST" }); poll(); } catch (e) { toast(e.message, "err"); } }
     var sh = t.getAttribute && t.getAttribute("data-shift");
-    if (sh) { try { await api("/queue/shift", { method: "POST", body: { peer: sh } });
+    if (sh) { try { await api("/queue/shift", { method: "POST", body: { target: sh, scope: "all" } });
         toast("Queue shifted to " + sh, "ok"); poll(); } catch (e) { toast(e.message, "err"); } }
     var tool = t.closest && t.closest("[data-tool]");
     if (tool) { runTool(tool.dataset.tool); return; }
@@ -3987,10 +4029,15 @@ function bindButtons(){
     if (url && url !== BASE) { toast("This console is served BY the hub \u2014 " + BASE + " is already connected", "ok"); }
     else toast("Connected \u2014 hub answered", "ok"); });
   btnLike("#p-connections", /Shift all waiting/i, function(){
-    var inp = qsa("#p-connections .frow input.inp.mono")[1];
+    /* v3.3.3: read the REAL shift-target input (id=shiftTarget). The
+       old qsa(...)[1] hit the Self PC token field after the LAN PC
+       card was inserted above it, and the body used the key `peer`
+       while the endpoint reads `target` - so Shift all waiting either
+       did nothing useful or fired at a garbage "URL". */
+    var inp = $("shiftTarget");
     var peer = inp ? inp.value.trim() : "";
     if (!peer) return toast("Enter the peer hub URL first", "warn");
-    api("/queue/shift", { method: "POST", body: { peer: peer } })
+    api("/queue/shift", { method: "POST", body: { target: peer, scope: "all" } })
       .then(function(){ toast("Queue shifted to " + peer, "ok"); poll(); })
       .catch(function(e){ toast(e.message, "err"); }); });
   /* hub panel */
@@ -4481,14 +4528,22 @@ function bindSwitches(){
     /* v3.3.2 SHARE SEND MODE (Connections LAN PC card) - saves itself
        the moment it is flipped, reads the PERSISTED pairing (never a
        transient JS flag), and reverting ON-without-peer is impossible
-       server-side too (POST /config validates share_send). */
+       server-side too (POST /config validates share_send).
+       v3.3.3 POPUP FIX: the old client-side pre-check
+       ("Connect the LAN PC first" toast when lanPeerState was not yet
+       loaded) fired on a normal page load - lanPeerState stays null
+       until the FIRST /peer/status answer, and that answer waits behind
+       seven sequential poll calls (health, stats, queue, printers,
+       jobs, audit, config - printers can take seconds on Windows WMI).
+       So a user who flipped Share Send right after opening the console
+       got the false popup EVEN THOUGH the pairing was saved and the
+       server would have accepted the flip. The client no longer blocks:
+       the POST goes out and the SERVER (the persisted truth) decides;
+       on 400 the switch reverts and the server's real message shows. */
     if (s.id === "shareSendSw") {
       var want = !s.classList.contains("on");
-      if (want && !(lanPeerState && lanPeerState.configured)) {
-        toast("Connect the LAN PC first \u2014 enter its hub URL + token and press Connect", "warn");
-        return;
-      }
       s.classList.toggle("on", want);
+      _shareSendPending = true;
       api("/config", { method: "POST", body: { share_send: want } })
         .then(function(){
           if (lanPeerState) lanPeerState.share_send = want;
@@ -4498,7 +4553,8 @@ function bindSwitches(){
           loadLanPeer();
         })
         .catch(function(e){ s.classList.toggle("on", !want);
-          toast(e.message, "err"); });
+          toast(e.message, "err"); })
+        .then(function(){ _shareSendPending = false; });
       return;
     }
     /* v3.3.2 remote devices switch (Printers panel) */
@@ -4639,7 +4695,7 @@ function applyCenterView(){
 /* ============================================================
    POLL + BOOT
    ============================================================ */
-var VERSION_TXT = BOOT.version || "";
+var VERSION_TXT = BOOT.version || "3.3.3";
 async function poll(){
   try {
     var h = await api("/health");
@@ -4669,9 +4725,21 @@ async function poll(){
     renderExt(audit);
     renderSettings(cfgCache);
     renderExtPrefs((cfgCache.ext_prefs || {}));
+    /* v3.3.3 SHARE SEND MIRROR: the switch used to render OFF until the
+       first /peer/status answer even when share_send was already ON in
+       config.json (the boot window again) - flip-and-popup bait. The
+       /config value arrives in the main poll body, mirror it here;
+       loadLanPeer below re-mirrors it with the authoritative value. */
+    var sssw = $("shareSendSw");
+    if (sssw && !_shareSendPending) sssw.classList.toggle("on", !!cfgCache.share_send);
     /* v3.3.2 SHARE SEND MODE + remote devices: the LAN PC card and the
        "Show other PCs" switch read the persisted hub state every poll */
     loadLanPeer();
+    /* v3.3.3: the peers table now refreshes on every poll too - it only
+       rendered on page load before, so a peer that came online stayed
+       OFFLINE in the table until a manual reload. /peers is cached
+       15 s server-side, so this costs the hub nothing. */
+    loadConnections();
     var srsw = $("showRemoteSw");
     if (srsw) srsw.classList.toggle("on", !!cfgCache.show_remote_printers);
     /* v3.2.3 SWITCH FIX part 2: the hub panel now refreshes from the

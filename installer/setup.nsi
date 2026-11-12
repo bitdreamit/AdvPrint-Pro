@@ -11,7 +11,7 @@
 ;    REAL administrator rights: the exe requests admin via its
 ;    manifest, so Windows shows the UAC prompt by itself
 ;    ("auto permission to install" - nothing is half-installed).
-;    Silent install:  AdvPrint-Pro-Setup-3.3.2.exe /S
+;    Silent install:  AdvPrint-Pro-Setup-3.3.3.exe /S
 ;    (elevation still applies - Windows shows UAC once.)
 ;  - v2.8 UPGRADE / UNINSTALL FIX (the v2.7.x pain "service not
 ;    uninstalled, some files abort install"): BEFORE any file is
@@ -36,7 +36,7 @@
 
 Unicode true
 Name "AdvPrint Pro (Advanced Printer)"
-OutFile "../dist/AdvPrint-Pro-Setup-3.3.2.exe"
+OutFile "../dist/AdvPrint-Pro-Setup-3.3.3.exe"
 InstallDir "$PROGRAMFILES64\AdvPrintPro"
 InstallDirRegKey HKLM "Software\AdvPrintPro" "InstallDir"
 ; full admin rights - the Windows UAC prompt appears by itself when
@@ -50,7 +50,7 @@ ShowInstDetails show
 ShowUnInstDetails show
 ManifestDPIAware true
 
-VIProductVersion "3.3.2.0"
+VIProductVersion "3.3.3.0"
 VIAddVersionKey ProductName "AdvPrint Pro (Advanced Printer)"
 VIAddVersionKey FileVersion "3.3.0"
 VIAddVersionKey ProductVersion "3.3.0"
@@ -301,7 +301,7 @@ Section "AdvPrint Pro hub (required)" SEC_MAIN
     DetailPrint "No usable pythonw.exe (bundled runtime missing + no system Python)."
     ${IfNot} ${Silent}
       MessageBox MB_ICONEXCLAMATION|MB_OK \
-        "Setup could not prepare the bundled Python runtime and found no system Python.$\n$\nPlease re-download AdvPrint-Pro-Setup-3.3.2.exe (the file may be damaged in transit) and run it again."
+        "Setup could not prepare the bundled Python runtime and found no system Python.$\n$\nPlease re-download AdvPrint-Pro-Setup-3.3.3.exe (the file may be damaged in transit) and run it again."
     ${EndIf}
   ${EndIf}
 
