@@ -68,8 +68,11 @@ def test_mdns_announces_one_service_per_printer(printers):
 
 
 def test_mdns_rrset_carries_per_printer_rp(monkeypatch, printers):
+    # v3.3.4: _ipp_printer_uuid takes the queue slug; every service gets
+    # its own uuid - the fake stamps slug into the value so the test
+    # can see the differentiation
     monkeypatch.setattr(advprint, "_ipp_printer_uuid",
-                        lambda: "urn:uuid:test-uuid")
+                        lambda slug=None: "urn:uuid:test-uuid-" + str(slug))
     rr = advprint._mdns_rrset("192.168.1.50")
     blob = b"".join(r for r in rr)
     assert b"hp-laser-103-107-108" in blob

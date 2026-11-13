@@ -1,4 +1,4 @@
-/* AdvPrint Pro v3.3.0 - UI language: English + Bangla (বাংলা).
+/* AdvPrint Pro v3.3.4 - UI language: English + Bangla (বাংলা).
  * Used by the popup, the options page and the notifications (the popup
  * is BACK in v3.2.5 with its branding-only footer; the toolbar icon
  * opens the popup, exactly like before v3.2.2).
@@ -51,11 +51,14 @@
       popQueueOffMsg: "Instant print ON - jobs print immediately; if no printer is active they are auto-queued for later",
       popLanSection: "LAN sharing",
       popPowerSection: "Power",
-      popShareRx: "Share Receive Mode",
+      // v3.3.4: "Receive" is now SHARING (the switch carries the
+      // network/connection icon; the header icon shows the LAN state)
+      popSelectPrinter: "Select printer",
+      popShareRx: "Sharing",
       popShareRxOn: "this PC accepts jobs from other PCs",
       popShareRxOff: "this PC prints only for itself",
-      popShareRxMsgOn: "Share Receive Mode ON - RESTART the hub (tray icon → Exit, start again) so other PCs can connect. Check the firewall!",
-      popShareRxMsgOff: "Share Receive Mode OFF - the hub only listens on this PC (restart it to unbind the LAN)",
+      popShareRxMsgOn: "Sharing (receive mode) ON - RESTART the hub (tray icon → Exit, start again) so other PCs can connect. Check the firewall!",
+      popShareRxMsgOff: "Sharing OFF - the hub only listens on this PC (restart it to unbind the LAN)",
       popShareTx: "Share Send Mode",
       popShareTxOn: "printing goes to the LAN PC",
       popShareTxOff: "printing on this PC",
@@ -69,6 +72,21 @@
       popCapturing: "Capturing screenshot...",
       popSavingPdf: "Saving page as PDF file...",
       popConfigError: "Config error",
+      // v3.3.4: printer selector + reload + network icon
+      popPrinterSection: "Printer",
+      popPrinterNone: "no printer found",
+      popPrinterNoneSub: "the hub reports no printer - connect one first",
+      popPrinterNow: "OS default:",
+      popPrinterNoDefault: "no OS default set - pick one",
+      popPrinterSetting: "Setting the default printer...",
+      popPrinterSetOk: "Default printer set:",
+      popPrinterAlready: "Already the OS default:",
+      popPrinterSetFail: "Could not set the default printer",
+      popReloadBtn: "Reload",
+      popNetOn: "Hub connected on this PC",
+      popNetLan: "LAN sharing is ON - other PCs and phones can send jobs to this hub",
+      popNetOff: "Hub offline",
+      popShareRxListen: "listening on",
       // options
       optLanguage: "UI language",
       optLangAuto: "Automatic (browser language)",
@@ -83,7 +101,7 @@
       optTypeGlob: "Glob (* wildcard)",
       optTypeRegex: "Regex",
       // about / branding
-      brandLine: "Version 3.3.0 - AdvPrint Pro (Advanced Printer) by Bit Dream IT - Innovative Healthcare Solutions - MIT license - 100% local - no cloud, no tracking."
+      brandLine: "Version 3.3.4 - AdvPrint Pro (Advanced Printer) by Bit Dream IT - Innovative Healthcare Solutions - MIT license - 100% local - no cloud, no tracking."
     },
     bn: {
       appName: "AdvPrint Pro",
@@ -124,11 +142,12 @@
       popQueueOffMsg: "কিউ মোড বন্ধ - কাজ সাথে সাথে প্রিন্ট হবে",
       popLanSection: "LAN শেয়ারিং",
       popPowerSection: "পাওয়ার",
-      popShareRx: "শেয়ার রিসিভ মোড",
+      popSelectPrinter: "প্রিন্টার বাছুন",
+      popShareRx: "শেয়ারিং",
       popShareRxOn: "এই পিসি অন্য পিসি থেকে কাজ নেয়",
       popShareRxOff: "এই পিসি শুধু নিজের জন্য প্রিন্ট করে",
-      popShareRxMsgOn: "শেয়ার রিসিভ মোড চালু - অন্য পিসি সংযোগ পেতে হাব রিস্টার্ট করুন (ট্রে আইকন → Exit, আবার চালু)। ফায়ারওয়াল দেখুন!",
-      popShareRxMsgOff: "শেয়ার রিসিভ মোড বন্ধ - হাব শুধু এই পিসিতে শোনে (LAN আনবাইন্ড করতে রিস্টার্ট করুন)",
+      popShareRxMsgOn: "শেয়ারিং চালু - অন্য পিসি সংযোগ পেতে হাব রিস্টার্ট করুন (ট্রে আইকন → Exit, আবার চালু)। ফায়ারওয়াল দেখুন!",
+      popShareRxMsgOff: "শেয়ারিং বন্ধ - হাব শুধু এই পিসিতে শোনে (LAN আনবাইন্ড করতে রিস্টার্ট করুন)",
       popShareTx: "শেয়ার সেন্ড মোড",
       popShareTxOn: "প্রিন্ট LAN পিসিতে যাবে",
       popShareTxOff: "এই পিসিতে প্রিন্ট হবে",
@@ -142,6 +161,20 @@
       popCapturing: "স্ক্রিনশট নেওয়া হচ্ছে...",
       popSavingPdf: "পেজ PDF হিসেবে সংরক্ষিত হচ্ছে...",
       popConfigError: "কনফিগ সমস্যা",
+      popPrinterSection: "প্রিন্টার",
+      popPrinterNone: "কোনো প্রিন্টার পাওয়া যায়নি",
+      popPrinterNoneSub: "হাব কোনো প্রিন্টার দেখাচ্ছে না - আগে সংযোগ করুন",
+      popPrinterNow: "ওএস ডিফল্ট:",
+      popPrinterNoDefault: "কোনো ওএস ডিফল্ট নেই - একটি বাছুন",
+      popPrinterSetting: "ডিফল্ট প্রিন্টার সেট হচ্ছে...",
+      popPrinterSetOk: "ডিফল্ট প্রিন্টার সেট হয়েছে:",
+      popPrinterAlready: "এটিই বর্তমান ওএস ডিফল্ট:",
+      popPrinterSetFail: "ডিফল্ট প্রিন্টার সেট করা যায়নি",
+      popReloadBtn: "রিলোড",
+      popNetOn: "এই পিসিতে হাব সংযুক্ত আছে",
+      popNetLan: "LAN শেয়ারিং চালু - অন্য পিসি ও ফোন এই হাবে কাজ পাঠাতে পারবে",
+      popNetOff: "হাব অফলাইন",
+      popShareRxListen: "শুনছে",
       optLanguage: "ইন্টারফেস ভাষা",
       optLangAuto: "স্বয়ংক্রিয় (ব্রাউজারের ভাষা)",
       optRetryOffline: "হাব ফিরে এলে আবার পাঠান",
@@ -154,7 +187,7 @@
       optRulesType: "ধরন",
       optTypeGlob: "Glob (* ওয়াইল্ডকার্ড)",
       optTypeRegex: "Regex",
-      brandLine: "সংস্করণ 3.3.0 - AdvPrint Pro (Advanced Printer) by Bit Dream IT - Innovative Healthcare Solutions - MIT লাইসেন্স - ১০০% লোকাল - কোনো ক্লাউড নেই, কোনো ট্র্যাকিং নেই।"
+      brandLine: "সংস্করণ 3.3.4 - AdvPrint Pro (Advanced Printer) by Bit Dream IT - Innovative Healthcare Solutions - MIT লাইসেন্স - ১০০% লোকাল - কোনো ক্লাউড নেই, কোনো ট্র্যাকিং নেই।"
     }
   };
 

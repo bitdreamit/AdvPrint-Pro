@@ -1,6 +1,17 @@
-/* AdvPrint Pro - popup logic */
+/* AdvPrint Pro - popup logic (ONE design, v3.3.4)
+ * PRINTER SELECTOR (change-only set-default, never on popup
+ * open/reload), RELOAD button, NETWORK icon in the header (LAN share
+ * state at a glance) and a refresh() in-flight guard so popup reloads
+ * can no longer stack duplicate hub calls ("cmd runs multiple times").
+ * The LAN switch is labelled SHARING now and carries the network/
+ * connection icon (popup.html). */
 const $ = (id) => document.getElementById(id);
 let paused = false;
+let _refreshBusy = false;        // v3.3.4: one refresh at a time
+let _printerMap = [];            // hub printer names, in hub order
+let _printerApplied = "";        // default the hub currently reports
+let _settingPrinter = false;     // v3.3.4: one set-default in flight
+let _lastListenAddr = "";        // v3.3.4: hub LAN listen addr (icon/label)
 
 function msg(text, cls) {
   const el = $("msg");
@@ -116,15 +127,140 @@ async function renderShareTxState(on, cfg) {
   $("swShareTxRow").classList.toggle("off", !on);
 }
 
-function renderShareRxState(on, reachable) {
+function renderShareRxState(on, reachable, listenAddr) {
   const sw = $("swShareRx");
   sw.checked = !!on;
   sw.disabled = !reachable;
-  $("swShareRxSub").textContent = !reachable
-    ? AdvPrintI18n.t("popShareRxOffline")
-    : (on ? AdvPrintI18n.t("popShareRxOn") : AdvPrintI18n.t("popShareRxOff"));
+  let sub;
+  if (!reachable) {
+    sub = AdvPrintI18n.t("popShareRxOffline");
+  } else if (on) {
+    // v3.3.4: SHOW the LAN address the hub is actually listening on -
+    // "Share Receive Mode to LAN" made visible (hub /health lan_bind_ip)
+    const ip = listenAddr || "";
+    sub = AdvPrintI18n.t("popShareRxOn") +
+          (ip ? (" - " + AdvPrintI18n.t("popShareRxListen") + " " + ip) : "");
+  } else {
+    sub = AdvPrintI18n.t("popShareRxOff");
+  }
+  $("swShareRxSub").textContent = sub;
   $("swShareRxRow").classList.toggle("off", reachable ? !on : true);
 }
+
+/* v3.3.4: the NETWORK icon in the header - gray = hub offline, green =
+ * hub on this PC, teal (pulsing) = Share Receive is ON and the hub
+ * listens on the LAN, so other PCs and phones can send jobs. The
+ * tooltip names the state and the listening address. Click = reload. */
+function renderNetIcon(state, detail) {
+  const el = $("netIcon");
+  if (!el) return;                    // future-proof: header icon optional
+  el.classList.remove("on", "lan");
+  if (state === "lan") el.classList.add("lan");
+  else if (state === "on") el.classList.add("on");
+  el.title = detail || "";
+}
+
+/* ---------- v3.3.4: PRINTER SELECTOR (change-only set-default) ------
+ * The hub's printer list fills the <select>; the hub's CURRENT OS
+ * default is preselected. The set-default command is sent ONLY when
+ * the user picks a DIFFERENT printer:
+ *   - popup open/reload only SELECTS an option programmatically, and a
+ *     programmatic value set fires no change event;
+ *   - even if something re-enters, the _printerApplied guard blocks a
+ *     repeat for the same printer, and _settingPrinter blocks parallel
+ *     calls - so the OS setter command runs exactly once per real
+ *     change ("cmd run multiple" is impossible from this popup);
+ *   - the hub endpoint itself is idempotent since v3.3.4 (already-
+ *     default answers instantly with zero commands). */
+async function loadPrinters() {
+  const sel = $("selPrinter");
+  const r = await send({ type: "hubPrinters" });
+  if (!r || !r.ok || !Array.isArray(r.printers) || !r.printers.length) {
+    _printerMap = [];
+    _printerApplied = "";
+    sel.innerHTML = "";
+    const o = document.createElement("option");
+    o.value = "";
+    o.textContent = AdvPrintI18n.t("popPrinterNone");
+    sel.appendChild(o);
+    sel.disabled = true;
+    sel.title = AdvPrintI18n.t("popPrinterNoneSub");
+    return;
+  }
+  _printerMap = r.printers.map((p) => p.name).filter(Boolean);
+  _printerApplied = r.default_printer || "";
+  const wanted = _printerApplied;
+  sel.innerHTML = "";
+  for (const p of r.printers) {
+    if (!p.name) continue;
+    const o = document.createElement("option");
+    o.value = p.name;
+    o.textContent = p.name + (p.status && p.status !== "unknown"
+                              ? "  (" + p.status + ")" : "");
+    sel.appendChild(o);
+  }
+  // programmatic select - fires NO change event, so nothing is sent
+  sel.value = _printerMap.includes(wanted) ? wanted : (_printerMap[0] || "");
+  sel.disabled = false;
+  // v3.3.4 ONE design: the applied default lives in the tooltip (the
+  // design has no sub-label under the selector)
+  sel.title = wanted
+    ? (AdvPrintI18n.t("popPrinterNow") + " " + wanted +
+       " - picking another printer makes THAT the OS default")
+    : AdvPrintI18n.t("popPrinterNoDefault");
+}
+
+$("selPrinter").addEventListener("change", async () => {
+  const sel = $("selPrinter");
+  const name = sel.value;
+  // change-ONLY guard 1: same printer as the hub already reports ->
+  // nothing to do (this is what stops re-runs on reload/re-entry)
+  if (!name || _settingPrinter || name === _printerApplied) return;
+  _settingPrinter = true;
+  sel.disabled = true;
+  msg(AdvPrintI18n.t("popPrinterSetting"), "info");
+  const r = await send({ type: "hubSetDefault", printer: name });
+  _settingPrinter = false;
+  sel.disabled = false;
+  if (r && r.ok) {
+    _printerApplied = r.default || name;
+    sel.value = _printerMap.includes(_printerApplied)
+      ? _printerApplied : sel.value;
+    sel.title = AdvPrintI18n.t("popPrinterNow") + " " + _printerApplied;
+    msg((r.unchanged ? AdvPrintI18n.t("popPrinterAlready")
+                     : AdvPrintI18n.t("popPrinterSetOk")) +
+        " " + _printerApplied, "info");
+  } else {
+    // revert the visible selection to what the hub still reports
+    sel.value = _printerMap.includes(_printerApplied)
+      ? _printerApplied : sel.value;
+    msg(AdvPrintI18n.t("popPrinterSetFail") +
+        "  [" + ((r && r.error) || "?") + "]", "err");
+  }
+});
+
+/* v3.3.4: the Reload button (the arrow next to the printer selector)
+ * - re-reads hub state, switches, printers and jobs. It NEVER sends a
+ * set-default command (loadPrinters only fills + selects). The
+ * spinning arrow shows it is working. The header NETWORK icon
+ * reloads too. */
+async function reloadAll(btn) {
+  const b = btn || $("bRefreshPrinters");
+  if (!b || b.classList.contains("spin")) return;   // one at a time
+  b.classList.add("spin");
+  b.disabled = true;
+  try {
+    await Promise.all([loadSwitches(), refresh()]);
+    await loadPrinters();
+  } finally {
+    b.classList.remove("spin");
+    b.disabled = false;
+  }
+}
+$("bRefreshPrinters").addEventListener("click", () =>
+  reloadAll($("bRefreshPrinters")));
+const _netIcon = $("netIcon");
+if (_netIcon) _netIcon.addEventListener("click", () => reloadAll(_netIcon));
 
 $("swEnabled").addEventListener("change", async () => {
   const on = $("swEnabled").checked;
@@ -189,8 +325,31 @@ $("swShareTx").addEventListener("change", async () => {
 });
 
 async function refresh() {
+  // v3.3.4: in-flight guard - popup open fires refresh() AND reloadAll
+  // AND the language re-render; stacked refreshes duplicated hub calls
+  // (the "commands run multiple times" report). One at a time now.
+  if (_refreshBusy) return;
+  _refreshBusy = true;
+  try {
+    await _refreshBody();
+  } finally {
+    _refreshBusy = false;
+  }
+}
+
+async function _refreshBody() {
   const st = await send({ type: "hubStatus" });
   if (st.ok) {
+    // v3.3.4: network icon - teal+pulsing while Share Receive listens
+    // on the LAN, green when the hub serves only this PC
+    const lanOn = !!st.self_share_lan || (st.lan_used === false &&
+                    Array.isArray(st.lan_bind_addrs) &&
+                    st.lan_bind_addrs.length > 0);
+    renderNetIcon(lanOn ? "lan" : "on",
+      lanOn ? (AdvPrintI18n.t("popNetLan") +
+               (st.lan_bind_addrs && st.lan_bind_addrs.length
+                 ? " (" + st.lan_bind_addrs.join(", ") + ")" : ""))
+            : AdvPrintI18n.t("popNetOn"));
     // v2.8: the status line names the ACTIVE print target
     $("dot").classList.add("on");
     $("stat").textContent = st.lan_used
@@ -208,7 +367,10 @@ async function refresh() {
                                      : AdvPrintI18n.t("popPause");
     $("qpend").textContent = st.pending ? st.pending + " pending" : "";
     // v2.8: Share RECEIVE state lives on the SELF hub (/health share_lan)
-    renderShareRxState(!!st.self_share_lan, st.self_ok !== false);
+    _lastListenAddr = (st.lan_bind_addrs && st.lan_bind_addrs[0]) ||
+                      st.lan_bind_ip || "";
+    renderShareRxState(!!st.self_share_lan, st.self_ok !== false,
+                       _lastListenAddr);
     showOffline(false);
     // v2.1.0: token rejected earlier (KEY state) -> red banner; once an
     // authed call succeeds below, the flag is cleared again
@@ -237,7 +399,7 @@ async function refresh() {
     $("connect").textContent = "";
     $("qstate").textContent = "-";
     $("qpend").textContent = "";
-    renderShareRxState(false, false);
+    renderShareRxState(false, false, "");
     showOffline(false);
     showTokenWarning(true, "token");
   } else if (st.reason === "slow") {
@@ -249,7 +411,7 @@ async function refresh() {
     $("connect").textContent = "";
     $("qstate").textContent = "-";
     $("qpend").textContent = "";
-    renderShareRxState(false, false);
+    renderShareRxState(false, false, "");
     showOffline(false);
     msg(AdvPrintI18n.t("popStatSlowHint"), "info");
   } else {
@@ -258,7 +420,8 @@ async function refresh() {
     $("connect").textContent = "Connect";
     $("qstate").textContent = "-";
     $("qpend").textContent = "";
-    renderShareRxState(false, false);
+    renderShareRxState(false, false, "");
+    renderNetIcon("off", AdvPrintI18n.t("popNetOff"));
     const ri = await send({ type: "retryInfo" });
     showOffline(true, ri.ok ? ri.count : 0);
     msg(AdvPrintI18n.t("popHubOfflineHint"), "err");
@@ -414,7 +577,8 @@ AdvPrintI18n.currentLang().then((lang) => {
                                       : AdvPrintI18n.t("popEnabledOn");
   // re-render the share switch sub-labels in the active language
   renderShareTxState($("swShareTx").checked);
-  renderShareRxState($("swShareRx").checked, !$("swShareRx").disabled);
+  renderShareRxState($("swShareRx").checked, !$("swShareRx").disabled,
+                     _lastListenAddr);
 });
 
 /* v2.7.0: the version badge always matches the real manifest version */
@@ -423,3 +587,4 @@ catch (_) { /* keep the hardcoded one */ }
 
 loadSwitches();
 refresh();
+loadPrinters();     // v3.3.4: fill the printer selector (sends NOTHING)

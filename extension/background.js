@@ -1702,6 +1702,16 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
         case "hubPrinters":
           reply(await hubFetch("/printers"));
           break;
+        case "hubSetDefault":
+          /* v3.3.4: popup printer selector - make the picked printer the
+           * OS default. The hub endpoint is IDEMPOTENT (already-default
+           * answers with zero commands), and the popup only calls this
+           * when the selection actually changes, so the OS setter runs
+           * exactly once per real change. */
+          reply(await hubFetch("/printers/set-default", {
+            method: "POST",
+            body: { printer: String(msg.printer || "") } }));
+          break;
         case "hubState":
           /* v3.1.2 CENTER MODE status for the popup + options page */
           {

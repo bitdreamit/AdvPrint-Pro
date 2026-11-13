@@ -1,47 +1,53 @@
-AdvPrint Pro (Advanced Printer) v3.3.0 - START HERE
+AdvPrint Pro (Advanced Printer) v3.3.4 - START HERE
 ====================================================
 by Bit Dream IT - Innovative Healthcare Solutions
 
-QUICK NOTE ON v3.3.0 - THE ANY-PC INVITE + DUAL-STACK LISTENER RELEASE
---------------------------------------------------------------------
-1) THE INVITE LINK CONNECTS THE RIGHT PC NOW. Opening
-   http://<hub-ip>:9235/connect?t=<token> no longer points at the
-   serving PC's own lan_ip() guess - the page uses the address YOU
-   typed (and saves exactly that peer URL). Opening the invite ON the
-   hub PC itself shows an explainer page instead of adding the hub to
-   itself, POST /peer-connect refuses self-invites, the page probes
-   the visiting PC's own hub before you click, and a token that
-   belongs to a DIFFERENT PC's hub is explained in plain words.
-2) EVERY LISTENER ANSWERS IPv4 AND IPv6 ON EVERY INTERFACE. The 9235
-   LAN hub, the 631 IPP mirror and the RAW 9100 port bind one socket
-   per interface IP plus one [::] socket each - a VPN/second-NIC PC no
-   longer goes deaf on its other addresses, and IPv6-only LANs work.
-   The LAN panel shows the REAL bound sockets (Hub addresses chips,
-   RAW + 631 rows), and interface changes rebind automatically.
-   allowed_ips still gates every socket exactly as before.
-3) PER-PRINTER IPP QUEUES WORK FOR ANY PRINTER THAT EXISTS. Unicode
-   printer names (Bangla / Arabic / CJK) get their own distinct,
-   percent-encoded queue slugs; matching tolerates dash / underscore /
-   %20 styles; a newly added printer's queue goes live in seconds; the
-   unknown-queue 404 lists the queues that ARE live; mDNS announces up
-   to 24 per-printer queues (+ the AAAA record for IPv6).
+QUICK NOTE ON v3.3.4 - MULTI-PRINTER IPP ADD + POPUP PRINTER/RELOAD/NETWORK
+--------------------------------------------------------------------------
+1) EVERY PRINTER OF THE HUB CAN BE ADDED NOW - NOT JUST ONE. Windows
+   refused the SECOND per-printer queue (http://<hub-ip>:9235/ipp/
+   print/<printer>) because mDNS advertised ONE shared UUID TXT record
+   for every queue - each per-printer service looked like a
+   re-announcement of the first. Every advertised queue now carries
+   its OWN stable printer-uuid (announce + direct TXT answers), so all
+   printers appear and add side by side in Windows and on phones. If a
+   queue was half-added before the upgrade, remove it once on the
+   device and add it again.
+2) THE POPUP IS A CONTROL SURFACE NOW. A PRINTER dropdown (the hub's
+   printers + status; picking one makes it the OS default - ONE
+   command per real change, NOTHING on popup open/reload, and the hub
+   endpoint is idempotent: "already default" answers with zero
+   commands - the "cmd runs multiple times" bug is dead). A RELOAD
+   button re-reads everything. A NETWORK icon shows at a glance:
+   gray = offline, green = hub on this PC, teal pulse = Share Receive
+   ON listening on the LAN (tooltip names the address). Share
+   Receive's sub-label shows the LAN listen address too.
+3) allow_extention_advprint_pro.bat REALLY APPLIES HKLM / HKCU NOW.
+   The old script deleted ExtensionInstallForcelist on every run and
+   never re-wrote it (the CRX force-install was silently wiped). The
+   rewrite writes ALL THREE policies per browser (Chrome, Edge, Brave,
+   Vivaldi, Chromium, Opera) with duplicate-skip, has a menu
+   [1]=HKLM (auto-UAC) [2]=HKCU (no admin) [3]=BOTH [R]=Remove [0]=
+   Exit, accepts scripted args (HKLM|HKCU|BOTH|REMOVE) and takes the
+   hub address for LAN deployments.
+
 4) IMPORTANT UPGRADE STEP: the extension is auto-updated FROM THE HUB
    (updates.xml) - after updating the hub, check
    http://127.0.0.1:9235/extension/info : it must show
-   "stale": false and version 3.3.0. If it shows "stale": true, re-run
+   "stale": false and version 3.3.4. If it shows "stale": true, re-run
    the installer (or restart the hub once) - the embedded CRX was not
-   synced; Chrome then silently updates the extension to 3.3.0.
+   synced; Chrome then silently updates the extension to 3.3.4.
 
 UPGRADE IN 3 STEPS (from any v3.x)
 ----------------------------------
 1. Close the old hub (tray icon -> Exit) and run the new
-   AdvPrint-Pro-Setup-3.3.0.exe - it installs over the old folder and
+   AdvPrint-Pro-Setup-3.3.4.exe - it installs over the old folder and
    keeps config.json, the queue database and your rules.
-2. Start AdvPrint Pro. The tray tooltip shows "v3.3.0 - running on
+2. Start AdvPrint Pro. The tray tooltip shows "v3.3.4 - running on
    http://127.0.0.1:9235".
 3. Chrome updates the extension by itself from the hub within a minute
-   (chrome://extensions -> AdvPrint Pro -> 3.3.0). Linux .deb: sudo
-   dpkg -i advprint-pro_3.3.0_all.deb.
+   (chrome://extensions -> AdvPrint Pro -> 3.3.4). Linux .deb: sudo
+   dpkg -i advprint-pro_3.3.4_all.deb.
 
 QUICK VERIFY (2 minutes)
 ------------------------
@@ -62,8 +68,8 @@ DOCUMENTATION (all local, A-to-Z)
 ---------------------------------
 - README.md            - features, install, API, LAN/IPP modes
 - docs/DEVELOPER-API.md          - window.advprint JS API
-- docs/AdvPrint-Pro-v3.3.0-A-to-Z-DEV-GUIDE.md - build + release guide
-- docs/RELEASE-NOTES-v3.3.0.md   - this release, all three bugs
+- docs/AdvPrint-Pro-v3.3.4-A-to-Z-DEV-GUIDE.md - build + release guide
+- docs/RELEASE-NOTES-v3.3.4.md   - this release, all three bugs
 - docs/PrintHub-Pro-Full-Guide.html - step-by-step visual manual
 - CHANGELOG.md                   - every release since v1.0.0
 - Console (127.0.0.1:9235/ui) -> Docs button - the same guide in-UI

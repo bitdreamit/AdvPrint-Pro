@@ -1345,6 +1345,13 @@ https://reports.example.com/*</textarea>
                 <button class="btn small">Copy URL</button>
                 <span style="font-size:10.5px;color:var(--muted)">served by this hub — CRX auto-updates even without the Web Store</span>
               </div>
+              <div class="frow" style="margin:10px 0 0;padding-top:10px;border-top:1px dashed var(--blue-line)">
+                <button class="btn small" style="background:var(--blue);border-color:var(--blue);color:#fff;font-weight:700">Auto-integrate (admin)</button>
+                <span style="font-size:10.5px;color:var(--muted);line-height:1.5">v3.3.4 AUTOCRX — <b>no extra .bat needed</b>: one click runs the policy pass internally
+                  with an elevated PowerShell (a single UAC prompt) and writes Forcelist + Allowlist + Sources for <b>every</b> Chromium
+                  browser, HKLM (all users of this PC) + HKCU (current user). CLI: <span class="mono">python advprint.py activate-extension</span>.
+                  The .bat in prebuilt/ stays only as an offline manual fallback.</span>
+              </div>
             </div>
             <table class="tbl" style="font-size:10.5px">
               <tr><th style="min-width:120px">Browser (Chromium)</th><th>Policy registry path — same value, one row per browser</th><th style="width:120px">Status</th><th style="width:150px"></th></tr>
@@ -1387,7 +1394,8 @@ https://reports.example.com/*</textarea>
             </table>
             <div class="card-b" style="padding-top:10px">
               <div class="note" style="margin-bottom:10px"><b>One CRX, every Chromium browser.</b> The same <span class="mono">AdvPrint-Pro.crx</span> installs into Chrome, Edge, Brave, Vivaldi, Chromium and Opera —
-                only the policy key path differs (table above). <b>Apply HKLM</b> = machine-wide for every user of this PC (needs admin);
+                only the policy key path differs (table above). The one-click <b>Auto-integrate (admin)</b> button above writes every row for you (HKLM + HKCU, one UAC prompt —
+                no external .bat). <b>Apply HKLM</b> = machine-wide for every user of this PC (needs admin);
                 <b>Apply HKCU</b> = only the current user. The browser force-installs the CRX silently on next start and keeps it
                 auto-updated from <span class="mono">/updates.xml</span> served by this hub — <b>no drag &amp; drop, no Web Store, no developer mode</b>.</div>
               <div class="note orange" style="margin-bottom:0"><b>Not Chromium browsers:</b> Firefox uses the same WebExtension codebase packaged as <span class="mono">.xpi</span>
@@ -3269,7 +3277,7 @@ function renderExt(audit){
     rows.slice(0, 6).forEach(function(r2){
       var tr = tmpl.cloneNode(true), td = tr.querySelectorAll("td");
       td[0].innerHTML = "<b>" + esc(r2.who) + "</b>";
-      td[1].textContent = "v" + (BOOT.version || "3.3.3");
+      td[1].textContent = "v" + (BOOT.version || "3.3.4");
       td[2].textContent = r2.at ? r2.at.slice(11, 19) : "\u2014";
       td[3].innerHTML = '<span class="chip ok"><span class="d"></span>PAIRED</span>';
       tbl.appendChild(tr);
@@ -3291,7 +3299,7 @@ function renderExt(audit){
       m2.textContent = BASE + "/extension/updates.xml";
   });
   var crxChip = document.querySelector("#p-extension .frow .chip.ok");
-  if (crxChip) crxChip.innerHTML = '<span class="d"></span>CRX v' + (BOOT.version || "3.3.3") + " READY";
+  if (crxChip) crxChip.innerHTML = '<span class="d"></span>CRX v' + (BOOT.version || "3.3.4") + " READY";
   /* v3.2.8 STALE-CRX GUARD: ask the hub which package it really
    * serves (/extension/info is open, no token). Older than the hub
    * itself -> Chrome never updates -> browsers keep the old bugs.
@@ -3497,7 +3505,7 @@ async function renderUpdate(res){
    full-page /docs stays available via the "Full guide page" button.
    ============================================================ */
 function docsHtml(){
-  var v = esc(BOOT.version || "3.3.3");
+  var v = esc(BOOT.version || "3.3.4");
   var ip = esc(BOOT.lan_ip || location.hostname || "127.0.0.1");
   var port = esc(String(BOOT.port || location.port || "9235"));
   var base = "http://" + ip + ":" + port;
@@ -3643,6 +3651,32 @@ var ACTIONS = {
                "  note:  " + (r.note || "")]);
       toast("LAN test OK \u2014 hub answered", "ok");
     } catch (e) { toolOut(["LAN self-test FAILED", "  " + e.message]); toast("LAN test failed: " + e.message, "err"); } },
+  "autocrx": async function(){
+    /* v3.3.4 AUTOCRX - internal browser auto-integration: the hub
+       generates the policy pass and runs it ONCE elevated (one UAC
+       prompt). Replaces the external allow_extention_advprint_pro.bat. */
+    toast("Auto-integrate running \u2014 approve the UAC prompt (a few seconds)", "warn");
+    try {
+      var r = await api("/extension/policy/activate", { method: "POST", body: { } });
+      var lines = ["AUTOCRX \u2014 browser auto-integrate (HKLM + HKCU)",
+                   "  forcelist: " + (r.updates_url ? (EXT_ID + ";" + r.updates_url) : "(unknown)")];
+      var res = r.result || {};
+      var hives = res.hives || {};
+      Object.keys(hives).forEach(function(hv){
+        lines.push("  " + hv + ": " + (hives[hv].written || 0) + " policy entr(ies) written");
+        var brs = hives[hv].browsers || {};
+        Object.keys(brs).forEach(function(b){ lines.push("    " + b + " \u2014 " + brs[b]); });
+      });
+      (res.errors || []).forEach(function(e){ lines.push("  ERROR: " + e); });
+      if (r.elevated === false) lines.push("  note: " + (r.note || "Windows only"));
+      toolOut(lines);
+      toast(r.message || (r.ok ? "Browser integration written \u2014 restart the browsers once"
+                               : (r.error || "Auto-integrate failed")), r.ok ? "ok" : "err");
+      poll();
+    } catch (e) {
+      toolOut(["AUTOCRX FAILED", "  " + e.message]);
+      toast("Auto-integrate failed: " + e.message, "err");
+    } },
   "copy-hub-url": function(){
     /* v3.2.6 BUG FIX 3/4: the URL carries the token - the old copy was
        a bare http://ip:9235/ui that opened the token error page. */
@@ -4087,6 +4121,8 @@ function bindButtons(){
   btnLike("#p-extension", /Download CRX/i, function(){
     window.open(BASE + "/extension/AdvPrint-Pro.crx", "_blank"); });
   btnLike("#p-extension", /Copy value/i, function(){ ACTIONS["copy-policy"](); });
+  /* v3.3.4 AUTOCRX: the one-click internal auto-integration button */
+  btnLike("#p-extension", /Auto-integrate/i, function(){ ACTIONS["autocrx"](); });
   btnLike("#p-extension", /Copy URL/i, function(){ ACTIONS["copy-updates"](); });
   qsa('#p-extension table.tbl button').forEach(function(b){
     var m2 = b.textContent.match(/Apply (HKLM|HKCU)/);
@@ -4695,7 +4731,7 @@ function applyCenterView(){
 /* ============================================================
    POLL + BOOT
    ============================================================ */
-var VERSION_TXT = BOOT.version || "3.3.3";
+var VERSION_TXT = BOOT.version || "3.3.4";
 async function poll(){
   try {
     var h = await api("/health");

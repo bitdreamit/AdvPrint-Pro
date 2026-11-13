@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<!-- AdvPrint Pro v3.3.4 - the toolbar popup: set the PRINTER, RELOAD
+     the hub state, Share Receive/Send switches, a NETWORK icon (LAN
+     sharing state at a glance) and the recent jobs list. The set-default
+     command is sent ONLY when the user actually changes the selection -
+     opening/reloading the popup never re-runs it. Branding-only footer
+     (100% local - no cloud); every advanced option lives in THE ONE UI
+     console. The Options button opens the options page (brand card)
+     which opens the console itself. -->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  :root { --blue:#1d4ed8; --ink:#0f172a; --mut:#64748b; --ok:#16a34a; --bad:#dc2626; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { width:340px; font:13px/1.45 "Segoe UI",system-ui,sans-serif; color:var(--ink); }
+  header { display:flex; align-items:center; gap:8px; padding:12px 14px;
+           background:linear-gradient(135deg,#1e3a8a,#1d4ed8); color:#fff; }
+  header .logo { width:22px; height:22px; border-radius:5px; background:#fff;
+                 display:flex; align-items:center; justify-content:center;
+                 font-weight:800; color:var(--blue); font-size:13px; }
+  header h1 { font-size:14px; font-weight:600; flex:1; }
+  header .ver { font-size:10px; opacity:.8; }
+  .status { display:flex; align-items:center; gap:6px; padding:8px 14px;
+            background:#f1f5f9; border-bottom:1px solid #e2e8f0; font-size:12px; }
+  .dot { width:8px; height:8px; border-radius:50%; background:var(--bad); }
+  .dot.on { background:var(--ok); }
+  .status .sp { flex:1; }
+  .status a { color:var(--blue); text-decoration:none; font-weight:600; }
+  /* v3.3.4: the NETWORK icon - at-a-glance LAN state. gray = hub
+     offline, green = hub on this PC, teal + pulse = LAN sharing is ON
+     (other PCs/phones can send jobs). Click = reload. */
+  .net { display:flex; align-items:center; justify-content:center;
+         width:20px; height:20px; border-radius:6px; color:#94a3b8;
+         cursor:pointer; flex:none; }
+  .net.on { color:var(--ok); }
+  .net.lan { color:#0d9488; }
+  .net.lan svg { animation:netpulse 2.2s ease-in-out infinite; }
+  @keyframes netpulse { 0%,100% { opacity:1; } 50% { opacity:.45; } }
+  .iconbtn { border:1px solid #dbe2ee; background:#fff; border-radius:7px;
+             padding:3px 7px; font:600 11px "Segoe UI",system-ui,sans-serif;
+             color:var(--ink); cursor:pointer; display:flex;
+             align-items:center; gap:4px; flex:none; }
+  .iconbtn:hover { border-color:var(--blue); color:var(--blue); }
+  .iconbtn svg { display:block; }
+  .iconbtn.spin svg { animation:spin .7s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  /* v3.3.4: the printer selector - shows the hub's printers, ON CHANGE
+     ONLY makes the picked one the OS default (one command, guarded) */
+  .printsel { padding:0 14px 2px; display:flex; flex-direction:column; gap:3px; }
+  .printsel select { width:100%; border:1px solid #dbe2ee; border-radius:8px;
+                     background:#fff; padding:8px 9px; font:600 12px
+                     "Segoe UI",system-ui,sans-serif; color:var(--ink);
+                     cursor:pointer; }
+  .printsel select:focus { outline:none; border-color:var(--blue); }
+  .printsel select:disabled { opacity:.6; cursor:default; }
+  .printsel small { color:var(--mut); font-size:10px; padding-left:2px; }
+  .printsel small.ok { color:var(--ok); }
+  .printsel small.bad { color:var(--bad); }
+  .actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; padding:12px 14px 4px; }
+  button { border:1px solid #dbe2ee; background:#fff; border-radius:8px;
+           padding:9px 8px; font:600 12px "Segoe UI",system-ui,sans-serif;
+           color:var(--ink); cursor:pointer; }
+  button:hover { border-color:var(--blue); color:var(--blue); }
+  button.primary { background:var(--blue); border-color:var(--blue); color:#fff; }
+  button.primary:hover { background:#1e40af; }
+  button:disabled { opacity:.5; cursor:default; }
+  .queuebar { display:flex; align-items:center; gap:8px; padding:8px 14px;
+              color:var(--mut); font-size:11px; }
+  .queuebar b { color:var(--ink); }
+  .queuebar button { padding:4px 10px; font-size:11px; }
+  h2 { font:700 10px "Segoe UI",system-ui,sans-serif; letter-spacing:.08em;
+       text-transform:uppercase; color:var(--mut); padding:8px 14px 4px; }
+  #jobs { padding:0 14px 12px; }
+  .job { display:flex; gap:8px; align-items:baseline; padding:6px 8px;
+         border:1px solid #eef2f7; border-radius:7px; margin-bottom:5px; }
+  .job .t { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+            font-weight:600; font-size:12px; }
+  .job .m { color:var(--mut); font-size:10px; white-space:nowrap; }
+  .st { font-size:10px; font-weight:700; padding:1px 7px; border-radius:9px; }
+  /* v2.2.1: every status has its OWN color - "queued" is gray (waiting),
+     only "printed" is green. Before, queued was green too and stuck
+     queues looked healthy. */
+  .st.printed { background:#dcfce7; color:#166534; }
+  .st.queued { background:#e2e8f0; color:#475569; }
+  .st.printing { background:#dbeafe; color:#1e40af; }
+  .st.held { background:#ffedd5; color:#9a3412; }
+  .st.scheduled { background:#ede9fe; color:#5b21b6; }
+  .st.forwarded { background:#dbeafe; color:#1e40af; }
+  .st.saved { background:#fef9c3; color:#854d0e; }
+  .st.failed, .st.dead, .st.canceled { background:#fee2e2; color:#991b1b; }
+  .job { flex-wrap:wrap; }
+  .job .e { flex-basis:100%; color:#b91c1c; font-size:10px; line-height:1.3;
+            white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .pbtn { flex:none; border:1px solid #dbe2ee; background:#fff; border-radius:6px;
+          padding:1px 7px; font:700 10px "Segoe UI",system-ui,sans-serif;
+          color:var(--ink); cursor:pointer; }
+  .pbtn:hover { border-color:var(--blue); color:var(--blue); }
+  .pbtn:disabled { opacity:.4; cursor:default; }
+  #qstate.paused { color:var(--bad); }
+  .empty { color:var(--mut); font-size:12px; padding:10px; text-align:center; }
+  footer { padding:8px 14px; border-top:1px solid #eef2f7; display:flex;
+           justify-content:space-between; font-size:11px; color:var(--mut); }
+  footer a { color:var(--blue); text-decoration:none; font-weight:600; }
+  #msg { margin:0 14px 8px; font-size:11px; border-radius:6px; padding:6px 9px; display:none; }
+  #msg.err { display:block; background:#fee2e2; color:#991b1b; }
+  #msg.info { display:block; background:#dbeafe; color:#1e40af; }
+  .switches { padding:8px 14px 2px; display:flex; flex-direction:column; gap:6px; }
+  .banner { display:none; align-items:center; gap:8px; margin:8px 14px 0;
+            padding:8px 10px; border-radius:8px; font-size:11.5px; line-height:1.35; }
+  .banner.show { display:flex; }
+  .banner.offline { background:#fee2e2; color:#991b1b; border:1px solid #fecaca; }
+  .banner.warn { background:#fef3c7; color:#92400e; border:1px solid #fcd34d; }
+  .banner button { padding:4px 9px; font-size:11px; flex:none; }
+  .banner .btxt { flex:1; }
+  .sw { display:flex; align-items:center; gap:10px; padding:7px 9px;
+        border:1px solid #eef2f7; border-radius:8px; cursor:pointer;
+        user-select:none; }
+  .sw .swtext { flex:1; line-height:1.25; }
+  .sw b { font-size:12px; display:block; }
+  .sw small { color:var(--mut); font-size:10px; }
+  .sw input { display:none; }
+  .sw .slider { width:34px; height:19px; border-radius:10px; background:#cbd5e1;
+                position:relative; transition:background .15s; flex:none; }
+  .sw .slider::after { content:""; position:absolute; top:2px; left:2px;
+                       width:15px; height:15px; border-radius:50%; background:#fff;
+                       transition:left .15s; box-shadow:0 1px 2px rgb(0 0 0 / .25); }
+  .sw input:checked + .slider { background:var(--ok); }
+  .sw input:checked + .slider::after { left:17px; }
+  .sw.off .slider { background:#94a3b8; }
+  body.off .actions button.primary { background:#94a3b8; border-color:#94a3b8; }
+</style>
+</head>
+<body>
+  <header>
+    <div class="logo"><svg viewBox="0 0 64 64" width="20" height="20" aria-label="AdvPrint Pro logo"><defs><linearGradient id="lgP" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2563eb"/><stop offset="1" stop-color="#1e3a8a"/></linearGradient></defs><rect x="1" y="1" width="62" height="62" rx="14" fill="url(#lgP)"/><path d="M14 52 L32 12 L50 52" fill="none" stroke="#fff" stroke-width="8.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M22 39.5 H42" stroke="#fff" stroke-width="8.5" stroke-linecap="round"/><rect x="24.5" y="43.5" width="15" height="13" rx="2" fill="#fff"/><rect x="27.5" y="47" width="9" height="1.9" rx="0.9" fill="#1d4ed8"/><rect x="27.5" y="51" width="6.5" height="1.9" rx="0.9" fill="#1d4ed8"/></svg></div>
+    <h1>AdvPrint Pro</h1>
+    <span class="ver" id="ver">v3.3.4</span>
+    <span class="net" id="netIcon" title="Hub state"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14.5 14.5 0 0 1 0 18a14.5 14.5 0 0 1 0-18z"/></svg></span>
+  </header>
+
+  <div class="status">
+    <span class="dot" id="dot"></span><span id="stat">Checking hub...</span>
+    <span class="sp"></span>
+    <button class="iconbtn" id="bReload" title="Reload - re-read hub state, printers and jobs"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M20 11a8 8 0 1 0-2.3 6.3"/><path d="M20 4v7h-7"/></svg><span data-i18n="popReloadBtn">Reload</span></button>
+    <a href="#" id="connect">Connect</a>
+  </div>
+
+  <div class="banner offline" id="offlineBanner">
+    <span class="btxt" id="offlineText">Hub offline</span>
+    <button id="bRetry">Retry now</button>
+  </div>
+  <div class="banner warn" id="tokenBanner">
+    <span class="btxt" id="tokenText">Using the DEFAULT token</span>
+    <button id="bFixToken" title="v2.6: ask the running hub (this PC) for its current token and store it - no typing, no Options visit">Fix token</button>
+    <button id="bTokenHelp">Change</button>
+  </div>
+  <div class="banner warn" id="heldBanner">
+    <span class="btxt" id="heldText"></span>
+    <button id="bPrintHeld" title="Send every waiting job to the printer right now (bypasses the printer-status check)">Print now</button>
+  </div>
+
+  <div class="switches">
+    <h2 data-i18n="popPrinterSection" style="padding:0 0 2px">Printer</h2>
+    <div class="printsel">
+      <select id="printerSel" title="Pick the printer to make it the OS default - the command runs ONLY when you change the choice, never on popup open/reload"></select>
+      <small id="printerSub">- uses the hub default</small>
+    </div>
+    <h2 data-i18n="popPowerSection" style="padding:6px 0 2px">Power</h2>
+    <label class="sw" id="swEnabledRow" title="Master switch: turns ALL AdvPrint printing, auto-print, the print() hook and the page API on or off">
+      <span class="swtext"><b>AdvPrint enabled</b><small id="swEnabledSub">printing is on</small></span>
+      <input type="checkbox" id="swEnabled">
+      <span class="slider"></span>
+    </label>
+    <label class="sw" id="swQueueRow" title="ON: jobs wait in the hub queue in order (pause works). OFF: instant print - every job goes straight to the printer; if no printer is active the job is auto-queued and prints when it is back">
+      <span class="swtext"><b>Queue mode</b><small id="swQueueSub">jobs wait in order + pause works</small></span>
+      <input type="checkbox" id="swQueue">
+      <span class="slider"></span>
+    </label>
+    <!-- v3.0.6: the auto-print rules switch moved OUT of the popup into
+         the Options page - it lives on the Rule Manager bar (Rules tab)
+         and in General > Power switches, one setting: rulesPaused. -->
+    <h2 data-i18n="popLanSection" style="padding:6px 0 2px">LAN sharing</h2>
+    <label class="sw" id="swShareRxRow" title="Share RECEIVE Mode (v2.7.0): ON = this PC's hub accepts print jobs from other PCs on the LAN (hub share_lan). OFF = this hub prints only for this PC. Takes effect after a hub restart">
+      <span class="swtext"><b data-i18n="popShareRx">Share Receive Mode</b><small id="swShareRxSub">this PC accepts jobs from other PCs</small></span>
+      <input type="checkbox" id="swShareRx">
+      <span class="slider"></span>
+    </label>
+    <label class="sw" id="swShareTxRow" title="Share Send Mode (v2.8): ON = print jobs go to the LAN PC hub (Options > LAN PC: URL + token). OFF = print jobs stay on this PC's own hub. The active target is shown under the switch">
+      <span class="swtext"><b data-i18n="popShareTx">Share Send Mode</b><small id="swShareTxSub">printing on this PC</small></span>
+      <input type="checkbox" id="swShareTx">
+      <span class="slider"></span>
+    </label>
+  </div>
+
+  <div id="msg"></div>
+
+  <div class="actions">
+    <button class="primary" id="bPage">Print this page</button>
+    <button id="bFile" title="Save the page as a PDF file - no paper, no dialog">Save as PDF</button>
+    <button id="bShot">Print screenshot</button>
+    <button id="bTest">Test page</button>
+    <button id="bOpts">Options</button>
+  </div>
+
+  <div class="queuebar">
+    Queue: <b id="qstate">-</b> <span id="qpend"></span>
+    <span class="sp" style="flex:1"></span>
+    <button id="bPause">Pause</button>
+  </div>
+
+  <h2 data-i18n="popRecentJobs">Recent jobs</h2>
+  <div id="jobs"><div class="empty">No jobs yet.</div></div>
+
+  <footer>
+    <span>100% local &middot; no cloud. By Bit Dream IT - Innovative Healthcare Solutions.</span>
+  </footer>
+
+  
+<script>
+window.__calls = [];
+window.__printers = { ok: true, printers: [
+  { name: "HP Laser 103 107 108", status: "ready", is_default: true },
+  { name: "Epson L3250", status: "ready", is_default: false }],
+  default_printer: "HP Laser 103 107 108" };
+window.__setStatus = { ok: true, version: "3.3.4", os: "Windows",
+  pending: 0, paused: false, lan_used: false, self_share_lan: true,
+  self_ok: true, lan_bind_addrs: ["192.168.1.10:9235"], default_token_warning: false };
+window.__setDefaultResult = { ok: true, default: "Epson L3250",
+  printer: "Epson L3250", detail: "Windows default printer is now" };
+window.chrome = {
+  runtime: {
+    getManifest: () => ({ version: "3.3.4" }),
+    openOptionsPage: () => {},
+    sendMessage: (msg, cb) => {
+      window.__calls.push(JSON.parse(JSON.stringify(msg)));
+      let r;
+      switch (msg.type) {
+        case "getCfg": r = { ok: true, cfg: { enabled: true,
+          queueMode: true, lanSend: false } }; break;
+        case "hubStatus": r = window.__setStatus; break;
+        case "hubPrinters": r = window.__printers; break;
+        case "hubSetDefault": r = window.__setDefaultResult; break;
+        case "hubJobs": r = { ok: true, jobs: [] }; break;
+        case "retryInfo": r = { ok: true, count: 0 }; break;
+        case "saveCfg": r = { ok: true }; break;
+        case "hubConfigSet": r = { ok: true }; break;
+        default: r = { ok: true };
+      }
+      setTimeout(() => cb(r), 5);
+    }
+  },
+  storage: {
+    local: {
+      get: async () => ({ authProblem: null }),
+      remove: async () => {},
+      set: async () => {}
+    }
+  },
+  i18n: { getUILanguage: () => "en" }
+};
+window.onerror = (m) => { window.__jserr = (window.__jserr||[]).concat([String(m)]); return false; };
+</script>
+<script src="i18n.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

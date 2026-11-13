@@ -96,34 +96,37 @@ if _HUB_DIR not in sys.path:
     sys.path.insert(0, _HUB_DIR)
 
 
-VERSION = "3.3.3"
-VERSION_NAME = ("v3.3.3 (SHARE SEND POPUP-FIX + PEERS-ONLINE RELEASE. "
-    "BUG 1 - the false \"Connect the LAN PC first\" popup when flipping "
-    "Share Send Mode ON: the console blocked the flip while lanPeerState "
-    "was still null - which is EVERY page load until the first /peer/"
-    "status answer lands behind seven sequential poll calls (printers "
-    "alone can take seconds on Windows WMI) - even though the pairing "
-    "was persisted and the server would have accepted it. The client no "
-    "longer blocks: the POST goes out, the server (the persisted truth) "
-    "decides, and an in-flight flip is guarded against the 3 s poll. BUG "
-    "2 - the Other PCs (peers) table showed EVERY peer OFFLINE forever "
-    "and its Shift queue buttons stayed disabled: /peers answers with "
-    "`alive` while the table read `p.up` (undefined). The hub now sends "
-    "`up` AND `alive`, plus the entry's name/label (rows said \"PC\" for "
-    "every peer), and the table refreshes on every poll instead of only "
-    "at page load. BUG 3 - the SAME PC listed twice in the peers table: "
-    "peer_hubs entries are now deduped by normalized URL on every write "
-    "path (pair, invite-connect, /config), /peers dedupes defensively, "
-    "and an invite link for an ALREADY-PAIRED PC updates the lan-pc "
-    "entry in place instead of silently unpairing Share Send Mode. BUG 4 "
-    "- Shift queue was doubly broken: the console sent {peer: url} while "
-    "the endpoint read `target`, and \"Shift all waiting\" read the SELF "
-    "PC token field as the peer URL (the LAN PC card had shifted the "
-    "qsa() indexes); the input kept its static demo value http://10.26."
-    "94.77:9235 forever. The input now has id=shiftTarget, is prefilled "
-    "with the LAN PC's URL, both sides agree on `target` (peer accepted "
-    "as alias) and the demo value is gone. On top: Share Send switch "
-    "mirrors cfgCache.share_send at boot (no OFF-rendered-while-ON).")
+VERSION = "3.3.4"
+VERSION_NAME = ("v3.3.4 (MULTI-PRINTER IPP ADD + POPUP PRINTER/RELOAD/"
+    "NETWORK RELEASE. BUG 1 - \"only default or only one add possible\": "
+    "the mDNS announcer stamped the SAME UUID TXT record on EVERY _ipp."
+    "_tcp service - the central queue AND all per-printer queues - so "
+    "Windows treated the second per-printer queue as a re-announcement "
+    "of the first and refused the add. Every advertised service now "
+    "carries its OWN stable printer-uuid (hub uuid for the central "
+    "queue, per-queue uuid token|hostname|slug for each printer), on "
+    "BOTH the proactive announce packet AND direct unicast TXT answers. "
+    "BUG 2 - \"popup reload / set printer: cmd continues to run "
+    "multiple\": the popup printer selector sends set-default ONLY on a "
+    "real user change (programmatic selection fires no change event, "
+    "the applied-default guard blocks repeats, one call in flight, "
+    "failures revert; refresh() has an in-flight guard), and POST "
+    "/printers/set-default is IDEMPOTENT - an already-default request "
+    "answers unchanged:true with ZERO commands and a successful set "
+    "caches the verified result. FEATURE - the popup is a control "
+    "surface now: PRINTER selector (hub printers + status, one pick "
+    "makes it the OS default via hubSetDefault), RELOAD button, "
+    "NETWORK icon in the header (gray offline / green this-PC / teal "
+    "pulse = Share Receive ON listening on the LAN, tooltip names the "
+    "address), Share Receive sub-label shows the LAN listen address. "
+    "FIXED - allow_extention_advprint_pro.bat deleted "
+    "ExtensionInstallForcelist on every run and never wrote it back; "
+    "the rewrite writes all three policies per browser with "
+    "duplicate-skip, has a real Apply HKLM (self-elevating) / Apply "
+    "HKCU / BOTH / Remove menu, accepts scripted args and takes the "
+    "hub address for LAN deployments. On top of v3.3.3: everything "
+    "from the SHARE SEND POPUP-FIX + PEERS-ONLINE release stays "
+    "unchanged.")
 FULL_BRAND = ("AdvPrint Pro (Advanced Printer) by "
               "Bit Dream IT - Innovative Healthcare Solutions")
 BRANDING = ("AdvPrint Pro (Advanced Printer) - Version %s - by "
@@ -4645,6 +4648,213 @@ def ext_policy_remove():
             "no AdvPrint policy entry found - nothing to remove"}
 
 
+# ------------------------------------------------------------
+# v3.3.4 AUTOCRX - ONE-CLICK browser auto-integration, INTERNAL.
+# prebuilt/allow_extention_advprint_pro.bat did this by hand: write
+# ExtensionInstallForcelist + ExtensionInstallAllowlist +
+# ExtensionInstallSources for every Chromium browser under HKLM
+# (machine-wide) AND HKCU (this user). The hub now runs the SAME
+# policy pass ITSELF - it generates a PowerShell script and starts it
+# ONCE with administrator approval (Start-Process -Verb RunAs -> a
+# single UAC prompt). No extra .bat needed any more. Entry points:
+#   - THE ONE UI console: Extension tab > "Auto-integrate (admin)"
+#   - POST /extension/policy/activate     body {"host": "ip:port"} opt.
+#   - POST /tool action "autocrx"         (loopback only)
+#   - CLI: python advprint.py activate-extension [host:port]
+# The .bat stays in prebuilt/ as an OFFLINE manual fallback only.
+# ------------------------------------------------------------
+EXT_ACTIVATE_BROWSERS = EXT_POLICY_BROWSERS + [
+    ("Opera Software\\Opera", "Opera"),
+]
+
+
+def _ext_activate_updates_url(host=None):
+    """The updates.xml URL stamped into the Forcelist. host overrides
+    the address ('192.168.1.10:9235') for LAN-wide activations where
+    OTHER PCs' browsers must reach this hub."""
+    if host:
+        h = str(host).strip().rstrip("/")
+        h = re.sub(r"^https?://", "", h, flags=re.I)
+        h = h.split("/")[0]
+        if ":" not in h:
+            h = "%s:%d" % (h, int(CFG.get("port", 9235)))
+        return "http://%s/extension/updates.xml" % h
+    return ext_policy_url()
+
+
+def _ext_activate_ps_script(updates_url, result_path):
+    """The .bat's apply pass as a PowerShell script (run elevated).
+    Writes Forcelist + Allowlist + Sources for every Chromium browser
+    in HKLM AND HKCU, skips entries that already exist, never deletes
+    anything, and leaves a JSON result file for the hub to read."""
+    ext_id = (crx_package() or {}).get("ext_id", EXT_CRX_ID)
+    source_url = re.sub(r"/extension/updates\.xml$", "/*", updates_url)
+    res_path = str(result_path).replace("'", "''")
+    rows = ",\n".join("  @('%s','%s')" % (frag, name)
+                      for frag, name in EXT_ACTIVATE_BROWSERS)
+    return """
+# AdvPrint Pro - auto-integrate browser force-install policy (autocrx)
+# Generated by the hub v%(version)s - one elevated run writes HKLM+HKCU.
+$ErrorActionPreference = 'Continue'
+$ProgressPreference    = 'SilentlyContinue'
+$extId      = '%(ext_id)s'
+$updatesUrl = '%(updates_url)s'
+$sourceUrl  = '%(source_url)s'
+$out    = [ordered]@{ ok = $true; hives = [ordered]@{ }; errors = [System.Collections.Generic.List[string]]::new() }
+
+function Add-AdvPolicy {
+  param([string]$Root, [string]$Frag, [string]$Sub,
+        [string]$Data, [string]$Match)
+  try {
+    $key = Join-Path $Root ('SOFTWARE\\Policies\\' + $Frag + '\\' + $Sub)
+    if (-not (Test-Path $key)) { New-Item -Path $key -Force | Out-Null }
+    $item = Get-Item -LiteralPath $key -ErrorAction SilentlyContinue
+    if ($item) {
+      foreach ($n0 in $item.GetValueNames()) {
+        $v = [string]$item.GetValue($n0)
+        if ($v -eq $Data -or $v.StartsWith($Match,
+            [System.StringComparison]::OrdinalIgnoreCase)) {
+          return $false                       # already there - keep it
+        }
+      }
+    }
+    $n = 1
+    if ($item) {
+      while ($item.GetValueNames() -contains [string]$n) { $n++ }
+    }
+    New-ItemProperty -LiteralPath $key -Name ([string]$n) `
+      -PropertyType String -Value $Data -Force | Out-Null
+    return $true
+  } catch {
+    $out.errors.Add(('' + $Root + '\\' + $Frag + '\\' + $Sub + ': ' +
+                     $_.Exception.Message)) | Out-Null
+    return $false
+  }
+}
+
+$browsers = @(
+%(browsers)s
+)
+
+foreach ($hive in @('HKLM', 'HKCU')) {
+  $written = 0
+  $detail  = [ordered]@{ }
+  foreach ($b in $browsers) {
+    $frag = $b[0]; $name = $b[1]
+    $r1 = Add-AdvPolicy -Root ($hive + ':') -Frag $frag `
+            -Sub 'ExtensionInstallForcelist' `
+            -Data ($extId + ';' + $updatesUrl) -Match ($extId + ';')
+    $r2 = Add-AdvPolicy -Root ($hive + ':') -Frag $frag `
+            -Sub 'ExtensionInstallAllowlist' `
+            -Data $extId -Match $extId
+    $r3 = Add-AdvPolicy -Root ($hive + ':') -Frag $frag `
+            -Sub 'ExtensionInstallSources' `
+            -Data $sourceUrl -Match $sourceUrl
+    $cnt = @($r1, $r2, $r3 | Where-Object { $_ }).Count
+    $written += $cnt
+    $detail[$name] = ($(if ($cnt -le 0) { 'kept (already set)' }
+                        else { 'written ({0} of 3 entries)' -f $cnt }))
+  }
+  $out.hives[$hive] = [ordered]@{ written = $written; browsers = $detail }
+}
+
+try {
+  $out | ConvertTo-Json -Depth 6 |
+    Set-Content -LiteralPath '%(res_path)s' -Encoding UTF8
+} catch {
+  $out.ok = $false
+  $out.errors.Add('result file: ' + $_.Exception.Message) | Out-Null
+  try {
+    $out | ConvertTo-Json -Depth 6 |
+      Set-Content -LiteralPath '%(res_path)s' -Encoding UTF8
+  } catch { }
+}
+Write-Host ''
+Write-Host 'AdvPrint Pro browser integration pass finished.'
+Write-Host ('  Forcelist : ' + $extId + ';' + $updatesUrl)
+Write-Host '  Restart Chrome / Edge / Brave / Vivaldi / Chromium / Opera once.'
+""" % {
+        "version": VERSION,
+        "ext_id": ext_id,
+        "updates_url": updates_url,
+        "source_url": source_url,
+        "res_path": res_path,
+        "browsers": rows,
+    }
+
+
+def ext_policy_activate(host=None):
+    """AUTOCRX: the internal, self-elevating version of
+    allow_extention_advprint_pro.bat. Generates the PowerShell pass
+    (Forcelist + Allowlist + Sources, every Chromium browser, HKLM +
+    HKCU) and starts it ONCE via Start-Process -Verb RunAs - the user
+    approves a single UAC prompt. Returns a dict with a per-hive
+    report; honest {ok:False} when elevation is declined."""
+    if not IS_WIN:
+        return {"ok": False, "elevated": False, "error": "not Windows",
+                "note": ("the browser force-install policy is a Windows "
+                         "registry feature. On Linux the .deb installs "
+                         "/etc/chromium/policies/managed/advprint-pro.json"
+                         " - see docs/ENTERPRISE.md")}
+    ensure_dirs()
+    updates_url = _ext_activate_updates_url(host)
+    ps_path = os.path.join(CFG["data_dir"],
+                           "advprint-activate-extension.ps1")
+    res_path = os.path.join(CFG["data_dir"],
+                            "advprint-activate-result.json")
+    with open(ps_path, "w", encoding="utf-8-sig", newline="\r\n") as f:
+        f.write(_ext_activate_ps_script(updates_url, res_path))
+    try:
+        if os.path.exists(res_path):
+            os.unlink(res_path)
+    except OSError:
+        pass
+    esc = ps_path.replace("'", "''")
+    launcher = ("$p = Start-Process powershell.exe -Verb RunAs -Wait "
+                "-PassThru -ArgumentList @('-NoProfile',"
+                "'-ExecutionPolicy','Bypass','-File','" + esc + "'); "
+                "exit $p.ExitCode")
+    log("[AUTOCRX] auto-integrate: requesting administrator approval "
+        "(UAC) - the elevated pass writes the CRX force-install policy "
+        "for every Chromium browser (HKLM + HKCU)")
+    try:
+        subprocess.run(
+            ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
+             "-Command", launcher],
+            capture_output=True, text=True, timeout=300,
+            creationflags=HIDE)
+    except Exception as e:                                    # noqa: BLE001
+        return {"ok": False, "elevated": True, "updates_url": updates_url,
+                "error": "elevation failed or timed out: %s" % e,
+                "message": ("the UAC prompt was not approved (or timed "
+                            "out) - nothing was written")}
+    res = None
+    try:
+        with open(res_path, encoding="utf-8-sig") as f:
+            res = json.loads(f.read())
+    except Exception:                                         # noqa: BLE001
+        res = None
+    if not isinstance(res, dict):
+        return {"ok": False, "elevated": True, "updates_url": updates_url,
+                "error": "the elevated run left no result file",
+                "message": ("the UAC prompt was probably canceled - "
+                            "approve it and try again; the generated "
+                            "script is at " + ps_path)}
+    log("[AUTOCRX] result: %s" % json.dumps(res)[:300])
+    ok = bool(res.get("ok"))
+    return {"ok": ok, "elevated": True, "updates_url": updates_url,
+            "result": res,
+            "error": None if ok else "the elevated policy pass reported "
+                                     "errors - see result.errors",
+            "message": ("browser integration written (HKLM + HKCU) - "
+                        "restart Chrome/Edge/Brave/Vivaldi/Chromium/"
+                        "Opera once; the AdvPrint Pro CRX installs by "
+                        "itself and auto-updates from the hub"
+                        if ok else
+                        "the policy pass finished with errors - see "
+                        "result.errors")}
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "AdvPrintPro/" + VERSION
     protocol_version = "HTTP/1.1"
@@ -6852,6 +7062,20 @@ class Handler(BaseHTTPRequestHandler):
                 res["message"] = ("firewall rule requested - approve the "
                                   "UAC prompt (TCP %d + %d)"
                                   % (CFG["port"], CFG["raw_printer_port"]))
+            elif action in ("autocrx", "activate-extension",
+                            "policy-activate"):
+                # v3.3.4: INTERNAL auto-integration - the hub runs the
+                # allow_extention_advprint_pro.bat policy pass itself
+                # (Forcelist + Allowlist + Sources for every Chromium
+                # browser, HKLM + HKCU) via one elevated PowerShell run.
+                # Synchronous: the console shows the real per-browser
+                # report once the UAC prompt is answered.
+                host = str(body.get("host") or "").strip() or None
+                r = _safe(lambda: ext_policy_activate(host=host),
+                          {"ok": False,
+                           "error": "autocrx crashed"})
+                res.update(r)
+                res["message"] = r.get("message") or ""
             elif action == "restart":
                 db_audit("hub.restart", actor="console", site=site, ip=ip,
                          details="tool [14] restart from the ONE UI")
@@ -6864,7 +7088,8 @@ class Handler(BaseHTTPRequestHandler):
                     "unknown tool action '%s' (use start/stop/status/"
                     "testprint/service-install/service-remove/autorun-"
                     "toggle/check-update/recent-jobs/uninstall/livetest/"
-                    "open-dashboard/diagnose/fw-allow/restart)" % action})
+                    "open-dashboard/diagnose/fw-allow/autocrx/restart)"
+                    % action})
             return self._send(200, res)
 
         if route == "/restart":
@@ -7133,6 +7358,22 @@ class Handler(BaseHTTPRequestHandler):
             if not nm:
                 return self._send(400, {"ok": False,
                     "error": "send {\"printer\": \"<printer name>\"}"})
+            # v3.3.4 BUG 2 - IDEMPOTENT: the endpoint is called from the
+            # console AND (new in v3.3.4) from the extension popup, which
+            # reloads every time it opens. Before this guard, every such
+            # call re-spawned the OS setter (Windows PowerShell
+            # SetDefaultPrinter / lpoptions -d) even when the requested
+            # printer was ALREADY the default - the "cmd keeps running
+            # multiple times" report. A cached read (10 s) decides first:
+            # same default -> answer immediately, ZERO commands spawned.
+            cur = default_printer_cached(max_age=10.0)
+            if cur and str(cur).strip().lower() == nm.lower():
+                return self._send(200, {"ok": True, "default": cur,
+                                        "printer": nm, "unchanged": True,
+                                        "detail": ("'%s' is already the OS"
+                                                   " default printer -"
+                                                   " nothing to change"
+                                                   % cur)})
             ok, got, detail = os_set_default_printer(nm)
             db_audit("printers.set_default", ip=ip, site=site,
                      details="%s -> %s (%s)" % (nm, got,
@@ -7144,7 +7385,16 @@ class Handler(BaseHTTPRequestHandler):
                     write_config_file(disk)
                 except Exception as e:
                     log("[SETDEF] config sync skipped: %s" % e)
-                _DP_CACHE["t"] = 0.0        # next read re-scans the OS
+                # v3.3.4 BUG 2: cache the VERIFIED result NOW as FRESH -
+                # the next set-default call (even milliseconds later)
+                # short-circuits on it instead of re-running the setter.
+                # (t was zeroed before, but the background re-scan could
+                # complete first and clobber the verified value - e.g. a
+                # WMI hiccup returning None - which re-triggered the cmd
+                # on slow Windows boxes: the exact "cmd runs multiple"
+                # report. The value here IS the OS-verified truth.)
+                _DP_CACHE["v"] = got
+                _DP_CACHE["t"] = time.time()
                 try:
                     build_health_snapshot()
                 except Exception:
@@ -7920,6 +8170,15 @@ class Handler(BaseHTTPRequestHandler):
             db_audit("extension.policy_remove", actor="dashboard",
                      ip=self._client_ip())
             return self._send(200, ext_policy_remove())
+
+        # v3.3.4 AUTOCRX: internal auto-integration - one UAC prompt,
+        # the hub runs the .bat's policy pass itself (HKLM + HKCU).
+        if route == "/extension/policy/activate":
+            db_audit("extension.policy_activate", actor="dashboard",
+                     ip=self._client_ip(),
+                     details="autocrx auto-integrate requested")
+            host = str((body or {}).get("host") or "").strip() or None
+            return self._send(200, ext_policy_activate(host=host))
 
         return self._send(404, {"ok": False, "error": "unknown endpoint"})
 
@@ -9899,6 +10158,13 @@ https://reports.example.com/*</textarea>
                 <button class="btn small">Copy URL</button>
                 <span style="font-size:10.5px;color:var(--muted)">served by this hub — CRX auto-updates even without the Web Store</span>
               </div>
+              <div class="frow" style="margin:10px 0 0;padding-top:10px;border-top:1px dashed var(--blue-line)">
+                <button class="btn small" style="background:var(--blue);border-color:var(--blue);color:#fff;font-weight:700">Auto-integrate (admin)</button>
+                <span style="font-size:10.5px;color:var(--muted);line-height:1.5">v3.3.4 AUTOCRX — <b>no extra .bat needed</b>: one click runs the policy pass internally
+                  with an elevated PowerShell (a single UAC prompt) and writes Forcelist + Allowlist + Sources for <b>every</b> Chromium
+                  browser, HKLM (all users of this PC) + HKCU (current user). CLI: <span class="mono">python advprint.py activate-extension</span>.
+                  The .bat in prebuilt/ stays only as an offline manual fallback.</span>
+              </div>
             </div>
             <table class="tbl" style="font-size:10.5px">
               <tr><th style="min-width:120px">Browser (Chromium)</th><th>Policy registry path — same value, one row per browser</th><th style="width:120px">Status</th><th style="width:150px"></th></tr>
@@ -9941,7 +10207,8 @@ https://reports.example.com/*</textarea>
             </table>
             <div class="card-b" style="padding-top:10px">
               <div class="note" style="margin-bottom:10px"><b>One CRX, every Chromium browser.</b> The same <span class="mono">AdvPrint-Pro.crx</span> installs into Chrome, Edge, Brave, Vivaldi, Chromium and Opera —
-                only the policy key path differs (table above). <b>Apply HKLM</b> = machine-wide for every user of this PC (needs admin);
+                only the policy key path differs (table above). The one-click <b>Auto-integrate (admin)</b> button above writes every row for you (HKLM + HKCU, one UAC prompt —
+                no external .bat). <b>Apply HKLM</b> = machine-wide for every user of this PC (needs admin);
                 <b>Apply HKCU</b> = only the current user. The browser force-installs the CRX silently on next start and keeps it
                 auto-updated from <span class="mono">/updates.xml</span> served by this hub — <b>no drag &amp; drop, no Web Store, no developer mode</b>.</div>
               <div class="note orange" style="margin-bottom:0"><b>Not Chromium browsers:</b> Firefox uses the same WebExtension codebase packaged as <span class="mono">.xpi</span>
@@ -11823,7 +12090,7 @@ function renderExt(audit){
     rows.slice(0, 6).forEach(function(r2){
       var tr = tmpl.cloneNode(true), td = tr.querySelectorAll("td");
       td[0].innerHTML = "<b>" + esc(r2.who) + "</b>";
-      td[1].textContent = "v" + (BOOT.version || "3.3.3");
+      td[1].textContent = "v" + (BOOT.version || "3.3.4");
       td[2].textContent = r2.at ? r2.at.slice(11, 19) : "\u2014";
       td[3].innerHTML = '<span class="chip ok"><span class="d"></span>PAIRED</span>';
       tbl.appendChild(tr);
@@ -11845,7 +12112,7 @@ function renderExt(audit){
       m2.textContent = BASE + "/extension/updates.xml";
   });
   var crxChip = document.querySelector("#p-extension .frow .chip.ok");
-  if (crxChip) crxChip.innerHTML = '<span class="d"></span>CRX v' + (BOOT.version || "3.3.3") + " READY";
+  if (crxChip) crxChip.innerHTML = '<span class="d"></span>CRX v' + (BOOT.version || "3.3.4") + " READY";
   /* v3.2.8 STALE-CRX GUARD: ask the hub which package it really
    * serves (/extension/info is open, no token). Older than the hub
    * itself -> Chrome never updates -> browsers keep the old bugs.
@@ -12051,7 +12318,7 @@ async function renderUpdate(res){
    full-page /docs stays available via the "Full guide page" button.
    ============================================================ */
 function docsHtml(){
-  var v = esc(BOOT.version || "3.3.3");
+  var v = esc(BOOT.version || "3.3.4");
   var ip = esc(BOOT.lan_ip || location.hostname || "127.0.0.1");
   var port = esc(String(BOOT.port || location.port || "9235"));
   var base = "http://" + ip + ":" + port;
@@ -12197,6 +12464,32 @@ var ACTIONS = {
                "  note:  " + (r.note || "")]);
       toast("LAN test OK \u2014 hub answered", "ok");
     } catch (e) { toolOut(["LAN self-test FAILED", "  " + e.message]); toast("LAN test failed: " + e.message, "err"); } },
+  "autocrx": async function(){
+    /* v3.3.4 AUTOCRX - internal browser auto-integration: the hub
+       generates the policy pass and runs it ONCE elevated (one UAC
+       prompt). Replaces the external allow_extention_advprint_pro.bat. */
+    toast("Auto-integrate running \u2014 approve the UAC prompt (a few seconds)", "warn");
+    try {
+      var r = await api("/extension/policy/activate", { method: "POST", body: { } });
+      var lines = ["AUTOCRX \u2014 browser auto-integrate (HKLM + HKCU)",
+                   "  forcelist: " + (r.updates_url ? (EXT_ID + ";" + r.updates_url) : "(unknown)")];
+      var res = r.result || {};
+      var hives = res.hives || {};
+      Object.keys(hives).forEach(function(hv){
+        lines.push("  " + hv + ": " + (hives[hv].written || 0) + " policy entr(ies) written");
+        var brs = hives[hv].browsers || {};
+        Object.keys(brs).forEach(function(b){ lines.push("    " + b + " \u2014 " + brs[b]); });
+      });
+      (res.errors || []).forEach(function(e){ lines.push("  ERROR: " + e); });
+      if (r.elevated === false) lines.push("  note: " + (r.note || "Windows only"));
+      toolOut(lines);
+      toast(r.message || (r.ok ? "Browser integration written \u2014 restart the browsers once"
+                               : (r.error || "Auto-integrate failed")), r.ok ? "ok" : "err");
+      poll();
+    } catch (e) {
+      toolOut(["AUTOCRX FAILED", "  " + e.message]);
+      toast("Auto-integrate failed: " + e.message, "err");
+    } },
   "copy-hub-url": function(){
     /* v3.2.6 BUG FIX 3/4: the URL carries the token - the old copy was
        a bare http://ip:9235/ui that opened the token error page. */
@@ -12641,6 +12934,8 @@ function bindButtons(){
   btnLike("#p-extension", /Download CRX/i, function(){
     window.open(BASE + "/extension/AdvPrint-Pro.crx", "_blank"); });
   btnLike("#p-extension", /Copy value/i, function(){ ACTIONS["copy-policy"](); });
+  /* v3.3.4 AUTOCRX: the one-click internal auto-integration button */
+  btnLike("#p-extension", /Auto-integrate/i, function(){ ACTIONS["autocrx"](); });
   btnLike("#p-extension", /Copy URL/i, function(){ ACTIONS["copy-updates"](); });
   qsa('#p-extension table.tbl button').forEach(function(b){
     var m2 = b.textContent.match(/Apply (HKLM|HKCU)/);
@@ -13249,7 +13544,7 @@ function applyCenterView(){
 /* ============================================================
    POLL + BOOT
    ============================================================ */
-var VERSION_TXT = BOOT.version || "3.3.3";
+var VERSION_TXT = BOOT.version || "3.3.4";
 async function poll(){
   try {
     var h = await api("/health");
@@ -17206,16 +17501,25 @@ def _mdns_encode_name(name):
 
 
 def _mdns_txt_records(rp="ipp/print", ty="AdvPrint Pro",
-                      note="AdvPrint Pro print hub"):
+                      note="AdvPrint Pro print hub", slug=None):
     """AirPrint TXT for one service. v3.0.9: rp/ty/note are per-service
-    so every per-printer queue advertises its own ipp/print/<printer>."""
+    so every per-printer queue advertises its own ipp/print/<printer>.
+    v3.3.4 BUG 1: every service now stamps its OWN UUID - the hub uuid
+    for the central queue, the stable per-queue uuid (_ipp_printer_uuid
+    (slug)) for a per-printer service. Before, ALL services shared one
+    UUID, so Bonjour/Windows saw the second, third... per-printer
+    service as a re-announcement of the FIRST one and refused to add it
+    ("only one printer can be added, the next one errors") - the exact
+    multi-printer report this release fixes. The uuid is what Windows
+    uses to tell printers apart during Add Printer; with unique values
+    every queue adds cleanly side by side."""
     kv = [("txtvers", "1"), ("qtotal", "1"), ("rp", rp),
           ("pdl", "application/pdf,image/urf,image/jpeg"),
           ("ty", ty), ("product", "(AdvPrint Pro)"),
           ("Note", note),
           ("usb_MFG", "Bit Dream IT"),
           ("usb_MDL", "AdvPrint Pro Hub"),
-          ("UUID", _ipp_printer_uuid().replace("urn:uuid:", "")),
+          ("UUID", _ipp_printer_uuid(slug).replace("urn:uuid:", "")),
           ("URF", "V1.4"), ("Color", "T"), ("Duplex", "F"),
           ("Scan", "F"), ("Sort", "F")]
     out = b""
@@ -17227,13 +17531,17 @@ def _mdns_txt_records(rp="ipp/print", ty="AdvPrint Pro",
 
 def _mdns_services():
     """v3.0.9: every advertised service as (instance, rp, ty, note).
+    v3.3.4 BUG 1: each service also carries its queue slug (None for
+    the central queue) so its TXT record gets a UNIQUE printer-uuid -
+    without it Windows adds only the first discovered queue and
+    errors on the rest.
     Service 0 = the classic central queue (ipp/print). Then ONE service
     per LOCAL printer with rp=ipp/print/<slug>, capped at 24 printers so
     the UDP announce packet stays far below the 9000 byte mDNS cap
     (v3.3.0 BUG 3: was 12 - larger labs/shops have more printers, and
     EVERY printer that exists must be separately discoverable)."""
     out = [(_mdns_instance_name(), "ipp/print", "AdvPrint Pro",
-            "AdvPrint Pro print hub")]
+            "AdvPrint Pro print hub", None)]
     try:
         for n in list_printers_cached(max_age=30.0)[:24]:
             if not n:
@@ -17241,7 +17549,8 @@ def _mdns_services():
             out.append(("%s @ %s" % (n, _mdns_host_target().split(".")[0]),
                         "ipp/print/%s" % _ipp_queue_slug(n),
                         n[:60],
-                        "AdvPrint Pro - %s" % n[:60]))
+                        "AdvPrint Pro - %s" % n[:60],
+                        _ipp_queue_slug(n)))
     except Exception:
         pass
     return out
@@ -17268,7 +17577,7 @@ def _mdns_rrset(ip, ttl=_MDNS_TTL, ip6=None):
     srv = ((0).to_bytes(2, "big") + (0).to_bytes(2, "big") +
            port.to_bytes(2, "big") + _mdns_encode_name(target))
     records = []
-    for inst, rp, ty, note in _mdns_services():
+    for inst, rp, ty, note, slug in _mdns_services():
         fq = inst + "._ipp._tcp.local"
         records.append(
             _mdns_rr("_ipp._tcp.local", _MDNS_QTYPE_PTR, ttl,
@@ -17277,8 +17586,10 @@ def _mdns_rrset(ip, ttl=_MDNS_TTL, ip6=None):
             _mdns_rr("_universal._sub._ipp._tcp.local", _MDNS_QTYPE_PTR,
                      ttl, _mdns_encode_name(fq)))
         records.append(_mdns_rr(fq, _MDNS_QTYPE_SRV, ttl, srv, flush=True))
+        # v3.3.4 BUG 1: slug makes the TXT UUID unique per queue
         records.append(_mdns_rr(fq, _MDNS_QTYPE_TXT, ttl,
-                                _mdns_txt_records(rp=rp, ty=ty, note=note),
+                                _mdns_txt_records(rp=rp, ty=ty, note=note,
+                                                  slug=slug),
                                 flush=True))
     records.append(_mdns_rr(target, _MDNS_QTYPE_A, ttl,
                             socket.inet_aton(ip), flush=True))
@@ -17466,10 +17777,13 @@ def _mdns_answer_query(pkt, addr, ip, ip6=None):
         "_ipp._tcp.local": True,
         "_universal._sub._ipp._tcp.local": True,
     }
-    # instance name -> (rp, ty, note) for per-instance SRV/TXT answers
+    # instance name -> (rp, ty, note, slug) for per-instance SRV/TXT
+    # answers - v3.3.4 BUG 1: the slug rides along so a DIRECT TXT
+    # query (Windows asks one instance by name) is answered with that
+    # queue's OWN uuid too, not the shared hub uuid
     instances = {}
-    for inst, rp, ty, note in _mdns_services():
-        instances[inst.lower() + "._ipp._tcp.local"] = (rp, ty, note)
+    for inst, rp, ty, note, slug in _mdns_services():
+        instances[inst.lower() + "._ipp._tcp.local"] = (rp, ty, note, slug)
     answers = []
     echoed = b""
     qdcount = 0
@@ -17494,12 +17808,12 @@ def _mdns_answer_query(pkt, addr, ip, ip6=None):
             answers.append(_mdns_rr(name, _MDNS_QTYPE_SRV, _MDNS_TTL,
                                     srv, flush=True))
         elif qtype == _MDNS_QTYPE_TXT:
-            rp, ty, note = instances.get(name, ("ipp/print",
-                                                "AdvPrint Pro",
-                                                "AdvPrint Pro print hub"))
+            rp, ty, note, slug = instances.get(
+                name, ("ipp/print", "AdvPrint Pro",
+                       "AdvPrint Pro print hub", None))
             answers.append(_mdns_rr(name, _MDNS_QTYPE_TXT, _MDNS_TTL,
                                     _mdns_txt_records(rp=rp, ty=ty,
-                                                      note=note),
+                                                      note=note, slug=slug),
                                     flush=True))
         elif qtype == _MDNS_QTYPE_A and name == target:
             answers.append(_mdns_rr(target, _MDNS_QTYPE_A, _MDNS_TTL,
@@ -19084,6 +19398,10 @@ def cmd_help():
   service-remove            Remove the Windows service (UAC)
   service-status            Show Windows service state
   service <action>          Alias: service install|remove|status
+  activate-extension        AUTOCRX (v3.3.4): auto-integrate the AdvPrint
+  autocrx                   CRX into every Chromium browser (HKLM + HKCU,
+                            one UAC prompt) - replaces the external .bat.
+                            Optional: [host:port] for LAN activations
   update-check              Check GitHub for a newer release
   help                      This help
 
@@ -19163,6 +19481,14 @@ def main():
             # call "advprint.py service install" (space form) - accept it
             # (args = sys.argv[1:], so the action is args[1])
             cmd_service(args[1])
+        elif cmd in ("activate-extension", "autocrx"):
+            # v3.3.4 AUTOCRX: auto-integrate the CRX into every Chromium
+            # browser (HKLM + HKCU) - ONE UAC prompt, no external .bat.
+            # Optional arg: hub address for LAN-wide activations.
+            r = ext_policy_activate(host=args[1] if len(args) > 1 else None)
+            print(json.dumps(r, indent=2)[:2000])
+            if not r.get("ok"):
+                sys.exit(1)
         elif cmd == "update-check":
             rc = cmd_update_check()
             if rc:

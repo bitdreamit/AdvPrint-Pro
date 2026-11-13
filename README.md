@@ -13,6 +13,41 @@ Web page ──► Chrome extension ──► AdvPrint Pro hub (localhost:9235) 
 
 ---
 
+## What's new in v3.3.4 (MULTI-PRINTER IPP ADD + POPUP PRINTER/RELOAD/NETWORK RELEASE)
+
+Three real-world reports, all fixed and locked by `tests/test_v334.py`.
+Full details in `CHANGELOG.md`; developer delta in
+`docs/AdvPrint-Pro-v3.3.4-A-to-Z-DEV-GUIDE.md`.
+
+1. **Every printer of the hub can be added now - not just one.** On the
+   LAN, Windows refused the SECOND per-printer queue
+   (`http://<hub-ip>:9235/ipp/print/<printer>`) because mDNS advertised
+   ONE shared `UUID` TXT record for every queue - so each per-printer
+   service looked like a re-announcement of the first. Every advertised
+   queue now carries its OWN stable uuid (announce + direct TXT
+   answers), so all printers appear and add side by side in Windows /
+   phones.
+2. **The popup sets the printer, reloads and shows the network state
+   (new ONE design).** A PRINTER dropdown (hub printers + status;
+   picking one makes it the OS default - ONE command per real change,
+   nothing on popup open/reload, and the hub endpoint is idempotent:
+   "already default" answers with zero commands). A RELOAD arrow
+   re-reads everything. A NETWORK icon in the header shows at a glance:
+   gray = offline, green = hub on this PC, teal pulse = Sharing ON
+   listening on the LAN (tooltip names the address). The LAN switch is
+   labelled **Sharing** and carries the network/connection icon.
+3. **Browser auto-integration is INTERNAL now (AUTOCRX) - no extra
+   .bat needed.** The hub runs the policy pass itself with an elevated
+   PowerShell (one UAC prompt): Forcelist + Allowlist + Sources for
+   Chrome/Edge/Brave/Vivaldi/Chromium/Opera in HKLM + HKCU, with
+   duplicate-skip and a real per-browser report. One click in the
+   console (Extension tab > **Auto-integrate (admin)**), or CLI
+   `python advprint.py activate-extension [host:port]`. The fixed
+   `allow_extention_advprint_pro.bat` (writes all three policies, real
+   HKLM/HKCU menu) stays in prebuilt/ as an offline fallback only.
+
+---
+
 ## What's new in v3.3.0 (THE ANY-PC INVITE + DUAL-STACK LISTENER RELEASE)
 
 Three more real-world LAN reports, all fixed and locked by

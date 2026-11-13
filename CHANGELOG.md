@@ -1,6 +1,110 @@
 # Changelog - AdvPrint Pro (Advanced Printer)
 by Bit Dream IT - Innovative Healthcare Solutions
 
+## v3.3.4 - MULTI-PRINTER IPP ADD + POPUP PRINTER/RELOAD/NETWORK RELEASE (2026-11-14)
+
+Base: v3.3.3 (user-verified "popup update and ipp work fine"). Three
+new real-world reports, each locked by `tests/test_v334.py`:
+
+### BUG 1 - "only default or only one add possible" - multi-printer IPP add
+On the LAN, Windows could add the hub ONCE (the central queue bound to
+the hub's default printer); adding a SECOND, per-printer queue
+(`http://ip:9235/ipp/print/<printer>`) was refused - Windows reported
+the printer as already existing / errored out. Root cause: the mDNS
+(Bonjour) announcer stamped the SAME `UUID` TXT record on EVERY
+advertised service - the central queue AND all per-printer queues.
+Windows/Bonjour use that UUID to tell printers apart, so the second
+per-printer service looked like a re-announcement of the first one and
+the add was rejected. Fix: every service now carries its OWN stable
+uuid - the hub uuid for the central queue, a per-queue uuid
+(`token|hostname|queue-slug`) for each printer queue (`_mdns_txt_records
+(slug=...)`, `_mdns_services()` 5-tuples). Fixed on BOTH answer paths:
+the proactive announce packet AND direct unicast TXT queries (Windows
+asks one instance by name). The per-printer IPP endpoints themselves
+(v3.0.9/v3.2.9: Get-Printer-Attributes / Validate-Job / Print-Job on
+`/ipp/print/<printer>` with the queue URI echoed and a unique
+printer-uuid per queue in IPP too) stay unchanged - they already
+worked; discovery was what made the SECOND add impossible.
+
+### BUG 2 - "popup reload / set printer - cmd continues to run multiple times"
+Two layers fixed, so the OS setter command (Windows PowerShell
+SetDefaultPrinter / Unix lpoptions -d) runs EXACTLY ONCE per real
+user change and NEVER on a popup open/reload:
+- POPUP: the new printer selector sends set-default ONLY when the
+  user picks a DIFFERENT printer. Popup open/reload only SELECTS an
+  option programmatically (a programmatic value set fires no change
+  event); `_printerApplied` blocks a repeat for the same printer;
+  `_settingPrinter` blocks parallel calls; a failed set reverts the
+  selection. `refresh()` gained an in-flight guard so the popup boot
+  storm can no longer stack duplicate hub calls.
+- HUB: POST /printers/set-default is IDEMPOTENT now - when the
+  requested printer IS already the verified OS default (cached read,
+  10 s), the endpoint answers immediately with `unchanged: true` and
+  spawns ZERO commands. Even a looping or old-UI client can no longer
+  multiply the cmd.
+
+### FEATURE - the popup is a control surface now (user-approved ONE design, UI update)
+The popup ships the new ONE design (navy gradient header, overlapping
+status pill, inline reload arrow beside the printer selector, three
+Power switch tiles, wide Options card):
+- PRINTER selector: the hub's printers with their statuses; the
+  current OS default is preselected (shown in the tooltip); picking
+  another printer makes it the OS default (via the guarded, idempotent
+  endpoint). New `hubSetDefault` background message.
+- RELOAD button (the arrow beside the selector; the network icon is
+  clickable too): re-reads hub state, switches, printers and jobs -
+  with a spinning indicator and a one-reload-at-a-time guard. Reload
+  never sends set-default.
+- NETWORK ICON in the header: gray = hub offline, green = hub on this
+  PC, teal + pulse = Sharing is ON and the hub listens on the LAN
+  (other PCs and phones can send jobs). The tooltip names the state
+  and the listening address (hub /health `lan_bind_addrs`).
+- "Receive" is now "Sharing" + CONNECTION icon: the Share Receive
+  switch is labelled Sharing (en + bn) and carries the network-nodes
+  icon instead of the download-tray arrow (Save PDF keeps its download
+  icon). Behaviour unchanged - the switch still writes hub share_lan.
+- New i18n strings (en + bn, incl. popSelectPrinter); popup version
+  badge = manifest version (3.3.4).
+
+### FEATURE - AUTOCRX: browser auto-integration is INTERNAL (no extra .bat)
+No extra .bat needed any more: the hub runs the policy pass itself.
+`ext_policy_activate()` generates `advprint-activate-extension.ps1`
+(the SAME policy writes the fixed .bat does: Forcelist + Allowlist +
+Sources for Chrome/Edge/Brave/Vivaldi/Chromium/Opera, HKLM + HKCU,
+duplicate-skip, never deletes) and starts it ONCE via
+`Start-Process powershell -Verb RunAs -Wait` - a single UAC prompt -
+then reads back a JSON result for a real per-browser report. Entry
+points: ONE UI console Extension tab > "Auto-integrate (admin)";
+`POST /extension/policy/activate` (optional `{"host": "ip:port"}` for
+LAN activations); `POST /tool` action `autocrx`; CLI
+`python advprint.py activate-extension [host:port]`. The .bat stays in
+prebuilt/ as an offline manual fallback only.
+
+### FIXED - allow_extention_advprint_pro.bat (Apply HKLM / Apply HKCU)
+The old script DELETED `ExtensionInstallForcelist` on every run and
+never wrote it back - so the CRX force-install was silently wiped and
+"Apply HKLM / Apply HKCU" seemed to do nothing (the bat "worked" - it
+wrote Allowlist + Sources - while removing the one policy that makes
+the extension install). The rewritten helper:
+- writes ALL THREE policies per browser (Chrome, Edge, Brave, Vivaldi,
+  Chromium, Opera): Forcelist (`ext-id;http://hub:9235/updates.xml`),
+  Allowlist, Sources - with duplicate-skip (no slot churn);
+- has a real MENU: [1] Apply HKLM (machine-wide; auto-elevates via UAC
+  when double-clicked without admin), [2] Apply HKCU (current user, no
+  admin needed), [3] Apply BOTH, [R] Remove, [0] Exit - and can be
+  scripted: `...bat HKLM|HKCU|BOTH|REMOVE`;
+- asks for the hub address once (Enter = 127.0.0.1:9235; LAN PCs can
+  enter the hub IP so the policy points at the reachable URL);
+- no longer deletes anything in the apply path (Remove is explicit);
+- fixed the truncated `http://127.0.0` success hint.
+
+### DELIVERY
+Full source + full code zip: `AdvPrint-Pro-v3.3.4-FULL.zip` (source
+tree + built artifacts: CRX3, extension zip, Windows Setup EXE, deb,
+SHA256SUMS). Extension copies synced (manifest 3.3.4); hub VERSION
+3.3.4 in BOTH `tool/unix/hub/advprint.py` and
+`tool/windows/portable/hub/advprint.py` (byte-identical).
+
 ## v3.3.3 - SHARE SEND POPUP-FIX + PEERS-ONLINE RELEASE (2026-11-12)
 
 Base: v3.3.2 (user-verified "v3.3.2 version work fine"). Four new
