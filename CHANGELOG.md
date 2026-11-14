@@ -1,6 +1,74 @@
 # Changelog - AdvPrint Pro (Advanced Printer)
 by Bit Dream IT - Innovative Healthcare Solutions
 
+## v3.3.5 - DEDICATED QUEUE PORTS + MANUAL RE-SCAN + AUTO-CRX-ON-INSTALL (2026-11-14)
+
+Base: v3.3.4 (everything below is additive; the v3.3.4 uuid fix, the
+popup printer/reload/network release and the idempotent set-default
+stay unchanged). One still-broken report + two new requests, each
+locked by `tests/test_v335.py`:
+
+### BUG 1 (deep fix) - "ipp work fine but only default or only one add
+posible ... when add aggain another it show error to add"
+
+v3.3.4 gave every queue its own uuid, but all queues still answered on
+the SAME endpoint: one shared mDNS SRV record (same host:port) and the
+same `ip:9235/ipp/print` URL family. Windows' Add-Printer flow keys a
+connection on host:port first - the second queue resolved to the
+endpoint that was already installed and the add errored. The only fix
+Windows cannot argue with is a DIFFERENT endpoint:
+
+- **One DEDICATED TCP port per printer** (9236, 9237, ... right after
+  the hub port): every queue port serves exactly ONE printer for ALL
+  `/ipp/print*` paths (`Handler.queue_binding`). Firewall: the Setup
+  now opens TCP 9235-9259 (rule "AdvPrint Pro Queues").
+- **One mDNS SRV PER SERVICE with its own port** - `_mdns_services()`
+  6-tuples (instance, rp, ty, note, slug, port); the announce packet
+  AND the direct unicast SRV answer both carry the queue's port.
+- **STABLE ports**: the allocation (`ipp_queue_port_allocations`) keeps
+  existing assignments and is persisted in config
+  (`ipp_queue_port_map`) - an installed queue survives restarts; a
+  removed printer frees its port; ports off / bind refused gracefully
+  fall back to the path queue.
+- All three address forms keep working: `ip:9235/ipp/print` (central),
+  `ip:9235/ipp/print/<printer>` (path) and the NEW
+  `ip:<queue-port>/ipp/print` (dedicated). `/printers` now returns
+  `ipp_port` + `ipp_dedicated` per printer; the console printer cards
+  show the dedicated URL with a COPY button; the queue-port landing
+  page describes the bound printer.
+
+### FEATURE 2 - the "Show other PCs (LAN / IPP)" list is MANUAL now
+
+"printer page when Show other PCs (LAN / IPP) on it auto load every
+time no need this page has re-scan option it just manualy trige when
+need." Before, the 3 s poll re-probed the paired LAN PC and rebuilt
+the remote cards on EVERY tick. Now the list renders from the LAST
+MANUAL SCAN (zero network during polls), and a FRESH probe of the
+other PC happens ONLY when the user asks: the Printers panel
+**Re-scan** button (which now also re-reads the other PC when the
+switch is ON) or the switch itself. `GET /peer/status?fresh=1` skips
+the 8 s probe cache. With the switch ON and nothing scanned yet, a
+hint card explains the manual flow ("press Re-scan").
+
+### FEATURE 3 - AUTO CRX ON INSTALL: the tool installs its own extension
+
+"when tool install it auto add update crx extention so extention also
+built in in this tool auto update or install this extention."
+
+- **The Setup now writes the FULL extension policy itself**
+  (`EXT_FORCELIST_FULL`): Forcelist + ExtensionInstallAllowlist +
+  ExtensionInstallSources for Chrome, Edge, Brave, Chromium, Vivaldi
+  AND Opera - machine-wide (HKLM) AND for the current user (HKCU).
+- **The hub re-applies the per-user pass SILENTLY on every start**
+  (`autocrx_hkcu_auto`, config key `autocrx_hkcu`, default ON): HKCU
+  needs no elevation - no UAC, no PowerShell script, no .bat. Every
+  Chromium browser picks the built-in CRX up at its next start and
+  auto-updates it from this hub's `/extension/updates.xml` on every
+  later release. The console Extension tab gets the
+  "Auto-install/update the extension (this PC)" switch.
+- The v3.3.4 one-click "Auto-integrate (admin)" (HKLM+HKCU elevated)
+  and the .bat offline fallback stay as they are.
+
 ## v3.3.4 - MULTI-PRINTER IPP ADD + POPUP PRINTER/RELOAD/NETWORK RELEASE (2026-11-14)
 
 Base: v3.3.3 (user-verified "popup update and ipp work fine"). Three

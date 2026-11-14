@@ -769,8 +769,9 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
               <div class="frow" style="margin-bottom:0">
                 <span class="tgl"><span class="sw"><span class="switch" id="showRemoteSw"></span></span></span>
                 <b>Show other PCs (LAN / IPP)</b>
-                <span class="note" style="margin:0 0 0 8px">Lists the paired LAN PC's printers (Connections &rarr; Another PC) with a
-                  <b>LAN PC &middot; IPP</b> badge, its ip:port and a ipp:// URL per device &mdash; test-page them right from here.</span>
+                <span class="note" style="margin:0 0 0 8px">v3.3.5 - <b>manual only</b>: flip this on, then press the panel's
+                  <b>&#8635; Re-scan</b> to load the paired LAN PC's printers (Connections &rarr; Another PC) with a
+                  <b>LAN PC &middot; IPP</b> badge, its ip:port and a ipp:// URL per device. No automatic loading.</span>
               </div>
             </div>
           </div>
@@ -1351,6 +1352,13 @@ https://reports.example.com/*</textarea>
                   with an elevated PowerShell (a single UAC prompt) and writes Forcelist + Allowlist + Sources for <b>every</b> Chromium
                   browser, HKLM (all users of this PC) + HKCU (current user). CLI: <span class="mono">python advprint.py activate-extension</span>.
                   The .bat in prebuilt/ stays only as an offline manual fallback.</span>
+              </div>
+              <div class="frow" style="margin:8px 0 0">
+                <span class="tgl"><span class="sw"><span class="switch" id="autocrxHkcuSw"></span></span></span>
+                <b style="font-size:11.5px">Auto-install/update the extension (this PC)</b>
+                <span style="font-size:10.5px;color:var(--muted);line-height:1.5">v3.3.5 — <b>the tool does it itself</b>: right after every hub start the
+                  built-in CRX policy is written for THIS user (HKCU, silent — no UAC, no .bat), so the extension installs and
+                  auto-updates from this hub in every Chromium browser. Turn OFF if a company policy manages the browsers.</span>
               </div>
             </div>
             <table class="tbl" style="font-size:10.5px">
@@ -2533,11 +2541,43 @@ function renderLanPeer(st){
 function loadLanPeer(){
   api("/peer/status").then(function(st){
     renderLanPeer(st);
-    renderRemotePrinters(st);
+    /* v3.3.5: the remote PRINTER cards no longer re-render here - the
+       poll kept re-probing and rebuilding them every 3 s (the printers
+       page "auto-loaded" constantly). They now render from the cached
+       scan and re-probe ONLY on a manual Re-scan / toggle-ON. */
   }).catch(function(){ /* keep the last known state */ });
 }
 /* alias used by the Connect/Clear handlers */
 function loadRemoteState(){ loadLanPeer(); }
+
+/* ---- v3.3.5 MANUAL RE-SCAN of the other PC's printers ----
+   The remote list is filled ONLY when the user asks: the Printers
+   panel's Re-scan button, or turning "Show other PCs (LAN / IPP)" ON.
+   ?fresh=1 skips the hub's 8 s probe cache so the button always
+   re-reads the other PC right now. */
+var remoteScanState = { scanned: false, st: null, busy: false };
+function scanRemotePrinters(manual){
+  if (remoteScanState.busy) return;
+  if (!cfgCache.show_remote_printers) return;
+  remoteScanState.busy = true;
+  api("/peer/status?fresh=1").then(function(st){
+    remoteScanState.busy = false;
+    remoteScanState.scanned = true;
+    remoteScanState.st = st;
+    renderLanPeer(st);
+    renderRemotePrinters(st);
+    if (manual) {
+      var p = st && st.peer;
+      toast(p && p.alive
+        ? ("Re-scan done - " + ((p.printers || []).length) +
+           " printer(s) on the LAN PC")
+        : "Re-scan done - the paired LAN PC did not answer", "ok");
+    }
+  }).catch(function(e){
+    remoteScanState.busy = false;
+    if (manual) toast("Re-scan failed: " + e.message, "err");
+  });
+}
 function renderRecent(jobs){
   var tbl = document.querySelector("#p-dashboard table.tbl");
   if (!tbl) return;
@@ -2589,9 +2629,15 @@ function renderPrinters(list){
         "<span>Jobs <b>" + (p.jobs != null ? p.jobs : 0) + "</b></span>" +
         "<span>" + chip(p.status === "ready" ? "ready" : p.status) + "</span>";
       var url = c.querySelector(".url");
-      if (p.ipp_queue) { url.innerHTML = ""; url.appendChild(document.createTextNode(p.ipp_queue));
+      /* v3.3.5: the DEDICATED queue port URL leads (this printer's OWN
+         ip:port - the endpoint Windows can add side by side with every
+         other printer); the path queue stays on the Details button. */
+      var leadUrl = p.ipp_dedicated || p.ipp_queue;
+      if (leadUrl) { url.innerHTML = ""; url.appendChild(document.createTextNode(leadUrl));
         var b = document.createElement("button"); b.className = "cp"; b.textContent = "COPY";
-        b.setAttribute("data-cp", p.ipp_queue); url.appendChild(b); }
+        b.setAttribute("data-cp", leadUrl); url.appendChild(b);
+        if (p.ipp_dedicated) url.title = "Dedicated port " + p.ipp_port +
+          " - this printer's OWN endpoint (v3.3.5 multi-printer fix)"; }
       else { url.style.display = "none"; }
       var ops = c.querySelector(".ops");
       ops.innerHTML = '<button class="btn blue" data-ptest="' + esc(p.name) + '">Test Page</button>' +
@@ -2637,11 +2683,38 @@ function renderPrinters(list){
    and can be test-printed through the peer hub. Set Default is
    disabled on remote cards (an OS default belongs to that other PC). */
 function renderRemotePrinters(st){
-  st = st || lanPeerState || {};
+  /* v3.3.5: renders from the LAST MANUAL SCAN (cached, zero network)
+     - poll() calls it after every grid rebuild so the cards survive,
+       but a fresh probe happens only in scanRemotePrinters(). */
+  st = st || remoteScanState.st || {};
   var grid = document.querySelector("#p-printers .pgrid");
   if (!grid) return;
   qsa("#p-printers .pcard[data-remote]").forEach(function(c){ c.remove(); });
+  qsa("#p-printers .pcard[data-remotescan]").forEach(function(c){ c.remove(); });
   if (!cfgCache.show_remote_printers) return;
+  if (!remoteScanState.scanned) {
+    /* v3.3.5: no automatic loading - show the manual-scan hint */
+    var th = grid.querySelector(".pcard");
+    if (th) {
+      var h = th.cloneNode(true);
+      h.setAttribute("data-remotescan", "1");
+      var hb = h.querySelector(".badge"); if (hb) hb.remove();
+      var hnm = h.querySelector(".nm");
+      if (hnm) hnm.textContent = "Other PCs' printers: press Re-scan";
+      var hmd = h.querySelector(".mdl");
+      if (hmd) hmd.textContent = "no automatic loading - the list fills " +
+        "when you press \u21bb Re-scan above (LAN PC \u00b7 IPP badge)";
+      var hst = h.querySelector(".st");
+      if (hst) hst.innerHTML = "<span>Source <b>LAN PC</b></span>" +
+        "<span>Scan <b>manual</b></span>";
+      var hu = h.querySelector(".url"); if (hu) hu.style.display = "none";
+      var ho = h.querySelector(".ops");
+      if (ho) ho.innerHTML =
+        '<button class="btn blue" data-rscan="1">\u21bb Re-scan now</button>';
+      grid.appendChild(h);
+    }
+    return;
+  }
   var p = st.peer;
   if (!st.configured || !p || !p.alive) return;
   var t0 = grid.querySelector(".pcard");
@@ -2677,7 +2750,16 @@ function renderRemotePrinters(st){
     grid.appendChild(c);
   });
   /* wire the remote-card buttons (delegated - the grid re-renders) */
-  qsa("#p-printers .pcard[data-remote] button").forEach(function(btn){
+  qsa("#p-printers .pcard[data-remote] button, " +
+      "#p-printers .pcard[data-remotescan] button").forEach(function(btn){
+    var rs = btn.getAttribute("data-rscan");
+    if (rs && !btn.dataset.bound) {
+      btn.dataset.bound = "1";
+      btn.addEventListener("click", function(){
+        toast("Re-scanning the other PC's printers ...");
+        scanRemotePrinters(true);
+      });
+    }
     var tp = btn.getAttribute("data-prtest");
     if (tp && !btn.dataset.bound) {
       btn.dataset.bound = "1";
@@ -3277,7 +3359,7 @@ function renderExt(audit){
     rows.slice(0, 6).forEach(function(r2){
       var tr = tmpl.cloneNode(true), td = tr.querySelectorAll("td");
       td[0].innerHTML = "<b>" + esc(r2.who) + "</b>";
-      td[1].textContent = "v" + (BOOT.version || "3.3.4");
+      td[1].textContent = "v" + (BOOT.version || "3.3.5");
       td[2].textContent = r2.at ? r2.at.slice(11, 19) : "\u2014";
       td[3].innerHTML = '<span class="chip ok"><span class="d"></span>PAIRED</span>';
       tbl.appendChild(tr);
@@ -3299,7 +3381,7 @@ function renderExt(audit){
       m2.textContent = BASE + "/extension/updates.xml";
   });
   var crxChip = document.querySelector("#p-extension .frow .chip.ok");
-  if (crxChip) crxChip.innerHTML = '<span class="d"></span>CRX v' + (BOOT.version || "3.3.4") + " READY";
+  if (crxChip) crxChip.innerHTML = '<span class="d"></span>CRX v' + (BOOT.version || "3.3.5") + " READY";
   /* v3.2.8 STALE-CRX GUARD: ask the hub which package it really
    * serves (/extension/info is open, no token). Older than the hub
    * itself -> Chrome never updates -> browsers keep the old bugs.
@@ -3505,7 +3587,7 @@ async function renderUpdate(res){
    full-page /docs stays available via the "Full guide page" button.
    ============================================================ */
 function docsHtml(){
-  var v = esc(BOOT.version || "3.3.4");
+  var v = esc(BOOT.version || "3.3.5");
   var ip = esc(BOOT.lan_ip || location.hostname || "127.0.0.1");
   var port = esc(String(BOOT.port || location.port || "9235"));
   var base = "http://" + ip + ":" + port;
@@ -3640,7 +3722,14 @@ var ACTIONS = {
   "export-audit": function(){
     window.open(BASE + "/export/audit.csv?token=" + encodeURIComponent(TOKEN), "_blank");
     toast("audit.csv exported", "ok"); },
-  "refresh-printers": function(){ poll(); toast("Printers rescanned", "ok"); },
+  "refresh-printers": function(){
+    poll();
+    /* v3.3.5: the Re-scan button is the MANUAL trigger for the other
+       PC's printers too - a fresh probe, only when the switch is ON.
+       With the switch off it stays the local printer re-scan. */
+    if (cfgCache.show_remote_printers) { scanRemotePrinters(true); }
+    else { toast("Printers rescanned", "ok"); }
+  },
   "fw-allow": async function(){
     try { var r = await api("/tool", { method: "POST", body: { action: "fw-allow" } });
       toast(r.message || "Firewall rule requested \u2014 approve the UAC prompt", "ok");
@@ -4593,6 +4682,21 @@ function bindSwitches(){
         .then(function(){ _shareSendPending = false; });
       return;
     }
+    /* v3.3.5 AUTO CRX (this PC) switch - Extension tab */
+    if (s.id === "autocrxHkcuSw") {
+      var wantA = !s.classList.contains("on");
+      s.classList.toggle("on", wantA);
+      api("/config", { method: "POST", body: { autocrx_hkcu: wantA } })
+        .then(function(){
+          cfgCache.autocrx_hkcu = wantA;
+          toast(wantA
+            ? "Auto-install ON - the hub writes the CRX policy for this PC after every restart (HKCU, silent)"
+            : "Auto-install OFF - the hub no longer touches the browser policy", wantA ? "ok" : "warn");
+        })
+        .catch(function(e){ s.classList.toggle("on", !wantA);
+          toast(e.message, "err"); });
+      return;
+    }
     /* v3.3.2 remote devices switch (Printers panel) */
     if (s.id === "showRemoteSw") {
       var wantR = !s.classList.contains("on");
@@ -4600,9 +4704,16 @@ function bindSwitches(){
       api("/config", { method: "POST", body: { show_remote_printers: wantR } })
         .then(function(){
           cfgCache.show_remote_printers = wantR;
-          if (wantR) { toast("Other PCs' devices shown below (LAN PC \u00b7 IPP badge)", "ok"); loadLanPeer(); }
-          else { qsa("#p-printers .pcard[data-remote]").forEach(function(c){ c.remove(); });
-                 toast("Remote devices hidden", "warn"); }
+          if (wantR) {
+            /* v3.3.5: turning the switch ON is the manual trigger -
+               ONE fresh probe right now, never the 3 s poll */
+            toast("Other PCs' devices shown below (LAN PC \u00b7 IPP badge)", "ok");
+            scanRemotePrinters(false);
+          } else {
+            remoteScanState.scanned = false; remoteScanState.st = null;
+            renderRemotePrinters();
+            toast("Remote devices hidden", "warn");
+          }
         })
         .catch(function(e){ s.classList.toggle("on", !wantR);
           toast(e.message, "err"); });
@@ -4755,6 +4866,12 @@ async function poll(){
     renderStats(h, st, q, pr);
     renderLanRows();
     renderPrinters(pr.printers || []);
+    /* v3.3.5 MANUAL RE-SCAN: the remote cards render from the LAST
+       manual scan (zero network) so they survive the grid rebuild -
+       a FRESH probe of the other PC happens only in scanRemotePrinters
+       (the panel Re-scan button / the switch ON). Before v3.3.5 the
+       poll re-probed and rebuilt this list every 3 s. */
+    renderRemotePrinters();
     renderJobs(jobs);
     renderRecent(jobs);
     renderAudit(audit);
@@ -4778,6 +4895,9 @@ async function poll(){
     loadConnections();
     var srsw = $("showRemoteSw");
     if (srsw) srsw.classList.toggle("on", !!cfgCache.show_remote_printers);
+    /* v3.3.5: the AUTO CRX (this PC) switch mirrors the live config */
+    var axsw = $("autocrxHkcuSw");
+    if (axsw) axsw.classList.toggle("on", cfgCache.autocrx_hkcu !== false);
     /* v3.2.3 SWITCH FIX part 2: the hub panel now refreshes from the
        live config on every poll - the inputs no longer keep the static
        demo values, and a switch save cannot write them into config.json */

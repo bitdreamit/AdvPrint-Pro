@@ -1,4 +1,4 @@
-"""v3.3.4 - MULTI-PRINTER IPP ADD + POPUP PRINTER/RELOAD/NETWORK RELEASE.
+"""v3.3.5 - MULTI-PRINTER IPP ADD + POPUP PRINTER/RELOAD/NETWORK RELEASE.
 
 Three real-world reports, each locked here:
 
@@ -111,23 +111,25 @@ def two_printers(monkeypatch):
     return names
 
 
-def test_mdns_services_are_5tuples_with_slugs(two_printers):
+def test_mdns_services_are_6tuples_with_slugs(two_printers):
     svcs = advprint._mdns_services()
     assert len(svcs) == 3                       # central + 2 printers
-    inst0, rp0, ty0, note0, slug0 = svcs[0]
+    inst0, rp0, ty0, note0, slug0, port0 = svcs[0]
     assert slug0 is None                        # central queue
     assert rp0 == "ipp/print"
     slugs = [s[4] for s in svcs[1:]]
+    ports = [s[5] for s in svcs[1:]]
+    assert all(isinstance(p_, int) and p_ > 0 for p_ in ports)
     assert slugs == [advprint._ipp_queue_slug("HP Laser 103"),
                      advprint._ipp_queue_slug("Epson L3250")]
-    for inst, rp, ty, note, slug in svcs[1:]:
+    for inst, rp, ty, note, slug, _port in svcs[1:]:
         assert rp == "ipp/print/" + slug
 
 
 def test_mdns_txt_uuid_unique_per_service(two_printers):
     svcs = advprint._mdns_services()
     uuids = []
-    for inst, rp, ty, note, slug in svcs:
+    for inst, rp, ty, note, slug, _port in svcs:
         txt = advprint._mdns_txt_records(rp=rp, ty=ty, note=note, slug=slug)
         u = _txt_uuid(txt)
         assert u, "TXT record must carry a UUID"
@@ -152,7 +154,7 @@ def test_mdns_announce_packet_carries_unique_uuids(two_printers):
 def test_mdns_unicast_txt_query_answers_queue_uuid(two_printers,
                                                    monkeypatch):
     svcs = advprint._mdns_services()
-    inst, rp, ty, note, slug = svcs[1]          # a PER-PRINTER service
+    inst, rp, ty, note, slug, _port = svcs[1]   # a PER-PRINTER service
     qname = advprint._mdns_encode_name(inst + "._ipp._tcp.local")
     pkt = ((0x1234).to_bytes(2, "big") + (0).to_bytes(2, "big") +
            (1).to_bytes(2, "big") + (0).to_bytes(2, "big") +
@@ -257,7 +259,7 @@ def test_set_default_requires_printer_name(hub, printer_env):
 
 
 # ---------------------------------------------------------------
-# POPUP v3.3.4 - change-only guard + UI surface
+# POPUP v3.3.5 - change-only guard + UI surface
 # ---------------------------------------------------------------
 
 def _popup_js():
@@ -306,7 +308,7 @@ def test_background_routes_hub_set_default():
 
 def test_popup_ui_surface_present():
     html = _popup_html()
-    # v3.3.4 ONE design (user-approved): the printer selector is
+    # v3.3.5 ONE design (user-approved): the printer selector is
     # #selPrinter, the reload arrow #bRefreshPrinters, the header
     # NETWORK icon #netIcon - and the LAN switch reads SHARING with
     # the network/connection icon (the old download icon is gone).
@@ -475,19 +477,19 @@ def test_bat_has_hklm_hkcu_menu_and_scripted_args():
 
 def test_version_coherence_334():
     vtxt = open(os.path.join(ROOT, "VERSION.txt"), encoding="utf-8").read()
-    assert "3.3.4" in vtxt
-    assert advprint.VERSION == "3.3.4"
+    assert "3.3.5" in vtxt
+    assert advprint.VERSION == "3.3.5"
     manifest = json.load(open(os.path.join(ROOT, "extension",
                                            "manifest.json"),
                               encoding="utf-8"))
-    assert manifest["version"] == "3.3.4"
-    assert '"version": "3.3.4"' in _popup_html().replace("v3.3.4",
-                                                         '"3.3.4"') or \
-        "v3.3.4" in _popup_html()
+    assert manifest["version"] == "3.3.5"
+    assert '"version": "3.3.5"' in _popup_html().replace("v3.3.5",
+                                                         '"3.3.5"') or \
+        "v3.3.5" in _popup_html()
     i18n = _i18n_js()
-    assert i18n.count("3.3.4") >= 2          # brandLine en + bn
+    assert i18n.count("3.3.5") >= 2          # brandLine en + bn
     guide = os.path.join(ROOT, "docs",
-                         "AdvPrint-Pro-v3.3.4-A-to-Z-DEV-GUIDE.md")
+                         "AdvPrint-Pro-v3.3.5-A-to-Z-DEV-GUIDE.md")
     assert os.path.isfile(guide)
 
 

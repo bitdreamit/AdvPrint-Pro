@@ -267,21 +267,21 @@ def test_v325_sums_cover_the_setup_exe():
         lines = open(sums_path, encoding="utf-8").read().strip().splitlines()
         assert len(lines) == 4, \
             "SHA256SUMS must cover CRX + extension zip + DEB + Setup EXE"
-        assert any("AdvPrint-Pro-Setup-3.3.4.exe" in l for l in lines)
+        assert any("AdvPrint-Pro-Setup-3.3.5.exe" in l for l in lines)
 
 
 # ------------------------------------------------------------
 # version coherence
 # ------------------------------------------------------------
 def test_v325_versions_agree():
-    assert advprint.VERSION == "3.3.4"
-    assert advprint.VERSION_NAME.startswith("v3.3.4")
+    assert advprint.VERSION == "3.3.5"
+    assert advprint.VERSION_NAME.startswith("v3.3.5")
     man = json.load(open(os.path.join(EXT, "manifest.json"),
                          encoding="utf-8"))
-    assert man["version"] == "3.3.4"
+    assert man["version"] == "3.3.5"
     vt = open(os.path.join(ROOT, "VERSION.txt"), encoding="utf-8").read()
-    assert "3.3.4" in vt
+    assert "3.3.5" in vt
     nsi = open(os.path.join(ROOT, "installer", "setup.nsi"),
                encoding="utf-8").read()
-    assert 'VIProductVersion "3.3.4.0"' in nsi
-    assert "AdvPrint-Pro-Setup-3.3.4.exe" in nsi
+    assert 'VIProductVersion "3.3.5.0"' in nsi
+    assert "AdvPrint-Pro-Setup-3.3.5.exe" in nsi

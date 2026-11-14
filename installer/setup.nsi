@@ -11,7 +11,7 @@
 ;    REAL administrator rights: the exe requests admin via its
 ;    manifest, so Windows shows the UAC prompt by itself
 ;    ("auto permission to install" - nothing is half-installed).
-;    Silent install:  AdvPrint-Pro-Setup-3.3.4.exe /S
+;    Silent install:  AdvPrint-Pro-Setup-3.3.5.exe /S
 ;    (elevation still applies - Windows shows UAC once.)
 ;  - v2.8 UPGRADE / UNINSTALL FIX (the v2.7.x pain "service not
 ;    uninstalled, some files abort install"): BEFORE any file is
@@ -36,7 +36,7 @@
 
 Unicode true
 Name "AdvPrint Pro (Advanced Printer)"
-OutFile "../dist/AdvPrint-Pro-Setup-3.3.4.exe"
+OutFile "../dist/AdvPrint-Pro-Setup-3.3.5.exe"
 InstallDir "$PROGRAMFILES64\AdvPrintPro"
 InstallDirRegKey HKLM "Software\AdvPrintPro" "InstallDir"
 ; full admin rights - the Windows UAC prompt appears by itself when
@@ -50,7 +50,7 @@ ShowInstDetails show
 ShowUnInstDetails show
 ManifestDPIAware true
 
-VIProductVersion "3.3.4.0"
+VIProductVersion "3.3.5.0"
 VIAddVersionKey ProductName "AdvPrint Pro (Advanced Printer)"
 VIAddVersionKey FileVersion "3.3.0"
 VIAddVersionKey ProductVersion "3.3.0"
@@ -278,11 +278,15 @@ Section "AdvPrint Pro hub (required)" SEC_MAIN
   ; v3.2.3: + TCP 631 - the standard IPP port mirror (Android's Default
   ;         Print Service tries port 631 first on manual add)
   DetailPrint "Adding the firewall rules for LAN sharing + printer port (TCP 9235 + 9100 + 631 IPP + UDP 5353 mDNS)..."
+  ; v3.3.5: + TCP 9235-9259 - ONE dedicated port per printer queue
+  ; (the multi-printer IPP add fix: every printer is its OWN endpoint)
   nsExec::Exec 'netsh advfirewall firewall delete-rule name="AdvPrint Pro" dir=in'
   nsExec::Exec 'netsh advfirewall firewall delete-rule name="AdvPrint Pro RAW 9100" dir=in'
   nsExec::Exec 'netsh advfirewall firewall delete-rule name="AdvPrint Pro mDNS" dir=in'
   nsExec::Exec 'netsh advfirewall firewall delete-rule name="AdvPrint Pro IPP 631" dir=in'
+  nsExec::Exec 'netsh advfirewall firewall delete-rule name="AdvPrint Pro Queues" dir=in'
   nsExec::Exec 'netsh advfirewall firewall add rule name="AdvPrint Pro" dir=in action=allow protocol=TCP localport=9235'
+  nsExec::Exec 'netsh advfirewall firewall add rule name="AdvPrint Pro Queues" dir=in action=allow protocol=TCP localport=9235-9259'
   nsExec::Exec 'netsh advfirewall firewall add rule name="AdvPrint Pro RAW 9100" dir=in action=allow protocol=TCP localport=9100'
   nsExec::Exec 'netsh advfirewall firewall add rule name="AdvPrint Pro mDNS" dir=in action=allow protocol=UDP localport=5353'
   nsExec::Exec 'netsh advfirewall firewall add rule name="AdvPrint Pro IPP 631" dir=in action=allow protocol=TCP localport=631'
@@ -301,7 +305,7 @@ Section "AdvPrint Pro hub (required)" SEC_MAIN
     DetailPrint "No usable pythonw.exe (bundled runtime missing + no system Python)."
     ${IfNot} ${Silent}
       MessageBox MB_ICONEXCLAMATION|MB_OK \
-        "Setup could not prepare the bundled Python runtime and found no system Python.$\n$\nPlease re-download AdvPrint-Pro-Setup-3.3.4.exe (the file may be damaged in transit) and run it again."
+        "Setup could not prepare the bundled Python runtime and found no system Python.$\n$\nPlease re-download AdvPrint-Pro-Setup-3.3.5.exe (the file may be damaged in transit) and run it again."
     ${EndIf}
   ${EndIf}
 
@@ -321,7 +325,7 @@ Section "AdvPrint Pro hub (required)" SEC_MAIN
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\AdvPrintPro" \
     "DisplayName" "AdvPrint Pro (Advanced Printer) by Bit Dream IT"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\AdvPrintPro" \
-    "DisplayVersion" "3.3.0"
+    "DisplayVersion" "3.3.5"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\AdvPrintPro" \
     "Publisher" "Bit Dream IT - Innovative Healthcare Solutions"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\AdvPrintPro" \
@@ -381,14 +385,58 @@ SectionEnd
   DetailPrint "${NAME}: force-install policy entry '$R2' -> updates.xml served by the hub"
 !macroend
 
+; ---------------------------------------------------------------
+; v3.3.5 AUTOCRX AT INSTALL - the FULL policy pass the hub's
+; "Auto-integrate (admin)" runs, now applied BY THE INSTALLER itself:
+; Forcelist + ExtensionInstallAllowlist + ExtensionInstallSources for
+; every Chromium browser, machine-wide (HKLM) AND for the current user
+; (HKCU). Allowlist + Sources let Chrome accept the hub-served CRX
+; without the unknown-source warning; the hub's own silent HKCU pass
+; (autocrx_hkcu) repeats this for every future user of the PC.
+; The macro appends at the first FREE index, never touches entries of
+; other companies and records our slots under Software\AdvPrintPro so
+; the uninstaller removes exactly ours.
+; ---------------------------------------------------------------
+!macro EXT_FORCELIST_FULL POLPATH NAME
+  ; ---- Forcelist (both hives) ----
+  !insertmacro EXT_FORCELIST "${POLPATH}" "${NAME}"
+  ; ---- Allowlist (HKLM) ----
+  StrCpy $R1 0
+  StrCpy $R6 ""
+  ${Do}
+    ClearErrors
+    EnumRegValue $R3 HKLM "SOFTWARE\Policies\${POLPATH}\ExtensionInstallAllowlist" $R1
+    ${If} ${Errors}
+      ${Break}
+    ${EndIf}
+    IntOp $R1 $R1 + 1
+    ReadRegStr $R4 HKLM "SOFTWARE\Policies\${POLPATH}\ExtensionInstallAllowlist" "$R3"
+    ${If} $R4 == "${EXTPOLICY_ID}"
+      StrCpy $R6 "$R3"
+      ${Break}
+    ${EndIf}
+  ${Loop}
+  ${If} $R6 == ""
+    StrCpy $R6 "$R1"
+  ${EndIf}
+  WriteRegStr HKLM "SOFTWARE\Policies\${POLPATH}\ExtensionInstallAllowlist" "$R6" "${EXTPOLICY_ID}"
+  WriteRegStr HKLM "SOFTWARE\Policies\${POLPATH}\ExtensionInstallSources" "1" "http://127.0.0.1:9235/*"
+  ; ---- HKCU mirror (this user; needs no elevation at all) ----
+  WriteRegStr HKCU "SOFTWARE\Policies\${POLPATH}\ExtensionInstallForcelist" "${NAME}AdvPrint" "${EXTPOLICY_VALUE}"
+  WriteRegStr HKCU "SOFTWARE\Policies\${POLPATH}\ExtensionInstallAllowlist" "AdvPrint" "${EXTPOLICY_ID}"
+  WriteRegStr HKCU "SOFTWARE\Policies\${POLPATH}\ExtensionInstallSources" "AdvPrint" "http://127.0.0.1:9235/*"
+  DetailPrint "${NAME}: forcelist + allowlist + sources written (HKLM + HKCU)"
+!macroend
+
 Section "Silent extension install in Chrome/Edge/Brave (policy)" SEC_POLICY
-  DetailPrint "Writing the ExtensionInstallForcelist policy (machine-wide)..."
-  !insertmacro EXT_FORCELIST "Google\Chrome" "Chrome"
-  !insertmacro EXT_FORCELIST "Microsoft\Edge" "Edge"
-  !insertmacro EXT_FORCELIST "BraveSoftware\Brave" "Brave"
-  !insertmacro EXT_FORCELIST "Chromium" "Chromium"
-  !insertmacro EXT_FORCELIST "Vivaldi" "Vivaldi"
-  DetailPrint "Silent install works on managed (domain/enrolled) PCs. On a home PC Chrome ignores it - load $INSTDIR\extension once via chrome://extensions > Load unpacked."
+  DetailPrint "Writing the FULL extension policy (Forcelist + Allowlist + Sources, HKLM + HKCU)..."
+  !insertmacro EXT_FORCELIST_FULL "Google\Chrome" "Chrome"
+  !insertmacro EXT_FORCELIST_FULL "Microsoft\Edge" "Edge"
+  !insertmacro EXT_FORCELIST_FULL "BraveSoftware\Brave" "Brave"
+  !insertmacro EXT_FORCELIST_FULL "Chromium" "Chromium"
+  !insertmacro EXT_FORCELIST_FULL "Vivaldi" "Vivaldi"
+  !insertmacro EXT_FORCELIST_FULL "Opera Software\Opera" "Opera"
+  DetailPrint "The extension installs/updates itself from the hub (updates.xml). The hub ALSO re-applies the HKCU pass silently on every start (autocrx_hkcu)."
 SectionEnd
 
 Section "Run as Windows service (optional, headless)" SEC_SERVICE
@@ -426,7 +474,7 @@ SectionEnd
 LangString DescMain    ${LANG_ENGLISH} "The AdvPrint Pro hub, bundled Python 3.11 runtime, bundled SumatraPDF, tray icon, auto-run at logon, desktop tool and full documentation. Required."
 LangString DescService ${LANG_ENGLISH} "Run the hub headless as a real Windows service (services.msc). For servers / shared PCs. The normal auto-run already covers desktop use. On upgrade an existing service is stopped, removed and reinstalled fresh automatically."
 LangString DescExt     ${LANG_ENGLISH} "Browser extension files installed to $INSTDIR\extension - load once via chrome://extensions > Load unpacked."
-LangString DescPolicy  ${LANG_ENGLISH} "Writes the ExtensionInstallForcelist policy so Chrome/Edge/Brave/Chromium/Vivaldi install the AdvPrint extension silently from the hub's own /extension/ server and auto-update it on every release. Works silently on domain-joined/enrolled machines (schools, workplaces); untick on private PCs where you prefer Load unpacked (keeps Chrome unmanaged)."
+LangString DescPolicy  ${LANG_ENGLISH} "v3.3.5 AUTOCRX at install: writes the FULL extension policy (Forcelist + Allowlist + Sources, HKLM + HKCU) so Chrome/Edge/Brave/Chromium/Vivaldi/Opera install the built-in AdvPrint extension silently from the hub's own /extension/ server and auto-update it on every release. The hub also re-applies the per-user pass silently on every start (autocrx_hkcu). Untick if a company policy manages the browsers."
 
 !insertmacro MUI_FUNCTION_DESCRIPTION_BEGIN
   !insertmacro MUI_DESCRIPTION_TEXT ${SEC_MAIN}    "$(DescMain)"
@@ -447,6 +495,12 @@ LangString DescPolicy  ${LANG_ENGLISH} "Writes the ExtensionInstallForcelist pol
     DeleteRegValue HKLM "SOFTWARE\Policies\${POLPATH}\ExtensionInstallForcelist" "$R6"
   ${EndIf}
   DeleteRegValue HKLM "Software\AdvPrintPro" "ExtPolicy.${NAME}"
+  ; v3.3.5: the FULL pass also wrote Allowlist + Sources (HKLM+HKCU)
+  DeleteRegValue HKLM "SOFTWARE\Policies\${POLPATH}\ExtensionInstallAllowlist" "$R6"
+  DeleteRegValue HKLM "SOFTWARE\Policies\${POLPATH}\ExtensionInstallSources" "1"
+  DeleteRegValue HKCU "SOFTWARE\Policies\${POLPATH}\ExtensionInstallForcelist" "${NAME}AdvPrint"
+  DeleteRegValue HKCU "SOFTWARE\Policies\${POLPATH}\ExtensionInstallAllowlist" "AdvPrint"
+  DeleteRegValue HKCU "SOFTWARE\Policies\${POLPATH}\ExtensionInstallSources" "AdvPrint"
   StrCpy $R1 1
   ${Do}
     ${If} $R1 > 20
@@ -499,14 +553,17 @@ Section "Uninstall"
   nsExec::Exec 'netsh advfirewall firewall delete-rule name="AdvPrint Pro" dir=in'
   nsExec::Exec 'netsh advfirewall firewall delete-rule name="AdvPrint Pro RAW 9100" dir=in'
   nsExec::Exec 'netsh advfirewall firewall delete-rule name="AdvPrint Pro mDNS" dir=in'
+  nsExec::Exec 'netsh advfirewall firewall delete-rule name="AdvPrint Pro IPP 631" dir=in'
+  nsExec::Exec 'netsh advfirewall firewall delete-rule name="AdvPrint Pro Queues" dir=in'
   DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\AdvPrintPro"
-  ; v3.0.7: remove exactly OUR extension force-install policy entries
-  DetailPrint "Removing the extension force-install policy (Chrome/Edge/Brave/Chromium/Vivaldi)..."
+  ; v3.0.7 / v3.3.5: remove exactly OUR extension policy entries
+  DetailPrint "Removing the extension policy (Chrome/Edge/Brave/Chromium/Vivaldi/Opera)..."
   !insertmacro EXT_FORCELIST_UN "Google\Chrome" "Chrome"
   !insertmacro EXT_FORCELIST_UN "Microsoft\Edge" "Edge"
   !insertmacro EXT_FORCELIST_UN "BraveSoftware\Brave" "Brave"
   !insertmacro EXT_FORCELIST_UN "Chromium" "Chromium"
   !insertmacro EXT_FORCELIST_UN "Vivaldi" "Vivaldi"
+  !insertmacro EXT_FORCELIST_UN "Opera Software\Opera" "Opera"
   DeleteRegKey HKLM "Software\AdvPrintPro"
   ; also clean a pre-2.6.4 per-user install if one is still around
   DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\AdvPrintPro"

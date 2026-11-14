@@ -13,7 +13,34 @@ Web page ──► Chrome extension ──► AdvPrint Pro hub (localhost:9235) 
 
 ---
 
-## What's new in v3.3.4 (MULTI-PRINTER IPP ADD + POPUP PRINTER/RELOAD/NETWORK RELEASE)
+## What's new in v3.3.5 (DEDICATED QUEUE PORTS + MANUAL RE-SCAN + AUTO-CRX-ON-INSTALL)
+
+One still-broken report + two new requests, all fixed and locked by
+`tests/test_v335.py`. Full details in `CHANGELOG.md`; developer delta
+in `docs/AdvPrint-Pro-v3.3.5-A-to-Z-DEV-GUIDE.md`.
+
+1. **Multi-printer add REALLY works now (the deep fix).** v3.3.4 made
+   every queue unique (uuid), but all queues still answered on the SAME
+   ip:port - and Windows refuses a second queue on the same endpoint.
+   The hub now opens ONE DEDICATED TCP PORT PER PRINTER (9236, 9237,
+   ...): each printer is its own endpoint
+   `http://<hub-ip>:<own-port>/ipp/print`, mDNS advertises one SRV per
+   printer (own port), ports stay stable across restarts. The central
+   queue (`ip:9235/ipp/print`, hub default) and the path queues
+   (`ip:9235/ipp/print/<printer>`) keep working; the Setup opens the
+   port range (TCP 9235-9259) in the firewall.
+2. **"Show other PCs (LAN / IPP)" no longer auto-loads.** The Printers
+   panel list renders from the LAST MANUAL SCAN and refreshes ONLY via
+   the panel Re-scan button or the switch itself - the 3 s poll never
+   probes the other PC on its own any more.
+3. **The tool installs its own extension (AUTO CRX).** The Setup writes
+   the full browser policy (Forcelist + Allowlist + Sources, HKLM +
+   HKCU, Chrome/Edge/Brave/Chromium/Vivaldi/Opera), and the hub
+   silently re-applies the per-user pass on every start - no UAC, no
+   .bat - so the built-in CRX installs and auto-updates itself from
+   the hub.
+
+## What was new in v3.3.4 (MULTI-PRINTER IPP ADD + POPUP PRINTER/RELOAD/NETWORK RELEASE)
 
 Three real-world reports, all fixed and locked by `tests/test_v334.py`.
 Full details in `CHANGELOG.md`; developer delta in

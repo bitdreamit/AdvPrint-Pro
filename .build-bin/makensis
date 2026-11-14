@@ -1,4 +1,0 @@
-#!/bin/sh
-export NSISDIR=/home/z/my-project/tools/nsis/root/usr/share/nsis
-export LD_LIBRARY_PATH=/home/z/my-project/tools/nsis/root/usr/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
-exec /home/z/my-project/tools/nsis/root/usr/bin/makensis "$@"

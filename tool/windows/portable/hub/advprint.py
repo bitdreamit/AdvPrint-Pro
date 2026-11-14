@@ -96,37 +96,36 @@ if _HUB_DIR not in sys.path:
     sys.path.insert(0, _HUB_DIR)
 
 
-VERSION = "3.3.4"
-VERSION_NAME = ("v3.3.4 (MULTI-PRINTER IPP ADD + POPUP PRINTER/RELOAD/"
-    "NETWORK RELEASE. BUG 1 - \"only default or only one add possible\": "
-    "the mDNS announcer stamped the SAME UUID TXT record on EVERY _ipp."
-    "_tcp service - the central queue AND all per-printer queues - so "
-    "Windows treated the second per-printer queue as a re-announcement "
-    "of the first and refused the add. Every advertised service now "
-    "carries its OWN stable printer-uuid (hub uuid for the central "
-    "queue, per-queue uuid token|hostname|slug for each printer), on "
-    "BOTH the proactive announce packet AND direct unicast TXT answers. "
-    "BUG 2 - \"popup reload / set printer: cmd continues to run "
-    "multiple\": the popup printer selector sends set-default ONLY on a "
-    "real user change (programmatic selection fires no change event, "
-    "the applied-default guard blocks repeats, one call in flight, "
-    "failures revert; refresh() has an in-flight guard), and POST "
-    "/printers/set-default is IDEMPOTENT - an already-default request "
-    "answers unchanged:true with ZERO commands and a successful set "
-    "caches the verified result. FEATURE - the popup is a control "
-    "surface now: PRINTER selector (hub printers + status, one pick "
-    "makes it the OS default via hubSetDefault), RELOAD button, "
-    "NETWORK icon in the header (gray offline / green this-PC / teal "
-    "pulse = Share Receive ON listening on the LAN, tooltip names the "
-    "address), Share Receive sub-label shows the LAN listen address. "
-    "FIXED - allow_extention_advprint_pro.bat deleted "
-    "ExtensionInstallForcelist on every run and never wrote it back; "
-    "the rewrite writes all three policies per browser with "
-    "duplicate-skip, has a real Apply HKLM (self-elevating) / Apply "
-    "HKCU / BOTH / Remove menu, accepts scripted args and takes the "
-    "hub address for LAN deployments. On top of v3.3.3: everything "
-    "from the SHARE SEND POPUP-FIX + PEERS-ONLINE release stays "
-    "unchanged.")
+VERSION = "3.3.5"
+VERSION_NAME = ("v3.3.5 (DEDICATED QUEUE PORTS + MANUAL RE-SCAN + "
+    "AUTO-CRX-ON-INSTALL. BUG 1 - \"only default or only one add "
+    "possible; adding another errors\" (still reported on v3.3.4): the "
+    "per-printer queues shared ONE endpoint - every mDNS service "
+    "resolved to the same host:port and every queue rode the same "
+    "ip:9235/ipp/print URL, so Windows' Add-Printer flow treated the "
+    "second queue as the printer that was already there. THE DEEP FIX: "
+    "the hub now opens ONE DEDICATED TCP PORT PER PRINTER (9236, 9237, "
+    "... right after the hub port) that serves exactly that printer's "
+    "queue for ALL /ipp/print* paths, every mDNS service advertises "
+    "its OWN SRV port, and ports are kept stable in config "
+    "(ipp_queue_port_map) so an installed queue survives restarts. "
+    "ip:9235/ipp/print stays the central/default queue and "
+    "ip:9235/ipp/print/<printer> the path queue - both keep working; "
+    "each printer ALSO gets http://<lan-ip>:<own-port>/ipp/print. "
+    "FEATURE 2 - the Printers panel's \"Show other PCs (LAN / IPP)\" "
+    "list no longer auto-loads on every 3 s poll: it renders from the "
+    "LAST MANUAL SCAN and refreshes ONLY via the panel Re-scan button "
+    "or the switch itself (GET /peer/status?fresh=1 skips the probe "
+    "cache). FEATURE 3 - AUTO CRX ON INSTALL: the installer writes the "
+    "FULL extension policy (Forcelist + Allowlist + Sources, HKLM + "
+    "HKCU, now incl. Opera) by itself, the hub re-applies the per-user "
+    "HKCU pass SILENTLY on every start (autocrx_hkcu, no UAC, no "
+    ".bat), so the built-in CRX installs and auto-updates itself from "
+    "the hub; the console gets the Auto-install switch. Firewall: the "
+    "installer opens TCP 9235-9259 for the queue ports. On top of "
+    "v3.3.4: everything from the multi-printer uuid fix, the popup "
+    "printer/reload/network-icon release and the idempotent "
+    "set-default stays unchanged.")
 FULL_BRAND = ("AdvPrint Pro (Advanced Printer) by "
               "Bit Dream IT - Innovative Healthcare Solutions")
 BRANDING = ("AdvPrint Pro (Advanced Printer) - Version %s - by "
@@ -263,6 +262,30 @@ CFG = {
                                       #  for ports < 1024; on macOS/Linux
                                       #  the hub logs a hint when the bind
                                       #  is refused. 0 = off.
+    "ipp_queue_ports": True,          # v3.3.5 BUG 1 (the deep fix): ONE
+                                      #  EXTRA TCP port per local printer
+                                      #  (9236, 9237, ...) that serves
+                                      #  ONLY that printer's queue. With a
+                                      #  dedicated ip:port every printer is
+                                      #  a genuinely DIFFERENT endpoint -
+                                      #  Windows adds all of them side by
+                                      #  side instead of "only one" (the
+                                      #  shared-port/path queues collide in
+                                      #  the Add-Printer flow). 0/False =
+                                      #  path-only queues (old behavior).
+    "ipp_queue_port_map": {},         # v3.3.5: {printer_name: port} the
+                                      #  STABLE port allocation - survives
+                                      #  restarts so an added queue keeps
+                                      #  working; managed automatically.
+    "autocrx_hkcu": True,             # v3.3.5 AUTO CRX ON INSTALL: the
+                                      #  hub writes THIS USER's browser
+                                      #  force-install policy (HKCU - no
+                                      #  UAC, no .bat) shortly after boot
+                                      #  so the built-in CRX installs and
+                                      #  auto-updates itself from this
+                                      #  hub. Machine-wide HKLM stays the
+                                      #  installer's / the console admin
+                                      #  button's job.
     "raw_printer_port": 9100,         # v2.9: JetDirect RAW listener port for
                                       #  Windows "Standard TCP/IP port"
                                       #  printers (0 = off)
@@ -366,6 +389,8 @@ CONFIG_KEYS = ("token", "token_header_only", "allowed_origins",
                "dest_mode", "ip_printer_host", "ip_printer_port",
                "ip_printer_proto",
                "ipp_printer", "ipp_mdns", "ipp_standard_port",
+               "ipp_queue_ports", "ipp_queue_port_map",
+               "autocrx_hkcu",
                "keep_files",           # v3.2.0 gap fix: the ONE UI
                                        #  switch writes it back now
                "drop_enabled", "drop_dir", "drop_delete",
@@ -381,6 +406,8 @@ CONFIG_TYPES = {"token_header_only": bool, "allowed_origins": list,
                 "hold_offline": bool, "audit_enabled": bool,
                 "share_lan": bool, "ipp_printer": bool,
                 "ipp_mdns": bool, "ipp_standard_port": int,
+                "ipp_queue_ports": bool, "ipp_queue_port_map": dict,
+                "autocrx_hkcu": bool,
                 "raw_printer_port": int,
                 "reprint_watermark": bool, "reprint_reason_required": bool,
                 "peer_hubs": list, "peer_forwarding": bool,
@@ -4783,6 +4810,97 @@ Write-Host '  Restart Chrome / Edge / Brave / Vivaldi / Chromium / Opera once.'
     }
 
 
+def _ext_reg_first_free(full_key):
+    """First free numeric value name (1, 2, 3, ...) under full_key."""
+    vals = _ext_reg_query_values(full_key)
+    n = 1
+    while str(n) in vals and n < 200:
+        n += 1
+    return str(n)
+
+
+_AUTOCRX_AUTO_STATE = {"done": False}
+
+
+def autocrx_hkcu_auto():
+    """v3.3.5 AUTO CRX ON INSTALL - the built-in extension installs
+    itself. The hub writes THIS USER's browser force-install policy
+    (HKCU: Forcelist + Allowlist + Sources for every Chromium browser)
+    by itself, SILENTLY: HKCU needs no elevation, so there is no UAC,
+    no PowerShell script and NO external .bat - the tool installs and
+    from then on Chrome/Edge/Brave/Chromium/Vivaldi/Opera pick the
+    AdvPrint Pro CRX up at their next start and auto-update it from
+    THIS hub's /extension/updates.xml on every later release.
+    Machine-wide HKLM stays the installer section's / the console
+    'Auto-integrate (admin)' button's job (autocrx, one UAC prompt).
+    Idempotent - existing entries are kept, nothing is ever deleted.
+    Config: autocrx_hkcu (default ON)."""
+    if not IS_WIN:
+        return None
+    if not CFG.get("autocrx_hkcu", True):
+        return None
+    if _AUTOCRX_AUTO_STATE["done"]:
+        return None
+    _AUTOCRX_AUTO_STATE["done"] = True
+    ext_id = (crx_package() or {}).get("ext_id", EXT_CRX_ID)
+    updates_url = ext_policy_url()
+    source_url = re.sub(r"/extension/updates\.xml$", "/*", updates_url)
+    wrote, kept = [], 0
+    for frag, name in EXT_ACTIVATE_BROWSERS:
+        base = "HKCU\\SOFTWARE\\Policies\\%s" % frag
+        fl_key = base + "\\ExtensionInstallForcelist"
+        existing = _ext_reg_query_values(fl_key)
+        slot = None
+        for vname, vdata in existing.items():
+            if str(vdata).startswith(ext_id + ";"):
+                slot = vname
+                break
+        if slot is None:
+            slot = _ext_reg_first_free(fl_key)
+            if not _ext_reg_add(fl_key, slot,
+                                "%s;%s" % (ext_id, updates_url)):
+                continue                      # AV blocked both writers
+            wrote.append(name)
+        else:
+            kept += 1
+        # Allowlist + Sources make the CRX install cleanly from the hub
+        # (no unknown-source warning); refreshed only when missing.
+        al_key = base + "\\ExtensionInstallAllowlist"
+        if ext_id not in [str(v) for v in _ext_reg_query_values(al_key).values()]:
+            _ext_reg_add(al_key, _ext_reg_first_free(al_key), ext_id)
+        so_key = base + "\\ExtensionInstallSources"
+        if source_url not in [str(v) for v in
+                              _ext_reg_query_values(so_key).values()]:
+            _ext_reg_add(so_key, _ext_reg_first_free(so_key), source_url)
+    if wrote or kept:
+        log("[AUTOCRX] auto-integrate (HKCU, silent): %s - the built-in "
+            "CRX installs/updates itself in Chrome/Edge/Brave/Vivaldi/"
+            "Chromium/Opera at their next start (updates.xml: %s)"
+            % (("%d browser(s) written" % len(wrote)) if wrote
+               else "already present, kept", updates_url))
+        try:
+            db_audit("extension.autocrx_hkcu", actor="hub",
+                     details="silent HKCU policy pass: %d written, %d "
+                             "already present" % (len(wrote), kept))
+        except Exception:
+            pass
+    return {"ok": True, "written": wrote, "kept": kept,
+            "updates_url": updates_url}
+
+
+def _autocrx_auto_thread():
+    """Boot-time wrapper: give the hub a few seconds to settle (config
+    load, listeners, CRX packaging), then run the silent HKCU pass."""
+    try:
+        time.sleep(8.0)
+        autocrx_hkcu_auto()
+    except Exception as e:                    # never break the boot
+        try:
+            log("[AUTOCRX] auto pass failed: %s" % e)
+        except Exception:
+            pass
+
+
 def ext_policy_activate(host=None):
     """AUTOCRX: the internal, self-elevating version of
     allow_extention_advprint_pro.bat. Generates the PowerShell pass
@@ -6197,6 +6315,13 @@ class Handler(BaseHTTPRequestHandler):
             # v3.0.8: per-OS cheat sheet. v3.2.2: shared with the
             # standard-port mirror (ipp631) via ipp_landing_html().
             # v3.2.9 BUG 3: the page shows the address THIS device used.
+            # v3.3.5 BUG 1: on a DEDICATED queue port the landing page
+            # describes THE BOUND PRINTER (the endpoint IS that queue).
+            _qbind = getattr(self.server, "queue_binding", None)
+            if _qbind:
+                return self._send_html(200, ipp_landing_html(
+                    req_host=self._req_host(), req_port=self._req_port(),
+                    queue_name=_qbind))
             return self._send_html(200, ipp_landing_html(
                 req_host=self._req_host(), req_port=self._req_port()))
         err = self._auth_error(qt, allow_query=True)   # v2.0.2: every GET
@@ -6300,6 +6425,13 @@ class Handler(BaseHTTPRequestHandler):
             # queue from its own console always gets ITS reachable URL.
             per_printer = ipp_printer_enabled()
             _req_h = self._req_host()
+            # v3.3.5 BUG 1: make sure the dedicated port map reflects the
+            # CURRENT printer list before the payload is built (cheap -
+            # the printer list comes from the cache)
+            try:
+                ipp_queue_port_allocations()
+            except Exception:
+                pass
             items = []
             for n in list_printers_cached():
                 item = {"name": n, "is_default": n == dp,
@@ -6314,6 +6446,16 @@ class Handler(BaseHTTPRequestHandler):
                     # /ipp/print/ipp/print/<printer>?token=... URL on
                     # the printer Details button.
                     item["ipp_path"] = _ipp_queue_slug(n)
+                    # v3.3.5 BUG 1: the DEDICATED queue port URL - this
+                    # printer's OWN ip:port endpoint (the multi-add fix).
+                    ded = ipp_queue_dedicated_url(n, host=_req_h)
+                    try:
+                        item["ipp_port"] = (int(
+                            ded.split(":")[-1].split("/")[0])
+                            if ded else 0)
+                    except ValueError:
+                        item["ipp_port"] = 0
+                    item["ipp_dedicated"] = ded
                 items.append(item)
             for g in groups:
                 items.append({"name": g, "is_default": False,
@@ -6526,8 +6668,12 @@ class Handler(BaseHTTPRequestHandler):
         # printer list) + the Share Send Mode switch state. The card
         # renders from this on every poll, so a reload / hub restart
         # always shows the truth instead of a stale demo chip.
+        # v3.3.5 (manual re-scan): ?fresh=1 skips the 8 s probe cache -
+        # the Printers page "Re-scan" button uses it to re-read the
+        # other PC's printers ON DEMAND; the plain poll keeps the cache.
         if route == "/peer/status":
-            return self._send(200, _lan_peer_status())
+            return self._send(200, _lan_peer_status(
+                fresh=str((q or {}).get("fresh") or "") == "1"))
         return self._send(404, {"ok": False, "error": "unknown endpoint"})
 
     def _csv_response(self, which, rows):
@@ -6615,17 +6761,30 @@ class Handler(BaseHTTPRequestHandler):
         # as before (routed to that one printer).
         ipp_q_printer = ""
         ipp_q_unknown = ""
+        # v3.3.5 BUG 1: on a DEDICATED per-printer queue port the bound
+        # printer OWNS every /ipp/print* path - the endpoint itself IS
+        # the queue. Windows adds this printer as
+        # http://<lan-ip>:<queue-port>/ipp/print (NO path tail!) - the
+        # binding is what routes its Get-Printer-Attributes / Print-Job
+        # to exactly that one printer.
+        _ippq_bind = getattr(self.server, "queue_binding", None)
+        if _ippq_bind and route.startswith("/ipp"):
+            ipp_q_printer = _ippq_bind
+            ipp_q_unknown = ""
         if route.startswith("/ipp/print/"):
-            ipp_q_printer = _ipp_queue_match_cached(
-                urllib.parse.unquote(route[len("/ipp/print/"):]))
-            if not ipp_q_printer:
-                ipp_q_unknown = urllib.parse.unquote(
-                    route[len("/ipp/print/"):])[:80]
-                db_audit("ipp.queue.reject", ip=self._client_ip(),
-                         site="lan",
-                         details="unknown per-printer IPP queue %r "
-                                 "(answered as generic queue)"
-                                 % route[:120])
+            # v3.3.5: on a bound queue port the binding WINS - a slug
+            # path on that port still prints on the bound printer.
+            if not _ippq_bind:
+                ipp_q_printer = _ipp_queue_match_cached(
+                    urllib.parse.unquote(route[len("/ipp/print/"):]))
+                if not ipp_q_printer:
+                    ipp_q_unknown = urllib.parse.unquote(
+                        route[len("/ipp/print/"):])[:80]
+                    db_audit("ipp.queue.reject", ip=self._client_ip(),
+                             site="lan",
+                             details="unknown per-printer IPP queue %r "
+                                     "(answered as generic queue)"
+                                     % route[:120])
             route = "/ipp/print"
         if route in ("/ipp/print", "/ipp", "/ipp/"):
             if not ipp_printer_enabled():
@@ -9582,8 +9741,9 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
               <div class="frow" style="margin-bottom:0">
                 <span class="tgl"><span class="sw"><span class="switch" id="showRemoteSw"></span></span></span>
                 <b>Show other PCs (LAN / IPP)</b>
-                <span class="note" style="margin:0 0 0 8px">Lists the paired LAN PC's printers (Connections &rarr; Another PC) with a
-                  <b>LAN PC &middot; IPP</b> badge, its ip:port and a ipp:// URL per device &mdash; test-page them right from here.</span>
+                <span class="note" style="margin:0 0 0 8px">v3.3.5 - <b>manual only</b>: flip this on, then press the panel's
+                  <b>&#8635; Re-scan</b> to load the paired LAN PC's printers (Connections &rarr; Another PC) with a
+                  <b>LAN PC &middot; IPP</b> badge, its ip:port and a ipp:// URL per device. No automatic loading.</span>
               </div>
             </div>
           </div>
@@ -10164,6 +10324,13 @@ https://reports.example.com/*</textarea>
                   with an elevated PowerShell (a single UAC prompt) and writes Forcelist + Allowlist + Sources for <b>every</b> Chromium
                   browser, HKLM (all users of this PC) + HKCU (current user). CLI: <span class="mono">python advprint.py activate-extension</span>.
                   The .bat in prebuilt/ stays only as an offline manual fallback.</span>
+              </div>
+              <div class="frow" style="margin:8px 0 0">
+                <span class="tgl"><span class="sw"><span class="switch" id="autocrxHkcuSw"></span></span></span>
+                <b style="font-size:11.5px">Auto-install/update the extension (this PC)</b>
+                <span style="font-size:10.5px;color:var(--muted);line-height:1.5">v3.3.5 — <b>the tool does it itself</b>: right after every hub start the
+                  built-in CRX policy is written for THIS user (HKCU, silent — no UAC, no .bat), so the extension installs and
+                  auto-updates from this hub in every Chromium browser. Turn OFF if a company policy manages the browsers.</span>
               </div>
             </div>
             <table class="tbl" style="font-size:10.5px">
@@ -11346,11 +11513,43 @@ function renderLanPeer(st){
 function loadLanPeer(){
   api("/peer/status").then(function(st){
     renderLanPeer(st);
-    renderRemotePrinters(st);
+    /* v3.3.5: the remote PRINTER cards no longer re-render here - the
+       poll kept re-probing and rebuilding them every 3 s (the printers
+       page "auto-loaded" constantly). They now render from the cached
+       scan and re-probe ONLY on a manual Re-scan / toggle-ON. */
   }).catch(function(){ /* keep the last known state */ });
 }
 /* alias used by the Connect/Clear handlers */
 function loadRemoteState(){ loadLanPeer(); }
+
+/* ---- v3.3.5 MANUAL RE-SCAN of the other PC's printers ----
+   The remote list is filled ONLY when the user asks: the Printers
+   panel's Re-scan button, or turning "Show other PCs (LAN / IPP)" ON.
+   ?fresh=1 skips the hub's 8 s probe cache so the button always
+   re-reads the other PC right now. */
+var remoteScanState = { scanned: false, st: null, busy: false };
+function scanRemotePrinters(manual){
+  if (remoteScanState.busy) return;
+  if (!cfgCache.show_remote_printers) return;
+  remoteScanState.busy = true;
+  api("/peer/status?fresh=1").then(function(st){
+    remoteScanState.busy = false;
+    remoteScanState.scanned = true;
+    remoteScanState.st = st;
+    renderLanPeer(st);
+    renderRemotePrinters(st);
+    if (manual) {
+      var p = st && st.peer;
+      toast(p && p.alive
+        ? ("Re-scan done - " + ((p.printers || []).length) +
+           " printer(s) on the LAN PC")
+        : "Re-scan done - the paired LAN PC did not answer", "ok");
+    }
+  }).catch(function(e){
+    remoteScanState.busy = false;
+    if (manual) toast("Re-scan failed: " + e.message, "err");
+  });
+}
 function renderRecent(jobs){
   var tbl = document.querySelector("#p-dashboard table.tbl");
   if (!tbl) return;
@@ -11402,9 +11601,15 @@ function renderPrinters(list){
         "<span>Jobs <b>" + (p.jobs != null ? p.jobs : 0) + "</b></span>" +
         "<span>" + chip(p.status === "ready" ? "ready" : p.status) + "</span>";
       var url = c.querySelector(".url");
-      if (p.ipp_queue) { url.innerHTML = ""; url.appendChild(document.createTextNode(p.ipp_queue));
+      /* v3.3.5: the DEDICATED queue port URL leads (this printer's OWN
+         ip:port - the endpoint Windows can add side by side with every
+         other printer); the path queue stays on the Details button. */
+      var leadUrl = p.ipp_dedicated || p.ipp_queue;
+      if (leadUrl) { url.innerHTML = ""; url.appendChild(document.createTextNode(leadUrl));
         var b = document.createElement("button"); b.className = "cp"; b.textContent = "COPY";
-        b.setAttribute("data-cp", p.ipp_queue); url.appendChild(b); }
+        b.setAttribute("data-cp", leadUrl); url.appendChild(b);
+        if (p.ipp_dedicated) url.title = "Dedicated port " + p.ipp_port +
+          " - this printer's OWN endpoint (v3.3.5 multi-printer fix)"; }
       else { url.style.display = "none"; }
       var ops = c.querySelector(".ops");
       ops.innerHTML = '<button class="btn blue" data-ptest="' + esc(p.name) + '">Test Page</button>' +
@@ -11450,11 +11655,38 @@ function renderPrinters(list){
    and can be test-printed through the peer hub. Set Default is
    disabled on remote cards (an OS default belongs to that other PC). */
 function renderRemotePrinters(st){
-  st = st || lanPeerState || {};
+  /* v3.3.5: renders from the LAST MANUAL SCAN (cached, zero network)
+     - poll() calls it after every grid rebuild so the cards survive,
+       but a fresh probe happens only in scanRemotePrinters(). */
+  st = st || remoteScanState.st || {};
   var grid = document.querySelector("#p-printers .pgrid");
   if (!grid) return;
   qsa("#p-printers .pcard[data-remote]").forEach(function(c){ c.remove(); });
+  qsa("#p-printers .pcard[data-remotescan]").forEach(function(c){ c.remove(); });
   if (!cfgCache.show_remote_printers) return;
+  if (!remoteScanState.scanned) {
+    /* v3.3.5: no automatic loading - show the manual-scan hint */
+    var th = grid.querySelector(".pcard");
+    if (th) {
+      var h = th.cloneNode(true);
+      h.setAttribute("data-remotescan", "1");
+      var hb = h.querySelector(".badge"); if (hb) hb.remove();
+      var hnm = h.querySelector(".nm");
+      if (hnm) hnm.textContent = "Other PCs' printers: press Re-scan";
+      var hmd = h.querySelector(".mdl");
+      if (hmd) hmd.textContent = "no automatic loading - the list fills " +
+        "when you press \u21bb Re-scan above (LAN PC \u00b7 IPP badge)";
+      var hst = h.querySelector(".st");
+      if (hst) hst.innerHTML = "<span>Source <b>LAN PC</b></span>" +
+        "<span>Scan <b>manual</b></span>";
+      var hu = h.querySelector(".url"); if (hu) hu.style.display = "none";
+      var ho = h.querySelector(".ops");
+      if (ho) ho.innerHTML =
+        '<button class="btn blue" data-rscan="1">\u21bb Re-scan now</button>';
+      grid.appendChild(h);
+    }
+    return;
+  }
   var p = st.peer;
   if (!st.configured || !p || !p.alive) return;
   var t0 = grid.querySelector(".pcard");
@@ -11490,7 +11722,16 @@ function renderRemotePrinters(st){
     grid.appendChild(c);
   });
   /* wire the remote-card buttons (delegated - the grid re-renders) */
-  qsa("#p-printers .pcard[data-remote] button").forEach(function(btn){
+  qsa("#p-printers .pcard[data-remote] button, " +
+      "#p-printers .pcard[data-remotescan] button").forEach(function(btn){
+    var rs = btn.getAttribute("data-rscan");
+    if (rs && !btn.dataset.bound) {
+      btn.dataset.bound = "1";
+      btn.addEventListener("click", function(){
+        toast("Re-scanning the other PC's printers ...");
+        scanRemotePrinters(true);
+      });
+    }
     var tp = btn.getAttribute("data-prtest");
     if (tp && !btn.dataset.bound) {
       btn.dataset.bound = "1";
@@ -12090,7 +12331,7 @@ function renderExt(audit){
     rows.slice(0, 6).forEach(function(r2){
       var tr = tmpl.cloneNode(true), td = tr.querySelectorAll("td");
       td[0].innerHTML = "<b>" + esc(r2.who) + "</b>";
-      td[1].textContent = "v" + (BOOT.version || "3.3.4");
+      td[1].textContent = "v" + (BOOT.version || "3.3.5");
       td[2].textContent = r2.at ? r2.at.slice(11, 19) : "\u2014";
       td[3].innerHTML = '<span class="chip ok"><span class="d"></span>PAIRED</span>';
       tbl.appendChild(tr);
@@ -12112,7 +12353,7 @@ function renderExt(audit){
       m2.textContent = BASE + "/extension/updates.xml";
   });
   var crxChip = document.querySelector("#p-extension .frow .chip.ok");
-  if (crxChip) crxChip.innerHTML = '<span class="d"></span>CRX v' + (BOOT.version || "3.3.4") + " READY";
+  if (crxChip) crxChip.innerHTML = '<span class="d"></span>CRX v' + (BOOT.version || "3.3.5") + " READY";
   /* v3.2.8 STALE-CRX GUARD: ask the hub which package it really
    * serves (/extension/info is open, no token). Older than the hub
    * itself -> Chrome never updates -> browsers keep the old bugs.
@@ -12318,7 +12559,7 @@ async function renderUpdate(res){
    full-page /docs stays available via the "Full guide page" button.
    ============================================================ */
 function docsHtml(){
-  var v = esc(BOOT.version || "3.3.4");
+  var v = esc(BOOT.version || "3.3.5");
   var ip = esc(BOOT.lan_ip || location.hostname || "127.0.0.1");
   var port = esc(String(BOOT.port || location.port || "9235"));
   var base = "http://" + ip + ":" + port;
@@ -12453,7 +12694,14 @@ var ACTIONS = {
   "export-audit": function(){
     window.open(BASE + "/export/audit.csv?token=" + encodeURIComponent(TOKEN), "_blank");
     toast("audit.csv exported", "ok"); },
-  "refresh-printers": function(){ poll(); toast("Printers rescanned", "ok"); },
+  "refresh-printers": function(){
+    poll();
+    /* v3.3.5: the Re-scan button is the MANUAL trigger for the other
+       PC's printers too - a fresh probe, only when the switch is ON.
+       With the switch off it stays the local printer re-scan. */
+    if (cfgCache.show_remote_printers) { scanRemotePrinters(true); }
+    else { toast("Printers rescanned", "ok"); }
+  },
   "fw-allow": async function(){
     try { var r = await api("/tool", { method: "POST", body: { action: "fw-allow" } });
       toast(r.message || "Firewall rule requested \u2014 approve the UAC prompt", "ok");
@@ -13406,6 +13654,21 @@ function bindSwitches(){
         .then(function(){ _shareSendPending = false; });
       return;
     }
+    /* v3.3.5 AUTO CRX (this PC) switch - Extension tab */
+    if (s.id === "autocrxHkcuSw") {
+      var wantA = !s.classList.contains("on");
+      s.classList.toggle("on", wantA);
+      api("/config", { method: "POST", body: { autocrx_hkcu: wantA } })
+        .then(function(){
+          cfgCache.autocrx_hkcu = wantA;
+          toast(wantA
+            ? "Auto-install ON - the hub writes the CRX policy for this PC after every restart (HKCU, silent)"
+            : "Auto-install OFF - the hub no longer touches the browser policy", wantA ? "ok" : "warn");
+        })
+        .catch(function(e){ s.classList.toggle("on", !wantA);
+          toast(e.message, "err"); });
+      return;
+    }
     /* v3.3.2 remote devices switch (Printers panel) */
     if (s.id === "showRemoteSw") {
       var wantR = !s.classList.contains("on");
@@ -13413,9 +13676,16 @@ function bindSwitches(){
       api("/config", { method: "POST", body: { show_remote_printers: wantR } })
         .then(function(){
           cfgCache.show_remote_printers = wantR;
-          if (wantR) { toast("Other PCs' devices shown below (LAN PC \u00b7 IPP badge)", "ok"); loadLanPeer(); }
-          else { qsa("#p-printers .pcard[data-remote]").forEach(function(c){ c.remove(); });
-                 toast("Remote devices hidden", "warn"); }
+          if (wantR) {
+            /* v3.3.5: turning the switch ON is the manual trigger -
+               ONE fresh probe right now, never the 3 s poll */
+            toast("Other PCs' devices shown below (LAN PC \u00b7 IPP badge)", "ok");
+            scanRemotePrinters(false);
+          } else {
+            remoteScanState.scanned = false; remoteScanState.st = null;
+            renderRemotePrinters();
+            toast("Remote devices hidden", "warn");
+          }
         })
         .catch(function(e){ s.classList.toggle("on", !wantR);
           toast(e.message, "err"); });
@@ -13568,6 +13838,12 @@ async function poll(){
     renderStats(h, st, q, pr);
     renderLanRows();
     renderPrinters(pr.printers || []);
+    /* v3.3.5 MANUAL RE-SCAN: the remote cards render from the LAST
+       manual scan (zero network) so they survive the grid rebuild -
+       a FRESH probe of the other PC happens only in scanRemotePrinters
+       (the panel Re-scan button / the switch ON). Before v3.3.5 the
+       poll re-probed and rebuilt this list every 3 s. */
+    renderRemotePrinters();
     renderJobs(jobs);
     renderRecent(jobs);
     renderAudit(audit);
@@ -13591,6 +13867,9 @@ async function poll(){
     loadConnections();
     var srsw = $("showRemoteSw");
     if (srsw) srsw.classList.toggle("on", !!cfgCache.show_remote_printers);
+    /* v3.3.5: the AUTO CRX (this PC) switch mirrors the live config */
+    var axsw = $("autocrxHkcuSw");
+    if (axsw) axsw.classList.toggle("on", cfgCache.autocrx_hkcu !== false);
     /* v3.2.3 SWITCH FIX part 2: the hub panel now refreshes from the
        live config on every poll - the inputs no longer keep the static
        demo values, and a switch save cannot write them into config.json */
@@ -15787,11 +16066,22 @@ def lan_listen_start():
         build_health_snapshot()
     except Exception:
         pass
+    # v3.3.5: the per-printer queue ports ride the LAN listener's
+    # lifecycle - they exist for LAN clients only.
+    try:
+        ippq_reconcile()
+    except Exception:
+        pass
     return None
 
 def lan_listen_stop():
-    """Stop the dedicated LAN listeners (loopback hub keeps running)."""
+    """Stop the dedicated LAN listeners (loopback hub keeps running).
+    v3.3.5: the per-printer queue ports stop with them."""
     global _LAN_HTTPDS, _LAN_THREADS, _LAN_BINDS, _LAN_BIND_SIG, BOUND_LAN
+    try:
+        ippq_stop_all()
+    except Exception:
+        pass
     httpds = _LAN_HTTPDS
     if not httpds:
         return
@@ -15847,6 +16137,213 @@ def lan_listen_ensure():
         lan_listen_start()
     elif not want and _LAN_HTTPDS:
         lan_listen_stop()
+    # v3.3.5: keep the dedicated queue ports in step with the printer
+    # list (new printer -> new port; removed printer -> port freed)
+    # every time this 3 s hook runs.
+    try:
+        ippq_reconcile()
+    except Exception:
+        pass
+
+# ------------------------------------------------------------
+# v3.3.5 BUG 1 - DEDICATED PER-PRINTER QUEUE PORTS (the deep fix for
+# "only default or only one add possible - adding another errors").
+#
+# v3.3.4 made every mDNS service carry its OWN uuid, but all queues
+# still answered on the SAME host:port (one SRV target, one TCP 9235)
+# and the SAME /ipp/print URL prefix. Windows' Add-Printer flow keys a
+# connection on host:port first - when the second queue resolves to
+# the SAME ip:9235 the wizard treats it as the printer that is already
+# there and the add fails. The only fix Windows cannot argue with is
+# a DIFFERENT endpoint: the hub now opens ONE EXTRA TCP port per
+# local printer (9236, 9237, ... right after the hub port) and every
+# queue port serves EXACTLY ONE printer for ALL /ipp/print* paths.
+#
+#   http://<lan-ip>:9235/ipp/print              -> central queue (default)
+#   http://<lan-ip>:9235/ipp/print/<printer>    -> per-printer path queue
+#   http://<lan-ip>:9236/ipp/print              -> printer #1 (own port!)
+#   http://<lan-ip>:9237/ipp/print              -> printer #2 (own port!)
+#
+# The mDNS announce gives every printer service its OWN SRV record
+# (its own port), so discovery, manual add and "Add device" all see
+# genuinely separate printers. Ports are allocated ONCE and kept in
+# config (ipp_queue_port_map) so an installed queue survives restarts.
+# ------------------------------------------------------------
+
+_IPPQ_MAX_QUEUES = 24
+_IPPQ_HTTPDS = {}        # printer_name -> {"port": int, "httpds": [...],
+                         #                 "threads": [...]}
+_IPPQ_LOCK = threading.Lock()
+
+
+def ipp_queue_port_base():
+    """First queue port = hub port + 1 (9236 with the default 9235)."""
+    return int(CFG.get("port", 9235)) + 1
+
+
+def ipp_queue_port_allocations(refresh=False):
+    """{printer_name: port} - the STABLE per-printer port map.
+    Existing valid assignments are kept (an installed Windows queue
+    keeps its port across restarts); new printers take the lowest free
+    port after the hub port; stale entries (printer gone) are dropped.
+    Persisted in config when something changed."""
+    names = []
+    try:
+        names = sorted(n for n in list_printers_cached(max_age=30.0)
+                       if n)[:_IPPQ_MAX_QUEUES]
+    except Exception:
+        names = []
+    base = ipp_queue_port_base()
+    top = base + _IPPQ_MAX_QUEUES
+    m = {}
+    kept = CFG.get("ipp_queue_port_map") or {}
+    if not isinstance(kept, dict):
+        kept = {}
+    used = set()
+    for n in names:
+        p = kept.get(n)
+        try:
+            p = int(p)
+        except (TypeError, ValueError):
+            p = 0
+        if base <= p < top and p not in used:
+            m[n] = p
+            used.add(p)
+    nxt = base
+    for n in names:
+        if n in m:
+            continue
+        while nxt < top and nxt in used:
+            nxt += 1
+        if nxt >= top:
+            break                      # ran out of queue ports - path
+        m[n] = nxt                     # queues keep working for the rest
+        used.add(nxt)
+    if m != kept:
+        CFG["ipp_queue_port_map"] = dict(m)   # in-memory: always
+        # persist so an installed queue keeps its port across restarts
+        # (only on a REAL configured hub - config.json exists after the
+        # boot bootstrap; keeps test/mDNS probe calls side-effect free)
+        try:
+            if os.path.exists(config_path()):
+                write_config_file({k: CFG[k] for k in CONFIG_KEYS})
+        except Exception:
+            pass
+    return m
+
+
+def _ippq_stop_one(name):
+    """Stop + forget the dedicated listeners of ONE printer."""
+    with _IPPQ_LOCK:
+        ent = _IPPQ_HTTPDS.pop(name, None)
+    if not ent:
+        return
+    def _closer(ents):
+        for httpd in ents:
+            try:
+                httpd.shutdown()
+            except Exception:
+                pass
+            try:
+                httpd.server_close()
+            except Exception:
+                pass
+    threading.Thread(target=_closer, args=(ent["httpds"],), daemon=True,
+                     name="advprint-ippq-stop").start()
+    log("[IPPQ] queue port %d closed (%s)" % (ent["port"], name))
+
+
+def ippq_stop_all():
+    """Stop EVERY dedicated queue-port listener (LAN sharing off)."""
+    with _IPPQ_LOCK:
+        names = list(_IPPQ_HTTPDS.keys())
+    for n in names:
+        _ippq_stop_one(n)
+
+
+def ippq_reconcile():
+    """Start/stop the dedicated queue ports so they always match the
+    current printer list. Runs alongside the LAN listeners: with LAN
+    sharing / IPP off nothing is bound. Cheap - called from the mDNS
+    3 s loop and right after lan_listen_start()."""
+    if _env("HOST"):
+        return
+    want = bool(CFG.get("ipp_queue_ports")) and ipp_printer_enabled() \
+        and (bool(CFG.get("share_lan")) or lan_listen_active())
+    if not want:
+        ippq_stop_all()
+        return
+    alloc = ipp_queue_port_allocations()
+    with _IPPQ_LOCK:
+        live = dict(_IPPQ_HTTPDS)
+    for n in list(live.keys()):
+        if n not in alloc or live[n]["port"] != alloc[n]:
+            _ippq_stop_one(n)
+    for n, port in alloc.items():
+        with _IPPQ_LOCK:
+            if n in _IPPQ_HTTPDS:
+                continue
+        socks, errs = [], []
+        try:
+            socks, errs = bind_listener_sockets(port, "IPPQ %s" % n)
+        except OSError as e:
+            log("[IPPQ] %s: cannot bind port %d (%s) - the path queue"
+                " ip:%d/ipp/print/%s still works"
+                % (n, port, e, int(CFG.get("port", 9235)),
+                   _ipp_queue_slug(n)))
+            continue
+        opened, threads = [], []
+        for s in socks:
+            try:
+                httpd = _httpd_on(s, Handler, HubServer)
+                httpd.queue_binding = n          # THE per-port routing
+            except Exception as e:
+                try:
+                    s.close()
+                except OSError:
+                    pass
+                errs.append("%s: %s" % (_sock_label(s), e))
+                continue
+            opened.append(httpd)
+        if not opened:
+            for s in socks:
+                try:
+                    s.close()
+                except OSError:
+                    pass
+            log("[IPPQ] %s: port %d refused (%s) - path queue still"
+                " works" % (n, port, "; ".join(errs)))
+            continue
+        for httpd in opened:
+            t = threading.Thread(target=httpd.serve_forever,
+                                 kwargs={"poll_interval": 0.2},
+                                 name="advprint-ippq", daemon=True)
+            threads.append(t)
+            t.start()
+        with _IPPQ_LOCK:
+            _IPPQ_HTTPDS[n] = {"port": port, "httpds": opened,
+                               "threads": threads}
+        log("[IPPQ] printer %r listens on its OWN port %d - add it as "
+            "http://<lan-ip>:%d/ipp/print (unique endpoint, every "
+            "printer adds cleanly)" % (n, port, port))
+
+
+def ipp_queue_dedicated_url(name, host=None):
+    """http://<host>:<queue-port>/ipp/print for ONE printer - empty
+    string when the printer has no dedicated port (ports off, list
+    unavailable). host defaults to the LAN IP the same way lan_share_url
+    does."""
+    m = CFG.get("ipp_queue_port_map") or {}
+    port = m.get(name)
+    try:
+        port = int(port)
+    except (TypeError, ValueError):
+        return ""
+    if not (ipp_queue_port_base() <=
+            port < ipp_queue_port_base() + _IPPQ_MAX_QUEUES):
+        return ""
+    ip = str(host or (lan_ip() if CFG.get("share_lan") else "127.0.0.1"))
+    return "http://%s:%d/ipp/print" % (ip, port)
 
 # ------------------------------------------------------------
 # v2.9.0 - NETWORK PRINTER MODE. The hub can now be added on OTHER
@@ -17015,7 +17512,7 @@ def ipp_printer_enabled():
     return bool(CFG.get("ipp_printer", True))
 
 
-def ipp_landing_html(req_host=None, req_port=None):
+def ipp_landing_html(req_host=None, req_port=None, queue_name=None):
     """v3.2.2: the IPP how-to page served when a HUMAN opens the printer
     URL in a browser (GET /ipp/print). Shared by the main hub listener
     and the standard-port mirror - one source, both ports.
@@ -17023,7 +17520,9 @@ def ipp_landing_html(req_host=None, req_port=None):
     used (Host header) when it is a real LAN address, so every PC/phone
     sees its own reachable ip:port - never one stale global lan_ip().
     The page also states WHO may print (allowed_ips rules) so a denied
-    or restricted device understands the hub's ACL at a glance."""
+    or restricted device understands the hub's ACL at a glance.
+    v3.3.5 BUG 1: queue_name = a DEDICATED queue port's bound printer -
+    the page then titles and describes THAT printer's endpoint."""
     host = socket.gethostname()
     # v3.2.9 BUG 3: per-device base address. Loopback-only Host headers
     # (the hub owner opening the page on the hub itself) fall back to
@@ -17074,7 +17573,7 @@ def ipp_landing_html(req_host=None, req_port=None):
  font-size:12.5px;word-break:break-all}li{margin:5px 0}
  .ok{background:#ecfdf5;border:1px solid #a7f3d0;border-radius:10px;padding:10px 14px;
  margin:14px 0;font-size:13.5px}</style></head><body><div class="b">
- <h1>AdvPrint Pro - IPP network printer</h1>
+ <h1>AdvPrint Pro - IPP %s</h1>
  <p>This URL is the <b>IPP print endpoint of <span>%s</span></b>.
  Add it as a printer - do not open it in a browser:</p>
  <p style="font-size:16px"><code>ipp://%s</code></p>
@@ -17102,11 +17601,13 @@ def ipp_landing_html(req_host=None, req_port=None):
  <ul><li>Print from any app &rarr; Default Print Service / Mopria -
  the printer is discovered automatically.</li>
  %s</ul>
- <div class="ok">%s<br><b>Prints go to THIS PC's printer</b> through the
- AdvPrint Pro hub - the PC must be on and the hub running (tray icon).
- The first job also shows in the hub history like every other print.
- 100%% local - powered by AdvPrint Pro %s.</div>
+ <div class="ok">%s<br><b>Prints go to <span>%s</span> on THIS PC</b>
+ through the AdvPrint Pro hub - the PC must be on and the hub running
+ (tray icon). The first job also shows in the hub history like every
+ other print. 100%% local - powered by AdvPrint Pro %s.</div>
  </div></body></html>""" % (
+        _html_escape("network printer" if not queue_name
+                     else "queue \"%s\" (dedicated port)" % queue_name),
         _html_escape(host),
         _html_escape(ipp_url, quote=True),
         _html_escape(http_url, quote=True),
@@ -17115,6 +17616,7 @@ def ipp_landing_html(req_host=None, req_port=None):
         port,
         std_note,
         acl_note,
+        _html_escape(queue_name if queue_name else "THIS PC's printer"),
         VERSION)
 
 
@@ -17535,14 +18037,26 @@ def _mdns_services():
     the central queue) so its TXT record gets a UNIQUE printer-uuid -
     without it Windows adds only the first discovered queue and
     errors on the rest.
-    Service 0 = the classic central queue (ipp/print). Then ONE service
-    per LOCAL printer with rp=ipp/print/<slug>, capped at 24 printers so
-    the UDP announce packet stays far below the 9000 byte mDNS cap
-    (v3.3.0 BUG 3: was 12 - larger labs/shops have more printers, and
-    EVERY printer that exists must be separately discoverable)."""
+    v3.3.5 BUG 1: each service ALSO carries its OWN SRV port - the
+    central queue the hub port, every per-printer queue its DEDICATED
+    port (ipp_queue_port_allocations). v3.3.4 taught Windows to tell
+    the queues apart (unique uuids) but all of them still resolved to
+    the SAME host:port, and the Add-Printer flow treats a second queue
+    on the same endpoint as "already there". With one port per printer
+    every queue is a genuinely DIFFERENT network printer - discovery,
+    "Add device" and manual adds all succeed side by side.
+    Tuple: (instance, rp, ty, note, slug, port).
+    Service 0 = the classic central queue (ipp/print, hub port). Then
+    ONE service per LOCAL printer with rp=ipp/print/<slug>, capped at
+    24 printers so the UDP announce packet stays far below the 9000
+    byte mDNS cap (v3.3.0 BUG 3: was 12 - larger labs/shops have more
+    printers, and EVERY printer that exists must be separately
+    discoverable)."""
+    hub_port = int(CFG.get("port", 9235))
     out = [(_mdns_instance_name(), "ipp/print", "AdvPrint Pro",
-            "AdvPrint Pro print hub", None)]
+            "AdvPrint Pro print hub", None, hub_port)]
     try:
+        alloc = ipp_queue_port_allocations()
         for n in list_printers_cached(max_age=30.0)[:24]:
             if not n:
                 continue
@@ -17550,7 +18064,8 @@ def _mdns_services():
                         "ipp/print/%s" % _ipp_queue_slug(n),
                         n[:60],
                         "AdvPrint Pro - %s" % n[:60],
-                        _ipp_queue_slug(n)))
+                        _ipp_queue_slug(n),
+                        int(alloc.get(n) or hub_port)))
     except Exception:
         pass
     return out
@@ -17573,12 +18088,14 @@ def _mdns_rrset(ip, ttl=_MDNS_TTL, ip6=None):
     v3.3.0 BUG 2: one shared AAAA record too, so IPv6-capable clients
     (modern phones, IPv6-only LANs) can reach the hub over IPv6."""
     target = _mdns_host_target()
-    port = int(CFG.get("port", 9235))
-    srv = ((0).to_bytes(2, "big") + (0).to_bytes(2, "big") +
-           port.to_bytes(2, "big") + _mdns_encode_name(target))
     records = []
-    for inst, rp, ty, note, slug in _mdns_services():
+    for inst, rp, ty, note, slug, port in _mdns_services():
         fq = inst + "._ipp._tcp.local"
+        # v3.3.5 BUG 1: an SRV PER SERVICE - every printer queue
+        # advertises its own dedicated port, so a client resolving one
+        # instance can never land on another printer's endpoint.
+        srv = ((0).to_bytes(2, "big") + (0).to_bytes(2, "big") +
+               int(port).to_bytes(2, "big") + _mdns_encode_name(target))
         records.append(
             _mdns_rr("_ipp._tcp.local", _MDNS_QTYPE_PTR, ttl,
                      _mdns_encode_name(fq)))
@@ -17772,18 +18289,19 @@ def _mdns_answer_query(pkt, addr, ip, ip6=None):
     if not qs:
         return
     target = _mdns_host_target()
-    port = int(CFG.get("port", 9235))
     services = {
         "_ipp._tcp.local": True,
         "_universal._sub._ipp._tcp.local": True,
     }
-    # instance name -> (rp, ty, note, slug) for per-instance SRV/TXT
-    # answers - v3.3.4 BUG 1: the slug rides along so a DIRECT TXT
-    # query (Windows asks one instance by name) is answered with that
-    # queue's OWN uuid too, not the shared hub uuid
+    # instance name -> (rp, ty, note, slug, port) for per-instance
+    # SRV/TXT answers - v3.3.4 BUG 1: the slug rides along so a DIRECT
+    # TXT query (Windows asks one instance by name) is answered with
+    # that queue's OWN uuid; v3.3.5 BUG 1: the port rides along too so
+    # the SRV answer carries that queue's DEDICATED endpoint.
     instances = {}
-    for inst, rp, ty, note, slug in _mdns_services():
-        instances[inst.lower() + "._ipp._tcp.local"] = (rp, ty, note, slug)
+    for inst, rp, ty, note, slug, port in _mdns_services():
+        instances[inst.lower() + "._ipp._tcp.local"] = (rp, ty, note,
+                                                        slug, port)
     answers = []
     echoed = b""
     qdcount = 0
@@ -17803,14 +18321,18 @@ def _mdns_answer_query(pkt, addr, ip, ip6=None):
             full_set_sent = True
             break               # PTR/ANY -> full record set (all queues)
         if qtype == _MDNS_QTYPE_SRV:
+            _rp, _ty, _note, _slug, port = instances.get(
+                name, ("", "", "", None, int(CFG.get("port", 9235))))
             srv = ((0).to_bytes(2, "big") + (0).to_bytes(2, "big") +
-                   port.to_bytes(2, "big") + _mdns_encode_name(target))
+                   int(port).to_bytes(2, "big") +
+                   _mdns_encode_name(target))
             answers.append(_mdns_rr(name, _MDNS_QTYPE_SRV, _MDNS_TTL,
                                     srv, flush=True))
         elif qtype == _MDNS_QTYPE_TXT:
-            rp, ty, note, slug = instances.get(
+            rp, ty, note, slug, _port = instances.get(
                 name, ("ipp/print", "AdvPrint Pro",
-                       "AdvPrint Pro print hub", None))
+                       "AdvPrint Pro print hub", None,
+                       int(CFG.get("port", 9235))))
             answers.append(_mdns_rr(name, _MDNS_QTYPE_TXT, _MDNS_TTL,
                                     _mdns_txt_records(rp=rp, ty=ty,
                                                       note=note, slug=slug),
@@ -19012,6 +19534,13 @@ def cmd_serve():
     log("Open THE ONE UI console:  http://127.0.0.1:%d/ui  (the toolbar "
         "icon opens it too). Press Ctrl+C to stop." % CFG["port"])
     _start_tray(httpd)
+    # v3.3.5 AUTO CRX ON INSTALL: shortly after boot the hub silently
+    # writes THIS USER's browser force-install policy (HKCU - no UAC,
+    # no .bat) so the built-in CRX installs and auto-updates itself
+    # (config switch: autocrx_hkcu, default ON).
+    if IS_WIN and CFG.get("autocrx_hkcu", True):
+        threading.Thread(target=_autocrx_auto_thread, daemon=True,
+                         name="advprint-autocrx").start()
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

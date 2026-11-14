@@ -135,18 +135,18 @@ def _vals(group, name):
 # ---------------------------------------------------------------
 
 def test_version_330_everywhere():
-    assert advprint.VERSION == "3.3.4"
-    assert advprint.VERSION_NAME.startswith("v3.3.4")
-    assert "SHARE SEND POPUP-FIX" in advprint.VERSION_NAME
-    assert "3.3.4" in VERSION_TXT
-    assert MANIFEST["version"] == "3.3.4"
-    assert 'var _apVerFallback = "3.3.4";' in open(
+    assert advprint.VERSION == "3.3.5"
+    assert advprint.VERSION_NAME.startswith("v3.3.5")
+    assert "DEDICATED QUEUE PORTS" in advprint.VERSION_NAME
+    assert "3.3.5" in VERSION_TXT
+    assert MANIFEST["version"] == "3.3.5"
+    assert 'var _apVerFallback = "3.3.5";' in open(
         os.path.join(EXT, "content", "api.js"), encoding="utf-8").read()
-    assert 'BOOT.version || "3.3.4"' in CONSOLE
+    assert 'BOOT.version || "3.3.5"' in CONSOLE
     assert "## v3.3.0 - THE ANY-PC INVITE + DUAL-STACK LISTENER RELEASE" \
         in CHANGELOG
-    assert 'VIProductVersion "3.3.4.0"' in NSI
-    assert "AdvPrint-Pro-Setup-3.3.4.exe" in NSI
+    assert 'VIProductVersion "3.3.5.0"' in NSI
+    assert "AdvPrint-Pro-Setup-3.3.5.exe" in NSI
     # old fallback gone from the live UI source
     assert 'BOOT.version || "3.2.9"' not in CONSOLE
 
