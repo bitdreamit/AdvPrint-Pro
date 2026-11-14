@@ -529,17 +529,17 @@ def test_console_prefill_prefers_lan_pc_url():
 # ---------------------------------------------------------------
 
 def test_version_coherence_333():
-    assert advprint.VERSION == "3.4.7"
+    assert advprint.VERSION == "3.4.8"
     src = open(advprint.__file__, encoding="utf-8").read()
-    assert src.count('VERSION = "3.4.7"') == 1
+    assert src.count('VERSION = "3.4.8"') == 1
     manifest = json.load(open(
         __file__.replace("tests", "extension", 1)
         .replace("test_v333.py", "manifest.json"), encoding="utf-8"))
-    assert manifest["version"] == "3.4.7"
+    assert manifest["version"] == "3.4.8"
     vtxt = open(__file__.replace("tests", "", 1)
                 .replace("test_v333.py", "VERSION.txt"),
                 encoding="utf-8").read()
-    assert "3.4.7" in vtxt
+    assert "3.4.8" in vtxt
 
 
 def test_hub_copies_byte_identical():

@@ -338,7 +338,7 @@ def test_popup_i18n_keys_exist_en_and_bn():
     assert 'popPrinterLastUsed: "Last used:"' in i18n
     assert 'popPrinterDefaultTag: "ডিফল্ট"' in i18n
     assert 'popPrinterLastUsed: "সর্বশেষ ব্যবহৃত:"' in i18n
-    assert i18n.count("3.4.7") >= 2
+    assert i18n.count("3.4.8") >= 2
 
 
 def test_console_cards_lead_with_the_path_queue():

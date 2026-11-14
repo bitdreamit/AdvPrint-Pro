@@ -1,4 +1,4 @@
-/* AdvPrint Pro - popup logic (ONE design, v3.4.7)
+/* AdvPrint Pro - popup logic (ONE design, v3.4.8)
  * PRINTER SELECTOR (change-only set-default, never on popup
  * open/reload), RELOAD button, NETWORK icon in the header (LAN share
  * state at a glance) and a refresh() in-flight guard so popup reloads

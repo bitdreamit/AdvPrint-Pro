@@ -198,13 +198,24 @@ body{font-family:'Segoe UI',system-ui,-apple-system,Roboto,'Noto Sans SC',sans-s
 .tgl p{font-size:11px;color:var(--muted);line-height:1.5;margin-top:2px;max-width:640px}
 /* ---------- tables ---------- */
 table.tbl{width:100%;border-collapse:collapse;font-size:12px}
+/* v3.4.8 TABLE FIT FIX: the rules table (14 columns) used to force a
+   ~1145px minimum width through the nowrap headers and push the Runs
+   column + the Edit/Del buttons OUTSIDE the card. Headers may wrap to
+   a second line now and every wide table sits in a .tbl-wrap that
+   scrolls horizontally INSIDE the card as a last resort, so every
+   button stays reachable on any window width. */
 .tbl th{text-align:left;font-size:10px;letter-spacing:.8px;text-transform:uppercase;color:var(--muted);
-  padding:8px 10px;border-bottom:1px solid var(--line);background:#f8fafc;font-weight:800;white-space:nowrap}
+  padding:8px 10px;border-bottom:1px solid var(--line);background:#f8fafc;font-weight:800;
+  white-space:normal;vertical-align:bottom}
 .tbl td{padding:7px 10px;border-bottom:1px solid #eef2f8;color:var(--ink-2);vertical-align:middle}
 .tbl tr:last-child td{border-bottom:none}
 .tbl tr:hover td{background:var(--blue-soft)}
 .tbl .doc{color:var(--ink);font-weight:600;max-width:210px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tbl .id{font-family:var(--mono);color:var(--muted);font-size:11px}
+.tbl-wrap{overflow-x:auto}
+/* the 14-column rules table: tighter cells so it fits without scrolling */
+.tbl.compact th,.tbl.compact td{padding:6px 6px}
+.tbl.compact .doc{max-width:118px}
 .filters{display:flex;gap:7px;margin-bottom:12px;align-items:center;flex-wrap:wrap}
 .fchip{font-size:11px;font-weight:700;padding:4px 12px;border-radius:14px;border:1px solid #c4d4ec;
   background:#fff;color:var(--ink-2);cursor:pointer}
@@ -662,7 +673,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
 
           <div class="card">
             <div class="card-h">&#128203; Recent Jobs <span class="r">last 6 of 38 today</span></div>
-            <table class="tbl">
+            <div class="tbl-wrap"><table class="tbl">
               <tr><th>ID</th><th>Document</th><th>Printer</th><th>Pages</th><th>Status</th><th style="width:150px">Progress</th><th>Time</th></tr>
               <tr><td class="id">#2047</td><td class="doc">lab-report-nov.pdf</td><td>HP Laser 103 107 108</td><td>12</td><td><span class="chip info"><span class="d"></span>PRINTING</span></td><td><div class="prog"><i style="width:64%"></i></div></td><td>14:22:08</td></tr>
               <tr><td class="id">#2046</td><td class="doc">invoice-2026-11.pdf</td><td>Microsoft Print to PDF</td><td>2</td><td><span class="chip ok"><span class="d"></span>DONE</span></td><td><div class="prog done"><i style="width:100%"></i></div></td><td>14:19:41</td></tr>
@@ -670,7 +681,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
               <tr><td class="id">#2044</td><td class="doc">presentation.pptx</td><td>OneNote (Desktop)</td><td>18</td><td><span class="chip ok"><span class="d"></span>DONE</span></td><td><div class="prog done"><i style="width:100%"></i></div></td><td>14:11:55</td></tr>
               <tr><td class="id">#2043</td><td class="doc">manual-de.pdf</td><td>HP Laser 103 107 108</td><td>64</td><td><span class="chip err"><span class="d"></span>FAILED</span></td><td><div class="prog fail"><i style="width:31%"></i></div></td><td>13:58:12</td></tr>
               <tr><td class="id">#2042</td><td class="doc">receipt.html</td><td>HP Laser 103 107 108</td><td>1</td><td><span class="chip ok"><span class="d"></span>DONE</span></td><td><div class="prog done"><i style="width:100%"></i></div></td><td>13:55:30</td></tr>
-            </table>
+            </table></div>
           </div>
         </section>
 
@@ -704,7 +715,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
               <span style="flex:1"></span>
               <span style="font-size:12px;color:#64748b">ticked rows stay ticked across the 3 s refresh</span>
             </div>
-            <table class="tbl">
+            <div class="tbl-wrap"><table class="tbl">
               <tr><th style="width:30px"><input type="checkbox" data-qall></th><th>ID</th><th>Document</th><th>Printer</th><th>Kind</th><th>Status</th><th style="width:150px">Progress</th><th></th></tr>
               <tr><td><input type="checkbox"></td><td class="id">#2047</td><td class="doc">lab-report-nov.pdf</td><td>HP Laser 103 107 108</td><td><span class="chip info">PDF</span></td><td><span class="chip info"><span class="d"></span>PRINTING</span></td><td><div class="prog"><i style="width:64%"></i></div></td><td><button class="btn small danger">Cancel</button></td></tr>
               <tr><td><input type="checkbox"></td><td class="id">#2045</td><td class="doc">scanned-pp.oxps</td><td>AdvPrint Pro @ AI-Lab</td><td><span class="chip gray">XPS</span></td><td><span class="chip gray"><span class="d"></span>QUEUED</span></td><td><div class="prog"><i style="width:0%"></i></div></td><td><button class="btn small danger">Cancel</button></td></tr>
@@ -713,7 +724,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
               <tr><td><input type="checkbox"></td><td class="id">#2046</td><td class="doc">invoice-2026-11.pdf</td><td>Microsoft Print to PDF</td><td><span class="chip info">PDF</span></td><td><span class="chip ok"><span class="d"></span>DONE</span></td><td><div class="prog done"><i style="width:100%"></i></div></td><td><button class="btn small">&#8635; Reprint</button></td></tr>
               <tr><td><input type="checkbox"></td><td class="id">#2044</td><td class="doc">presentation.pptx</td><td>OneNote (Desktop)</td><td><span class="chip gray">DOC</span></td><td><span class="chip ok"><span class="d"></span>DONE</span></td><td><div class="prog done"><i style="width:100%"></i></div></td><td><button class="btn small">&#8635; Reprint</button></td></tr>
               <tr><td><input type="checkbox"></td><td class="id">#2043</td><td class="doc">manual-de.pdf</td><td>HP Laser 103 107 108</td><td><span class="chip info">PDF</span></td><td><span class="chip err"><span class="d"></span>FAILED</span></td><td><div class="prog fail"><i style="width:31%"></i></div></td><td><button class="btn small">&#8635; Retry</button></td></tr>
-            </table>
+            </table></div>
           </div>
           <div class="note">Queue mode is switched in <b>Power Switches</b> — flip it and it saves instantly:
             <b>ON</b> = jobs print in order (Pause holds them back); <b>OFF</b> = instant print — every job goes straight to the printer.
@@ -741,7 +752,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
                 <button class="btn small">Export CSV</button>
               </div>
             </div>
-            <table class="tbl">
+            <div class="tbl-wrap"><table class="tbl">
               <tr><th style="width:30px"><input type="checkbox" data-hall></th><th>#</th><th>Time</th><th>Title</th><th>Printer</th><th>Kind</th><th>Status</th><th></th></tr>
               <tr><td><input type="checkbox" checked></td><td class="id">#2046</td><td class="id">14:19:41</td><td class="doc">invoice-2026-11.pdf</td><td>Microsoft Print to PDF</td><td><span class="chip info">PDF</span></td><td><span class="chip ok">PRINTED</span></td><td><button class="btn small">&#8635; Reprint</button></td></tr>
               <tr><td><input type="checkbox" checked></td><td class="id">#2044</td><td class="id">14:11:55</td><td class="doc">presentation.pptx</td><td>OneNote (Desktop)</td><td><span class="chip gray">DOC</span></td><td><span class="chip ok">PRINTED</span></td><td><button class="btn small">&#8635; Reprint</button></td></tr>
@@ -750,7 +761,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
               <tr><td><input type="checkbox"></td><td class="id">#2039</td><td class="id">13:38:10</td><td class="doc">scan-batch.pdf</td><td>—</td><td><span class="chip info">PDF</span></td><td><span class="chip warn">SCHEDULED 15:00</span></td><td><button class="btn small">Edit</button></td></tr>
               <tr><td><input type="checkbox"></td><td class="id">#2038</td><td class="id">13:12:44</td><td class="doc">lab-request-form.pdf</td><td>HP Laser 103 107 108</td><td><span class="chip info">PDF</span></td><td><span class="chip purple">DROPZONE</span></td><td><button class="btn small">&#8635; Reprint</button></td></tr>
               <tr><td><input type="checkbox"></td><td class="id">#2037</td><td class="id">12:41:19</td><td class="doc">receipt-scan.pdf</td><td>Microsoft Print to PDF</td><td><span class="chip info">PDF</span></td><td><span class="chip ok">PRINTED</span></td><td><button class="btn small">&#8635; Reprint</button></td></tr>
-            </table>
+            </table></div>
           </div>
           <div class="note"><b>Tick rows</b> and reprint in bulk — or clear the whole finished history.
             Waiting jobs (queued / held) are never touched by Clear. Reprinted copies can carry a visible REPRINT stamp (Hub tab &#8594; Reprint &amp; audit).</div>
@@ -914,11 +925,11 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
                 <button class="btn small" id="hitsClear">Clear list</button>
                 <button class="btn small blue" id="hitsRefresh">Refresh</button>
               </div>
-              <table class="tbl" style="width:100%"><thead><tr>
+              <div class="tbl-wrap"><table class="tbl" style="width:100%"><thead><tr>
                 <th style="width:24%">IP that hit this hub</th><th style="width:7%">Hits</th><th style="width:13%">First seen</th><th style="width:13%">Last hit</th><th style="width:17%">Status</th><th></th>
               </tr></thead><tbody id="hitsBody">
                 <tr><td colspan="6" style="color:var(--muted)">loading&#8230;</td></tr>
-              </tbody></table>
+              </tbody></table></div>
               <div class="note">While Strict mode is ON the hub records every distinct address that touches it — console, send portal, print API, IPP — even a REFUSED one. One click on <b>Allow</b> moves the IP into Allowed IPs (if the list was <span class="mono">*</span>, it becomes that IP ONLY — the hub locks down to real entries from that moment); <b>Remove</b> takes it off again. The switch itself blocks nothing — blocking is exactly what the Allowed-IPs list above does.</div>
             </div>
           </div>
@@ -945,7 +956,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
                 <button class="btn small blue" data-act="copy-ipp-http">Copy http:// URL</button>
                 <button class="btn small" data-qr="ipp">QR code</button>
               </div>
-              <table class="tbl" style="width:100%">
+              <div class="tbl-wrap"><table class="tbl" style="width:100%">
                 <tr><th style="width:110px">Device</th><th>How to add this printer</th></tr>
                 <tr><td><b>Windows 10 / 11</b></td><td>
                   Settings &#8594; Bluetooth &amp; devices &#8594; Printers &amp; scanners &#8594; <b>Add device</b> — the printer appears by itself (mDNS discovery), click it.
@@ -958,7 +969,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
                 <tr><td><b>Android</b></td><td>
                   Print from any app &#8594; <b>Default Print Service / Mopria</b> — the printer is discovered automatically (mDNS).
                   Manual add: Default Print Service &#8594; &#8942; &#8594; Add printer &#8594; <b>IP address</b> &#8594; <span class="mono" id="ippGuideAndroid">10.26.94.206</span> — Android tries the standard port <b>631</b> first, where this hub mirrors <span class="mono" id="ippGuideAndroid631">http://10.26.94.206:631/ipp/print</span> (Android ignores custom ports on manual add — the hub mirrors IPP on 631 for it).</td></tr>
-              </table>
+              </table></div>
               <div class="note" style="margin:10px 0 0">RAW / JetDirect lovers: add a <b>Standard TCP/IP port</b> — IP <span class="mono" id="ippGuideRawIp">10.26.94.206</span>, port <span class="mono">9100</span>, device type <b>Generic Network Card</b>. Prints go to THIS PC's printer through the AdvPrint Pro hub — 100% local, no cloud.</div>
             </div>
           </div>
@@ -1018,7 +1029,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
               <div class="note" style="margin-bottom:0">After enabling: <b>restart the hub</b> (tray &#8594; Exit, start AdvPrint Pro again) and allow the port once:<br>
                 <span class="mono" style="font-size:10.5px">netsh advfirewall firewall add rule name="AdvPrint Pro" dir=in action=allow protocol=TCP localport=9235</span></div>
               <div class="h3sec">Other PCs (peers)</div>
-              <table class="tbl" style="font-size:11.5px">
+              <div class="tbl-wrap"><table class="tbl" style="font-size:11.5px">
                 <tr><th>PC (hub URL)</th><th>Status</th><th>Version</th><th style="width:160px"></th></tr>
                 <!-- v3.3.3: the two DEMO rows (Storage-Room-PC / SHOP-PC
                      with fake 10.26.94.x addresses) are gone - they
@@ -1026,7 +1037,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
                      first /peers answer replaced them. loadConnections()
                      renders the real rows (or "no peer hubs configured"). -->
                 <tr><td class="mono doc" style="font-size:10.5px;color:var(--muted)">loading&hellip;</td><td></td><td></td><td></td></tr>
-              </table>
+              </table></div>
               <div class="frow" style="margin:10px 0 0"><label style="min-width:auto">Shift whole queue to</label>
                 <input class="inp mono" id="shiftTarget" style="min-width:200px;font-size:11px" value="">
                 <button class="btn blue">Shift all waiting</button></div>
@@ -1132,12 +1143,12 @@ https://reports.example.com/*</textarea>
 
           <div class="card">
             <div class="card-h">&#128203; Recent DropZone prints <span class="r">files that came in through the folder</span></div>
-            <table class="tbl">
+            <div class="tbl-wrap"><table class="tbl">
               <tr><th>File</th><th>Printer</th><th>Result</th><th>Time</th></tr>
               <tr><td class="doc">lab-request-form.pdf</td><td>HP Laser 103 107 108</td><td><span class="chip ok">PRINTED</span></td><td class="id">13:12:44</td></tr>
               <tr><td class="doc"> discharge-summary.pdf</td><td>HP Laser 103 107 108</td><td><span class="chip warn">HELD — printer offline</span></td><td class="id">13:09:01</td></tr>
               <tr><td class="doc">receipt-scan.pdf</td><td>Microsoft Print to PDF</td><td><span class="chip ok">PRINTED</span></td><td class="id">12:41:19</td></tr>
-            </table>
+            </table></div>
           </div>
         </section>
 
@@ -1200,8 +1211,9 @@ https://reports.example.com/*</textarea>
           <!-- RULES TABLE -->
           <div class="card">
             <div class="card-h">&#9881; Rules <span class="r">run top to bottom · first match wins · per-job printer always wins over the Print destination card</span></div>
-            <table class="tbl" style="font-size:10px">
-              <tr><th style="width:20px">#</th><th style="min-width:84px">Rule</th><th style="min-width:110px">URL / address filter</th><th>Match by</th><th>Page content</th><th>URL type</th><th style="min-width:90px">Printer</th><th>What to print</th><th style="width:30px">Cpl</th><th style="width:40px">Paper</th><th style="width:30px">On</th><th style="width:34px">Auto</th><th style="width:58px">Runs</th><th style="width:86px"></th></tr>
+            <div class="tbl-wrap">
+            <table class="tbl compact" style="font-size:10px">
+              <tr><th style="width:22px">#</th><th style="min-width:58px">Rule</th><th style="min-width:80px">URL / address filter</th><th>Match by</th><th>Page content</th><th>URL type</th><th style="min-width:70px">Printer</th><th>What to print</th><th style="width:26px">Cpl</th><th style="width:46px">Paper</th><th style="width:30px">On</th><th style="width:34px">Auto</th><th style="width:52px">Runs</th><th style="width:84px"></th></tr>
               <tr>
                 <td class="id">&#9776; 1</td><td class="doc"><b>Lab PDF reports</b></td><td class="mono doc" style="max-width:112px;font-size:9.5px">*://www.htncr.org/lab/*</td><td><span class="chip info">URL</span></td><td>&mdash;</td><td>PDF</td>
                 <td><b>HP Laser 103 107 108</b></td><td>Auto (PDF)</td><td>1</td><td>A5</td>
@@ -1245,6 +1257,7 @@ https://reports.example.com/*</textarea>
                 <td><button class="btn small blue" data-edit-rule="5">Edit</button> <button class="btn small danger" data-del-rule="5">Del</button></td>
               </tr>
             </table>
+            </div>
             <div class="note" style="margin:0 14px 12px">Every row is fully editable: <b>Edit</b> opens the 3-step rule editor pre-filled, <b>Del</b> asks twice then removes,
               the <b>On</b> switch pauses a rule without deleting, and <b>Auto</b> decides silent vs. one confirm dialog. Drag <span class="mono">&#9776;</span> to change priority.</div>
           </div>
@@ -1252,13 +1265,13 @@ https://reports.example.com/*</textarea>
           <div class="card">
             <div class="card-h">&#128203; Rule activity log <span class="r">sent / FAILED + why</span>
               <span class="r" style="margin-left:12px"><button class="btn small">&#8635; Refresh</button> <button class="btn small danger">Clear log</button></span></div>
-            <table class="tbl">
+            <div class="tbl-wrap"><table class="tbl">
               <tr><th style="width:110px">Time</th><th style="width:26%">Rule</th><th style="width:110px">Action</th><th style="width:20%">Printer</th><th>Page / result</th></tr>
               <tr><td class="id">14:22:08</td><td class="doc">Lab PDF reports (URL)</td><td><span class="chip info">PDF</span></td><td>HP Laser 103 107 108</td><td><span class="chip ok">SENT</span> lab-report-nov.pdf · A5</td></tr>
               <tr><td class="id">14:18:45</td><td class="doc">Zebra labels (content)</td><td><span class="chip purple">ZPL</span></td><td>Zebra GK420d</td><td><span class="chip ok">SENT</span> raw 212 B · ^XA&#8230;^XZ byte-for-byte</td></tr>
               <tr><td class="id">14:12:31</td><td class="doc">POS receipts (content)</td><td><span class="chip warn">ESC-POS</span></td><td>XP-58 Thermal</td><td><span class="chip ok">SENT</span> receipt + auto cut</td></tr>
               <tr><td class="id">13:58:12</td><td class="doc">Lab PDF reports (URL)</td><td><span class="chip info">PDF</span></td><td>HP Laser 103 107 108</td><td><span class="chip err">FAILED</span> media-out · retried 1/2</td></tr>
-            </table>
+            </table></div>
           </div>
         </section>
 
@@ -1321,11 +1334,11 @@ https://reports.example.com/*</textarea>
           <div class="dash-row">
             <div class="card">
               <div class="card-h">&#128274; Paired Browsers <span class="r">2 connected</span></div>
-              <table class="tbl">
+              <div class="tbl-wrap"><table class="tbl">
                 <tr><th>Client</th><th>Extension</th><th>Last seen</th><th>Status</th></tr>
                 <tr><td><b>AI-Lab-PC · Chrome</b></td><td>v3.2.1</td><td>just now</td><td><span class="chip ok"><span class="d"></span>PAIRED</span></td></tr>
                 <tr><td><b>client-laptop · Edge</b></td><td>v3.2.1</td><td>2 min ago</td><td><span class="chip ok"><span class="d"></span>PAIRED</span></td></tr>
-              </table>
+              </table></div>
               <div class="note orange" style="margin:10px 14px 12px">
                 <b style="display:block;margin-bottom:3px">&#9888; Two extension installs detected on this PC</b>
                 Policy CRX <span class="mono">likldbk&#8230;bbnohc</span> and a dev/unpacked copy <span class="mono">honpjjb&#8230;mjbjo</span> are both loaded.
@@ -1380,7 +1393,7 @@ https://reports.example.com/*</textarea>
                   auto-updates from this hub in every Chromium browser. Turn OFF if a company policy manages the browsers.</span>
               </div>
             </div>
-            <table class="tbl" style="font-size:10.5px">
+            <div class="tbl-wrap"><table class="tbl" style="font-size:10.5px">
               <tr><th style="min-width:120px">Browser (Chromium)</th><th>Policy registry path — same value, one row per browser</th><th style="width:120px">Status</th><th style="width:150px"></th></tr>
               <tr>
                 <td><b>Google Chrome</b></td>
@@ -1418,7 +1431,7 @@ https://reports.example.com/*</textarea>
                 <td><span class="chip gray">TEST</span></td>
                 <td><button class="btn small">Apply HKLM</button> <button class="btn small">Apply HKCU</button></td>
               </tr>
-            </table>
+            </table></div>
             <div class="card-b" style="padding-top:10px">
               <div class="note" style="margin-bottom:10px"><b>One CRX, every Chromium browser.</b> The same <span class="mono">AdvPrint-Pro.crx</span> installs into Chrome, Edge, Brave, Vivaldi, Chromium and Opera —
                 only the policy key path differs (table above). The one-click <b>Auto-integrate (admin)</b> button above writes every row for you (HKLM + HKCU, one UAC prompt —
@@ -1471,11 +1484,11 @@ https://reports.example.com/*</textarea>
 
           <div class="card">
             <div class="card-h">&#128220; Client error reports <span class="r">sent by the extension when a job fails</span></div>
-            <table class="tbl">
+            <div class="tbl-wrap"><table class="tbl">
               <tr><th>Time</th><th>Source</th><th>Problem</th><th></th></tr>
               <tr><td class="id">14:05:22</td><td><span class="chip info">chrome-ext</span></td><td class="doc">job #11 — save-as-PDF failed: PDF still locked by antivirus/another process</td><td><button class="btn small blue">Retry now</button> <button class="btn small">Open spool</button></td></tr>
               <tr><td class="id">13:58:12</td><td><span class="chip info">hub</span></td><td class="doc">job #2043 — printer HP Laser offline (status hold kept the job)</td><td><button class="btn small">Release</button></td></tr>
-            </table>
+            </table></div>
           </div>
 
           <div class="card">
@@ -1507,7 +1520,7 @@ https://reports.example.com/*</textarea>
             <div class="right"><button class="btn">&#8632; Export CSV</button><button class="btn danger">Clear audit</button></div>
           </div>
           <div class="card">
-            <table class="tbl">
+            <div class="tbl-wrap"><table class="tbl">
               <tr><th>Time</th><th>Actor</th><th>Action</th><th>Target</th><th>Result</th></tr>
               <tr><td class="id">14:22:08</td><td><span class="chip info">chrome-ext</span></td><td>job.submit</td><td class="doc">lab-report-nov.pdf &#8594; HP Laser</td><td><span class="chip ok">ACCEPTED</span></td></tr>
               <tr><td class="id">14:19:41</td><td><span class="chip info">chrome-ext</span></td><td>job.complete</td><td class="doc">invoice-2026-11.pdf</td><td><span class="chip ok">DONE</span></td></tr>
@@ -1517,7 +1530,7 @@ https://reports.example.com/*</textarea>
               <tr><td class="id">13:58:12</td><td><span class="chip info">hub</span></td><td>job.failed</td><td class="doc">manual-de.pdf · media-out</td><td><span class="chip err">ERROR</span></td></tr>
               <tr><td class="id">13:41:02</td><td><span class="chip info">hub</span></td><td>auth.reject</td><td class="mono doc">wrong token from 10.26.94.77</td><td><span class="chip warn">DENIED</span></td></tr>
               <tr><td class="id">13:12:02</td><td><span class="chip info">hub</span></td><td>settings.lan</td><td class="mono doc">lan_sharing = on</td><td><span class="chip ok">OK</span></td></tr>
-            </table>
+            </table></div>
           </div>
         </section>
 
@@ -1694,8 +1707,8 @@ https://reports.example.com/*</textarea>
         </div>
         <div>
           <label class="rl">URL TYPE</label>
-          <select class="inp2" id="re-type"><option selected>PDF link</option><option>Web page</option><option>Plain text / stream</option><option>Any</option></select>
-          <div class="hint2">PDF link = the job is the .pdf file itself.</div>
+          <select class="inp2" id="re-type"><option value="pdf" selected>PDF link</option><option value="web">Web page</option><option value="text">Plain text / stream</option><option value="zpl">ZPL label page</option><option value="image">Image page</option><option value="">Any</option></select>
+          <div class="hint2">PDF link = the job is the .pdf file itself. ZPL / Image / Plain text / Web page match <b>content rules</b> by what the page IS; Any = every page. v3.4.8 note: Web page really matches web pages now (the old editor saved a kind no page ever reports).</div>
         </div>
         <div class="full">
           <div class="note" style="margin:0;font-size:10.5px">&#128269; Test THIS pattern before saving: paste a full address into the <b>Test a URL</b> box on the Rules panel (above the table) and press <b>Which rule fires?</b> — the hub answers with the matching rule and its printer, or "no rule". Nothing is printed.</div>
@@ -3168,7 +3181,14 @@ function renderAudit(rows){
 }
 
 /* ---- rules (central rule manager) ---- */
-var KIND_LABELS = { "": "Any", pdf: "PDF link", web: "Web page", text: "Plain text / stream", url: "URL type" };
+/* v3.4.8 KIND LABELS: the editor's URL-type select now carries the REAL
+   detected kinds (detectTabKind answers pdf | image | zpl | text | html -
+   there is no "web" kind) plus legacy aliases for display. A rule saved
+   by an older build with kind "web" displays as Web page and MATCHES
+   html pages through the alias in both matchers. */
+var KIND_LABELS = { "": "Any", pdf: "PDF link", web: "Web page", html: "Web page",
+  text: "Plain text / stream", zpl: "ZPL label page", image: "Image page",
+  url: "URL type" };
 var ACTION_LABELS = { auto: "Auto (PDF as-is)", web: "Entire web page", sel: "Selected element only",
   raw: "Raw text / ZPL / ESC-POS stream", pdf: "Linked PDF only" };
 /* v3.4.7 PATTERN TYPES + RECIPES: a rule's "type" decides how the
@@ -3296,7 +3316,18 @@ function renderRules(){
       "</span> <span class=\"chip info\" style=\"font-size:9px\">" +
       esc(RULE_TYPE_LABEL[String(r.type || "glob").toLowerCase()] || "GLOB") + "</span>";
     td[3].innerHTML = '<span class="chip info">' + (r.match === "content" ? "CONTENT" : "URL") + "</span>";
-    td[4].textContent = r.match === "content" ? (r.content || "(any content)") : "\u2014";
+    /* v3.4.8: clamp the content text like the pattern cell so a long
+       "page content must contain" line cannot stretch the row either
+       (the ellipsis class sits on the TD - inline spans do not clip) */
+    if (r.match === "content") {
+      td[4].className = "doc";
+      td[4].setAttribute("style", "max-width:100px;font-weight:500");
+      td[4].textContent = r.content || "(any content)";
+    } else {
+      td[4].className = "";
+      td[4].removeAttribute("style");
+      td[4].innerHTML = "&mdash;";
+    }
     td[5].textContent = KIND_LABELS[r.kind] || r.kind || "Any";
     td[6].innerHTML = "<b>" + esc(r.printer || "OS default") + "</b>";
     td[7].textContent = ACTION_LABELS[r.action] || r.action || "Auto (PDF as-is)";
@@ -3341,7 +3372,14 @@ function openRuleEditor(idx){
     ? String(r.type || "glob").toLowerCase() : "glob";
   fillRuleRecipes();
   $("re-content").value = r.content || "";
-  setSel($("re-type"), KIND_LABELS[r.kind] || "Any");
+  /* v3.4.8: set the URL-type select by VALUE (the kind), not by label -
+     legacy "web" shows as Web page and saves back as "html". */
+  (function(){
+    var rt = $("re-type"), rk = String(r.kind || "");
+    if (rk === "web") rk = "html";
+    rt.value = Array.prototype.some.call(rt.options,
+      function(o){ return o.value === rk; }) ? rk : "";
+  })();
   var sel = $("re-printer");
   sel.innerHTML = "<option>(OS default printer)</option>" +
     printersCache.filter(function(p){ return !p.is_group; }).map(function(p){
@@ -3390,10 +3428,21 @@ async function saveRule(){
       return (pt && ["glob", "regex", "contains"].indexOf(pt.value) >= 0)
         ? pt.value : "glob"; })(),
     content: $("re-content").value.trim(),
-    match: $("re-content").value.trim() ? "content" :
-      ($("re-type").selectedIndex === 3 ? "url" : "url"),
-    kind: ["", "pdf", "web", "text"][$("re-type").selectedIndex] !== undefined
-      ? ["", "pdf", "web", "text"][$("re-type").selectedIndex] : "",
+    /* v3.4.8 KIND FIX: the select carries the kind VALUES now. The old
+       positional array ("", pdf, web, text) was shifted one slot against
+       the option order AND saved "web" - a kind no page ever reports
+       (detectTabKind answers pdf | image | zpl | text | html), so a rule
+       saved as "Web page" could never fire. "web" normalizes to "html";
+       a content rule left on Any defaults to html (a content rule without
+       a kind is skipped by the matchers). */
+    match: $("re-content").value.trim() ? "content" : "url",
+    kind: (function(){
+      var v = String($("re-type").value || "");
+      if (v === "web") v = "html";
+      if (["pdf", "html", "text", "zpl", "image", ""].indexOf(v) < 0) v = "";
+      if ($("re-content").value.trim() && !v) v = "html";
+      return v;
+    })(),
     printer: $("re-printer").value === "(OS default printer)" ? "" : $("re-printer").value,
     action: ["auto", "web", "sel", "raw", "pdf"][$("re-what").selectedIndex] || "auto",
     copies: Math.max(1, parseInt($("re-copies").value, 10) || 1),
@@ -3622,7 +3671,7 @@ function renderExt(audit){
     rows.slice(0, 6).forEach(function(r2){
       var tr = tmpl.cloneNode(true), td = tr.querySelectorAll("td");
       td[0].innerHTML = "<b>" + esc(r2.who) + "</b>";
-      td[1].textContent = "v" + (BOOT.version || "3.4.7");
+      td[1].textContent = "v" + (BOOT.version || "3.4.8");
       td[2].textContent = r2.at ? r2.at.slice(11, 19) : "\u2014";
       td[3].innerHTML = '<span class="chip ok"><span class="d"></span>PAIRED</span>';
       tbl.appendChild(tr);
@@ -3644,7 +3693,7 @@ function renderExt(audit){
       m2.textContent = BASE + "/extension/updates.xml";
   });
   var crxChip = document.querySelector("#p-extension .frow .chip.ok");
-  if (crxChip) crxChip.innerHTML = '<span class="d"></span>CRX v' + (BOOT.version || "3.4.7") + " READY";
+  if (crxChip) crxChip.innerHTML = '<span class="d"></span>CRX v' + (BOOT.version || "3.4.8") + " READY";
   /* v3.2.8 STALE-CRX GUARD: ask the hub which package it really
    * serves (/extension/info is open, no token). Older than the hub
    * itself -> Chrome never updates -> browsers keep the old bugs.
@@ -3850,7 +3899,7 @@ async function renderUpdate(res){
    full-page /docs stays available via the "Full guide page" button.
    ============================================================ */
 function docsHtml(){
-  var v = esc(BOOT.version || "3.4.7");
+  var v = esc(BOOT.version || "3.4.8");
   var ip = esc(BOOT.lan_ip || location.hostname || "127.0.0.1");
   var port = esc(String(BOOT.port || location.port || "9235"));
   var base = "http://" + ip + ":" + port;

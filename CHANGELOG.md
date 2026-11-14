@@ -1,6 +1,69 @@
 # Changelog - AdvPrint Pro (Advanced Printer)
 by Bit Dream IT - Innovative Healthcare Solutions
 
+## v3.4.8 - RULES TABLE FITS + RULE EDITOR SAVES REAL KINDS + RUN BOOKKEEPING SYNCED (2026-11-14)
+
+Base: v3.4.7. Final-polish release: the reported rules-table layout
+bug is fixed at the root and the full A-to-Z audit fixed every gap it
+found. Every item is locked by `tests/test_v348.py` (17 tests).
+
+### 1. THE RULES TABLE NEVER PUSHES EDIT/DEL OUTSIDE AGAIN - "Rule
+### URL / address filter Match by Page content URL type Printer What
+### to print Cpl Paper On Auto Runs th so td outside when paper or
+### other extra selected edit button goes outside"
+
+Measured on v3.4.7: the 14 column headers could not wrap
+(white-space:nowrap) and forced a 1145px minimum table width inside
+a 990px card - the Runs column and the Edit/Del buttons rendered
+OUTSIDE the card border (edit right edge 1399 vs card right 1245).
+Fixed with three layers: the headers may wrap now and the rules
+table is compact (tighter cells, shrunken min-widths, the long
+pattern / page-content cells clamp with an ellipsis - measured after
+the fix: table 990 = card 990, overflow 0, Edit fully inside); EVERY
+ONE UI table (13) sits in a .tbl-wrap that scrolls horizontally
+INSIDE the card as a last resort; and no column was removed - the
+header still reads exactly Rule / URL / address filter / Match by /
+Page content / URL type / Printer / What to print / Cpl / Paper /
+On / Auto / Runs.
+
+### 2. THE RULE EDITOR SAVES REAL URL TYPES (audit gap #1)
+
+The URL TYPE select was saved through a shifted positional array
+(["", "pdf", "web", "text"]): PDF link saved kind "" (Any), Web page
+saved kind "pdf" (a content rule matched only PDF pages), Plain text
+saved kind "web" (never matched anything - detectTabKind answers pdf
+| image | zpl | text | html, there is NO "web" kind), Any saved kind
+"text" (matched only text/plain pages). The select carries real
+values now (pdf / web / text / zpl / image / ""), ZPL label page and
+Image page joined the list, "web" normalizes to "html" on save, a
+content rule left on Any defaults to html, and BOTH matchers
+(extension matchRule + hub rule_matches) alias legacy kind "web" to
+"html" so rules saved by older builds start working.
+
+### 3. RUN BOOKKEEPING REACHES THE ONE UI (audit gap #2)
+
+The extension tracked lastRun but pushed only the counter and the
+hub cleaner dropped last_run (and the title filter) - the Runs
+column showed "128 runs" but never the promised "last 14:22".
+last_run rides along with every push now and the cleaner keeps
+title + last_run on central edits.
+
+### 4. /rules/test GET FORM HONORS kind + title (audit gap #3)
+
+The POST form passed both, the GET form silently dropped them - a
+content rule could never be tested from the browser bar
+(/rules/test?url=...&kind=html). Both forms behave identically now.
+
+### 5. THE A-TO-Z AUDIT VERDICT
+
+Full pytest suite green after the release build; an independent JS
+wiring audit of the ONE UI + classic dashboard found 0 undefined
+function calls, 0 missing ids, 0 duplicate ids, 0 unsubstituted
+placeholders, 0 JS syntax errors; the two hub copies stay
+byte-identical with the embedded console fresh; popup printer
+memory, one-port IPP path routing, configurable hub port, strict
+LAN share and the rule test engine are verified unchanged.
+
 ## v3.4.7 - CONFIGURABLE HUB PORT + DROPZONE WATCH FIX + STRICT LAN SHARE + URL RULES THAT REALLY MATCH (2026-11-14)
 
 Base: v3.4.6 (one port for every queue, the popup that remembers the

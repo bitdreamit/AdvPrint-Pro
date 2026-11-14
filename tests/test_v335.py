@@ -232,19 +232,19 @@ def test_installer_has_the_full_policy_and_cleanup_rule():
 # ---------------------------------------------------------------
 
 def test_version_coherence_346():
-    assert advprint.VERSION == "3.4.7"
+    assert advprint.VERSION == "3.4.8"
     vtxt = open(os.path.join(ROOT, "VERSION.txt"), encoding="utf-8").read()
-    assert "3.4.7" in vtxt
+    assert "3.4.8" in vtxt
     manifest = json.load(open(os.path.join(ROOT, "extension",
                                            "manifest.json"),
                               encoding="utf-8"))
-    assert manifest["version"] == "3.4.7"
+    assert manifest["version"] == "3.4.8"
     popup = open(os.path.join(ROOT, "extension", "popup.html"),
                  encoding="utf-8").read()
-    assert 'id="ver">v3.4.7<' in popup
+    assert 'id="ver">v3.4.8<' in popup
     i18n = open(os.path.join(ROOT, "extension", "i18n.js"),
                 encoding="utf-8").read()
-    assert i18n.count("3.4.7") >= 2          # brandLine en + bn
+    assert i18n.count("3.4.8") >= 2          # brandLine en + bn
 
 
 def test_hub_copies_byte_identical():
