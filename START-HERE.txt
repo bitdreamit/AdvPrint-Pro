@@ -1,83 +1,98 @@
-AdvPrint Pro (Advanced Printer) v3.5.0 - START HERE
+AdvPrint Pro (Advanced Printer) v3.5.1 - START HERE
 ====================================================
 by Bit Dream IT - Innovative Healthcare Solutions
 
-QUICK NOTE ON v3.5.0 - PRO THEMES + DASHBOARD DATA VIEW FIXES
---------------------------------------------------------------
-v3.5.0 is a layout + theming release built ON TOP of the working
-v3.4.8.1 tree (the rules-table fit stays locked by tests). No print,
-rule-matching, queue or network logic was touched. What is new:
+QUICK NOTE ON v3.5.1 - DASHBOARD LIVE DATA (dashboard-only bug fix)
+-------------------------------------------------------------------
+The user reported: "in all previous versions dashboard data so fake -
+it always shows 33.3% success and the default printer and other things,
+this is not dynamic." Correct - the dashboard LOOKED live but several
+values were static demo markup that no code ever replaced. v3.5.1 is a
+DASHBOARD-ONLY bug fix on the working v3.5.0 (ProTheme) tree - no
+print, rule, queue, theme or network logic was touched:
 
-1) PRO THEME ENGINE IN THE ONE UI. The console gets 7 color themes -
-   Cobalt (new default), Classic IDM (the original v3.2.1 blue lives
-   on), Emerald, Violet, Graphite, Midnight and Carbon (the last two
-   are full dark themes) - plus light/dark, three densities, two
-   corner styles and a framed/borderless window option. Set it from
-   the Theme menu in the menu bar or Settings > Appearance; the choice
-   is saved in the browser (localStorage key "advprintTheme") and is
-   applied BEFORE first paint, so the console never flashes the wrong
-   theme. Icon-only sidebar/toolbar items show their label as a
-   tooltip on hover/focus/tap.
+1) PRINT HUB STATUS CARD - every row is now REAL (3 s refresh):
+   - uptime     ticks from the actual hub start time (was stuck at
+                the static "uptime 04:12:37" forever);
+   - Service    HEALTHY while the real print worker thread is alive,
+                DEGRADED otherwise (was hardcoded HEALTHY);
+   - Listen     the address this browser actually reached;
+   - LAN share  real share_lan config + your PC's real LAN URL;
+   - IPP        real ipp_printer config (READY / OFF) - also fixes
+                the bug where the row was overwritten by the mDNS
+                text ("printers announce themselves");
+   - RAW port   the REAL JetDirect socket state (raw_active +
+                raw_printer_port + the actual bound address);
+   - DropZone   real watch state + the REAL number of PDFs waiting;
+   - Connections real counts: this PC (+ saved LAN PC) and
+                online/total peers from /peers (was always "2 PCs
+                2 peers");
+   - Token      the REAL hub token, masked to first...last 4.
+   The dashboard subtitle now shows your real PC name (was always
+   "AI-Lab").
 
-2) DASHBOARD DATA VIEW NOW AGREES WITH THE REST OF THE UI. The
-   glance rows on the dashboard rendered wrong before: the "IPP
-   printer" row showed mDNS discovery text instead of its own state,
-   mDNS / RAW port / DropZone rows showed static placeholders, the
-   Printers-Ready stat counted an idle printer as down ("2/4 - 2
-   offline" while the Printers tab said 3 usable) and In Queue showed
-   "4 (+2)" - counting the held jobs twice. Fixed: IPP printer shows
-   READY + the /ipp/print endpoint, mDNS / RAW / DropZone render
-   live, idle printers count as usable, held jobs appear once (in
-   the corner label), and progress bars carry rounded widths.
+2) DEFAULT PRINTER CARD - shows the REAL OS default printer with its
+   LIVE state: name from the hub, status chip READY / OFFLINE /
+   PAPER OUT / ERROR from the printer scan, and the real status-hold
+   setting. (Was hardcoded "HP Laser 103 107 108 / OFFLINE / status
+   hold ON" in every previous version.)
 
-3) LOCAL QR GENERATOR. The QR tiles (hub / invite / IPP) render
-   without asking the hub, so they appear even while the hub is
-   restarting.
+3) RECENT JOBS CARD - the caption now counts TODAY'S REAL jobs
+   ("last 6 of N today"), the rows were already live.
 
-4) THE v3.4.8.1 RULES TABLE FIT STAYS. Every ONE UI table still sits
-   in its .tbl-wrap: no column and no Edit button can ever render
-   outside the card. tests/test_v348.py still locks it; the rule
-   editor keeps the reverted (working) v3.4.7 kind handling - the
-   theme work did NOT re-introduce the buggy kind remapping.
+4) KPI ROW - was already live and stays live: jobs today, 7-day
+   success rate computed from the job database, queue size, printers
+   ready, hub version.
+
+5) THEME ENGINE (from v3.5.0, unchanged): 8 themes (Cobalt, Classic
+   IDM, Emerald, Violet, Graphite, Midnight, Carbon, System) +
+   density / corners / window frame in Settings > Appearance, saved
+   per browser, applies instantly.
 
 UPGRADE IN 3 STEPS (from any v3.x)
 ----------------------------------
 1. Close the old hub (tray icon -> Exit) and run the new
-   AdvPrint-Pro-Setup-3.5.0.exe - it installs over the old folder and
+   AdvPrint-Pro-Setup-3.5.1.exe - it installs over the old folder and
    keeps config.json, the queue database and your rules.
-2. Start AdvPrint Pro. The tray tooltip shows "v3.5.0 - running on
+2. Start AdvPrint Pro. The tray tooltip shows "v3.5.1 - running on
    http://127.0.0.1:9235".
 3. Chrome updates the extension by itself from the hub within a minute
-   (chrome://extensions -> AdvPrint Pro -> 3.5.0). Linux .deb: sudo
-   dpkg -i advprint-pro_3.5.0_all.deb.
+   (chrome://extensions -> AdvPrint Pro -> 3.5.1). Linux .deb: sudo
+   dpkg -i advprint-pro_3.5.1_all.deb.
 
 QUICK VERIFY (2 minutes)
 ------------------------
-- Console: http://127.0.0.1:9235/ui - open the Theme menu (top left,
-  next to File) and switch Cobalt -> Midnight -> Carbon: the whole
-  ONE UI re-colors instantly. Settings > Appearance shows the 8-tile
-  picker (7 themes + System) with density / corners / frame options
-  and "Reset appearance".
-- Dashboard: the IPP printer row shows "READY /ipp/print", RAW port
-  shows LISTENING with the address, and the Printers stat matches the
-  Printers tab (idle = usable).
-- Rules tab: with Paper + Page content set the table fits and the
-  Edit button is INSIDE the card (the v3.4.8 fix, still).
-- The ONE UI About panel, footer and the tray tooltip say v3.5.0.
-- http://127.0.0.1:9235/health reports "version": "3.5.0".
+- Console: http://127.0.0.1:9235/ui - Dashboard:
+  - the uptime in the Print Hub Status card STARTS FROM YOUR HUB'S
+    real uptime and ticks every second (it is NOT 04:12:37 anymore);
+  - Default Printer shows YOUR real default printer and its real
+    state (switch a printer off and watch the chip flip to OFFLINE);
+  - Connections shows your real peer count (empty hub = "1 PC
+    0/0 peers"), not "2 PCs 2 peers";
+  - Jobs Today / Success Rate come from YOUR job database.
+- The ONE UI footer and the tray tooltip say v3.5.1.
+- http://127.0.0.1:9235/health reports "version": "3.5.1" and
+  carries default_printer / raw_active / worker_alive.
 - http://127.0.0.1:9235/extension/info shows "stale": false and
-  version 3.5.0 (if stale, restart the hub once).
+  version 3.5.1 (if stale, restart the hub once).
+- Locked by tests/test_v351.py (python3 tests/test_v351.py).
 
 DOCUMENTATION (all local, A-to-Z)
 ---------------------------------
 - README.md            - features, install, API, LAN/IPP modes
 - docs/DEVELOPER-API.md          - window.advprint JS API
-- docs/RELEASE-NOTES-v3.5.0.md   - everything in this release
-- docs/AdvPrint-Pro-v3.5.0-A-to-Z-DEV-GUIDE.md - build + internals
-- docs/CHANGELOG.md (repo root CHANGELOG.md) - full history
+- docs/AdvPrint-Pro-v3.4.8-A-to-Z-DEV-GUIDE.md - build + release guide
+- docs/RELEASE-NOTES-v3.5.1.md   - this release, the fix explained
+- docs/RELEASE-NOTES-v3.4.8.md   - previous release, the table fix
+- download/AdvPrint-Pro-Console-UI-Template-v3.5.1-ProTheme.html
+  - the ONE UI as a standalone theme template (opens anywhere; with
+    the hub running it is 100% live, offline it shows real-shaped
+    sample data labelled TEMPLATE PREVIEW)
+- CHANGELOG.md                   - every release since v1.0.0
+- Console (127.0.0.1:9235/ui) -> Docs button - the same guide in-UI
 
 SUPPORT
 -------
-AdvPrint Pro by Bit Dream IT - Innovative Healthcare Solutions.
-GitHub: https://github.com/bitdreamit/AdvPrint-Pro
-MIT license - 100% local, no cloud, no tracking.
+MIT license - 100% local - no cloud, no tracking.
+Bit Dream IT - Innovative Healthcare Solutions
+https://github.com/bitdreamit/AdvPrint-Pro

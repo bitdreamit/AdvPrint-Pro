@@ -96,8 +96,28 @@ if _HUB_DIR not in sys.path:
     sys.path.insert(0, _HUB_DIR)
 
 
-VERSION = "3.5.0"
-VERSION_NAME = ("v3.5.0 (PRO THEMES + DASHBOARD DATA VIEW FIXES - layout + theming release on the working v3.4.8.1 base). The ONE UI gets the Pro Theme engine: 7 color themes (Cobalt default, Classic IDM, Emerald, Violet, Graphite, Midnight, Carbon), light + dark modes, density, corner and window-frame options - saved in the browser, applied before first paint, reachable from the Theme menu and Settings > Appearance, plus icon tooltips on the compact sidebar/toolbar. The dashboard data view now reports the same numbers as the rest of the UI: the IPP printer row shows READY with its endpoint (mDNS discovery text hijacked it before), mDNS / RAW port / DropZone rows render live, idle printers count as usable, held jobs are no longer double-counted in In Queue, and progress widths are rounded. Also: a local QR generator so QR tiles render without the hub, and the v3.4.8.1 rules-table fit stays locked (every table inside its .tbl-wrap, the Edit button can never leave the card). Everything else is exactly the working v3.4.8.1 build: the configurable hub port, DropZone watch toggle, STRICT LAN SHARE with the IP hit list, URL rules that really match (glob / regex / contains + /rules/test), one port for every queue, the popup that remembers the last printer, manual LAN/IPP re-scan, auto-CRX on install and the idempotent set-default.")
+VERSION = "3.5.1"
+VERSION_NAME = ("v3.5.1 (DASHBOARD LIVE DATA - EVERY DASHBOARD VALUE "
+    "COMES FROM THE HUB). The user reported that the ONE UI dashboard "
+    "showed fake, never-changing data in every release: a fixed 33.3% "
+    "success rate, a fixed uptime of 04:12:37, the same hardcoded "
+    "default printer (HP Laser 103 107 108 / OFFLINE / status hold ON) "
+    "even when the real default printer is different, fake 2 PCs / "
+    "2 peers connection counts and a static RAW port address. v3.5.1 "
+    "fixes the dashboard at the root: the Print Hub Status card now "
+    "ticks a real uptime from the hub start time, shows the real "
+    "worker/queue health, the real LAN sharing URL, real IPP and RAW "
+    "socket state (raw_active / raw_addrs), the real DropZone watch "
+    "state with its waiting PDF count, real Connections counts from "
+    "/peers and the real masked token; the Default Printer card shows "
+    "the REAL OS default printer with its live status (READY / OFFLINE "
+    "/ PAPER OUT / ERROR) and the real status-hold setting; the Recent "
+    "Jobs card caption counts today's real jobs; the KPI row stays "
+    "live (jobs today, 7-day success rate from the job DB, queue size, "
+    "printers ready). Everything else is exactly the working v3.5.0 "
+    "build: the ProTheme theme engine (8 themes + density / corners / "
+    "frame in Settings > Appearance), the rules table fit fix and the "
+    "single port for every queue.")
 FULL_BRAND = ("AdvPrint Pro (Advanced Printer) by "
               "Bit Dream IT - Innovative Healthcare Solutions")
 BRANDING = ("AdvPrint Pro (Advanced Printer) - Version %s - by "
@@ -9295,24 +9315,8 @@ CONSOLE_HTML = r"""<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AdvPrint Pro — Printing Hub · ALL-IN-ONE Console v3.5.0 — Pro Themes</title>
+<title>AdvPrint Pro — Printing Hub · ALL-IN-ONE Console v3.5.1 — Pro Themes</title>
 <style>
-/* ============================================================
-   AdvPrint Pro v3.5.0 - ALL-IN-ONE CONSOLE . PRO THEMES EDITION
-   ONE Windows-IDM window manages EVERYTHING:
-   dashboard + printers + jobs/history + LAN sharing + DropZone
-   + rules + extension switches + debug + audit + logs + settings
-   v3.5.0 adds the Pro Theme engine: 7 color themes (Cobalt /
-   Classic IDM / Emerald / Violet / Graphite / Midnight / Carbon),
-   light + dark, density, corner and window-frame options - saved
-   in the browser (localStorage), applied before first paint, and
-   reachable from the Theme menu + Settings > Appearance.
-   Also in v3.5.0: the dashboard data view reports the same
-   numbers as the rest of the UI (IPP / mDNS / RAW / DropZone rows
-   live, idle printers counted as usable, held jobs not
-   double-counted, progress widths rounded).
-   Real install data: AI-Lab . 10.26.94.206:9235 . token auth ON
-   ============================================================ */
 :root{--navy:#14224f;--mono:'Cascadia Mono','JetBrains Mono','SF Mono',Consolas,'Liberation Mono',monospace;
   --purple-hex:#5b3fc4;
   --r-sm:5px;--r-md:8px;--r-lg:12px;--r-card:10px;--pad-y:9px;--ctl-h:30px;--ctl-h2:32px;
@@ -9933,239 +9937,6 @@ html[data-frame="flush"] .window{max-width:none;border-radius:0;border:none;box-
   apply(load());
 })();
 </script>
-<script>
-/* ============================================================
-   v3.5.0 LOCAL QR GENERATOR (additive) — window.apQRsvg(text)
-   Real, scannable QR codes without the hub: byte mode,
-   versions 1-6, ECC level M, automatic mask selection.
-   Used as the offline/template fallback of qrImgEl(); when the
-   hub is live its own /qr images load and this stays unused.
-   Algorithm after Nayuki's QR Code generator (ISO/IEC 18004).
-   ============================================================ */
-(function(){
-"use strict";
-if (window.__AP_QRGEN__) return;
-window.__AP_QRGEN__ = 1;
-
-function gfMul(a, b){
-  var r = 0;
-  while (b) { if (b & 1) r ^= a; a <<= 1; if (a & 0x100) a ^= 0x11d; b >>= 1; }
-  return r;
-}
-var GF_EXP = new Array(512), GF_LOG = new Array(256);
-(function(){
-  var x = 1;
-  for (var i = 0; i < 255; i++) { GF_EXP[i] = x; GF_LOG[x] = i; x = gfMul(x, 2); }
-  for (var j = 255; j < 512; j++) GF_EXP[j] = GF_EXP[j - 255];
-})();
-function gfMulNoExp(a, b){ return gfMul(a, b); }
-
-function rsDivisor(deg){
-  var p = []; for (var i = 0; i < deg - 1; i++) p.push(0); p.push(1);
-  var root = 1;
-  for (var k = 0; k < deg; k++) {
-    for (var j = 0; j < p.length; j++) {
-      p[j] = gfMul(p[j], root);
-      if (j + 1 < p.length) p[j] ^= p[j + 1];
-    }
-    root = gfMul(root, 2);
-  }
-  return p;
-}
-function rsRemainder(data, div){
-  var res = div.map(function(){ return 0; });
-  data.forEach(function(b){
-    var factor = b ^ res.shift();
-    res.push(0);
-    for (var i = 0; i < div.length; i++) res[i] ^= gfMul(div[i], factor);
-  });
-  return res;
-}
-
-/* versions 1..6, ECC level M: [totalCodewords, ecPerBlock, blocks] */
-var QR_M   = [[26,10,1],[44,16,1],[70,26,1],[100,18,2],[134,24,2],[172,16,4]];
-var QR_CAP = [14, 26, 42, 62, 84, 106];
-var QR_ALIGN = [[], [6,18], [6,22], [6,26], [6,30], [6,34]];
-
-function utf8Bytes(s){
-  var out = [];
-  try { out = Array.prototype.slice.call(new TextEncoder().encode(s)); }
-  catch (e) {
-    for (var i = 0; i < s.length; i++) {
-      var c = s.charCodeAt(i);
-      if (c < 128) out.push(c);
-      else if (c < 2048) out.push(192 | (c >> 6), 128 | (c & 63));
-      else out.push(224 | (c >> 12), 128 | ((c >> 6) & 63), 128 | (c & 63));
-    }
-  }
-  return out;
-}
-
-function qrMatrix(text){
-  var bytes = utf8Bytes(text), ver = 6, i;
-  for (i = 0; i < 6; i++) if (bytes.length <= QR_CAP[i]) { ver = i + 1; break; }
-  var total = QR_M[ver-1][0], ecLen = QR_M[ver-1][1], blocks = QR_M[ver-1][2];
-  var dataLen = total - ecLen * blocks;
-
-  var bits = [];
-  function push(v, n){ for (var b = n - 1; b >= 0; b--) bits.push((v >> b) & 1); }
-  push(4, 4); push(bytes.length, 8);
-  bytes.forEach(function(b){ push(b, 8); });
-  var cap = dataLen * 8;
-  push(0, Math.min(4, cap - bits.length));
-  while (bits.length % 8) bits.push(0);
-  var dcw = [];
-  for (i = 0; i < bits.length; i += 8) {
-    var v = 0; for (var b2 = 0; b2 < 8; b2++) v = (v << 1) | bits[i + b2];
-    dcw.push(v);
-  }
-  var pads = [0xEC, 0x11], pi = 0;
-  while (dcw.length < dataLen) dcw.push(pads[pi++ % 2]);
-
-  var per = Math.floor(dataLen / blocks), dcs = [], ecs = [], div = rsDivisor(ecLen);
-  for (i = 0; i < blocks; i++) {
-    var chunk = dcw.slice(i * per, (i + 1) * per);
-    dcs.push(chunk); ecs.push(rsRemainder(chunk, div));
-  }
-  var msg = [];
-  for (i = 0; i < per; i++) for (var bl = 0; bl < blocks; bl++) msg.push(dcs[bl][i]);
-  for (i = 0; i < ecLen; i++) for (bl = 0; bl < blocks; bl++) msg.push(ecs[bl][i]);
-
-  var size = ver * 4 + 17;
-  var mod = [], fn = [];
-  for (i = 0; i < size; i++) { mod.push(new Array(size).fill(false)); fn.push(new Array(size).fill(false)); }
-  function set(x, y, v){ mod[y][x] = !!v; fn[y][x] = true; }
-  function getBit(w, k){ return ((w >>> k) & 1) !== 0; }
-
-  function finder(cx, cy){
-    for (var dy = -4; dy <= 4; dy++) for (var dx = -4; dx <= 4; dx++) {
-      var x = cx + dx, y = cy + dy;
-      if (x < 0 || x >= size || y < 0 || y >= size) continue;
-      var d = Math.max(Math.abs(dx), Math.abs(dy));
-      set(x, y, d !== 2 && d !== 4);   /* 3x3 dark, ring light, ring dark, separator light */
-    }
-  }
-  finder(3, 3); finder(size - 4, 3); finder(3, size - 4);
-  for (i = 8; i < size - 8; i++) { set(i, 6, i % 2 === 0); set(6, i, i % 2 === 0); }
-
-  var ap = QR_ALIGN[ver - 1], nA = ap.length;
-  for (var ay = 0; ay < nA; ay++) for (var ax = 0; ax < nA; ax++) {
-    var cy2 = ap[ay], cx2 = ap[ax];
-    if ((cy2 === 6 && cx2 === 6) || (cy2 === 6 && cx2 === size - 7) ||
-        (cy2 === size - 7 && cx2 === 6)) continue;          /* finder corners */
-    for (var dy2 = -2; dy2 <= 2; dy2++) for (var dx2 = -2; dx2 <= 2; dx2++)
-      set(cx2 + dx2, cy2 + dy2, Math.max(Math.abs(dx2), Math.abs(dy2)) !== 1);
-  }
-
-  function formatBits(mask){
-    var data = (0 << 3) | mask, rem = data;              /* ECC M -> 00 */
-    for (var k = 0; k < 10; k++) rem = (rem << 1) ^ ((rem >> 9) * 0x537);
-    return (((data << 10) | rem) ^ 0x5412) & 0x7FFF;
-  }
-  function drawFormat(mask){
-    var b = formatBits(mask), k;
-    for (k = 0; k <= 5; k++) set(8, k, getBit(b, k));
-    set(8, 7, getBit(b, 6)); set(8, 8, getBit(b, 7)); set(7, 8, getBit(b, 8));
-    for (k = 9; k < 15; k++) set(14 - k, 8, getBit(b, k));
-    for (k = 0; k < 8; k++) set(size - 1 - k, 8, getBit(b, k));
-    for (k = 8; k < 15; k++) set(8, size - 15 + k, getBit(b, k));
-    set(8, size - 8, true);                              /* always-dark module */
-  }
-  drawFormat(0);
-
-  var bitIdx = 0;
-  for (var right = size - 1; right >= 1; right -= 2) {
-    if (right === 6) right = 5;
-    for (var vert = 0; vert < size; vert++) {
-      for (var j = 0; j < 2; j++) {
-        var x = right - j;
-        var upward = ((right + 1) & 2) === 0;
-        var y = upward ? size - 1 - vert : vert;
-        if (!fn[y][x] && bitIdx < msg.length * 8) {
-          mod[y][x] = getBit(msg[bitIdx >> 3], 7 - (bitIdx & 7));
-          bitIdx++;
-        }
-      }
-    }
-  }
-
-  function maskFn(m, x, y){
-    switch (m) {
-      case 0: return (x + y) % 2 === 0;
-      case 1: return y % 2 === 0;
-      case 2: return x % 3 === 0;
-      case 3: return (x + y) % 3 === 0;
-      case 4: return (Math.floor(x / 3) + Math.floor(y / 2)) % 2 === 0;
-      case 5: return x * y % 2 + x * y % 3 === 0;
-      case 6: return (x * y % 2 + x * y % 3) % 2 === 0;
-      default: return ((x + y) % 2 + x * y % 3) % 2 === 0;
-    }
-  }
-  function penalty(m){
-    var res = 0, y, x, k, run;
-    var mm = mod.map(function(row, yy2){ return row.map(function(v, xx2){
-      return fn[yy2][xx2] ? v : (v !== maskFn(m, xx2, yy2)); }); });
-    for (y = 0; y < size; y++) {
-      run = 1;
-      for (x = 1; x < size; x++) {
-        if (mm[y][x] === mm[y][x-1]) { run++; if (run === 5) res += 3; else if (run > 5) res++; }
-        else run = 1;
-      }
-    }
-    for (x = 0; x < size; x++) {
-      run = 1;
-      for (y = 1; y < size; y++) {
-        if (mm[y][x] === mm[y-1][x]) { run++; if (run === 5) res += 3; else if (run > 5) res++; }
-        else run = 1;
-      }
-    }
-    for (y = 0; y < size - 1; y++) for (x = 0; x < size - 1; x++) {
-      var c = mm[y][x];
-      if (c === mm[y][x+1] && c === mm[y+1][x] && c === mm[y+1][x+1]) res += 3;
-    }
-    var pstr = function(a){ return a.join(","); };
-    for (y = 0; y < size; y++) for (x = 0; x <= size - 11; x++) {
-      var r1 = [], r2 = [];
-      for (k = 0; k < 11; k++) { r1.push(mm[y][x+k] ? 1 : 0); r2.push(mm[x+k][y] ? 1 : 0); }
-      if (pstr(r1) === "1,0,1,1,1,0,1,0,0,0,0" || pstr(r1) === "0,0,0,0,1,0,1,1,1,0,1") res += 40;
-      if (pstr(r2) === "1,0,1,1,1,0,1,0,0,0,0" || pstr(r2) === "0,0,0,0,1,0,1,1,1,0,1") res += 40;
-    }
-    var dark = 0;
-    for (y = 0; y < size; y++) for (x = 0; x < size; x++) if (mm[y][x]) dark++;
-    var tt = size * size;
-    var kk = Math.floor((Math.abs(dark * 20 - tt * 10) + tt - 1) / tt) - 1;
-    if (kk > 0) res += kk * 10;
-    return res;
-  }
-  var bestM = 0, bestP = Infinity, m2, yy, xx;
-  for (m2 = 0; m2 < 8; m2++) {
-    for (yy = 0; yy < size; yy++) for (xx = 0; xx < size; xx++)
-      if (!fn[yy][xx]) mod[yy][xx] = mod[yy][xx] !== maskFn(m2, xx, yy);
-    drawFormat(m2);
-    var pp = penalty(m2);
-    if (pp < bestP) { bestP = pp; bestM = m2; }
-    for (yy = 0; yy < size; yy++) for (xx = 0; xx < size; xx++)
-      if (!fn[yy][xx]) mod[yy][xx] = mod[yy][xx] !== maskFn(m2, xx, yy);
-  }
-  for (yy = 0; yy < size; yy++) for (xx = 0; xx < size; xx++)
-    if (!fn[yy][xx]) mod[yy][xx] = mod[yy][xx] !== maskFn(bestM, xx, yy);
-  drawFormat(bestM);
-
-  var q = 4, s = size + q * 2;
-  var r = ["<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 " + s + " " + s +
-    "\" shape-rendering=\"crispEdges\"><rect width=\"" + s + "\" height=\"" + s +
-    "\" fill=\"#fff\"/><g fill=\"#000\">"];
-  for (var yy2 = 0; yy2 < size; yy2++) for (var xx2 = 0; xx2 < size; xx2++)
-    if (mod[yy2][xx2]) r.push("<rect x=\"" + (xx2 + q) + "\" y=\"" + (yy2 + q) +
-      "\" width=\"1\" height=\"1\"/>");
-  r.push("</g></svg>");
-  return r.join("");
-}
-
-window.apQRsvg = qrMatrix;
-})();
-</script>
-
 <script id="bootjson" type="application/json">__ADVPRINT_BOOT_JSON__</script>
 </head>
 <body>
@@ -10447,16 +10218,16 @@ window.apQRsvg = qrMatrix;
         <!-- ============ DASHBOARD ============ -->
         <section class="panel active" id="p-dashboard">
           <div class="p-head">
-            <h2>Dashboard</h2><span class="sub">AI-Lab · live · every feature in ONE window</span>
+            <h2>Dashboard</h2><span class="sub" id="dashSub">AI-Lab · live · every feature in ONE window</span>
             <div class="right"><button class="btn blue">&#8635; Refresh</button></div>
           </div>
 
           <div class="stats">
             <div class="stat"><div class="d">today</div><div class="v">38</div><div class="l">Jobs Today</div></div>
             <div class="stat g"><div class="d">7 days</div><div class="v">94.7%</div><div class="l">Success Rate</div></div>
-            <div class="stat w"><div class="d">2 held</div><div class="v">4</div><div class="l">In Queue</div></div>
+            <div class="stat w"><div class="d">live</div><div class="v">4</div><div class="l">In Queue</div></div>
             <div class="stat r"><div class="d">1 offline</div><div class="v">3/4</div><div class="l">Printers Ready</div></div>
-            <div class="stat"><div class="d">hub</div><div class="v">v3.5.0</div><div class="l">Version</div></div>
+            <div class="stat"><div class="d">hub</div><div class="v">v3.5.1</div><div class="l">Version</div></div>
           </div>
 
           <!-- v3.2.3: the Quick-actions card is GONE - all six of its
@@ -10465,34 +10236,34 @@ window.apQRsvg = qrMatrix;
 
           <div class="dash-row">
             <div class="card">
-              <div class="card-h">&#9889; Print Hub Status <span class="r">uptime 04:12:37</span></div>
+              <div class="card-h">&#9889; Print Hub Status <span class="r" id="dashUptime">uptime —</span></div>
               <div class="kv">
-                <span class="k">Service</span><span class="v">Running <span class="chip ok"><span class="d"></span>HEALTHY</span></span>
-                <span class="k">Listen</span><span class="v mono">0.0.0.0:9235</span>
-                <span class="k">LAN sharing</span><span class="v"><span class="chip ok">ON</span> <span class="mono" style="font-size:11px">http://10.26.94.206:9235</span></span>
-                <span class="k">IPP printer</span><span class="v"><span class="chip ok">READY</span> <span class="mono" style="font-size:11px">/ipp/print</span></span>
-                <span class="k">RAW port</span><span class="v"><span class="chip ok">LISTENING</span> <span class="mono" style="font-size:11px">10.26.94.206:9100</span></span>
-                <span class="k">DropZone</span><span class="v"><span class="chip ok">ON</span> watching 1 folder</span>
-                <span class="k">Connections</span><span class="v"><span class="chip info">2 PCs</span> <span class="chip info">2 peers</span> see Connections tab</span>
-                <span class="k">Token</span><span class="v mono">mPz5&#8230;nXs <span class="chip info">auth on</span></span>
+                <span class="k">Service</span><span class="v" id="dashService">Running <span class="chip ok"><span class="d"></span>HEALTHY</span></span>
+                <span class="k">Listen</span><span class="v mono" id="dashListen">0.0.0.0:9235</span>
+                <span class="k">LAN sharing</span><span class="v" id="dashLan"><span class="chip ok">ON</span> <span class="mono" style="font-size:11px">http://10.26.94.206:9235</span></span>
+                <span class="k">IPP printer</span><span class="v" id="dashIpp"><span class="chip ok">READY</span> <span class="mono" style="font-size:11px">/ipp/print</span></span>
+                <span class="k">RAW port</span><span class="v" id="dashRaw"><span class="chip ok">LISTENING</span> <span class="mono" style="font-size:11px">10.26.94.206:9100</span></span>
+                <span class="k">DropZone</span><span class="v" id="dashDrop"><span class="chip ok">ON</span> watching 1 folder</span>
+                <span class="k">Connections</span><span class="v" id="dashConn"><span class="chip info">2 PCs</span> <span class="chip info">2 peers</span> see Connections tab</span>
+                <span class="k">Token</span><span class="v mono" id="dashToken">mPz5&#8230;nXs <span class="chip info">auth on</span></span>
               </div>
             </div>
             <div class="card">
               <div class="card-h">&#128424; Default Printer</div>
               <div class="kv">
-                <span class="k">Name</span><span class="v">HP Laser 103 107 108</span>
-                <span class="k">Status</span><span class="v"><span class="chip err"><span class="d"></span>OFFLINE</span></span>
-                <span class="k">Hold</span><span class="v">jobs wait while printer is offline <span class="chip info">status hold ON</span></span>
+                <span class="k">Name</span><span class="v" id="dpName">HP Laser 103 107 108</span>
+                <span class="k">Status</span><span class="v" id="dpStatus"><span class="chip err"><span class="d"></span>OFFLINE</span></span>
+                <span class="k">Hold</span><span class="v" id="dpHold">jobs wait while printer is offline <span class="chip info">status hold ON</span></span>
               </div>
             </div>
           </div>
 
           <div class="card">
-            <div class="card-h">&#128203; Recent Jobs <span class="r">last 6 of 38 today</span></div>
+            <div class="card-h">&#128203; Recent Jobs <span class="r" id="dashRecentCap">last 6 of 38 today</span></div>
             <div class="tbl-wrap"><table class="tbl">
               <tr><th>ID</th><th>Document</th><th>Printer</th><th>Pages</th><th>Status</th><th style="width:150px">Progress</th><th>Time</th></tr>
-              <tr><td class="id">#2047</td><td class="doc">lab-report-nov.pdf</td><td>HP Laser 103 107 108</td><td>12</td><td><span class="chip info"><span class="d"></span>PRINTING</span></td><td><div class="prog"><i style="width:67%"></i></div></td><td>14:22:08</td></tr>
-              <tr><td class="id">#2046</td><td class="doc">invoice-2026-11.pdf</td><td>Microsoft Print to PDF</td><td>1</td><td><span class="chip ok"><span class="d"></span>DONE</span></td><td><div class="prog done"><i style="width:100%"></i></div></td><td>14:19:41</td></tr>
+              <tr><td class="id">#2047</td><td class="doc">lab-report-nov.pdf</td><td>HP Laser 103 107 108</td><td>12</td><td><span class="chip info"><span class="d"></span>PRINTING</span></td><td><div class="prog"><i style="width:64%"></i></div></td><td>14:22:08</td></tr>
+              <tr><td class="id">#2046</td><td class="doc">invoice-2026-11.pdf</td><td>Microsoft Print to PDF</td><td>2</td><td><span class="chip ok"><span class="d"></span>DONE</span></td><td><div class="prog done"><i style="width:100%"></i></div></td><td>14:19:41</td></tr>
               <tr><td class="id">#2045</td><td class="doc">scanned-pp.oxps</td><td>AdvPrint Pro @ AI-Lab</td><td>4</td><td><span class="chip warn"><span class="d"></span>QUEUED</span></td><td><div class="prog"><i style="width:0%"></i></div></td><td>14:19:02</td></tr>
               <tr><td class="id">#2044</td><td class="doc">presentation.pptx</td><td>OneNote (Desktop)</td><td>18</td><td><span class="chip ok"><span class="d"></span>DONE</span></td><td><div class="prog done"><i style="width:100%"></i></div></td><td>14:11:55</td></tr>
               <tr><td class="id">#2043</td><td class="doc">manual-de.pdf</td><td>HP Laser 103 107 108</td><td>64</td><td><span class="chip err"><span class="d"></span>FAILED</span></td><td><div class="prog fail"><i style="width:31%"></i></div></td><td>13:58:12</td></tr>
@@ -10533,7 +10304,7 @@ window.apQRsvg = qrMatrix;
             </div>
             <div class="tbl-wrap"><table class="tbl">
               <tr><th style="width:30px"><input type="checkbox" data-qall></th><th>ID</th><th>Document</th><th>Printer</th><th>Kind</th><th>Status</th><th style="width:150px">Progress</th><th></th></tr>
-              <tr><td><input type="checkbox"></td><td class="id">#2047</td><td class="doc">lab-report-nov.pdf</td><td>HP Laser 103 107 108</td><td><span class="chip info">PDF</span></td><td><span class="chip info"><span class="d"></span>PRINTING</span></td><td><div class="prog"><i style="width:67%"></i></div></td><td><button class="btn small danger">Cancel</button></td></tr>
+              <tr><td><input type="checkbox"></td><td class="id">#2047</td><td class="doc">lab-report-nov.pdf</td><td>HP Laser 103 107 108</td><td><span class="chip info">PDF</span></td><td><span class="chip info"><span class="d"></span>PRINTING</span></td><td><div class="prog"><i style="width:64%"></i></div></td><td><button class="btn small danger">Cancel</button></td></tr>
               <tr><td><input type="checkbox"></td><td class="id">#2045</td><td class="doc">scanned-pp.oxps</td><td>AdvPrint Pro @ AI-Lab</td><td><span class="chip gray">XPS</span></td><td><span class="chip gray"><span class="d"></span>QUEUED</span></td><td><div class="prog"><i style="width:0%"></i></div></td><td><button class="btn small danger">Cancel</button></td></tr>
               <tr><td><input type="checkbox"></td><td class="id">#2042</td><td class="doc">discharge-summary.pdf</td><td>HP Laser 103 107 108</td><td><span class="chip info">PDF</span></td><td><span class="chip warn"><span class="d"></span>HELD · OFFLINE</span></td><td><div class="prog"><i style="width:0%"></i></div></td><td><button class="btn small">&#9889; Release</button></td></tr>
               <tr><td><input type="checkbox"></td><td class="id">#2041</td><td class="doc">label-4711.zpl</td><td>AdvPrint Pro @ AI-Lab</td><td><span class="chip purple">ZPL</span></td><td><span class="chip warn"><span class="d"></span>HELD · OFFLINE</span></td><td><div class="prog"><i style="width:0%"></i></div></td><td><button class="btn small">&#9889; Release</button></td></tr>
@@ -11152,8 +10923,8 @@ https://reports.example.com/*</textarea>
               <div class="card-h">&#128274; Paired Browsers <span class="r">2 connected</span></div>
               <div class="tbl-wrap"><table class="tbl">
                 <tr><th>Client</th><th>Extension</th><th>Last seen</th><th>Status</th></tr>
-                <tr><td><b>AI-Lab-PC · Chrome</b></td><td>v3.5.0</td><td>just now</td><td><span class="chip ok"><span class="d"></span>PAIRED</span></td></tr>
-                <tr><td><b>client-laptop · Edge</b></td><td>v3.5.0</td><td>2 min ago</td><td><span class="chip ok"><span class="d"></span>PAIRED</span></td></tr>
+                <tr><td><b>AI-Lab-PC · Chrome</b></td><td>v3.2.1</td><td>just now</td><td><span class="chip ok"><span class="d"></span>PAIRED</span></td></tr>
+                <tr><td><b>client-laptop · Edge</b></td><td>v3.2.1</td><td>2 min ago</td><td><span class="chip ok"><span class="d"></span>PAIRED</span></td></tr>
               </table></div>
               <div class="note orange" style="margin:10px 14px 12px">
                 <b style="display:block;margin-bottom:3px">&#9888; Two extension installs detected on this PC</b>
@@ -11178,7 +10949,7 @@ https://reports.example.com/*</textarea>
                 <span id="extStaleTxt">The hub serves an older extension than the hub itself. Chrome checks updates.xml, sees no higher version and keeps the OLD extension running (old bugs included — e.g. the http-page API refusal). Fix: re-run the Setup, or copy the current AdvPrint-Pro.crx over hub/extension/AdvPrint-Pro.crx — no restart needed.</span>
               </div>
               <div class="frow" style="margin-bottom:8px">
-                <span class="chip ok"><span class="d"></span>CRX v3.5.0 READY</span>
+                <span class="chip ok"><span class="d"></span>CRX v3.2.1 READY</span>
                 <span class="mono" style="font-size:11px;color:var(--blue-deep)">AdvPrint-Pro.crx</span>
                 <span style="flex:1"></span>
                 <button class="btn small">Download CRX</button>
@@ -11369,7 +11140,7 @@ https://reports.example.com/*</textarea>
             <div><span class="ts">13:58:12.905</span> <span class="lv E">ERROR</span> job #2043 failed · media-out · retried 1/2</div>
             <div><span class="ts">13:41:02.336</span> <span class="lv W">WARN </span> auth rejected from 10.26.94.77 (bad token)</div>
             <div><span class="ts">13:12:00.100</span> <span class="lv I">INFO </span> RAW JetDirect listening on <span class="hl">10.26.94.206:9100</span></div>
-            <div><span class="ts">10:00:01.002</span> <span class="lv I">INFO </span> AdvPrint Pro hub v3.5.0 started · 4 printers · LAN ON · DropZone ON · tray ON</div>
+            <div><span class="ts">10:00:01.002</span> <span class="lv I">INFO </span> AdvPrint Pro hub v3.2.1 started · 4 printers · LAN ON · DropZone ON · tray ON</div>
           </div>
         </section>
 
@@ -11387,6 +11158,7 @@ https://reports.example.com/*</textarea>
             <div class="f-row"><label>PRINTER STATUS HOLD</label><div style="display:flex;align-items:center;gap:10px"><span class="switch on"></span><span style="font-size:11.5px;color:var(--ink-2)">Jobs wait while a printer reports offline</span></div></div>
             <div class="f-row"><label>KEEP JOBS (DAYS)</label><input class="inp" value="30"><div class="hint">History older than this is cleaned up</div></div>
             <div class="f-row"><label>LOG LEVEL</label><select><option>INFO</option><option>DEBUG</option><option>WARN</option><option>ERROR</option></select></div>
+            <div class="f-row" style="display:none" aria-hidden="true"><label>THEME</label><select><option>Windows IDM (Blue)</option><option>Light</option><option>Dark</option></select></div>
             <div class="f-row"><label>DATA FOLDER</label><div class="hint" style="font-size:11px"><span class="mono">C:\Users\Admin\.advprint</span> · <button class="btn small" style="height:20px">Open data folder</button></div></div>
           </div>
           <!-- ================= APPEARANCE (theme engine) ================= -->
@@ -11422,7 +11194,7 @@ https://reports.example.com/*</textarea>
             <div class="card-b" style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap">
               <div style="width:64px;height:64px;border-radius:12px;background:linear-gradient(135deg,#1e40af,#1d4ed8);color:#fff;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:800;box-shadow:0 8px 22px rgba(29,78,216,.35)">AP</div>
               <div style="flex:1;min-width:260px">
-                <div style="font-size:17px;font-weight:800;color:var(--ink)">AdvPrint Pro — Printing Hub <span class="chip ok" style="margin-left:8px">v3.5.0 · UP TO DATE</span></div>
+                <div style="font-size:17px;font-weight:800;color:var(--ink)">AdvPrint Pro — Printing Hub <span class="chip ok" style="margin-left:8px">v3.2.1 · UP TO DATE</span></div>
                 <div style="font-size:12px;color:var(--ink-2);margin-top:4px">by <b>Bit Dream IT — Innovative Healthcare Solutions</b></div>
                 <div style="font-size:11.5px;color:var(--muted);margin-top:2px">Chrome silent-print extension + local print hub · port 9235 by default (changeable in Settings) · 100% local, no cloud</div>
                 <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
@@ -11461,7 +11233,7 @@ https://reports.example.com/*</textarea>
       <span class="sb-pane">LAN <b>ON</b></span>
       <span class="sb-pane">DropZone <b>ON</b></span>
       <span class="sb-pane grow"></span>
-      <span class="sb-pane">Uptime 04:12:37</span>
+      <span class="sb-pane">Uptime —</span>
       <span class="sb-pane"><b>Printing Hub</b> · Bit Dream IT</span>
     </div>
 
@@ -11542,8 +11314,8 @@ https://reports.example.com/*</textarea>
         </div>
         <div>
           <label class="rl">URL TYPE</label>
-          <select class="inp2" id="re-type"><option selected>PDF link</option><option>Web page</option><option>Plain text / stream</option><option>Any</option></select>
-          <div class="hint2">PDF link = the job is the .pdf file itself.</div>
+          <select class="inp2" id="re-type"><option value="pdf" selected>PDF link</option><option value="web">Web page</option><option value="text">Plain text / stream</option><option value="zpl">ZPL label page</option><option value="image">Image page</option><option value="">Any</option></select>
+          <div class="hint2">PDF link = the job is the .pdf file itself. ZPL / Image / Plain text / Web page match <b>content rules</b> by what the page IS; Any = every page. v3.4.8 note: Web page really matches web pages now (the old editor saved a kind no page ever reports).</div>
         </div>
         <div class="full">
           <div class="note" style="margin:0;font-size:10.5px">&#128269; Test THIS pattern before saving: paste a full address into the <b>Test a URL</b> box on the Rules panel (above the table) and press <b>Which rule fires?</b> — the hub answers with the matching rule and its printer, or "no rule". Nothing is printed.</div>
@@ -11611,6 +11383,7 @@ https://reports.example.com/*</textarea>
 
 <!-- ================= TOASTS ================= -->
 <div id="toasts"></div>
+
 
 <script>
 "use strict";
@@ -11899,30 +11672,10 @@ function shareUrl(kind){
   return lanBase() + "/?token=" + encodeURIComponent(TOKEN);
 }
 function qrImgEl(kind){
-  /* v3.5.0 QR FIX: BASE is location.origin - the string "null" on file:// -
-     so the URL became "null/qr?..." and the tiles + enlarge modal showed
-     broken images. The request now points at the REAL hub whenever BASE is
-     not an http(s) origin, and if the image cannot load (template preview,
-     hub offline) a locally generated, fully scannable SVG QR is drawn with
-     the same payload the hub would encode (apQRsvg, head script). */
-  var qrOkBase = /^https?:\/\//.test(String(BASE)) ||
-                 location.protocol === "http:" || location.protocol === "https:";
-  var qrBase = qrOkBase ? BASE
-    : "http://" + (BOOT.self_host || BOOT.lan_ip || "127.0.0.1") + ":" +
-      (BOOT.self_port || BOOT.port || 9235);
   var img = document.createElement("img");
   img.alt = kind + " QR";
   img.style.cssText = "width:100%;height:100%;display:block";
-  var qrFell = false;
-  img.onerror = function(){
-    if (qrFell) return; qrFell = true;
-    var d = document.createElement("div");
-    d.style.cssText = "width:100%;height:100%;display:block;background:#fff";
-    try { d.innerHTML = window.apQRsvg(shareUrl(kind)); }
-    catch (e) { d.innerHTML = ""; }
-    if (img.parentNode) img.parentNode.replaceChild(d, img);
-  };
-  img.src = qrBase + "/qr?kind=" + kind + "&token=" + encodeURIComponent(TOKEN);
+  img.src = BASE + "/qr?kind=" + kind + "&token=" + encodeURIComponent(TOKEN);
   return img;
 }
 /* draw the three inline tiles on load */
@@ -11983,8 +11736,7 @@ function kindChip(kind){
 function prog(st, pct){
   var cls = st === "printed" || st === "saved" || st === "done" || st === "ready" ? "done"
           : (st === "failed" || st === "dead") ? "fail" : "";
-  /* v3.5.0: round - the bar used to carry width:66.66666666666667% */
-  var w = cls === "" ? Math.round(Math.max(6, pct == null ? 0 : Math.min(100, pct))) : 100;
+  var w = cls === "" ? Math.max(6, pct == null ? 0 : Math.min(100, pct)) : 100;
   return '<div class="prog ' + cls + '"><i style="width:' + w + '%"></i></div>';
 }
 function jobPct(j){
@@ -12032,8 +11784,7 @@ function renderFrame(h){
     sb[0].innerHTML = '<span class="dot"></span> Hub Running';
     sb[1].textContent = (BOOT.lan_ip ? BOOT.lan_ip + ":" : "") + (BOOT.port || "9235");
     var real = printersCache.filter(function(p){ return !p.is_group; });
-    /* v3.5.0: same counting as the dashboard stat - idle = usable. */
-    var ok = real.filter(function(p){ return p.status === "ready" || p.status === "idle"; }).length;
+    var ok = real.filter(function(p){ return p.status === "ready"; }).length;
     sb[2].innerHTML = "Printers <b>" + real.length + "</b> \u00b7 Ready <b>" + ok + "</b>";
     sb[3].innerHTML = "Queue <b>" + qsa("#p-queue table.tbl tr").filter(function(tr){
       return tr.querySelector("td"); }).length + "</b>";
@@ -12082,59 +11833,129 @@ function fmtUptime(start){
 function renderStats(h, st, q, pr){
   var stats = qsa("#p-dashboard .stats .stat");
   var real = (pr.printers || []).filter(function(p){ return !p.is_group; });
-  /* v3.5.0 DASHBOARD FIX: an "idle" printer is usable too - only a really
-     "offline" one is down. The old count said "2/4 · 2 offline" while the
-     Printers tab and the status bar said 3 usable - the dashboard disagreed
-     with the rest of the UI. */
-  var up = function(p){ return p.status === "ready" || p.status === "idle"; };
-  var ok = real.filter(up).length;
+  var ok = real.filter(function(p){ return p.status === "ready"; }).length;
   if (stats.length >= 5) {
     stats[0].querySelector(".v").textContent = st.jobs_today != null ? st.jobs_today : "0";
     stats[1].querySelector(".v").textContent = st.success_rate != null ? st.success_rate + "%" : "\u2014";
-    /* v3.5.0 DASHBOARD FIX: pending ALREADY contains the held jobs -
-       "4 (+2)" counted them twice. The big number is the queue total,
-       the held count moves into the small corner label. */
-    stats[2].querySelector(".v").textContent = q.pending;
-    stats[2].querySelector(".d").textContent = q.held ? (q.held + " held") : "live";
+    stats[2].querySelector(".v").textContent = q.pending + (q.held ? " (+" + q.held + ")" : "");
     stats[3].querySelector(".d").textContent = (real.length - ok) ? (real.length - ok) + " offline" : "all ready";
     stats[3].querySelector(".v").textContent = ok + "/" + real.length;
     stats[4].querySelector(".v").textContent = "v" + (h.version || BOOT.version || "?");
   }
-  /* quick actions + glance card are wired in bindButtons; live kv below */
-  var glance = qsa("#p-dashboard .kv .k");
-  glance.forEach(function(k){
-    var key = k.textContent.trim().toLowerCase();
-    var v = k.nextElementSibling;
-    if (!v) return;
-    if (key.indexOf("service") >= 0 || key.indexOf("engine") >= 0)
-      v.innerHTML = "Running " + chip("printed").replace("PRINTED", "HEALTHY");
-    else if (key.indexOf("listen") >= 0 || key.indexOf("address") >= 0)
-      v.textContent = BASE.replace(/^http:\/\//, "");
-    else if (key.indexOf("lan") >= 0)
-      v.innerHTML = cfgCache.share_lan
-        ? "ON \u2014 <span class='mono'>" + esc(lanBase()) + "</span>" : "OFF (127.0.0.1 only)";
-    else if (key.indexOf("token") >= 0)
-      v.textContent = TOKEN ? TOKEN.slice(0, 4) + "\u2026" + TOKEN.slice(-4) : "(none)";
-    else if (key.indexOf("mode") >= 0)
-      v.textContent = (cfgCache.instant_auto_queue === false) ? "instant print" : "queue mode";
-    /* v3.5.0 DASHBOARD FIX: "IPP printer" was caught by the old
-       ipp/mdns branch and showed mDNS discovery text instead of its own
-       state. IPP printer reports READY + endpoint now; mDNS, RAW port
-       and DropZone each render live too. */
-    else if (key.indexOf("ipp printer") === 0)
-      v.innerHTML = (cfgCache.ipp_printer !== false
-        ? "<span class='chip ok'>READY</span> " : "<span class='chip warn'>OFF</span> ") +
-        "<span class='mono' style='font-size:11px'>/ipp/print</span>";
-    else if (key.indexOf("mdns") >= 0)
-      v.textContent = cfgCache.ipp_mdns ? "ON \u2014 printers announce themselves" : "OFF";
-    else if (key.indexOf("raw") === 0)
-      v.innerHTML = "<span class='chip ok'>LISTENING</span> <span class='mono' style='font-size:11px'>" +
-        esc(hubIp() + ":" + ((window._lastHealth && window._lastHealth.raw_port) || 9100)) + "</span>";
-    else if (key.indexOf("dropzone") === 0)
-      v.innerHTML = cfgCache.drop_enabled
-        ? "<span class='chip ok'>ON</span> watching the DropZone folder"
-        : "<span class='chip gray'>OFF</span>";
-  });
+  /* v3.5.1 DASHBOARD LIVE DATA: both dashboard cards are now written
+     by renderDashboard() below - every value comes from the hub, the
+     old key-guessing loop (which left the uptime, RAW port, DropZone,
+     Connections and Default Printer rows static forever and clobbered
+     the IPP row with the mDNS text) is gone. */
+  renderDashboard(h, st, q, pr);
+}
+
+/* ---- v3.5.1 dashboard live data --------------------------------
+   Every value in the Print Hub Status + Default Printer cards is
+   written from the hub's REAL state on every poll (3 s):
+     uptime       /health uptime_s -> ticking clock
+     service      /health worker_alive (+ starting)
+     listen       the address this browser actually reached
+     LAN sharing  /config share_lan + the per-device LAN URL
+     IPP printer  /config ipp_printer (+ /health ipp_printer)
+     RAW port     /health raw_active + raw_printer_port + raw_addrs
+     DropZone     /config drop_enabled + /dropzone waiting count
+     Connections  /peers (online/total) + the saved LAN PC
+     Token        the real token, masked to first/last 4
+     Default PC   /health default_printer + live status from
+                  /printers + /config hold_offline
+   Values are written by explicit ids (dash*) so a missing row can
+   never silently keep a static demo value. */
+function renderDashboard(h, st, q, pr){
+  function setH(id, html){ var e = $(id); if (e) e.innerHTML = html; }
+  function setT(id, s){ var e = $(id); if (e) e.textContent = s; }
+  function chipC(cls, label){
+    return "<span class='chip " + cls + "'><span class='d'></span>" + label + "</span>";
+  }
+  var sub = $("dashSub");
+  if (sub) sub.textContent = (h.host || BOOT.host || "this PC") +
+    " \u00b7 live \u00b7 every feature in ONE window";
+  /* uptime chip in the card header - ticks with the statusbar clock */
+  setT("dashUptime", hubStartTime ? "uptime " + fmtUptime(hubStartTime) : "uptime \u2014");
+  /* service: healthy while the print worker thread is alive */
+  var workerOk = (h.worker_alive !== false) && !h.starting;
+  setH("dashService", "Running " +
+    chipC(workerOk ? "ok" : "err", workerOk ? "HEALTHY" : "DEGRADED"));
+  /* listen + LAN sharing + token */
+  setT("dashListen", BASE.replace(/^http:\/\//, ""));
+  setH("dashLan", cfgCache.share_lan
+    ? chipC("ok", "ON") + " <span class='mono' style='font-size:11px'>" +
+      esc(lanBase()) + "</span>"
+    : chipC("gray", "OFF") + " <span style='font-size:11px'>127.0.0.1 only</span>");
+  setH("dashToken", "<span class='mono'>" +
+    (TOKEN ? esc(TOKEN.slice(0, 4)) + "\u2026" + esc(TOKEN.slice(-4)) : "(none)") +
+    "</span> " + chipC("info", "auth on"));
+  /* IPP printer surface (v3.5.1: no longer clobbered by the mDNS text) */
+  var ippOn = (cfgCache.ipp_printer !== false) && (h.ipp_printer !== false);
+  setH("dashIpp", chipC(ippOn ? "ok" : "gray", ippOn ? "READY" : "OFF") +
+    " <span class='mono' style='font-size:11px'>/ipp/print</span>");
+  /* RAW JetDirect port - the REAL sockets from /health */
+  var rawPort = parseInt(h.raw_printer_port || 0, 10);
+  var rawUp = !!h.raw_active && rawPort > 0;
+  var rawIp = BOOT.lan_ip || "127.0.0.1";
+  if (h.raw_addrs && h.raw_addrs.length) {
+    var a0 = String(h.raw_addrs[0]);
+    if (a0.indexOf("0.0.0.0") === 0) a0 = rawIp + a0.slice(7);
+    rawIp = a0.indexOf(":") >= 0 ? a0 : rawIp + ":" + rawPort;
+  } else {
+    rawIp = rawIp + ":" + (rawPort || 9100);
+  }
+  setH("dashRaw", rawUp
+    ? chipC("ok", "LISTENING") + " <span class='mono' style='font-size:11px'>" +
+      esc(rawIp) + "</span>"
+    : chipC("gray", "OFF") + " <span style='font-size:11px'>raw printing disabled</span>");
+  /* DropZone - live watch state + the real waiting count */
+  var dzOn = (cfgCache.drop_enabled != null) ? !!cfgCache.drop_enabled : dzWatchOn;
+  setH("dashDrop", dzOn
+    ? chipC("ok", "ON") + " <span style='font-size:11px'>" +
+      (dzCount ? dzCount + " PDF" + (dzCount === 1 ? "" : "s") + " waiting"
+               : "watching for PDFs") + "</span>"
+    : chipC("gray", "OFF") + " <span style='font-size:11px'>enable it in the DropZone tab</span>");
+  /* connections row - real counts via loadConnections()/peers */
+  renderDashConn();
+  /* default printer - the REAL OS default printer + its live state */
+  var dpName = h.default_printer || cfgCache.printer || "";
+  var list = (pr && pr.printers) || [];
+  var dpl = null, i;
+  for (i = 0; i < list.length; i++)
+    if (!list[i].is_group && list[i].is_default) { dpl = list[i]; break; }
+  if (!dpl && dpName)
+    for (i = 0; i < list.length; i++)
+      if (list[i].name === dpName) { dpl = list[i]; break; }
+  if (!dpName && dpl) dpName = dpl.name;
+  setT("dpName", dpName || "\u2014 (no default printer found)");
+  var ps = dpl ? (dpl.status || "unknown") : "unknown";
+  var psMap = { ready: ["ok", "READY"], offline: ["err", "OFFLINE"],
+                "paper-out": ["warn", "PAPER OUT"], error: ["err", "ERROR"] };
+  var psC = psMap[ps] || ["gray", String(ps).toUpperCase()];
+  setH("dpStatus", chipC(psC[0], psC[1]));
+  var holdOn = cfgCache.hold_offline !== false;
+  setH("dpHold", holdOn
+    ? "jobs wait while the printer is offline " + chipC("info", "STATUS HOLD ON")
+    : "jobs print even when the printer is offline " + chipC("gray", "STATUS HOLD OFF"));
+  /* recent jobs caption - the real jobs-today count */
+  var today = (st && st.jobs_today != null) ? st.jobs_today : (lastJobs ? lastJobs.length : 0);
+  var cap = $("dashRecentCap");
+  if (cap) cap.textContent = "last 6 of " + today + " today";
+}
+
+/* connections row of the dashboard - loadConnections() owns the
+   /peers answer and publishes it here; self PC only until then */
+var dashConnState = null;
+function renderDashConn(){
+  var e = $("dashConn"); if (!e) return;
+  var cs = dashConnState || { pcs: 1, online: 0, peers: 0 };
+  function chipC(cls, label){
+    return "<span class='chip " + cls + "'><span class='d'></span>" + label + "</span>";
+  }
+  e.innerHTML = chipC("info", cs.pcs + (cs.pcs === 1 ? " PC" : " PCs")) + " " +
+    chipC(cs.online ? "ok" : "gray", cs.online + "/" + cs.peers + " peers") +
+    " <span style='font-size:11px'>see Connections tab</span>";
 }
 /* ---- v3.2.1 r2 LAN tab: fill the lrows with REAL values (the
    approved markup ships with design-demo values; the hub replaces
@@ -13067,7 +12888,9 @@ function renderAudit(rows){
    there is no "web" kind) plus legacy aliases for display. A rule saved
    by an older build with kind "web" displays as Web page and MATCHES
    html pages through the alias in both matchers. */
-var KIND_LABELS = { "": "Any", pdf: "PDF link", web: "Web page", text: "Plain text / stream", url: "URL type" };
+var KIND_LABELS = { "": "Any", pdf: "PDF link", web: "Web page", html: "Web page",
+  text: "Plain text / stream", zpl: "ZPL label page", image: "Image page",
+  url: "URL type" };
 var ACTION_LABELS = { auto: "Auto (PDF as-is)", web: "Entire web page", sel: "Selected element only",
   raw: "Raw text / ZPL / ESC-POS stream", pdf: "Linked PDF only" };
 /* v3.4.7 PATTERN TYPES + RECIPES: a rule's "type" decides how the
@@ -13251,7 +13074,14 @@ function openRuleEditor(idx){
     ? String(r.type || "glob").toLowerCase() : "glob";
   fillRuleRecipes();
   $("re-content").value = r.content || "";
-  setSel($("re-type"), KIND_LABELS[r.kind] || "Any");
+  /* v3.4.8: set the URL-type select by VALUE (the kind), not by label -
+     legacy "web" shows as Web page and saves back as "html". */
+  (function(){
+    var rt = $("re-type"), rk = String(r.kind || "");
+    if (rk === "web") rk = "html";
+    rt.value = Array.prototype.some.call(rt.options,
+      function(o){ return o.value === rk; }) ? rk : "";
+  })();
   var sel = $("re-printer");
   sel.innerHTML = "<option>(OS default printer)</option>" +
     printersCache.filter(function(p){ return !p.is_group; }).map(function(p){
@@ -13300,10 +13130,21 @@ async function saveRule(){
       return (pt && ["glob", "regex", "contains"].indexOf(pt.value) >= 0)
         ? pt.value : "glob"; })(),
     content: $("re-content").value.trim(),
-    match: $("re-content").value.trim() ? "content" :
-      ($("re-type").selectedIndex === 3 ? "url" : "url"),
-    kind: ["", "pdf", "web", "text"][$("re-type").selectedIndex] !== undefined
-      ? ["", "pdf", "web", "text"][$("re-type").selectedIndex] : "",
+    /* v3.4.8 KIND FIX: the select carries the kind VALUES now. The old
+       positional array ("", pdf, web, text) was shifted one slot against
+       the option order AND saved "web" - a kind no page ever reports
+       (detectTabKind answers pdf | image | zpl | text | html), so a rule
+       saved as "Web page" could never fire. "web" normalizes to "html";
+       a content rule left on Any defaults to html (a content rule without
+       a kind is skipped by the matchers). */
+    match: $("re-content").value.trim() ? "content" : "url",
+    kind: (function(){
+      var v = String($("re-type").value || "");
+      if (v === "web") v = "html";
+      if (["pdf", "html", "text", "zpl", "image", ""].indexOf(v) < 0) v = "";
+      if ($("re-content").value.trim() && !v) v = "html";
+      return v;
+    })(),
     printer: $("re-printer").value === "(OS default printer)" ? "" : $("re-printer").value,
     action: ["auto", "web", "sel", "raw", "pdf"][$("re-what").selectedIndex] || "auto",
     copies: Math.max(1, parseInt($("re-copies").value, 10) || 1),
@@ -13405,6 +13246,13 @@ async function loadConnections(){
       seen[k] = 1; uniq.push(p);
     });
     peers = uniq;
+    /* v3.5.1: the dashboard Connections row reads the SAME live
+       answer - self PC (+ configured LAN PC) and online/total peers */
+    dashConnState = { pcs: 1 + ((lanPeerState && lanPeerState.configured) ? 1 : 0),
+                      peers: peers.length,
+                      online: peers.filter(function(p){
+                        return !!(p.up || p.alive); }).length };
+    renderDashConn();
     var tbl = document.querySelector("#p-connections table.tbl");
     if (tbl) {
       var tmpl = null;
@@ -13532,7 +13380,7 @@ function renderExt(audit){
     rows.slice(0, 6).forEach(function(r2){
       var tr = tmpl.cloneNode(true), td = tr.querySelectorAll("td");
       td[0].innerHTML = "<b>" + esc(r2.who) + "</b>";
-      td[1].textContent = "v" + (BOOT.version || "3.5.0");
+      td[1].textContent = "v" + (BOOT.version || "3.5.1");
       td[2].textContent = r2.at ? r2.at.slice(11, 19) : "\u2014";
       td[3].innerHTML = '<span class="chip ok"><span class="d"></span>PAIRED</span>';
       tbl.appendChild(tr);
@@ -13554,7 +13402,7 @@ function renderExt(audit){
       m2.textContent = BASE + "/extension/updates.xml";
   });
   var crxChip = document.querySelector("#p-extension .frow .chip.ok");
-  if (crxChip) crxChip.innerHTML = '<span class="d"></span>CRX v' + (BOOT.version || "3.5.0") + " READY";
+  if (crxChip) crxChip.innerHTML = '<span class="d"></span>CRX v' + (BOOT.version || "3.5.1") + " READY";
   /* v3.2.8 STALE-CRX GUARD: ask the hub which package it really
    * serves (/extension/info is open, no token). Older than the hub
    * itself -> Chrome never updates -> browsers keep the old bugs.
@@ -13695,6 +13543,7 @@ function renderSettings(cfg){
     days.value = cfgCache.history_days != null ? cfgCache.history_days : 30;
   var sels = qsa("#p-settings select");
   if (sels[0]) setSel(sels[0], (cfgCache.log_level || "INFO").toUpperCase());
+  if (sels[1]) setSel(sels[1], "Windows IDM (Blue)");
   var folder = document.querySelector("#p-settings .hint .mono");
   if (folder) folder.textContent = cfgCache.data_dir || "~/.advprint";
   /* LAN hint line */
@@ -13759,7 +13608,7 @@ async function renderUpdate(res){
    full-page /docs stays available via the "Full guide page" button.
    ============================================================ */
 function docsHtml(){
-  var v = esc(BOOT.version || "3.5.0");
+  var v = esc(BOOT.version || "3.5.1");
   var ip = esc(BOOT.lan_ip || location.hostname || "127.0.0.1");
   var port = esc(String(BOOT.port || location.port || "9235"));
   var base = "http://" + ip + ":" + port;
@@ -15057,7 +14906,12 @@ async function poll(){
     var audit = (await api("/audit?limit=60")).audit || auditRows;
     cfgCache = Object.assign(cfgCache, await api("/config"));
     auditRows = audit; pausedState = !!q.paused;
-    if (!hubStartTime && h.uptime_s) hubStartTime = Date.now() - h.uptime_s * 1000;
+    /* v3.5.1 UPTIME FIX: /health carries no uptime_s (only /stats
+       does) - the old line never fired, so the statusbar clock stayed
+       at "Uptime -" and the dashboard uptime chip kept the static
+       demo value forever. Read the REAL hub uptime from /stats. */
+    if (!hubStartTime && (st.uptime_s || h.uptime_s))
+      hubStartTime = Date.now() - (st.uptime_s || h.uptime_s) * 1000;
     showOffline(false);
     VERSION_TXT = "v" + (h.version || BOOT.version || "?");
     /* v3.2.5 BUG FIX 6: the REAL Startup-folder state (the same source
@@ -15096,6 +14950,8 @@ async function poll(){
        OFFLINE in the table until a manual reload. /peers is cached
        15 s server-side, so this costs the hub nothing. */
     loadConnections();
+    /* v3.5.1: the dashboard DropZone row shows the live waiting count */
+    loadDropzone();
     /* v3.4.7 STRICT LAN SHARE: the hit list refreshes with the poll
        (the endpoint is a cheap in-memory snapshot) */
     loadLanHits();

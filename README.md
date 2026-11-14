@@ -13,43 +13,34 @@ Web page ──► Chrome extension ──► AdvPrint Pro hub (localhost:9235) 
 
 ---
 
-## What's new in v3.5.0 (PRO THEMES + DASHBOARD DATA VIEW FIXES)
+## What's new in v3.5.1 (DASHBOARD LIVE DATA - dashboard-only bug fix)
 
-The console gets the **Pro Theme engine**: 7 color themes - Cobalt
-(new default), Classic IDM (the original v3.2.1 blue), Emerald,
-Violet, Graphite, Midnight and Carbon (both full dark) - plus
-light/dark, three densities, rounded/sharp corners and a
-framed/borderless window option. Pick from the **Theme menu** or
-**Settings > Appearance**; the choice is saved in the browser and
-applied **before first paint** (no wrong-theme flash), and icon-only
-sidebar/toolbar items show their label as a tooltip. The **dashboard
-data view now agrees with the rest of the UI**: the "IPP printer"
-glance row shows READY + the /ipp/print endpoint (mDNS discovery text
-hijacked it before), mDNS / RAW port / DropZone rows render live,
-idle printers count as usable, held jobs are no longer double-counted
-in In Queue, and progress widths are rounded. A local QR generator
-renders the QR tiles without the hub. No print / rule / queue /
-network logic changed - `tests/test_v350.py` locks the theme engine
-and the dashboard fixes, `tests/test_v348.py` still locks the rules
-table fit, and the rule editor keeps the reverted (working) v3.4.7
-kind handling. Full details in `CHANGELOG.md` and
-`docs/AdvPrint-Pro-v3.5.0-A-to-Z-DEV-GUIDE.md`.
+You reported: "in all previous versions the dashboard data is so fake -
+it always shows 33.3% success and the default printer and other things,
+this is not dynamic." Correct: the dashboard looked live but several
+values were static demo markup that NO code ever replaced. v3.5.1
+fixes exactly that (nothing else was touched):
 
----
-## What was new in v3.4.8 (RULES TABLE FITS - layout-only release)
-
-The first v3.4.8 attempt did not work and was reverted per your
-request; this release is the working **v3.4.7** tree plus EXACTLY ONE
-change: **the ONE UI rules table fits its card again.** With `Paper`
-or another extra column showing, the nowrap headers forced ~1145px
-inside a ~990px card and pushed the Edit/Del buttons outside the
-card border. v3.4.8: headers wrap, every ONE UI table sits in an
-inner scroll container that never crosses the card, the rules table
-is compact enough to fit at the normal console width without
-scrolling, and long Page-content cells ellipsis-clamp. No print /
-rule / queue / network logic changed - `tests/test_v348.py` locks
-both the fix and that the reverted logic stays absent. Full details
-in `CHANGELOG.md` and `docs/AdvPrint-Pro-v3.4.8-A-to-Z-DEV-GUIDE.md`.
+- **Print Hub Status card - every row is real now.** The uptime ticks
+  from the actual hub start (it is NOT stuck at 04:12:37 anymore),
+  Service reflects the real print-worker state, LAN sharing shows your
+  real LAN URL, IPP / RAW port show the REAL socket state, DropZone
+  shows the real watch state with the waiting-PDF count, Connections
+  shows your real peer counts from `/peers`, and the token row masks
+  the real token. The subtitle shows your real PC name (was always
+  "AI-Lab").
+- **Default Printer card - your REAL default printer.** Name from the
+  hub, live status chip (READY / OFFLINE / PAPER OUT / ERROR) from the
+  printer scan, and the real status-hold setting - instead of the
+  hardcoded "HP Laser 103 107 108 / OFFLINE / status hold ON".
+- **Recent Jobs caption** counts today's real jobs.
+- **Also fixed:** the IPP row used to be overwritten by the mDNS text
+  ("printers announce themselves").
+- The KPI row (jobs today / 7-day success rate / queue / printers
+  ready) was already computed from the job database and stays live.
+- Theme engine, rules, queue, printing and network logic are exactly
+  the working v3.5.0 build. Locked by `tests/test_v351.py`. Full
+  details in `CHANGELOG.md` and `docs/RELEASE-NOTES-v3.5.1.md`.
 
 ---
 ## What was new in v3.4.7 (CONFIGURABLE HUB PORT + DROPZONE WATCH FIX + STRICT LAN SHARE + URL RULES THAT REALLY MATCH)

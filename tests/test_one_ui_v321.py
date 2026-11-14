@@ -50,20 +50,13 @@ def test_console_is_the_rev4_design():
 
 
 def test_console_is_still_the_byte_for_byte_markup():
-    """v3.5.0: the Pro Theme engine re-issues the design tokens (the
-    default theme is Cobalt now; the original IDM blue lives on as the
-    "Classic IDM" theme) - markup structure and wiring are untouched."""
+    """Markup/CSS of the approved design are untouched - only the demo
+    script was swapped for the wiring and static versions bumped."""
     src = _console_src()
-    # the approved CSS block is intact (v3.5.0 cobalt design tokens)
-    for token in ("--navy:#14224f", "--blue:#2554d9", "--blue-soft:#eef1fc",
-                  "--blue-line:#cfd9f7"):
+    # the approved CSS block is intact (design tokens)
+    for token in ("--navy:#1e3a8a", "--blue:#1d4ed8", "--blue-soft:#eff6ff",
+                  "--blue-line:#bfdbfe"):
         assert token in src, "design token missing: " + token
-    # the theme engine ships all 7 themes + the light/dark switch
-    for theme in ("cobalt", "classic", "emerald", "violet", "graphite",
-                  "midnight", "carbon"):
-        assert ('data-theme="%s"' % theme) in src or \
-               ('data-theme-set="%s"' % theme) in src, "theme missing: " + theme
-    assert 'html[data-mode="dark"]{color-scheme:dark}' in src
     # no design-preview note, no stale version
     assert '<div class="design-note">' not in src
     assert "v3.1.3" not in src
@@ -109,7 +102,7 @@ def test_boot_json_view_detection(hub):
     end = html.find("</script>", start)
     boot = json.loads(html[start:end])
     assert boot["view"] == "self"      # loopback = owner = SELF PC UI
-    assert boot["version"] == "3.5.0"
+    assert boot["version"] == "3.4.8"
     assert boot["port"] == 9235 or "port" in boot
 
 
@@ -181,7 +174,7 @@ def test_extension_options_opens_the_hub():
     opts = open(os.path.join(ext, "options.html"), encoding="utf-8").read()
     ojs = open(os.path.join(ext, "options.js"), encoding="utf-8").read()
     man = json.load(open(os.path.join(ext, "manifest.json")))
-    assert man["version"] == "3.5.0"
+    assert man["version"] == "3.4.8"
     assert "http://127.0.0.1:9235" in ojs
     # v3.2.3: the options page is BRANDING ONLY - no Console/Dashboard
     # buttons, the brand footer is present

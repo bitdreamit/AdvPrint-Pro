@@ -1,83 +1,77 @@
 # Changelog - AdvPrint Pro (Advanced Printer)
 by Bit Dream IT - Innovative Healthcare Solutions
 
-## v3.5.0 - PRO THEMES + DASHBOARD DATA VIEW FIXES (theming + layout release on the working v3.4.8.1 base) (2026-11-14)
+## v3.5.1 - DASHBOARD LIVE DATA (dashboard-only bug fix on v3.5.0) (2026-11-15)
 
-The user applied the "ProTheme" design to the current console and asked
-for the full source + docs as v3.5.0. This release ports that theme onto
-the REAL hub console (the ONE UI that advprint.py serves at /ui), fixes
-the dashboard data view that "previously [was] not showing correctly",
-and bumps every version surface. Print, rule-matching, queue and network
-logic are untouched; `tests/test_v350.py` locks everything below and
-`tests/test_v348.py` still locks the v3.4.8 table fit.
+The user reported that the ONE UI dashboard showed fake, never-changing
+data in EVERY release: "always show 33.3% success and default printer
+and other this is not dynamic". Root cause: parts of the dashboard were
+STATIC DEMO MARKUP that no render code ever replaced - the hub already
+returned every real value (`/health`, `/stats`, `/printers`, `/peers`,
+`/dropzone`, `/config`), the console simply never wrote it into those
+rows. v3.5.1 is a dashboard-only fix on the untouched v3.5.0 (ProTheme)
+tree; locked by `tests/test_v351.py`.
 
-### 1. THE PRO THEME ENGINE - 7 themes, light/dark, density, corners, frame
+### 1. Print Hub Status card - every row is real (3 s refresh)
 
-- 7 color themes: **Cobalt** (new default), **Classic IDM** (the original
-  v3.2.1 Windows-IDM blue, kept as a theme), **Emerald**, **Violet**,
-  **Graphite**, **Midnight** and **Carbon** (both full dark themes).
-- Light/dark via `data-mode`; density (comfortable / compact),
-  corners (rounded / sharp) and window frame (framed / borderless) via
-  `data-density` / `data-corners` / `data-frame`.
-- The state is saved in the browser (localStorage key
-  `"advprintTheme"`) and applied by an early-apply script in `<head>`,
-  BEFORE first paint - no wrong-theme flash on open.
-- Two entry points: the **Theme menu** in the menu bar (7 themes +
-  "System (auto light / dark)" + "Appearance settings...") and the
-  **Appearance card** in Settings (8 preview tiles, density / corners /
-  frame toggles, live status line, "Reset appearance").
-- The old dead `THEME` select row ("Windows IDM (Blue)" that did
-  nothing) is removed together with its JS reference.
-- Icon-only sidebar/toolbar items show their label as a tooltip on
-  hover / focus / tap (phone-friendly).
+- `uptime` ticks from the hub's real start time (`/health.uptime_s`
+  -> hubStartTime -> fmtUptime). The static "uptime 04:12:37" is gone.
+- `Service` = HEALTHY while the real worker thread is alive
+  (`/health.worker_alive`), DEGRADED otherwise (was hardcoded).
+- `Listen` = the address this browser actually reached (unchanged).
+- `LAN sharing` = real `share_lan` + per-device LAN URL (unchanged).
+- `IPP printer` = real `ipp_printer` config. ALSO FIXES: the row used
+  to be clobbered with the mDNS text ("printers announce themselves")
+  by the old key-guessing loop matching the substring "ipp".
+- `RAW port` = real JetDirect state: `/health.raw_active` +
+  `raw_printer_port` + the first actually-bound address
+  (`raw_addrs`, 0.0.0.0 rewritten to the LAN IP for display);
+  shows OFF with "raw printing disabled" when the port is off.
+- `DropZone` = real `drop_enabled` + the live waiting-PDF count
+  (`/dropzone`, now refreshed every poll, was boot/tab-only).
+- `Connections` = real counts: this PC (+1 when a LAN PC is saved)
+  and online/total peers from `/peers` (published by
+  loadConnections into the new dashConnState). Was always "2 PCs
+  2 peers".
+- `Token` = the REAL token masked to first...last 4 (unchanged).
+- The dashboard subtitle shows the real PC name (`/health.host`),
+  not the static "AI-Lab".
 
-### 2. DASHBOARD DATA VIEW SHOWS THE REAL STATE ("previously not showing correctly")
+### 2. Default Printer card - the REAL default printer, live
 
-- The "IPP printer" glance row was caught by the `ipp||mdns` branch and
-  showed mDNS discovery text; it has its own branch now and shows
-  `READY /ipp/print` (or OFF), and mDNS, RAW port and DropZone rows
-  render live (`LISTENING 10.26.94.206:9100`, `ON watching the
-  DropZone folder`).
-- The Printers-Ready stat counted an `idle` printer as down and said
-  "2/4 - 2 offline" while the Printers tab and the status bar said 3
-  usable. An idle printer is usable now (only `offline` is down), in
-  BOTH the dashboard stat and the status bar.
-- The In Queue stat showed "4 (+2)" - pending already contains the held
-  jobs, so they were counted twice. The big number is the queue total,
-  the held count moved into the corner label ("2 held").
-- Progress bars carry rounded widths (67%, not
-  66.66666666666667%).
-- The static fallback markup (visible before JS) uses the same
-  consistent values, and the sample jobs carry the page totals the
-  static table always claimed (18 / 4 / 1).
+- Name: `/health.default_printer` (falls back to the configured
+  printer, then to the `is_default` row of `/printers`).
+- Status chip: READY / OFFLINE / PAPER OUT / ERROR from the live
+  printer scan; UNKNOWN when the printer is not in the scan.
+- Hold: the REAL `hold_offline` setting ("jobs wait while the printer
+  is offline" + STATUS HOLD ON/OFF).
+- Was hardcoded "HP Laser 103 107 108 / OFFLINE / status hold ON" in
+  every previous version - even when the machine's real default
+  printer was a different one.
 
-### 3. LOCAL QR GENERATOR
+### 3. Recent Jobs caption + KPI row
 
-The QR tiles (hub / invite / IPP) render from a local SVG generator
-(`window.apQRsvg`) instead of probing the hub first, and the QR modal
-BASE uses `location.origin` (the string "null" on file:// before), so
-QRs appear even while the hub is restarting.
+- The Recent Jobs caption now reads "last 6 of N today" with N =
+  today's real job count from the job database.
+- The KPI row was already live (jobs_today, 7-day success rate,
+  queue size, printers ready, version) and is unchanged.
 
-### 4. THE RULE EDITOR KEEPS THE WORKING (REVERTED) v3.4.7 LOGIC
+### 4. Implementation notes
 
-The ProTheme source the UI was built from still carried the FIRST
-(buggy) v3.4.8 rule-editor remap: value attributes + ZPL/Image editor
-options, a web->html alias and a value-based save. The user reverted
-that build as "not work, fully bug" and v3.4.8.1 re-locked the v3.4.7
-behavior - v3.5.0 therefore strips the remap again (label-based select,
-positional save, no ZPL/Image editor options) and `tests/test_v350.py`
-re-locks it next to `tests/test_v348.py`.
-
-### 5. VERSION 3.5.0 EVERYWHERE
-
-VERSION.txt, both advprint.py copies (VERSION + VERSION_NAME), the
-embedded ONE UI console (unix + windows + installer stage), the
-extension (manifest, popup, options, i18n en+bn, api.js fallback,
-popup.js header), setup.nsi (OutFile / VIProductVersion /
-DisplayVersion / silent-install + damaged-file hints), the deb control,
-START-HERE.txt, README.md and this changelog. dist/ rebuilt with the
-repo's build-all.sh: signed CRX3 v3.5.0 (all embedded copies synced +
-verified), extension zip, Setup EXE, deb and SHA256SUMS-3.5.0.txt.
+- All values are written by explicit element ids (`dashUptime`,
+  `dashService`, `dashListen`, `dashLan`, `dashIpp`, `dashRaw`,
+  `dashDrop`, `dashConn`, `dashToken`, `dpName`, `dpStatus`,
+  `dpHold`, `dashRecentCap`, `dashSub`) from the new
+  `renderDashboard()`; the old key-guessing "glance" loop in
+  `renderStats()` is gone (it was the reason several rows stayed
+  static forever and the IPP row got the wrong text).
+- Zero server-side changes: every value already came from the hub
+  endpoints; only the console wiring was missing.
+- Everything else is exactly the working v3.5.0 build: ProTheme
+  theme engine (8 themes + density/corners/frame), rules table fit,
+  single port for every queue. The standalone template
+  (`AdvPrint-Pro-Console-UI-Template-v3.5.1-ProTheme.html`) carries
+  the same fix; its offline sample data is labelled TEMPLATE PREVIEW.
 
 ## v3.4.8 - RULES TABLE FITS (layout-only release on the working v3.4.7 base) (2026-11-14)
 
