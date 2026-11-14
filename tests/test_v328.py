@@ -53,19 +53,19 @@ CHANGELOG = open(os.path.join(ROOT, "CHANGELOG.md"), encoding="utf-8").read()
 # ---------------------------------------------------------------
 
 def test_version_328_everywhere():
-    assert advprint.VERSION == "3.3.5"
-    assert advprint.VERSION_NAME.startswith("v3.3.5")
-    assert "DEDICATED QUEUE PORTS" in advprint.VERSION_NAME
-    assert "3.3.5" in VERSION_TXT
-    assert MANIFEST["version"] == "3.3.5"
-    assert 'var _apVerFallback = "3.3.5";' in open(
+    assert advprint.VERSION == "3.4.6"
+    assert advprint.VERSION_NAME.startswith("v3.4.6")
+    assert "ONE PORT FOR EVERYTHING" in advprint.VERSION_NAME
+    assert "3.4.6" in VERSION_TXT
+    assert MANIFEST["version"] == "3.4.6"
+    assert 'var _apVerFallback = "3.4.6";' in open(
         os.path.join(EXT, "content", "api.js"), encoding="utf-8").read()
-    assert 'BOOT.version || "3.3.5"' in CONSOLE
+    assert 'BOOT.version || "3.4.6"' in CONSOLE
     assert "## v3.2.9 - THE MULTI-PC IPP RELEASE" in CHANGELOG
     nsi = open(os.path.join(ROOT, "installer", "setup.nsi"),
                encoding="utf-8").read()
-    assert 'VIProductVersion "3.3.5.0"' in nsi
-    assert "AdvPrint-Pro-Setup-3.3.5.exe" in nsi
+    assert 'VIProductVersion "3.4.6.0"' in nsi
+    assert "AdvPrint-Pro-Setup-3.4.6.exe" in nsi
 
 
 def test_release_docs_328_exist():

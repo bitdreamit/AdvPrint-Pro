@@ -280,9 +280,9 @@ def test_v322_lan_tab_carries_platform_guide():
 def test_v322_version_strings_agree():
     # v3.3.2: the hub VERSION, VERSION.txt and the extension manifest
     # move together - same invariant as every release
-    assert advprint.VERSION == "3.3.5"
+    assert advprint.VERSION == "3.4.6"
     vt = open(os.path.join(ROOT, "VERSION.txt"), encoding="utf-8").read()
-    assert "3.3.5" in vt
+    assert "3.4.6" in vt
     man = json.load(open(os.path.join(ROOT, "extension", "manifest.json"),
                          encoding="utf-8"))
-    assert man["version"] == "3.3.5"
+    assert man["version"] == "3.4.6"
