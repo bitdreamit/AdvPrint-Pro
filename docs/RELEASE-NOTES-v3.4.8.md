@@ -1,102 +1,60 @@
-# v3.4.8 - RULES TABLE FITS + RULE EDITOR SAVES REAL KINDS + RUN BOOKKEEPING SYNCED (2026-11-14)
+# AdvPrint Pro v3.4.8 - Release Notes
 
-**Base: v3.4.7** — the configurable hub port, the DropZone watch
-toggle, strict LAN share with the IP hit list, URL rules that really
-match (glob / regex / contains + `/rules/test`) and the clean UI notes
-all stay. v3.4.8 is the FINAL-POLISH release: the reported layout bug
-is fixed at the root and the full A-to-Z audit fixed every remaining
-gap it found. Every item is locked by `tests/test_v348.py` (17 tests).
+**Rules table fits - the Edit button never leaves the card.**
+by Bit Dream IT - Innovative Healthcare Solutions
 
----
+## What happened to the first v3.4.8?
 
-## 1. The rules table never pushes Edit/Del outside again (the reported bug)
+The first v3.4.8 attempt shipped the table fix together with three
+extra logic changes and did not work ("fully bug"). Per your request it
+was REVERTED completely: this release is built on the untouched,
+working **v3.4.7** tree. Nothing from the buggy attempt is in this
+build - the release notes below describe the only change that ships.
 
-**You reported:** the Rules table columns *"Rule / URL / address
-filter / Match by / Page content / URL type / Printer / What to print /
-Cpl / Paper / On / Auto / Runs"* — *"th so td outside when paper or
-other extra selected edit button goes outside."*
+## The fix
 
-**Measured root cause (v3.4.7):** the 14 column headers could not wrap
-(`white-space:nowrap`) and the cell padding was generous, so the table
-forced a **1145 px minimum width inside a 990 px card**. The Runs
-column and the **Edit/Del buttons rendered OUTSIDE the card border**
-(edit button right edge 1399 px vs card right edge 1245 px) — with
-Paper ("58mm receipt", "4×6″ label") or a long page-content filter
-selected the rows just got taller and it looked even worse.
+**The ONE UI rules table (14 columns) overflowed the card.** With
+`Paper` or another extra column showing, the `white-space:nowrap`
+headers forced a ~1145px minimum width inside a ~990px card, pushing
+the `Runs` column and the `Edit` / `Del` buttons OUTSIDE the visible
+card.
 
-**The fix — three layers, so it can never come back:**
+v3.4.8 fixes it at the root with CSS only - no print, rule, queue or
+network logic touched:
 
-1. **The table fits.** Headers may wrap to a second line now, the
-   rules table is `compact` (tighter cells, shrunken min-widths) and
-   the long pattern / page-content cells clamp with an ellipsis.
-   Measured after the fix: table 990 px = card 990 px, **overflow 0**,
-   Edit button fully inside.
-2. **A scroll safety net.** EVERY ONE UI table (13 of them — rules,
-   activity log, queue, history, dashboard, audit, LAN hits,
-   connections, dropzone, extension, debug) sits in a `.tbl-wrap`
-   that scrolls horizontally INSIDE the card as a last resort. On a
-   very narrow window you scroll within the card — a button can never
-   again render outside the visible area.
-3. **Same look, same columns.** The header still reads exactly
-   Rule / URL / address filter / Match by / Page content / URL type /
-   Printer / What to print / Cpl / Paper / On / Auto / Runs (plus the
-   edit column) — nothing was removed to make it fit.
+1. **Headers may wrap** to a second line (`white-space:normal`).
+2. **Every ONE UI table sits in a horizontal scroll container** that
+   lives INSIDE the card - on very narrow windows the table scrolls,
+   the card border is never crossed, the page never scrolls sideways.
+3. **The rules table is compact** (tighter cells + slimmer column
+   widths) so at the normal console width it fits with NO scrolling.
+4. **Long "Page content" cells clamp** with an ellipsis, exactly like
+   the URL pattern cells.
 
-## 2. The rule editor saves REAL URL types (A-to-Z audit gap #1)
+Measured on the live hub: 0px overflow at 1280px, Edit/Del fully
+inside the card; at 800px the inner container scrolls and the buttons
+stay reachable inside the card (`scripts/ui_check_v348.py` PASS).
 
-The ONE UI rule editor's URL TYPE select was saved through a **shifted
-positional array** (`["", "pdf", "web", "text"]` against the options
-PDF link / Web page / Plain text / stream / Any):
+## Everything else = working v3.4.7
 
-| You picked | v3.4.7 saved | Effect |
-|---|---|---|
-| PDF link | `""` (Any) | type shown as Any |
-| Web page | `"pdf"` | a content rule matched only PDF pages |
-| Plain text / stream | `"web"` | **never matched anything** — no page is ever detected as "web" (the browser answers `html`) |
-| Any | `"text"` | matched only text/plain pages |
+Configurable hub port (9235 default, movable when busy), DropZone
+watch Enable/Disable toggle, strict LAN share with the IP hit list +
+one-click Allow, URL rules that really match (glob / regex / contains
++ the "Which rule fires?" test box), one TCP port 9235 for every queue,
+the popup that remembers the last printer, manual LAN/IPP re-scan,
+auto-CRX on install, idempotent set-default.
 
-Fixed: the select now carries real **values** (`pdf / web / text / zpl
-/ image / ""`), **ZPL label page** and **Image page** joined the list
-(the extension detects both), `web` normalizes to `html` on save, and
-a content rule left on **Any** defaults to `html` (a content rule
-without a kind is skipped by the matchers). Rules saved by older
-builds with the dead kind `web` **start working** — BOTH matchers
-(extension `matchRule` + hub `rule_matches`) alias `web` → `html`.
+## Upgrade
 
-## 3. Run bookkeeping reaches the ONE UI (A-to-Z audit gap #2)
+Install straight over v3.4.6 / v3.4.7 (Setup exe / deb) - settings,
+history and printer queues are kept. Browsers with the auto-installed
+CRX update themselves; manual installs: Remove + Load unpacked the new
+`AdvPrint-Pro-Extension-3.4.8.zip`.
 
-The extension tracked `lastRun` but pushed only the counter to the
-hub, and the hub's rules cleaner dropped `last_run` (and the `title`
-filter) — so the Runs column could show "128 runs" but never the
-promised "last 14:22". Now `last_run` rides along with every push and
-the cleaner keeps `title` + `last_run` on central edits.
+## Verification chain
 
-## 4. `/rules/test` GET form honors `kind` + `title` (A-to-Z audit gap #3)
-
-The POST form passed both, the GET form silently dropped them — a
-content rule could never be tested from the browser bar
-(`/rules/test?url=...&kind=html`). Both forms behave identically now.
-
-## 5. The A-to-Z audit verdict
-
-- Full pytest suite: **680 tests** green after the release build
-  (17 new v3.4.8 locks included).
-- Independent JS wiring audit of the ONE UI + classic dashboard:
-  0 undefined function calls, 0 missing ids, 0 duplicate ids,
-  0 unsubstituted placeholders, 0 JS syntax errors.
-- The two hub copies (`tool/unix/hub/advprint.py`,
-  `tool/windows/portable/hub/advprint.py`) stay byte-identical and
-  the embedded console matches `console.html`.
-- The popup printer memory (v3.4.6), one-port IPP path routing,
-  configurable hub port, strict LAN share and the rule test engine
-  are all verified unchanged.
-
-## Files
-
-- Hub: `tool/unix/hub/advprint.py` + `tool/windows/portable/hub/advprint.py` (byte-identical), `console.html` embedded
-- Extension: `background.js` (kind alias + last_run push), manifest 3.4.8
-- Tests: `tests/test_v348.py`
-- Docs: this file, `CHANGELOG.md`, `README.md`,
-  `docs/AdvPrint-Pro-v3.4.8-A-to-Z-DEV-GUIDE.md`,
-  `docs/PRINT-RULES-RECIPES.md` (kind note), the regenerated
-  `docs/AdvPrint-Pro-Full-Guide.pdf`
+- 663 pytest green (incl. the new `tests/test_v348.py` which locks the
+  fix AND the absence of the reverted logic changes)
+- Real-browser UI check 1280px + 800px PASS, zero JS errors
+- CRX3 re-signed v3.4.8, every embedded copy byte-verified
+- SHA256SUMS-3.4.8.txt: 4/4 OK

@@ -13,41 +13,23 @@ Web page ──► Chrome extension ──► AdvPrint Pro hub (localhost:9235) 
 
 ---
 
-## What's new in v3.4.8 (RULES TABLE FITS + RULE EDITOR SAVES REAL KINDS + RUN BOOKKEEPING SYNCED)
+## What's new in v3.4.8 (RULES TABLE FITS - layout-only release)
 
-The final-polish release on top of v3.4.7. Locked by
-`tests/test_v348.py`; full details in `CHANGELOG.md`; developer delta
-in `docs/AdvPrint-Pro-v3.4.8-A-to-Z-DEV-GUIDE.md`.
-
-1. **The rules table never pushes Edit/Del outside again.** The
-   reported bug: with Paper or another extra selected the columns
-   Rule / URL / address filter / Match by / Page content / URL type /
-   Printer / What to print / Cpl / Paper / On / Auto / Runs pushed
-   the Edit button outside the card (the 14 nowrap headers forced a
-   1145px table inside a 990px card). Fixed at the root: headers
-   wrap, the table is compact, long pattern / content cells clamp
-   with an ellipsis (measured: table 990 = card 990, overflow 0) and
-   EVERY ONE UI table sits in a horizontal-scroll `.tbl-wrap` as a
-   last resort - no column and no button can ever render outside the
-   card again.
-2. **The rule editor saves real URL types.** The old editor saved a
-   SHIFTED kind: "Web page" saved kind `web` - a kind no page ever
-   reports - so such rules could never fire. The select carries real
-   values now (PDF link / Web page / Plain text / ZPL label page /
-   Image page / Any), legacy `web` rules read as `html` in both
-   matchers, and a content rule left on Any defaults to html.
-3. **Run bookkeeping synced.** The Runs column shows "last HH:MM"
-   again - `last_run` rides along with the extension's rules push and
-   the hub cleaner keeps it (plus the title filter) on central edits.
-4. **`/rules/test` GET form honors `kind` + `title`** - content rules
-   are testable from the browser bar now, same as the POST form.
-
-The v3.4.7 configurable hub port, DropZone watch toggle, strict LAN
-share and URL rules engine are unchanged (below).
+The first v3.4.8 attempt did not work and was reverted per your
+request; this release is the working **v3.4.7** tree plus EXACTLY ONE
+change: **the ONE UI rules table fits its card again.** With `Paper`
+or another extra column showing, the nowrap headers forced ~1145px
+inside a ~990px card and pushed the Edit/Del buttons outside the
+card border. v3.4.8: headers wrap, every ONE UI table sits in an
+inner scroll container that never crosses the card, the rules table
+is compact enough to fit at the normal console width without
+scrolling, and long Page-content cells ellipsis-clamp. No print /
+rule / queue / network logic changed - `tests/test_v348.py` locks
+both the fix and that the reverted logic stays absent. Full details
+in `CHANGELOG.md` and `docs/AdvPrint-Pro-v3.4.8-A-to-Z-DEV-GUIDE.md`.
 
 ---
-
-## What's new in v3.4.7 (CONFIGURABLE HUB PORT + DROPZONE WATCH FIX + STRICT LAN SHARE + URL RULES THAT REALLY MATCH)
+## What was new in v3.4.7 (CONFIGURABLE HUB PORT + DROPZONE WATCH FIX + STRICT LAN SHARE + URL RULES THAT REALLY MATCH)
 
 The user said "current work fine" and asked for the next version with
 five items. Fixed and locked by `tests/test_v347.py`. Full details in

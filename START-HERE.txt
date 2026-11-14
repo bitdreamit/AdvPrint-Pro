@@ -1,76 +1,67 @@
-AdvPrint Pro (Advanced Printer) v3.3.4 - START HERE
+AdvPrint Pro (Advanced Printer) v3.4.8 - START HERE
 ====================================================
 by Bit Dream IT - Innovative Healthcare Solutions
 
-QUICK NOTE ON v3.3.4 - MULTI-PRINTER IPP ADD + POPUP PRINTER/RELOAD/NETWORK
---------------------------------------------------------------------------
-1) EVERY PRINTER OF THE HUB CAN BE ADDED NOW - NOT JUST ONE. Windows
-   refused the SECOND per-printer queue (http://<hub-ip>:9235/ipp/
-   print/<printer>) because mDNS advertised ONE shared UUID TXT record
-   for every queue - each per-printer service looked like a
-   re-announcement of the first. Every advertised queue now carries
-   its OWN stable printer-uuid (announce + direct TXT answers), so all
-   printers appear and add side by side in Windows and on phones. If a
-   queue was half-added before the upgrade, remove it once on the
-   device and add it again.
-2) THE POPUP IS A CONTROL SURFACE NOW. A PRINTER dropdown (the hub's
-   printers + status; picking one makes it the OS default - ONE
-   command per real change, NOTHING on popup open/reload, and the hub
-   endpoint is idempotent: "already default" answers with zero
-   commands - the "cmd runs multiple times" bug is dead). A RELOAD
-   button re-reads everything. A NETWORK icon shows at a glance:
-   gray = offline, green = hub on this PC, teal pulse = Share Receive
-   ON listening on the LAN (tooltip names the address). Share
-   Receive's sub-label shows the LAN listen address too.
-3) allow_extention_advprint_pro.bat REALLY APPLIES HKLM / HKCU NOW.
-   The old script deleted ExtensionInstallForcelist on every run and
-   never re-wrote it (the CRX force-install was silently wiped). The
-   rewrite writes ALL THREE policies per browser (Chrome, Edge, Brave,
-   Vivaldi, Chromium, Opera) with duplicate-skip, has a menu
-   [1]=HKLM (auto-UAC) [2]=HKCU (no admin) [3]=BOTH [R]=Remove [0]=
-   Exit, accepts scripted args (HKLM|HKCU|BOTH|REMOVE) and takes the
-   hub address for LAN deployments.
+QUICK NOTE ON v3.4.8 - RULES TABLE FITS (layout-only release)
+--------------------------------------------------------------
+The FIRST v3.4.8 attempt bundled the table fix with extra logic
+changes and did not work - per the user's request it was fully
+REVERTED to the working v3.4.7 tree. THIS release is v3.4.7 plus
+EXACTLY ONE change, and it is CSS/layout only - no print, rule,
+queue or network logic was touched:
 
-4) IMPORTANT UPGRADE STEP: the extension is auto-updated FROM THE HUB
-   (updates.xml) - after updating the hub, check
-   http://127.0.0.1:9235/extension/info : it must show
-   "stale": false and version 3.3.4. If it shows "stale": true, re-run
-   the installer (or restart the hub once) - the embedded CRX was not
-   synced; Chrome then silently updates the extension to 3.3.4.
+1) THE ONE UI RULES TABLE FITS ITS CARD AGAIN. With Paper or another
+   extra column showing, the nowrap headers forced ~1145px inside a
+   ~990px card and pushed the Runs column + the Edit/Del buttons
+   OUTSIDE the card border. Fixed at the root:
+   - headers may wrap to a second line;
+   - every ONE UI table sits in an inner scroll container
+     (.tbl-wrap) - on very narrow windows the table scrolls INSIDE
+     the card, the page never scrolls sideways, the card border is
+     never crossed;
+   - the rules table is compact: at the normal console width (1280px)
+     all 14 columns incl. Edit/Del fit WITHOUT any scrolling;
+   - long "Page content" cells ellipsis-clamp like the URL cells.
+   Measured on the live hub + screenshots: scripts/ui_check_v348.py.
+
+2) EVERYTHING ELSE = THE WORKING v3.4.7. Configurable hub port (9235
+   default, movable when busy), DropZone watch Enable/Disable toggle,
+   strict LAN share with the IP hit list + one-click Allow, URL rules
+   that really match (glob / regex / contains + the "Which rule
+   fires?" test box), one TCP port 9235 for every queue, the popup
+   that remembers the last printer, manual LAN/IPP re-scan, auto-CRX
+   on install, idempotent set-default.
 
 UPGRADE IN 3 STEPS (from any v3.x)
 ----------------------------------
 1. Close the old hub (tray icon -> Exit) and run the new
-   AdvPrint-Pro-Setup-3.3.4.exe - it installs over the old folder and
+   AdvPrint-Pro-Setup-3.4.8.exe - it installs over the old folder and
    keeps config.json, the queue database and your rules.
-2. Start AdvPrint Pro. The tray tooltip shows "v3.3.4 - running on
+2. Start AdvPrint Pro. The tray tooltip shows "v3.4.8 - running on
    http://127.0.0.1:9235".
 3. Chrome updates the extension by itself from the hub within a minute
-   (chrome://extensions -> AdvPrint Pro -> 3.3.4). Linux .deb: sudo
-   dpkg -i advprint-pro_3.3.4_all.deb.
+   (chrome://extensions -> AdvPrint Pro -> 3.4.8). Linux .deb: sudo
+   dpkg -i advprint-pro_3.4.8_all.deb.
 
 QUICK VERIFY (2 minutes)
 ------------------------
-- Console: http://127.0.0.1:9235/ui - LAN Sharing card shows "Hub
-  addresses" chips (IPv4 AND IPv6 where available), the RAW row shows
-  every bound 9100 socket.
-- Invite: LAN card -> "Connect another PC" -> Copy invite link -> open
-  it on the OTHER PC. The page says which PC's hub it adds and probes
-  that PC's own hub first. Open it on the hub PC itself and you get
-  the "this invite is for the OTHER PC" explainer - never a self-add.
-- Per-printer queues: http://127.0.0.1:9235/printers lists
-  ipp://<ip>:9235/ipp/print/<printer> for EVERY printer, Unicode
-  names included. Add one on another PC - it connects first try.
-- IPv6: on an IPv6-capable PC, netstat -ano | findstr ":9100" shows
-  0.0.0.0/your-IPv4 AND [::] rows - both answer.
+- Console: http://127.0.0.1:9235/ui - Rules tab: add a rule with
+  Paper + Page content set; the table fits, the Edit button is INSIDE
+  the card (resize the window narrow: the table scrolls inside the
+  card, never across it).
+- The ONE UI footer and the tray tooltip say v3.4.8.
+- http://127.0.0.1:9235/health reports "version": "3.4.8".
+- http://127.0.0.1:9235/extension/info shows "stale": false and
+  version 3.4.8 (if stale, restart the hub once).
 
 DOCUMENTATION (all local, A-to-Z)
 ---------------------------------
 - README.md            - features, install, API, LAN/IPP modes
 - docs/DEVELOPER-API.md          - window.advprint JS API
-- docs/AdvPrint-Pro-v3.3.4-A-to-Z-DEV-GUIDE.md - build + release guide
-- docs/RELEASE-NOTES-v3.3.4.md   - this release, all three bugs
-- docs/PrintHub-Pro-Full-Guide.html - step-by-step visual manual
+- docs/AdvPrint-Pro-v3.4.8-A-to-Z-DEV-GUIDE.md - build + release guide
+  (incl. WHY the first v3.4.8 attempt was reverted)
+- docs/RELEASE-NOTES-v3.4.8.md   - this release, the fix measured
+- docs/AdvPrint-Pro-Full-Guide.html/.pdf - the A-to-Z user manual
 - CHANGELOG.md                   - every release since v1.0.0
 - Console (127.0.0.1:9235/ui) -> Docs button - the same guide in-UI
 

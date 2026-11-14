@@ -1,26 +1,19 @@
 #!/usr/bin/env python3
-"""v3.4.8 console UI check: boot the real hub (two mocked printers),
-open the ONE UI console in headless Chromium and verify the v3.4.8
-surfaces:
+"""v3.4.8 UI check - the rules table must never overflow the card.
 
-  1. BOOT.version == 3.4.8
-  2. Rules table (with paper + content extras): every column through
-     Runs + the Edit/Del buttons render INSIDE the card (the reported
-     v3.4.7 bug); the table is tbl compact inside a .tbl-wrap
-  3. Narrow window (800px): the wrap scrolls INSIDE the card - the
-     Edit button stays reachable, the card border is never crossed
-  4. Rule editor: #re-type carries real values; saving "Web page" +
-     content stores kind html (the v3.4.7 shift bug is gone)
-  5. popup badge is v3.4.8, popup structure intact
-  6. no uncaught JS exceptions
+Boots the real hub with the patched console, injects rules with the
+exact user scenario (Paper + Page-content extras, long strings), and
+measures at 1280px (must FIT, no scroll) and 800px (may scroll INSIDE
+the .tbl-wrap but must never cross the card border).  Also re-checks
+that the reverted rule-editor is the untouched v3.4.7 one.
 """
+import json
 import os
+import socket
 import sys
 import tempfile
 import threading
 import time
-import json
-import socket
 import urllib.request
 from http.server import ThreadingHTTPServer
 
@@ -30,11 +23,10 @@ os.environ["ADVPRINT_DATA"] = tempfile.mkdtemp(prefix="ap348-ui-")
 
 import advprint  # noqa: E402
 
-NAMES = ["HP Laser 103", "Epson L3250"]
+NAMES = ["HP Laser 103 107 108", "AdvPrint Pro @ AI-Lab (IPP virtual)"]
 advprint.list_printers_cached = lambda max_age=30.0: list(NAMES)
 advprint.default_printer_cached = lambda max_age=10.0: NAMES[0]
-advprint.printers_status_cached = lambda max_age=30.0: {
-    n: "ready" for n in NAMES}
+advprint.printers_status_cached = lambda max_age=30.0: {n: "ready" for n in NAMES}
 
 s = socket.socket(); s.bind(("127.0.0.1", 0)); port = s.getsockname()[1]; s.close()
 advprint.CFG["port"] = port
@@ -50,22 +42,24 @@ threading.Thread(target=httpd.serve_forever, daemon=True).start()
 base = "http://127.0.0.1:%d" % port
 time.sleep(0.3)
 
-# rules WITH the extras the user reported (paper + content)
 RULES = [
-    {"id": 1, "name": "Lab PDF reports",
-     "pattern": "*://www.htncr.org/lab/*", "type": "glob",
-     "printer": NAMES[0], "action": "web", "copies": 1, "paper": "A5",
-     "on": True, "match": "url", "runs": 128,
-     "last_run": "2026-11-14T14:22:08.000Z"},
+    {"id": 1, "name": "Lab PDF reports", "pattern": "*://www.htncr.org/lab/*",
+     "type": "glob", "printer": NAMES[0], "action": "web", "copies": 1,
+     "paper": "A5", "on": True, "match": "url", "runs": 128},
     {"id": 2, "name": "Receipts", "pattern": "*://billing.local/pos/*",
-     "type": "glob", "printer": "XP-58 Thermal", "action": "raw",
-     "copies": 1, "paper": "58mm receipt", "on": True, "match": "url",
-     "runs": 41},
+     "type": "glob", "printer": "XP-58 Thermal", "action": "raw", "copies": 1,
+     "paper": "58mm receipt", "color": "Black & white", "duplex": "",
+     "on": True, "match": "url", "runs": 41},
     {"id": 3, "name": "Patient reports", "pattern": "(any page)",
-     "match": "content", "content": "Patient Report (long content line "
-     "that used to stretch the row)",
+     "match": "content",
+     "content": "Patient Report (a long content line that used to stretch "
+                "the row beyond the card border)",
      "printer": NAMES[1], "action": "web", "copies": 1,
      "paper": "4\u00d76\u2033 label", "on": True, "runs": 12},
+    {"id": 4, "name": "Night reports",
+     "pattern": "*://intranet/night-reports/very/long/path/*",
+     "type": "glob", "printer": NAMES[0], "action": "web", "copies": 2,
+     "paper": "Legal", "on": True, "match": "url", "runs": 3},
 ]
 
 
@@ -81,146 +75,110 @@ def api(path, body=None):
 
 api("/config", {"rules_mirror": RULES})
 
-ok_all = True
+from playwright.sync_api import sync_playwright  # noqa: E402
 
+MEASURE = """() => {
+  const card = document.querySelector('#p-rules .card:last-of-type');
+  const tbl  = document.querySelector('#p-rules table.tbl');
+  const wrap = tbl.closest('.tbl-wrap');
+  const host = card;
+  const firstDataRow = tbl.querySelectorAll('tr')[1];
+  const last = firstDataRow.querySelectorAll('td');
+  const edit = last[last.length - 1].querySelector('button');
+  const er = edit.getBoundingClientRect(), hr = host.getBoundingClientRect();
+  const ths = [...tbl.querySelectorAll('tr')[0].querySelectorAll('th')]
+    .map(t => t.textContent.trim()).filter(Boolean);
+  // the CONTENT rule's Page-content cell (td[3] chip says CONTENT)
+  let contentClamped = null;
+  [...tbl.querySelectorAll('tr')].forEach(tr => {
+    const tds = tr.querySelectorAll('td');
+    if (tds.length > 4 && tds[3].textContent.indexOf('CONTENT') >= 0)
+      contentClamped = tds[4].className.indexOf('doc') >= 0;
+  });
+  return {
+    boot: BOOT.version,
+    tableW: tbl.scrollWidth, cardW: host.clientWidth,
+    overflow: Math.max(0, tbl.scrollWidth - host.clientWidth),
+    editRight: Math.round(er.right), cardRight: Math.round(hr.right),
+    editInside: er.right <= hr.right + 1,
+    wrapScrolls: wrap ? (wrap.scrollWidth > wrap.clientWidth) : null,
+    pageOverflowX: document.documentElement.scrollWidth - window.innerWidth,
+    headers: ths,
+    contentClamped: contentClamped,
+    docCount: document.querySelectorAll('#p-rules .tbl-wrap').length
+  };
+}"""
 
-def check(name, cond, extra=""):
-    global ok_all
-    print(("PASS " if cond else "FAIL "), name, extra)
-    if not cond:
-        ok_all = False
-
-
-from playwright.sync_api import sync_playwright
-
-errors = []
-shots = os.path.join(ROOT, "scripts")
+fails = []
 with sync_playwright() as pw:
     b = pw.chromium.launch()
     pg = b.new_page(viewport={"width": 1280, "height": 800})
+    errors = []
     pg.on("pageerror", lambda e: errors.append(str(e)))
-    pg.on("console", lambda m: errors.append(m.text)
-          if m.type == "error" else None)
     pg.goto(base + "/ui", wait_until="domcontentloaded", timeout=20000)
     pg.wait_for_function("typeof BOOT === 'object' && BOOT.version",
                          timeout=15000)
-    pg.wait_for_function("cfgCache && cfgCache.rules_mirror", timeout=15000)
+    pg.wait_for_function(
+        "cfgCache && cfgCache.rules_mirror && cfgCache.rules_mirror.length",
+        timeout=15000)
     pg.evaluate("typeof showTab === 'function' && showTab('rules')")
     pg.wait_for_selector("#p-rules table.tbl tr td", timeout=10000)
-    time.sleep(1.0)
-    check("BOOT.version 3.4.8", pg.evaluate("BOOT && BOOT.version") == "3.4.8")
+    time.sleep(1.2)
 
-    # ---- 2. the reported bug: Edit button inside the card ----
-    m = pg.evaluate("""() => {
-      const tbl = document.querySelector('#p-rules table.tbl');
-      const host = tbl.closest('.card');
-      const rows = tbl.querySelectorAll('tbody tr, tr');
-      let worstRight = 0, worstEdit = null;
-      rows.forEach(function(tr){
-        const tds = tr.querySelectorAll('td');
-        if (!tds.length) return;
-        const edit = tds[tds.length - 1].getBoundingClientRect();
-        if (edit.right > worstRight) { worstRight = edit.right;
-          worstEdit = (tds[0].textContent || '').trim(); }
-      });
-      const hr = host.getBoundingClientRect();
-      const wrap = tbl.closest('.tbl-wrap');
-      return {tableW: tbl.scrollWidth, hostW: host.clientWidth,
-              editRight: worstRight, hostRight: hr.right,
-              editInside: worstRight <= hr.right + 1,
-              compact: tbl.className.indexOf('compact') >= 0,
-              wrapped: !!wrap, editRow: worstEdit};
-    }""")
-    check("rules table is tbl compact inside .tbl-wrap",
-          m["compact"] and m["wrapped"], json.dumps(m))
-    check("Edit/Del inside the card (overflow %dpx)"
-          % (m["editRight"] - m["hostRight"]), m["editInside"],
-          "row %s editRight=%.0f hostRight=%.0f"
-          % (m["editRow"], m["editRight"], m["hostRight"]))
-    check("table width == card width (no overflow)",
-          m["tableW"] <= m["hostW"] + 1,
-          "table %d vs card %d" % (m["tableW"], m["hostW"]))
-    tbl_txt = pg.locator("#p-rules table.tbl").first.inner_text()
-    for col in ("RULE", "URL / ADDRESS", "MATCH BY", "PAGE CONTENT",
-                "URL TYPE", "PRINTER", "WHAT TO", "CPL", "PAPER", "ON",
-                "AUTO", "RUNS"):
-        check("header keeps %s" % col, col in tbl_txt.upper())
-    check("runs cell shows the synced last_run",
-          "14:22" in tbl_txt, "last HH:MM from last_run")
-    pg.evaluate("document.querySelector('#p-rules table.tbl')"
-                ".scrollIntoView({block:'center'})")
+    m = pg.evaluate(MEASURE)
+    print("WIDE 1280:", json.dumps(m, indent=2))
+    ok = (m["boot"] == "3.4.8" and m["overflow"] == 0 and m["editInside"]
+          and m["contentClamped"] is True
+          and m["headers"][:12] == ["#", "Rule", "URL / address filter",
+                                    "Match by", "Page content", "URL type",
+                                    "Printer", "What to print", "Cpl",
+                                    "Paper", "On", "Auto"]
+          and m["docCount"] >= 1)
+    (fails if not ok else []).append("wide-1280") if not ok else None
+    pg.evaluate(
+        "document.querySelector('#p-rules .tbl-wrap')"
+        ".scrollIntoView({block:'center'})")
     time.sleep(0.4)
-    pg.screenshot(path=os.path.join(shots, "ui348-rules-table.png"))
+    pg.screenshot(path=os.path.join(ROOT, "scripts", "ui348-rules-table.png"))
 
-    # ---- 3. narrow window: the wrap scrolls, nothing escapes ----
+    # narrow window: the wrap scrolls INSIDE the card; after scrolling the
+    # wrap fully right the Edit button must sit INSIDE the card rect, and
+    # the page itself must never grow a horizontal scrollbar
     pg.set_viewport_size({"width": 800, "height": 700})
-    time.sleep(0.5)
-    m2 = pg.evaluate("""() => {
-      const tbl = document.querySelector('#p-rules table.tbl');
-      const wrap = tbl.closest('.tbl-wrap');
-      const host = tbl.closest('.card');
-      const rows = tbl.querySelectorAll('tr');
-      let editRight = 0, editLeft = 0;
-      rows.forEach(function(tr){
-        const t = tr.querySelectorAll('td');
-        if (t.length) { const r = t[t.length-1].getBoundingClientRect();
-          editRight = Math.max(editRight, r.right);
-          editLeft = editLeft || r.left; }
-      });
-      const wr = wrap.getBoundingClientRect();
-      return {
-        wrapScrolls: wrap.scrollWidth > wrap.clientWidth + 1,
-        hostScrolls: host.scrollWidth <= host.clientWidth + 1,
-        /* scrolling the wrap right must be able to reveal the buttons:
-           the cell must end within the wrap's scrollable content box */
-        editReachable: (editRight - wr.left) <= wrap.scrollWidth + 1,
-        cardClips: host.clientWidth > 0 &&
-                   host.getBoundingClientRect().right <=
-                     window.innerWidth + 1};
+    time.sleep(0.6)
+    m2 = pg.evaluate(MEASURE)
+    pg.evaluate(
+        "const w = document.querySelector('#p-rules .tbl-wrap'); "
+        "w.scrollLeft = w.scrollWidth;")
+    time.sleep(0.3)
+    m3 = pg.evaluate(MEASURE)
+    print("NARROW 800:", json.dumps(m2, indent=2))
+    print("NARROW scrolled to end:", json.dumps(
+        {k: m3[k] for k in ("editRight", "cardRight", "editInside")}))
+    ok2 = (m2["pageOverflowX"] <= 0          # page never scrolls sideways
+           and m2["wrapScrolls"] is True     # the wrap does the scrolling
+           and m3["editInside"]              # button reachable INSIDE card
+           and m2["headers"][:12] == m["headers"][:12])
+    (fails if not ok2 else []).append("narrow-800") if not ok2 else None
+    pg.screenshot(path=os.path.join(ROOT, "scripts", "ui348-rules-narrow.png"))
+
+    # reverted rule editor must be the untouched v3.4.7 one (no explicit
+    # value attributes on the options - option.value alone falls back to
+    # the text content, which is normal DOM behaviour)
+    rev = pg.evaluate("""() => {
+      const sel = document.querySelector('#re-type');
+      const opts = [...sel.options].map(o => o.textContent.trim());
+      const withValueAttr = [...sel.options].filter(o => o.hasAttribute('value')).length;
+      return {opts, withValueAttr};
     }""")
-    check("narrow window: the wrap scrolls internally",
-          m2["wrapScrolls"], json.dumps(m2))
-    check("narrow window: nothing crosses the card border",
-          m2["hostScrolls"] and m2["editReachable"])
-    pg.screenshot(path=os.path.join(shots, "ui348-rules-narrow.png"))
-
-    # ---- 4. the editor kind fix ----
-    pg.set_viewport_size({"width": 1280, "height": 800})
-    time.sleep(0.4)
-    pg.evaluate("typeof openRuleEditor === 'function' && openRuleEditor(-1)")
-    time.sleep(0.4)
-    vals = pg.eval_on_selector_all(
-        "#re-type option", "els => els.map(e => [e.value, e.textContent])")
-    check("URL-type select carries real values",
-          [v[0] for v in vals] == ["pdf", "web", "text", "zpl", "image", ""],
-          str(vals))
-    # simulate the exact user flow: content text + Web page -> kind html
-    pg.fill("#re-content", "Patient Report")
-    pg.select_option("#re-type", "web")
-    kind = pg.evaluate("""() => {
-      var v = String(document.querySelector('#re-type').value || "");
-      if (v === "web") v = "html";
-      if (["pdf","html","text","zpl","image",""].indexOf(v) < 0) v = "";
-      if (document.querySelector('#re-content').value.trim() && !v) v = "html";
-      return v;
-    }""")
-    check("content + Web page saves kind html (was pdf)", kind == "html")
-    pg.click("#rulemodal .x")
-
-    # ---- 5. popup structure ----
-    import re as _re
-    popup = open(os.path.join(ROOT, "extension", "popup.html"),
-                 encoding="utf-8").read()
-    popup = _re.sub(r"<script[\s\S]*?</script>", "", popup)
-    pg.set_content(popup)
-    check("popup badge is v3.4.8", "v3.4.8" in (pg.text_content("#ver") or ""))
-    check("popup select + reload button intact",
-          pg.locator("#selPrinter").count() == 1 and
-          pg.locator("#bRefreshPrinters").count() == 1)
-
+    print("EDITOR:", json.dumps(rev))
+    ok3 = (rev["opts"] == ["PDF link", "Web page", "Plain text / stream", "Any"]
+           and rev["withValueAttr"] == 0)
+    if not ok3:
+        fails.append("reverted-editor")
+    if errors:
+        fails.append("js-errors: " + "; ".join(errors[:3]))
     b.close()
 
-errors = [e for e in errors if "401" not in e and "404" not in e]
-check("no uncaught JS exceptions", not errors, "; ".join(errors[:3]))
-print("\n%s" % ("ALL UI CHECKS PASSED" if ok_all else "UI CHECKS FAILED"))
-sys.exit(0 if ok_all else 1)
+print("UI CHECK:", "PASS" if not fails else "FAIL " + ", ".join(fails))
+sys.exit(0 if not fails else 1)

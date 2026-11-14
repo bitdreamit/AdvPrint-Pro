@@ -548,10 +548,7 @@ function matchRule(url, rules, title, kind) {
     }
     if (byContent) {
       if (!r.kind) continue;                    // content rule needs a kind
-      // v3.4.8: legacy alias - the old ONE UI editor saved kind "web"
-      // (a kind detectTabKind never answers); it reads as html now
-      const wantKind = r.kind === "web" ? "html" : r.kind;
-      if (!kind || wantKind !== kind) continue; // probed kind mismatch
+      if (!kind || r.kind !== kind) continue;   // probed kind mismatch
     }
     if (r.title &&
         !(title || "").toLowerCase().includes(String(r.title).toLowerCase())) {
@@ -2265,11 +2262,8 @@ async function rulesWithRuns(rules) {
     || {}; } catch (_) {}
   return (rules || []).map((r) => {
     const s = stats[ruleKey(r)];
-    // v3.4.8: last_run rides along so the ONE UI Runs column can show
-    // "last HH:MM" again (the hub used to receive only the counter)
     return Object.assign({}, r,
-      { runs: Math.max(r.runs || 0, (s && s.runs) || 0),
-        last_run: (s && s.lastRun) || r.last_run || "" });
+      { runs: Math.max(r.runs || 0, (s && s.runs) || 0) });
   });
 }
 

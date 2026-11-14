@@ -98,38 +98,26 @@ if _HUB_DIR not in sys.path:
 
 VERSION = "3.4.8"
 VERSION_NAME = ("v3.4.8 (RULES TABLE FITS - EDIT BUTTON NEVER LEAVES THE "
-    "CARD + RULE EDITOR URL-TYPE SAVES REAL KINDS + RUN BOOKKEEPING "
-    "SYNCED + CONFIGURABLE HUB PORT + DROPZONE WATCH FIX + STRICT LAN "
-    "SHARE + URL RULES THAT REALLY MATCH). The user reported that in "
-    "the ONE UI rules table the "
-    "columns Rule / URL address filter / Match by / Page content / URL "
-    "type / Printer / What to print / Cpl / Paper / On / Auto / Runs "
+    "CARD + CONFIGURABLE HUB PORT + DROPZONE WATCH FIX + "
+    "STRICT LAN SHARE WITH IP HIT LIST + URL RULES THAT REALLY MATCH "
+    "+ CLEAN UI NOTES). The user reported that in the ONE UI rules table "
+    "the columns Rule / URL address filter / Match by / Page content / "
+    "URL type / Printer / What to print / Cpl / Paper / On / Auto / Runs "
     "pushed the Edit button OUTSIDE the card whenever Paper or another "
-    "extra was selected - the 14 nowrap headers forced a ~1145px "
-    "minimum width inside a ~990px card. v3.4.8 fixes it at the root: "
-    "headers may wrap, the rules table is compact, long pattern and "
-    "content cells clamp with an ellipsis, and EVERY ONE UI table sits "
-    "in a .tbl-wrap that scrolls horizontally INSIDE the card as a "
-    "last resort - no column and no button can ever render outside "
-    "the visible card again. The full A-to-Z audit on top of v3.4.7 "
-    "found and fixed three more gaps: 1) the rule editor's URL-type "
-    "select saved SHIFTED kinds (PDF link -> Any, Web page -> pdf, "
-    "Plain text -> web, Any -> text) and \"web\" is a kind no page "
-    "ever reports (detectTabKind answers pdf | image | zpl | text | "
-    "html) - the select now carries real values, ZPL label page and "
-    "Image page joined the list, legacy kind \"web\" reads as html in "
-    "BOTH matchers (extension matchRule + hub rule_matches) and a "
-    "content rule left on Any defaults to html; 2) the run counters' "
-    "last_run timestamp never reached the ONE UI Runs column (the "
-    "extension pushed only the counter, the hub cleaner dropped the "
-    "field) - it rides along now and the cleaner also keeps the title "
-    "filter on central edits. Everything from v3.4.7 (configurable "
-    "hub port, DropZone watch toggle, strict LAN share with the IP "
-    "hit list, URL rules that really match with glob / regex / "
-    "contains + the /rules/test engine, clean UI notes) and v3.4.6 "
-    "(one port for every queue, the popup that remembers the last "
+    "extra was selected - the nowrap headers forced a ~1145px minimum "
+    "width inside a ~990px card. v3.4.8 fixes it at the root: headers "
+    "may wrap to a second line, the rules table is compact, long pattern "
+    "and content cells clamp with an ellipsis, and EVERY ONE UI table "
+    "sits in a .tbl-wrap that scrolls horizontally INSIDE the card as a "
+    "last resort - no column and no button can ever render outside the "
+    "visible card again. Everything else is exactly the working v3.4.7 "
+    "build: the configurable hub port (9235 default, movable when the "
+    "port is busy), the DropZone watch Enable/Disable toggle, STRICT LAN "
+    "SHARE with the IP hit list and one-click Allow, URL rules that "
+    "really match (glob / regex / contains + the /rules/test engine), "
+    "one port for every queue, the popup that remembers the last "
     "printer, manual LAN/IPP re-scan, auto-CRX on install and the "
-    "idempotent set-default) stays unchanged.")
+    "idempotent set-default.")
 FULL_BRAND = ("AdvPrint Pro (Advanced Printer) by "
               "Bit Dream IT - Innovative Healthcare Solutions")
 BRANDING = ("AdvPrint Pro (Advanced Printer) - Version %s - by "
@@ -6642,19 +6630,13 @@ class Handler(BaseHTTPRequestHandler):
         if route == "/rules/test":                 # v3.4.7 URL RULE TEST
             # GET form for the browser bar / curl:
             # /rules/test?url=https%3A%2F%2Fwww.htncr.org%2Flab%2Fsample%2F1
-            # v3.4.8 GET/POST parity: &kind= and &title= are honored on
-            # BOTH forms (the GET form silently dropped them, so a
-            # content rule could never be tested from the browser bar)
             u_test = (q.get("url", [""])[0] if q else "").strip()[:2000]
             if not u_test:
                 return self._send(400, {
                     "ok": False,
                     "error": "call /rules/test?url=<the address to test>"
                              " (or POST {\"url\": \"...\"})"})
-            res = rule_test_result(
-                u_test,
-                (q.get("title", [""])[0] if q else "")[:200],
-                (q.get("kind", [""])[0] if q else "")[:16])
+            res = rule_test_result(u_test)
             return self._send(200, res)
         if route == "/lan/selftest":                # v2.8.2 one-click check
             # Answers "why can the other PC not connect?": the hub tests
@@ -7835,10 +7817,6 @@ class Handler(BaseHTTPRequestHandler):
                                         "content": str(x.get("content") or "")[:200],
                                         "color": str(x.get("color") or "")[:12],
                                         "duplex": str(x.get("duplex") or "")[:16],
-                                        # v3.4.8: keep the title filter and the
-                                        # live run bookkeeping on central edits
-                                        "title": str(x.get("title") or "")[:120],
-                                        "last_run": str(x.get("last_run") or "")[:32],
                                     })
                                 else:
                                     raise ValueError(
@@ -8684,11 +8662,8 @@ def rule_matches(rule, url, title="", kind=""):
     elif not by_content:
         return False                # URL rule without a pattern
     if by_content:
-        # v3.4.8: legacy alias - rules saved by older builds could carry
-        # kind "web" (a kind detectTabKind never answers); it reads as html
-        want_kind = "html" if str(rule.get("kind")) == "web" \
-            else str(rule.get("kind"))
-        if not want_kind or not kind or want_kind != str(kind):
+        if not rule.get("kind") or not kind or \
+                str(rule.get("kind")) != str(kind):
             return False
     t = str(rule.get("title") or "")
     if t and t.lower() not in str(title or "").lower():
@@ -9535,12 +9510,6 @@ body{font-family:'Segoe UI',system-ui,-apple-system,Roboto,'Noto Sans SC',sans-s
 .tgl p{font-size:11px;color:var(--muted);line-height:1.5;margin-top:2px;max-width:640px}
 /* ---------- tables ---------- */
 table.tbl{width:100%;border-collapse:collapse;font-size:12px}
-/* v3.4.8 TABLE FIT FIX: the rules table (14 columns) used to force a
-   ~1145px minimum width through the nowrap headers and push the Runs
-   column + the Edit/Del buttons OUTSIDE the card. Headers may wrap to
-   a second line now and every wide table sits in a .tbl-wrap that
-   scrolls horizontally INSIDE the card as a last resort, so every
-   button stays reachable on any window width. */
 .tbl th{text-align:left;font-size:10px;letter-spacing:.8px;text-transform:uppercase;color:var(--muted);
   padding:8px 10px;border-bottom:1px solid var(--line);background:#f8fafc;font-weight:800;
   white-space:normal;vertical-align:bottom}
@@ -9549,6 +9518,12 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
 .tbl tr:hover td{background:var(--blue-soft)}
 .tbl .doc{color:var(--ink);font-weight:600;max-width:210px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tbl .id{font-family:var(--mono);color:var(--muted);font-size:11px}
+/* v3.4.8 TABLE FIT FIX: the rules table (14 columns) used to force a
+   ~1145px minimum width through the nowrap headers and push the Runs
+   column + the Edit/Del buttons OUTSIDE the card. Headers may wrap to
+   a second line now and every wide table sits in a .tbl-wrap that
+   scrolls horizontally INSIDE the card as a last resort, so every
+   button stays reachable on any window width. */
 .tbl-wrap{overflow-x:auto}
 /* the 14-column rules table: tighter cells so it fits without scrolling */
 .tbl.compact th,.tbl.compact td{padding:6px 6px}
@@ -10548,8 +10523,7 @@ https://reports.example.com/*</textarea>
           <!-- RULES TABLE -->
           <div class="card">
             <div class="card-h">&#9881; Rules <span class="r">run top to bottom · first match wins · per-job printer always wins over the Print destination card</span></div>
-            <div class="tbl-wrap">
-            <table class="tbl compact" style="font-size:10px">
+            <div class="tbl-wrap"><table class="tbl compact" style="font-size:10px">
               <tr><th style="width:22px">#</th><th style="min-width:58px">Rule</th><th style="min-width:80px">URL / address filter</th><th>Match by</th><th>Page content</th><th>URL type</th><th style="min-width:70px">Printer</th><th>What to print</th><th style="width:26px">Cpl</th><th style="width:46px">Paper</th><th style="width:30px">On</th><th style="width:34px">Auto</th><th style="width:52px">Runs</th><th style="width:84px"></th></tr>
               <tr>
                 <td class="id">&#9776; 1</td><td class="doc"><b>Lab PDF reports</b></td><td class="mono doc" style="max-width:112px;font-size:9.5px">*://www.htncr.org/lab/*</td><td><span class="chip info">URL</span></td><td>&mdash;</td><td>PDF</td>
@@ -10593,8 +10567,7 @@ https://reports.example.com/*</textarea>
                 <td class="id">3 runs<br>18&#8211;08h</td>
                 <td><button class="btn small blue" data-edit-rule="5">Edit</button> <button class="btn small danger" data-del-rule="5">Del</button></td>
               </tr>
-            </table>
-            </div>
+            </table></div>
             <div class="note" style="margin:0 14px 12px">Every row is fully editable: <b>Edit</b> opens the 3-step rule editor pre-filled, <b>Del</b> asks twice then removes,
               the <b>On</b> switch pauses a rule without deleting, and <b>Auto</b> decides silent vs. one confirm dialog. Drag <span class="mono">&#9776;</span> to change priority.</div>
           </div>
@@ -11010,7 +10983,7 @@ https://reports.example.com/*</textarea>
         <tr><td>F11</td><td>Full screen</td></tr>
         <tr><td>Esc</td><td>Close menu · close dialog</td></tr>
         <tr><td>Alt+F4</td><td>Exit hub (stops printing — jobs already queued are kept)</td></tr>
-      </table>
+      </table></div>
       <div class="mnote" style="text-align:center">Shortcuts work in the native window and in the browser at /ui. The extension adds its own page-level shortcuts.</div>
     </div>
   </div>
@@ -11044,8 +11017,8 @@ https://reports.example.com/*</textarea>
         </div>
         <div>
           <label class="rl">URL TYPE</label>
-          <select class="inp2" id="re-type"><option value="pdf" selected>PDF link</option><option value="web">Web page</option><option value="text">Plain text / stream</option><option value="zpl">ZPL label page</option><option value="image">Image page</option><option value="">Any</option></select>
-          <div class="hint2">PDF link = the job is the .pdf file itself. ZPL / Image / Plain text / Web page match <b>content rules</b> by what the page IS; Any = every page. v3.4.8 note: Web page really matches web pages now (the old editor saved a kind no page ever reports).</div>
+          <select class="inp2" id="re-type"><option selected>PDF link</option><option>Web page</option><option>Plain text / stream</option><option>Any</option></select>
+          <div class="hint2">PDF link = the job is the .pdf file itself.</div>
         </div>
         <div class="full">
           <div class="note" style="margin:0;font-size:10.5px">&#128269; Test THIS pattern before saving: paste a full address into the <b>Test a URL</b> box on the Rules panel (above the table) and press <b>Which rule fires?</b> — the hub answers with the matching rule and its printer, or "no rule". Nothing is printed.</div>
@@ -12518,14 +12491,7 @@ function renderAudit(rows){
 }
 
 /* ---- rules (central rule manager) ---- */
-/* v3.4.8 KIND LABELS: the editor's URL-type select now carries the REAL
-   detected kinds (detectTabKind answers pdf | image | zpl | text | html -
-   there is no "web" kind) plus legacy aliases for display. A rule saved
-   by an older build with kind "web" displays as Web page and MATCHES
-   html pages through the alias in both matchers. */
-var KIND_LABELS = { "": "Any", pdf: "PDF link", web: "Web page", html: "Web page",
-  text: "Plain text / stream", zpl: "ZPL label page", image: "Image page",
-  url: "URL type" };
+var KIND_LABELS = { "": "Any", pdf: "PDF link", web: "Web page", text: "Plain text / stream", url: "URL type" };
 var ACTION_LABELS = { auto: "Auto (PDF as-is)", web: "Entire web page", sel: "Selected element only",
   raw: "Raw text / ZPL / ESC-POS stream", pdf: "Linked PDF only" };
 /* v3.4.7 PATTERN TYPES + RECIPES: a rule's "type" decides how the
@@ -12663,7 +12629,7 @@ function renderRules(){
     } else {
       td[4].className = "";
       td[4].removeAttribute("style");
-      td[4].innerHTML = "&mdash;";
+      td[4].textContent = "\u2014";
     }
     td[5].textContent = KIND_LABELS[r.kind] || r.kind || "Any";
     td[6].innerHTML = "<b>" + esc(r.printer || "OS default") + "</b>";
@@ -12709,14 +12675,7 @@ function openRuleEditor(idx){
     ? String(r.type || "glob").toLowerCase() : "glob";
   fillRuleRecipes();
   $("re-content").value = r.content || "";
-  /* v3.4.8: set the URL-type select by VALUE (the kind), not by label -
-     legacy "web" shows as Web page and saves back as "html". */
-  (function(){
-    var rt = $("re-type"), rk = String(r.kind || "");
-    if (rk === "web") rk = "html";
-    rt.value = Array.prototype.some.call(rt.options,
-      function(o){ return o.value === rk; }) ? rk : "";
-  })();
+  setSel($("re-type"), KIND_LABELS[r.kind] || "Any");
   var sel = $("re-printer");
   sel.innerHTML = "<option>(OS default printer)</option>" +
     printersCache.filter(function(p){ return !p.is_group; }).map(function(p){
@@ -12765,21 +12724,10 @@ async function saveRule(){
       return (pt && ["glob", "regex", "contains"].indexOf(pt.value) >= 0)
         ? pt.value : "glob"; })(),
     content: $("re-content").value.trim(),
-    /* v3.4.8 KIND FIX: the select carries the kind VALUES now. The old
-       positional array ("", pdf, web, text) was shifted one slot against
-       the option order AND saved "web" - a kind no page ever reports
-       (detectTabKind answers pdf | image | zpl | text | html), so a rule
-       saved as "Web page" could never fire. "web" normalizes to "html";
-       a content rule left on Any defaults to html (a content rule without
-       a kind is skipped by the matchers). */
-    match: $("re-content").value.trim() ? "content" : "url",
-    kind: (function(){
-      var v = String($("re-type").value || "");
-      if (v === "web") v = "html";
-      if (["pdf", "html", "text", "zpl", "image", ""].indexOf(v) < 0) v = "";
-      if ($("re-content").value.trim() && !v) v = "html";
-      return v;
-    })(),
+    match: $("re-content").value.trim() ? "content" :
+      ($("re-type").selectedIndex === 3 ? "url" : "url"),
+    kind: ["", "pdf", "web", "text"][$("re-type").selectedIndex] !== undefined
+      ? ["", "pdf", "web", "text"][$("re-type").selectedIndex] : "",
     printer: $("re-printer").value === "(OS default printer)" ? "" : $("re-printer").value,
     action: ["auto", "web", "sel", "raw", "pdf"][$("re-what").selectedIndex] || "auto",
     copies: Math.max(1, parseInt($("re-copies").value, 10) || 1),

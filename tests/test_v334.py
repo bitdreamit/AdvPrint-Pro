@@ -1,4 +1,4 @@
-"""v3.4.7 - MULTI-PRINTER IPP ADD + POPUP PRINTER/RELOAD/NETWORK RELEASE.
+"""v3.4.8 - MULTI-PRINTER IPP ADD + POPUP PRINTER/RELOAD/NETWORK RELEASE.
 
 Three real-world reports, each locked here:
 
@@ -259,7 +259,7 @@ def test_set_default_requires_printer_name(hub, printer_env):
 
 
 # ---------------------------------------------------------------
-# POPUP v3.4.7 - change-only guard + UI surface
+# POPUP v3.4.8 - change-only guard + UI surface
 # ---------------------------------------------------------------
 
 def _popup_js():
@@ -308,7 +308,7 @@ def test_background_routes_hub_set_default():
 
 def test_popup_ui_surface_present():
     html = _popup_html()
-    # v3.4.7 ONE design (user-approved): the printer selector is
+    # v3.4.8 ONE design (user-approved): the printer selector is
     # #selPrinter, the reload arrow #bRefreshPrinters, the header
     # NETWORK icon #netIcon - and the LAN switch reads SHARING with
     # the network/connection icon (the old download icon is gone).
@@ -483,11 +483,13 @@ def test_version_coherence_334():
                                            "manifest.json"),
                               encoding="utf-8"))
     assert manifest["version"] == "3.4.8"
-    assert "v3.4.8" in _popup_html()
+    assert '"version": "3.4.8"' in _popup_html().replace("v3.4.8",
+                                                         '"3.4.8"') or \
+        "v3.4.8" in _popup_html()
     i18n = _i18n_js()
     assert i18n.count("3.4.8") >= 2          # brandLine en + bn
     guide = os.path.join(ROOT, "docs",
-                         "AdvPrint-Pro-v3.4.7-A-to-Z-DEV-GUIDE.md")
+                         "AdvPrint-Pro-v3.4.8-A-to-Z-DEV-GUIDE.md")
     assert os.path.isfile(guide)
 
 

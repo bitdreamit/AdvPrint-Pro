@@ -1,8 +1,6 @@
 # Print Rules — URL Recipes Guide
 
-**AdvPrint Pro v3.4.8** · by Bit Dream IT - Innovative Healthcare Solutions
-
-> **v3.4.8 kind fix** — the ONE UI editor's URL TYPE select saves real kinds now: PDF link = `pdf`, Web page = `html`, Plain text / stream = `text`, **ZPL label page = `zpl`, Image page = `image`**, Any = any kind. Rules saved by older builds with the dead kind `web` read as `html` in both matchers (they start working). A content rule left on Any defaults to `html`.
+**AdvPrint Pro v3.4.7** · by Bit Dream IT - Innovative Healthcare Solutions
 
 How to route ANY page to ANY printer by its address — including pages with
 dynamic ids, query arrays, several printer targets on one domain — and how
