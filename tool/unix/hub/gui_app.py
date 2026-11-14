@@ -29,7 +29,7 @@ import time
 import urllib.request
 import webbrowser
 
-VERSION = "3.1.3"
+VERSION = "3.4.6"
 PORT = 9235
 URL = "http://127.0.0.1:%d/ui" % PORT
 TITLE = "AdvPrint Pro Console v%s - THE ONE UI" % VERSION

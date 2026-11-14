@@ -11,7 +11,7 @@
 ;    REAL administrator rights: the exe requests admin via its
 ;    manifest, so Windows shows the UAC prompt by itself
 ;    ("auto permission to install" - nothing is half-installed).
-;    Silent install:  AdvPrint-Pro-Setup-3.3.5.exe /S
+;    Silent install:  AdvPrint-Pro-Setup-3.4.6.exe /S
 ;    (elevation still applies - Windows shows UAC once.)
 ;  - v2.8 UPGRADE / UNINSTALL FIX (the v2.7.x pain "service not
 ;    uninstalled, some files abort install"): BEFORE any file is
@@ -36,7 +36,7 @@
 
 Unicode true
 Name "AdvPrint Pro (Advanced Printer)"
-OutFile "../dist/AdvPrint-Pro-Setup-3.3.5.exe"
+OutFile "../dist/AdvPrint-Pro-Setup-3.4.6.exe"
 InstallDir "$PROGRAMFILES64\AdvPrintPro"
 InstallDirRegKey HKLM "Software\AdvPrintPro" "InstallDir"
 ; full admin rights - the Windows UAC prompt appears by itself when
@@ -50,7 +50,7 @@ ShowInstDetails show
 ShowUnInstDetails show
 ManifestDPIAware true
 
-VIProductVersion "3.3.5.0"
+VIProductVersion "3.4.6.0"
 VIAddVersionKey ProductName "AdvPrint Pro (Advanced Printer)"
 VIAddVersionKey FileVersion "3.3.0"
 VIAddVersionKey ProductVersion "3.3.0"
@@ -277,16 +277,19 @@ Section "AdvPrint Pro hub (required)" SEC_MAIN
   ; v3.0.8: + UDP 5353 so phones/PCs can SEE the mDNS printer announce
   ; v3.2.3: + TCP 631 - the standard IPP port mirror (Android's Default
   ;         Print Service tries port 631 first on manual add)
+  ; v3.4.6: ONE PORT FOR EVERYTHING again - the 9235-9259 queue-port
+  ;         range is gone (v3.3.5 experiment removed). ONE TCP port
+  ;         9235 serves every printer: the queue rides the PATH
+  ;         (/ipp/print/<printer>) + the per-queue identity, exactly
+  ;         like a CUPS server. The delete-rule below still cleans up
+  ;         the range rule left by a v3.3.5 install.
   DetailPrint "Adding the firewall rules for LAN sharing + printer port (TCP 9235 + 9100 + 631 IPP + UDP 5353 mDNS)..."
-  ; v3.3.5: + TCP 9235-9259 - ONE dedicated port per printer queue
-  ; (the multi-printer IPP add fix: every printer is its OWN endpoint)
   nsExec::Exec 'netsh advfirewall firewall delete-rule name="AdvPrint Pro" dir=in'
   nsExec::Exec 'netsh advfirewall firewall delete-rule name="AdvPrint Pro RAW 9100" dir=in'
   nsExec::Exec 'netsh advfirewall firewall delete-rule name="AdvPrint Pro mDNS" dir=in'
   nsExec::Exec 'netsh advfirewall firewall delete-rule name="AdvPrint Pro IPP 631" dir=in'
   nsExec::Exec 'netsh advfirewall firewall delete-rule name="AdvPrint Pro Queues" dir=in'
   nsExec::Exec 'netsh advfirewall firewall add rule name="AdvPrint Pro" dir=in action=allow protocol=TCP localport=9235'
-  nsExec::Exec 'netsh advfirewall firewall add rule name="AdvPrint Pro Queues" dir=in action=allow protocol=TCP localport=9235-9259'
   nsExec::Exec 'netsh advfirewall firewall add rule name="AdvPrint Pro RAW 9100" dir=in action=allow protocol=TCP localport=9100'
   nsExec::Exec 'netsh advfirewall firewall add rule name="AdvPrint Pro mDNS" dir=in action=allow protocol=UDP localport=5353'
   nsExec::Exec 'netsh advfirewall firewall add rule name="AdvPrint Pro IPP 631" dir=in action=allow protocol=TCP localport=631'
@@ -305,7 +308,7 @@ Section "AdvPrint Pro hub (required)" SEC_MAIN
     DetailPrint "No usable pythonw.exe (bundled runtime missing + no system Python)."
     ${IfNot} ${Silent}
       MessageBox MB_ICONEXCLAMATION|MB_OK \
-        "Setup could not prepare the bundled Python runtime and found no system Python.$\n$\nPlease re-download AdvPrint-Pro-Setup-3.3.5.exe (the file may be damaged in transit) and run it again."
+        "Setup could not prepare the bundled Python runtime and found no system Python.$\n$\nPlease re-download AdvPrint-Pro-Setup-3.4.6.exe (the file may be damaged in transit) and run it again."
     ${EndIf}
   ${EndIf}
 
@@ -325,7 +328,7 @@ Section "AdvPrint Pro hub (required)" SEC_MAIN
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\AdvPrintPro" \
     "DisplayName" "AdvPrint Pro (Advanced Printer) by Bit Dream IT"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\AdvPrintPro" \
-    "DisplayVersion" "3.3.5"
+    "DisplayVersion" "3.4.6"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\AdvPrintPro" \
     "Publisher" "Bit Dream IT - Innovative Healthcare Solutions"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\AdvPrintPro" \

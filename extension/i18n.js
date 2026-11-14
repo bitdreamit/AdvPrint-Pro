@@ -1,4 +1,4 @@
-/* AdvPrint Pro v3.3.5 - UI language: English + Bangla (বাংলা).
+/* AdvPrint Pro v3.4.6 - UI language: English + Bangla (বাংলা).
  * Used by the popup, the options page and the notifications (the popup
  * is BACK in v3.2.5 with its branding-only footer; the toolbar icon
  * opens the popup, exactly like before v3.2.2).
@@ -78,6 +78,9 @@
       popPrinterNoneSub: "the hub reports no printer - connect one first",
       popPrinterNow: "OS default:",
       popPrinterNoDefault: "no OS default set - pick one",
+      // v3.4.6: the popup remembers the last picked printer + marks the OS default
+      popPrinterDefaultTag: "default",
+      popPrinterLastUsed: "Last used:",
       popPrinterSetting: "Setting the default printer...",
       popPrinterSetOk: "Default printer set:",
       popPrinterAlready: "Already the OS default:",
@@ -101,7 +104,7 @@
       optTypeGlob: "Glob (* wildcard)",
       optTypeRegex: "Regex",
       // about / branding
-      brandLine: "Version 3.3.5 - AdvPrint Pro (Advanced Printer) by Bit Dream IT - Innovative Healthcare Solutions - MIT license - 100% local - no cloud, no tracking."
+      brandLine: "Version 3.4.6 - AdvPrint Pro (Advanced Printer) by Bit Dream IT - Innovative Healthcare Solutions - MIT license - 100% local - no cloud, no tracking."
     },
     bn: {
       appName: "AdvPrint Pro",
@@ -166,6 +169,8 @@
       popPrinterNoneSub: "হাব কোনো প্রিন্টার দেখাচ্ছে না - আগে সংযোগ করুন",
       popPrinterNow: "ওএস ডিফল্ট:",
       popPrinterNoDefault: "কোনো ওএস ডিফল্ট নেই - একটি বাছুন",
+      popPrinterDefaultTag: "ডিফল্ট",
+      popPrinterLastUsed: "সর্বশেষ ব্যবহৃত:",
       popPrinterSetting: "ডিফল্ট প্রিন্টার সেট হচ্ছে...",
       popPrinterSetOk: "ডিফল্ট প্রিন্টার সেট হয়েছে:",
       popPrinterAlready: "এটিই বর্তমান ওএস ডিফল্ট:",
@@ -187,7 +192,7 @@
       optRulesType: "ধরন",
       optTypeGlob: "Glob (* ওয়াইল্ডকার্ড)",
       optTypeRegex: "Regex",
-      brandLine: "সংস্করণ 3.3.5 - AdvPrint Pro (Advanced Printer) by Bit Dream IT - Innovative Healthcare Solutions - MIT লাইসেন্স - ১০০% লোকাল - কোনো ক্লাউড নেই, কোনো ট্র্যাকিং নেই।"
+      brandLine: "সংস্করণ 3.4.6 - AdvPrint Pro (Advanced Printer) by Bit Dream IT - Innovative Healthcare Solutions - MIT লাইসেন্স - ১০০% লোকাল - কোনো ক্লাউড নেই, কোনো ট্র্যাকিং নেই।"
     }
   };
 

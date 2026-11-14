@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AdvPrint Pro (Advanced Printer) — Full Setup Guide A to Z</title>
+<style>
+  @page { size: A4; margin: 16mm 15mm 16mm 15mm;
+          @bottom-center { content: "AdvPrint Pro 2.9.0 — Full Setup Guide — page " counter(page) " / " counter(pages);
+                           font: 9.5px "Segoe UI", sans-serif; color: #64748b; } }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font: 10.5px/1.55 "Segoe UI", "Noto Sans", sans-serif; color: #0f172a; }
+  h1 { font-size: 21px; color: #1d4ed8; margin-bottom: 4px; }
+  h2 { font-size: 14.5px; color: #1e3a8a; border-bottom: 2px solid #dbeafe;
+       padding-bottom: 4px; margin: 22px 0 10px; page-break-after: avoid; }
+  h3 { font-size: 12px; color: #0f172a; margin: 14px 0 6px; page-break-after: avoid; }
+  p, li { margin: 4px 0; }
+  ul, ol { padding-left: 20px; }
+  code, .mono { font: 9.5px/1.4 "Consolas", "DejaVu Sans Mono", monospace;
+                background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 3px;
+                padding: 0 4px; word-break: break-all; }
+  pre { background: #0f172a; color: #e2e8f0; border-radius: 8px;
+        padding: 10px 12px; font: 9.5px/1.5 "Consolas", "DejaVu Sans Mono", monospace;
+        overflow-x: hidden; white-space: pre-wrap; margin: 8px 0; page-break-inside: avoid; }
+  pre b { color: #86efac; }
+  table { width: 100%; border-collapse: collapse; margin: 8px 0; page-break-inside: avoid; }
+  th { background: #eff6ff; color: #1e3a8a; text-align: left; font-size: 10px;
+       padding: 5px 7px; border: 1px solid #dbeafe; }
+  td { font-size: 9.8px; padding: 5px 7px; border: 1px solid #e8eef7;
+       vertical-align: top; }
+  .cover { text-align: center; padding: 130px 20px 0; page-break-after: always; }
+  .cover .logo { width: 74px; height: 74px; margin: 0 auto 18px; border-radius: 16px;
+                 background: linear-gradient(135deg,#1e3a8a,#1d4ed8); color: #fff;
+                 font-size: 34px; font-weight: 800; line-height: 74px; }
+  .cover h1 { font-size: 30px; }
+  .cover .sub { color: #334155; font-size: 13px; margin-top: 6px; }
+  .cover .org { color: #1d4ed8; font-weight: 700; font-size: 14px; margin-top: 16px; }
+  .cover .meta { color: #64748b; font-size: 11px; margin-top: 28px; line-height: 1.9; }
+  .brand { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px;
+           padding: 9px 12px; font-size: 10px; margin: 8px 0; }
+  .tip { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px;
+         padding: 8px 12px; font-size: 10px; margin: 8px 0; }
+  .warn { background: #fef3c7; border: 1px solid #fcd34d; border-radius: 8px;
+          padding: 8px 12px; font-size: 10px; margin: 8px 0; }
+  .bad { background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px;
+         padding: 8px 12px; font-size: 10px; margin: 8px 0; }
+  .toc { page-break-after: always; }
+  .toc td { border: none; padding: 3px 4px; font-size: 10.5px; }
+  .toc td.n { color: #1d4ed8; font-weight: 700; width: 30px; }
+  .kw { display: inline-block; background: #e0e7ff; color: #3730a3; border-radius: 4px;
+        padding: 0 6px; font-size: 9.5px; font-weight: 600; }
+  .kbd { background: #0f172a; color: #fff; border-radius: 4px; padding: 0 5px;
+         font: 9.5px Consolas, monospace; }
+</style>
+</head>
+<body>
+
+<!-- ============ COVER ============ -->
+<div class="cover">
+  <div class="logo"><svg viewBox="0 0 64 64" width="74" height="74" style="display:block;margin:0 auto"><defs><linearGradient id="lgG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2563eb"/><stop offset="1" stop-color="#1e3a8a"/></linearGradient></defs><rect x="1" y="1" width="62" height="62" rx="14" fill="url(#lgG)"/><path d="M14 52 L32 12 L50 52" fill="none" stroke="#fff" stroke-width="8.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M22 39.5 H42" stroke="#fff" stroke-width="8.5" stroke-linecap="round"/><rect x="24.5" y="43.5" width="15" height="13" rx="2" fill="#fff"/><rect x="27.5" y="47" width="9" height="1.9" rx="0.9" fill="#1d4ed8"/><rect x="27.5" y="51" width="6.5" height="1.9" rx="0.9" fill="#1d4ed8"/></svg></div>
+  <h1>AdvPrint Pro</h1>
+  <div class="sub">Advanced Printer — silent printing for every web page, PDF, application and receipt printer</div>
+  <div class="org">by Bit Dream IT — Innovative Healthcare Solutions</div>
+  <div class="meta">
+    Version 3.0.7 — Enterprise Edition<br>
+    Full Setup Guide — A to Z<br><br>
+    100% local · no cloud · no tracking · MIT licensed<br>
+    Windows 7/8/10/11 · Windows Server · Debian/Ubuntu/Mint · macOS
+  </div>
+</div>
+
+<!-- ============ TOC ============ -->
+<div class="toc">
+  <h2>Contents</h2>
+  <table>
+    <tr><td class="n">1</td><td>What AdvPrint Pro is — and how one print job travels</td></tr>
+    <tr><td class="n">2</td><td>Install in 3 minutes (Windows · Linux · macOS)</td></tr>
+    <tr><td class="n">3</td><td>The token — and the one-click fix (never get locked out again)</td></tr>
+    <tr><td class="n">4</td><td>The browser extension — every Options tab explained (Queue · History · Settings · Debug · LAN / PCs · About)</td></tr>
+    <tr><td class="n">5</td><td>The hub dashboard — every card and button explained</td></tr>
+    <tr><td class="n">6</td><td>Printing everything: PDFs, pages, window.print(), raw/thermal, screenshots, selections</td></tr>
+    <tr><td class="n">7</td><td>LAN / IP: share one printer with every PC (and shift jobs between PCs)</td></tr>
+    <tr><td class="n">8</td><td>Queue, History &amp; Audit trail</td></tr>
+    <tr><td class="n">9</td><td>Settings reference — every switch in one table</td></tr>
+    <tr><td class="n">10</td><td>Debug &amp; the Live Test tool — find WHY in one click</td></tr>
+    <tr><td class="n">11</td><td>Enterprise edition: silent install, managed policy (GPO), service mode</td></tr>
+    <tr><td class="n">12</td><td>HTTP API quick reference</td></tr>
+    <tr><td class="n">13</td><td>Troubleshooting — every known problem and its fix</td></tr>
+    <tr><td class="n">14</td><td>Upgrade, uninstall, files &amp; folders</td></tr>
+  </table>
+</div>
+
+<!-- ============ 1 ============ -->
+<h2>1. What AdvPrint Pro is — and how one print job travels</h2>
+<p><b>AdvPrint Pro (Advanced Printer)</b> by <b>Bit Dream IT — Innovative Healthcare Solutions</b>
+prints anything — PDFs, web pages, <span class="mono">window.print()</span> calls, receipts (raw/ESC-POS),
+screenshots, selections — <b>silently</b>, with no print dialog, on any printer connected to the hub PC,
+including printers shared from other PCs. Everything stays on your machines: the hub listens on
+<span class="mono">127.0.0.1:9235</span> only (until you deliberately enable LAN sharing), no cloud, no telemetry.</p>
+
+<div class="brand">Product identity: <b>AdvPrint Pro</b> — <i>AdvPrint (Advanced Printer)</i> —
+<b>by Bit Dream IT — Innovative Healthcare Solutions</b>. The hub reports
+<span class="mono">app: "AdvPrint Pro"</span> and the full brand string in every /health answer.</div>
+
+<pre>Chrome (any web page)
+   │  extension: auto-print rules / right-click / Alt+P / window.advprint API
+   ▼
+AdvPrint Pro HUB  (http://127.0.0.1:9235, token-protected)
+   │  queue → retries → holds → printer status checks
+   ▼
+Silent print engines:  Windows: SumatraPDF (PDF) + Chrome headless (pages) + raw ESC/POS
+                       Linux/macOS: CUPS lp + Chrome headless
+   ▼
+Your printer — or ~/.advprint/files if the destination is "save as PDF"</pre>
+
+<ul>
+<li><b>Hub</b> = tiny local web server (<span class="mono">advprint.py</span>) that owns the queue, the history and the printers.</li>
+<li><b>Extension</b> = the browser side: auto-print rules, popup controls, the Options page (tab-wise), page API.</li>
+<li><b>Dashboard</b> = the hub's browser UI at <span class="mono">/dashboard</span>: status, queue, history, audit, debug, LAN, live test, settings.</li>
+<li><b>Tray icon</b> (Windows) = one click to the dashboard, pause/resume, test page, auto-run toggle.</li>
+<li><b>Desktop tool</b> = <span class="mono">AdvPrint Tool</span> (Start Menu) — numbered menu for start/stop/service/live test/updates plus <b>[13] Diagnose &amp; fix</b> (repairs “hub offline” automatically).</li>
+</ul>
+
+<!-- ============ 2 ============ -->
+<h2>2. Install in 3 minutes</h2>
+<h3>2.1 Windows — the one-time installer (recommended)</h3>
+<ol>
+<li>Download <span class="mono">AdvPrint-Pro-3.0.7-source.zip</span> and unzip it.</li>
+<li>Run <span class="mono">AdvPrint-Pro-Setup-3.0.7.exe</span>. Windows asks for admin once (UAC — the exe requests it itself), no Python needed —
+    the setup carries a <b>complete Python 3.11.9 runtime</b> (this is exactly what the broken 2.5.3 download missed:
+    if an installer is smaller than ~9&nbsp;MB it is incomplete — re-download).</li>
+<li>Setup registers the <b>Startup app "AdvPrint Pro"</b> (Task Manager → Startup apps), creates Start Menu
+    shortcuts, and starts the hub. A tray icon <span class="kw">A</span> appears next to the clock.</li>
+<li>Optional ticks: <b>Run as Windows service</b> (headless, services.msc) and <b>Install browser extension files</b>.</li>
+</ol>
+<div class="tip">Windows says <i>"cannot access / Access is denied"</i> on a downloaded setup?
+That is Mark-of-the-Web on a damaged/incomplete download. The 2.6.x setup is complete (~9.6&nbsp;MB) and
+the portable <span class="mono">install\install-windows.bat</span> unblocks every file automatically.
+If your AV quarantines the hub, whitelist the folder <span class="mono">%LOCALAPPDATA%\AdvPrintPro</span> —
+the hub is a plain stdlib Python script, signed-off and open source (MIT).</div>
+
+<h3>2.2 Windows — portable zip (no installer)</h3>
+<ol>
+<li>Unzip. Double-click <span class="mono">tool\windows\portable\install\install-windows.bat</span>.
+    It unblocks files, frees port 9235, uses the bundled runtime, registers auto-run, health-checks the hub.</li>
+<li>Undo any time: <span class="mono">UNINSTALL-WINDOWS.bat</span>.</li>
+</ol>
+
+<h3>2.3 Linux / Debian / Ubuntu / Mint — the .deb</h3>
+<pre>sudo apt install ./advprint-pro_3.0.7_all.deb
+advprint-start            # start now
+advprint token            # show the current token
+advprint livetest         # full A-to-Z self-test</pre>
+<p>Auto-run at login: run <span class="mono">/opt/advprint/install/install-unix.sh</span>
+(installs a <b>systemd --user</b> service — no root needed; falls back to XDG autostart).
+Headless server mode: <span class="mono">sudo /opt/advprint/install/install-unix.sh --service</span>.</p>
+
+<h3>2.4 macOS</h3>
+<p>Run the portable hub: <span class="mono">python3 tool/unix/hub/advprint.py serve</span>, then
+<span class="mono">install-unix.sh</span> (LaunchAgent auto-run). CUPS printers are used through
+<span class="mono">lp</span>; page printing uses Chrome/Edge if installed.</p>
+
+<h3>2.5 First print in 60 seconds</h3>
+<ol>
+<li>Hub running (tray icon green / <span class="mono">advprint status</span>).</li>
+<li>Load the extension: <span class="mono">chrome://extensions</span> → Developer mode → <b>Load unpacked</b> → the <span class="mono">extension</span> folder (or the one installed to <span class="mono">%LOCALAPPDATA%\AdvPrintPro\extension</span>).</li>
+<li>Open the extension Options → Settings → <b>Detect token</b> (one click) → <b>Connect</b> shows <span class="kw">CONNECTED</span>.</li>
+<li>Click <b>Send test page</b>. Paper comes out. Done.</li>
+</ol>
+
+<!-- ============ 3 ============ -->
+<h2>3. The token — and the one-click fix</h2>
+<p>Every request to the hub carries a token. Since v2.0 a <b>fresh install generates a private random token</b>
+and stores it in <span class="mono">%USERPROFILE%\.advprint\config.json</span>
+(Linux/macOS <span class="mono">~/.advprint/config.json</span>). Upgrades of pre-2.0 installs keep working
+with the old default <span class="mono">PrintHub-2024</span> until you rotate it — the hub warns you in the
+dashboard until then. Pre-2.6 installs with a <span class="mono">~/.printhub</span> folder are
+<b>migrated automatically</b> to <span class="mono">~/.advprint</span> on first start (old folder kept as backup).</p>
+
+<h3>3.1 The one-click fix (v2.6)</h3>
+<p>Open a stale bookmark like <span class="mono">/dashboard?token=PrintHub-2024</span> and you get the
+friendly error page — with a green <b>“Fix it now — open the dashboard with the current token”</b> button.
+One click and you are in. It works because the hub hands the current token only to programs
+<b>on the hub PC itself</b> (loopback-only <span class="mono">GET /token/current</span>); other PCs on the
+LAN still see the manual steps only. The same button exists in the extension Options → Settings →
+<b>Detect token</b>.</p>
+
+<h3>3.2 Every way to get the current token</h3>
+<table>
+<tr><th>Way</th><th>How</th></tr>
+<tr><td>Tray icon (easiest)</td><td>Right-click the <b>AdvPrint Pro</b> tray icon → <b>Open dashboard</b> — always opens with the right token.</td></tr>
+<tr><td>Dashboard error page</td><td>Green <b>Fix it now</b> button (hub PC only) — or <b>Copy current token</b>.</td></tr>
+<tr><td>Extension Options</td><td>Settings → <b>Detect token</b> button fills and saves it automatically.</td></tr>
+<tr><td>Command line</td><td><span class="mono">python advprint.py token</span> (portable) / <span class="mono">advprint token</span> (deb).</td></tr>
+<tr><td>Config file</td><td><span class="mono">"token"</span> value in <span class="mono">~/.advprint/config.json</span>.</td></tr>
+</table>
+
+<h3>3.3 Rotating the token</h3>
+<pre>python advprint.py token-rotate        # CLI
+POST /token/rotate (header auth)       # API
+Dashboard → “Rotate token” button</pre>
+<div class="warn">After rotating: press <b>Detect token</b> in the extension (or paste the new token),
+and update old dashboard bookmarks. Rotating <b>invalidates the old token immediately</b> — including
+<span class="mono">PrintHub-2024</span> on upgraded installs.</div>
+
+<!-- ============ 4 ============ -->
+<h2>4. The browser extension — every Options tab explained</h2>
+<p>Open the extension icon → ⚙ (or right-click the toolbar icon → Options). The Options page is
+<b>tab-wise</b>: <span class="kw">Queue</span> <span class="kw">History</span> <span class="kw">Settings</span>
+<span class="kw">Debug</span> <span class="kw">LAN / PCs</span> <span class="kw">About</span>.
+The extension opens on Queue when something is waiting, otherwise on Settings. Every tab auto-refreshes live.</p>
+
+<h3>4.1 Queue tab — live FIFO</h3>
+<ul>
+<li>Hub state dot: running / PAUSED / offline, pending count, jobs today, hub version.</li>
+<li>Every waiting job row: id, title, printer, kind, status chip + buttons: <b>Cancel</b>, <b>Shift to PC</b> (print this job on another PC's hub over the LAN), <b>Print now</b> (bypasses pause and printer-status hold — the remedy when jobs sit "stuck").</li>
+<li><b>Pause / Resume</b> queue, <b>Clear</b> queue, <b>Refresh</b>. Auto-refresh every 3 s.</li>
+</ul>
+
+<h3>4.2 History tab — last 100 jobs</h3>
+<ul>
+<li>Every job with time, title, printer, kind and a colored status chip — <b>queued</b> gray, <b>printed</b> green, <b>failed/dead/canceled</b> red, <b>held</b> orange (with the exact held reason, e.g. "printer offline").</li>
+<li>Row actions: <b>Retry</b> (failed jobs — optionally on another printer), <b>Reprint</b> (printed jobs — reason goes to the audit log), <b>Cancel</b>/<b>Print now</b> (waiting jobs).</li>
+<li>History auto-refreshes every 8 s — a stuck "queued" row turns "printed" in front of you.</li>
+<li>“Clear” wipes only the browser-side copy; the hub history stays.</li>
+</ul>
+
+<h3>4.3 Settings tab — all switches</h3>
+<ul>
+<li><b>Power switches</b>: master <b>AdvPrint enabled</b> (OFF = nothing prints, gray OFF badge), <b>Queue mode</b> (ON = FIFO order + pause; OFF = instant print with auto-queue fallback), <b>Debug mode</b>, <b>Retry when the hub comes back</b>, UI language (English / বাংলা / auto).</li>
+<li><b>Connection</b>: Hub URL (<span class="mono">http://127.0.0.1:9235</span>), Token + <b>Connect</b> + <b>Detect token</b>; buttons to open the dashboard and the audit log.</li>
+<li><b>Printing</b>: default printer (or "File (save as PDF)"), plus <b>default print options</b> sent with every job: copies, pages (odd/even/custom), quality (draft…1200 dpi), per-sheet n-up, duplex, layout, scale, margins, paper size — with live capability hints from the selected printer.</li>
+<li><b>Auto-print &amp; routing rules</b>: URL pattern (glob or regex), page-title filter, per-rule printer, action (auto/PDF/page), per-site ON/OFF, auto-print-on-open, delete. First match wins.</li>
+<li><b>Behavior</b>: print every PDF opened in the browser (simple mode), intercept <span class="mono">window.print()</span> (also Ctrl+P), close tab after auto-print, failure fallback (new tab vs silent), right-click menu, toolbar badge.</li>
+<li><b>Hub settings (advanced)</b> — v2.6: the hub's own switches, editable live (see §9 for the full list): queue &amp; retries, security/lockout, reprint watermark &amp; reason, audit, thermal text engine + ESC/POS codepage, save-as-PDF folder, keep-files, SumatraPDF path.</li>
+</ul>
+
+<h3>4.4 Debug tab — WHEN / WHY / WHERE</h3>
+<ul>
+<li>One card: hub version, debug mode on/off, worker alive, queue paused, printers ready, instant auto-queue state.</li>
+<li><b>Problems found by the hub</b> table with the exact fix for each finding.</li>
+<li><b>Browser error reports</b>: everything this browser hit (network, token, page JS) while Debug mode was on.</li>
+<li>Buttons: Refresh · Send test report · Copy report (everything for a bug report) · Open /debug JSON · <b>Run full self-test (A-to-Z)</b> — runs the hub's live test right here and prints OK/!! lines (v2.6).</li>
+</ul>
+
+<h3>4.5 LAN / PCs tab — share &amp; shift</h3>
+<ul>
+<li>Shows this PC's LAN URL (<span class="mono">http://192.168.x.x:9235</span>) when sharing is ON, with copy button.</li>
+<li><b>Enable/Disable LAN sharing</b> (writes <span class="mono">share_lan</span>; restart the hub to rebind + open TCP 9235 in the firewall).</li>
+<li><b>Other PCs (peers)</b>: online/offline + version of each configured peer hub, one-click <b>Shift all waiting jobs</b>. Or type a LAN URL and shift everything ad hoc.</li>
+</ul>
+
+<h3>4.6 About tab</h3>
+<p>Version + full brand line, update check against GitHub releases, links to the user guide served by the hub
+(<span class="mono">/docs</span>), the developer API (<span class="mono">window.advprint</span>) and the test tools.</p>
+
+<h3>4.7 The popup (toolbar icon)</h3>
+<p>Master switch, queue mode switch, live queue state, pause/resume, last jobs, test page, screenshot-to-printer,
+save-page-as-PDF, offline banner with retry counter, token warnings with the exact remedy. Hotkey <span class="kbd">Alt+P</span>
+prints the current tab. Right-click menu prints page / selection / linked PDF / screenshot.</p>
+
+<!-- ============ 5 ============ -->
+<div class="tip" style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:8px 10px;margin:8px 0">
+<b>v2.7.0 — popup LAN sharing switches:</b> the toolbar popup now has a <b>LAN sharing</b> section with
+<b>Share Receive Mode</b> (this PC accepts jobs from other PCs = hub <span class="mono">share_lan</span>, saved
+straight into the hub config) and <b>Share Send Mode</b> (this browser may shift jobs to peer PCs —
+OFF locks every send-to-PC button here). Both turn gray while the hub is offline and exist in
+English + Bangla. Nothing was removed anywhere.
+</div>
+
+<h2>5. The hub dashboard — every card and button</h2>
+<p>Open <span class="mono">http://127.0.0.1:9235/dashboard?token=…</span> (the tray icon does this with one click).
+All cards refresh live (5–15 s).</p>
+<table>
+<tr><th>Area</th><th>What it shows / does</th></tr>
+<tr><td>Status cards</td><td>Success rate (7 days) · queue size · jobs today · printers ready · hub version.</td></tr>
+<tr><td>Action bar</td><td>Pause/Clear queue · Docs (user guide) · History CSV · Audit CSV · Diagnostics JSON · Debug · Health JSON · <b>Rotate token</b>.</td></tr>
+<tr><td>Token warning</td><td>Appears while the old default <span class="mono">PrintHub-2024</span> is active, with a one-click <b>Rotate now</b>.</td></tr>
+<tr><td>LAN sharing &amp; other PCs</td><td>Enable/disable + this PC's LAN URL + printer-status-hold switch + peer PCs with “Shift all waiting jobs”.</td></tr>
+<tr><td>Debug card</td><td>Debug mode toggle, worker/queue state, problems with fixes, client error reports, copy report.</td></tr>
+<tr><td>Printers</td><td>Every printer + live status (ready / offline / paper-out / error).</td></tr>
+<tr><td>Queue (waiting + printing)</td><td>Cancel · Print now · Shift per job.</td></tr>
+<tr><td><b>Job history (v2.7.0)</b></td><td>Full manager: <b>filter</b> by status (incl. one-click “Not printed”), <b>search</b> title/printer/#id, load 50/100/300/1000, paging, <b>tick rows</b> (check / uncheck all) with a live “N selected” counter, <b>Reprint selected</b>, <b>Reprint all non-printed</b>, <b>Clear ALL history</b> (finished jobs only — waiting jobs are never touched), per-row Retry / Reprint.</td></tr>
+<tr><td>Audit trail</td><td>Latest events: who printed what from where, reprint reasons, token errors.</td></tr>
+<tr><td><b>LAN sharing applies live (v2.8.2)</b></td><td>Toggling <b>LAN sharing</b> starts/stops a second listener on this PC’s LAN IP INSIDE the same request — no hub restart, 127.0.0.1 never stops answering, DHCP IP changes are followed automatically. A failed LAN bind is only logged and can never stop local printing.</td></tr>
+<tr><td><b>Firewall one-click + Test LAN (v2.8.2)</b></td><td>LAN card shows <b>Windows firewall: ALLOWED / BLOCKED</b> and an <b>Allow in firewall</b> button (one UAC prompt; also in the tray menu). <b>Test LAN</b> makes the hub call its own LAN URL: PASS + another PC still failing = firewall; FAIL = listener problem (hub.log explains).</td></tr>
+<tr><td><b>Print destination (v2.9.1)</b></td><td><b>ANY printer</b> - one card decides where every job prints: the OS <b>default printer</b>, <b>any installed printer</b> (picked from the live list), or an upstream <b>IP printer</b> at IP:port (<b>RAW JetDirect 9100</b> or <b>IPP</b>). <b>Save destination</b> applies instantly, the <b>Test</b> button pings the IP printer (reachability + latency) before saving, and with <span class="mono">dest_mode:"ip"</span> the queue <b>holds</b> jobs while that printer is unreachable (reason shows in the queue row; <b>Print now</b> forces). PCs and phones that added <i>this</i> hub as their network printer print through exactly this destination - one setting routes everything. <span class="mono">v2.9.1:</span> the card and ALL dashboard tables are fully responsive - every column, button and option is visible on load, nothing hides inside an inner scrollbar.</td></tr>
+<tr><td><b>Network printer - IPP (v2.9.0)</b></td><td>The hub is a real IPP printer at <span class="mono">http://&lt;lan-ip&gt;:9235/ipp/print</span> (same port as the hub - no extra firewall rule). Windows 10/11: Add printer → “Select a shared printer by name” → paste the URL (built-in Microsoft IPP Class Driver). Phones: print services that accept a manual IPP address. No token - printer protocol, size-bounded, audited, switchable with <span class="mono">"ipp_printer": false</span>.</td></tr>
+<tr><td><b>Network printer - RAW 9100 (v2.9.0)</b></td><td>JetDirect listener on <b>TCP 9100</b> (<span class="mono">"raw_printer_port"</span>, 0 = off) while LAN sharing is ON: Windows “Add a printer using TCP/IP address” → this PC’s IP + port 9100 + device type <b>Generic Network Card</b> + your real printer’s driver. Windows renders any file and streams the print-ready bytes; the hub prints them. ESC/POS and ZPL apps can open the same socket.</td></tr>
+<tr><td><b>Send portal QR (v2.8.1)</b></td><td>LAN card &rarr; <b>Copy send URL</b> / <b>QR code</b>: phones scan the QR and upload a PDF to the Send portal — it prints on the default printer. The QR is drawn by a QR encoder embedded in the hub (verified bit-exact; no internet used).</td></tr>
+<tr><td><b>One-click invite (v2.8.1)</b></td><td>LAN card &rarr; <b>Copy invite link</b>: open the link on another PC and click <i>Add as LAN print peer</i> — the peer is saved into that PC's config automatically and health-checked. Removable any time from the same LAN card.</td></tr>
+<tr><td><b>DropZone (v2.8.0)</b></td><td>Print WITHOUT the extension: pick a folder; in Word / Excel / ANY app print to “Microsoft Print to PDF” and save the PDF into it — AdvPrint prints it seconds later and moves it to <span class="mono">done\\</span>. Live on/off (no restart), delete-after-print option, <b>Open folder</b> button. Phones/tablets print through the <b>Send portal</b> button (<span class="mono">/send</span>) — token-protected, 100% local.</td></tr>
+<tr><td><b>Restart hub (v2.8.0)</b></td><td>One button in the toolbar: the hub relaunches ITSELF as a new process (queued jobs, settings and history kept) and this page reloads automatically when <span class="mono">/health</span> answers again. Same restart lives in the tray menu (Restart hub), AdvPrint Tool [14] and <span class="mono">POST /restart</span>.</td></tr>
+<tr><td>Live debug &amp; test tool + Hub settings</td><td><b>Send test print &amp; watch live</b> (job → printer verdict), <b>Release ALL held jobs</b>, <b>Full self-test (A-to-Z)</b>, SumatraPDF path setting. <b>v2.7.0:</b> both panels now sit properly INSIDE the page (they used to hang below it, unstyled and full-width).</td></tr>
+</table>
+
+<!-- ============ 6 ============ -->
+<h2>6. Printing everything</h2>
+<h3>6.1 PDFs (the lab-report flow)</h3>
+<ul>
+<li><b>Simple mode</b> (default ON): any PDF opened in the browser prints silently and the tab closes.</li>
+<li><b>Rules</b>: URL pattern + optional title filter + optional printer → auto-prints the moment the URL opens (glob or regex).</li>
+<li><b>From your app's code</b>: <span class="mono">printPdfLink(url, 'Lab report', {fallback:false})</span> — the page API prints via the hub and never opens a dialog. Full API: extension <span class="mono">content/api.js</span>, docs at <span class="mono">/docs</span>.</li>
+</ul>
+<h3>6.2 Web pages</h3>
+<p>Right-click → AdvPrint Pro → Print page · <span class="kbd">Alt+P</span> · popup button ·
+<span class="mono">window.advprint.printPage()</span>. Rendered with headless Chrome/Edge at print quality.
+<span class="mono">window.print()</span> and Ctrl+P are intercepted (toggle in Settings) and routed silently.</p>
+<h3>6.3 Receipts / raw text (ESC/POS)</h3>
+<p>Send <span class="mono">kind:"raw"</span> or <span class="mono">|center|…|</span> markup to <span class="mono">/print</span>.
+Codepage selectable (cp437/cp850/cp866/cp1251/cp1252). Bangla and other complex scripts are automatically rendered
+through headless Chrome so they shape correctly on thermal rolls (<span class="mono">thermal_text_engine</span>).</p>
+<h3>6.4 Selections &amp; screenshots</h3>
+<p>Right-click a selection to print exactly it; the popup can print the visible page as an image — useful for
+POS systems and stubborn apps.</p>
+<h3>6.5 Save as PDF instead of paper</h3>
+<p>Choose printer <span class="mono">File (save as PDF)</span> or send <span class="mono">"printer":"__file__"</span>.
+Files land in <span class="mono">~/Downloads/AdvPrint</span> or the folder set in Hub settings (<span class="mono">file_dir</span>).</p>
+<h3>6.6 Multiple printers on one PC — the lab scenario (v3.0.2)</h3>
+<p>One PC, one hub, ANY number of printers — a <b>PDF report printer (A4/A5)</b> and a
+<b>Zebra (or any) label printer</b> at the same time. The routing rule is simple:
+<b>the printer named on the job always wins</b>; without a name the <b>Print destination</b>
+card decides; a <b>printer group</b> name means "first healthy member" (automatic failover).
+Every sender can name a printer: the extension auto-print rules (each rule has its own
+printer + paper + tray + duplex + copies), the Options default-printer dropdown, the page API
+(<span class="mono">printPage({printer:"Zebra ZD421"})</span>), or
+<span class="mono">POST /print</span> (<span class="mono">"printer"</span> field,
+<span class="mono">paper=a4|a5</span>, copies, tray, pages, profile...). The payload decides the
+pipeline: <span class="mono">%PDF</span> → the PDF engine; JPEG → wrapped PDF;
+<b>ZPL (<span class="mono">^XA</span>) / ESC-POS / PostScript / PCL → RAW passthrough</b>, byte-for-byte
+to the named printer (labels render on the Zebra, reports on the laser — queued side by side,
+every job in History with its printer name). ZPL from desktop label software (NiceLabel,
+BarTender, ZebraDesigner): add this PC as a network printer
+(<span class="mono">http://&lt;ip&gt;:9235/ipp/print</span> or RAW 9100) and the hub forwards to the
+destination. Full worked example + API snippets: <span class="mono">docs/MULTI-PRINTER.md</span>
+(ships in this package).</p>
+
+<!-- ============ 7 ============ -->
+<h2>7. LAN / IP — share one printer with every PC</h2>
+<div class="note" style="border:1px solid #a7f3d0;background:#ecfdf5;border-radius:10px;padding:12px 14px;margin:10px 0 14px">
+<b>v3.0.7 — SILENT EXTENSION AUTO-INSTALL (ONE DOWNLOAD).</b> The Setup exe / deb now ships the extension as a signed .crx with a stable release key (the extension ID never changes) and writes the Chrome enterprise force-install policy: Chrome/Edge/Brave install the extension silently and update it automatically on every newer hub release - no chrome://extensions, no Load unpacked. The hub serves the package itself at /extension/updates.xml + /extension/AdvPrint-Pro.crx, the dashboard has a Browser-extension card (check / write / remove the policy), and the Enterprise-Deploy-Kit hosts the same two files on any web server for schools/workplaces. On a non-domain home PC Chrome ignores silent off-store install (use Load unpacked there); Linux installs silently everywhere.<br><br><b>v3.0.7 — SILENT EXTENSION AUTO-INSTALL (ONE DOWNLOAD).</b> The Setup exe / deb now ships the extension as a signed .crx with a stable release key (the extension ID never changes) and writes the Chrome enterprise force-install policy: Chrome/Edge/Brave install the extension silently and update it automatically on every newer hub release - no chrome://extensions, no Load unpacked. The hub serves the package itself at /extension/updates.xml + /extension/AdvPrint-Pro.crx, the dashboard has a Browser-extension card (check / write / remove the policy), and the Enterprise-Deploy-Kit hosts the same two files on any web server for schools/workplaces. On a non-domain home PC Chrome ignores silent off-store install (use Load unpacked there); Linux installs silently everywhere.<br><br><b>v3.0.6 — RULES MATCH BY CONTENT: ZPL, TEXT, PDF, IMAGE.</b> A rule no longer needs a URL: Match by Content fires for ANY page whose text is a ZPL label (^XA...^XZ → the Zebra, byte-for-byte), a plain-text receipt (text/plain → ESC-POS thermal), a PDF, an image (picture tabs print the photo) or a web page - detection reads the already-open tab (content type + text sample), no extra download, no page JavaScript. The auto-print rules power switch moved out of the popup into the Options page (Rule Manager bar + General &gt; Power switches), and the Options are split into 9 human tabs (Queue, History, Rules, General, Printing, Connections, Hub, Debug, About) with a plain-English description on every option. New text simulator: paste label/receipt text, see which content rule fires - without printing. The URL simulator now also detects the content of the URL.<br><br><b>v3.0.5 — RULE MANAGER: THE HIDDEN LAB, NOW MANAGED &amp; CONTROLLED.</b> The silent multi-printer rules get their own <b>Rules</b> tab in the extension Options: the whole rule table lives there together with a <b>Pause all rules</b> switch (popup switch too - manual prints keep working), a <b>URL simulator</b> that shows which rule would fire on which printer WITHOUT printing, per-rule <b>run counters</b> (“12 runs · last 14:02”) and a <b>rule activity log</b> of the last 100 hidden hits (time, pattern, action, printer, result incl. FAILED + why). The lab recipe from 3.0.3/3.0.4 is unchanged - it is just managed now.<br><br><b>v3.0.4 — MULTI-PRINTER RULES MADE EASY.</b> The rules section now shows <b>"Printers on this PC"</b> - every installed printer (+ groups) as a chip with live status, one click <b>+ rule</b> starts a rule with that printer selected; every rule row gained a <b>Copy</b> button (duplicate, change pattern + printer); and the new <b>Contains</b> pattern type matches a URL by plain text - the easiest way to give each printer its own rule (PDF reports &rarr; laser, ZPL label pages &rarr; Zebra) with no syntax to learn.<br><br><b>v3.0.3 — RULES PRINT LABELS (ZPL / ESC-POS) + PER-RULE COPIES &amp; PAPER.</b> The Auto-print &amp; routing rules table now runs the whole multi-printer lab with no page JavaScript: rule Action <b>ZPL label (text on page)</b> / <b>ESC-POS receipt (text on page)</b> grabs the page text (user selection first, then &lt;pre&gt;/textarea, then visible body text) and posts it to the hub with an explicit language - ZPL streams byte-for-byte to the rule's Zebra, ESC/POS (auto cut) to the thermal printer; a guard refuses text with no ^ commands. New per-rule <b>Copies</b> (1-999) and <b>Paper</b> (A4/A5/A3/Letter/Legal/Tabloid) columns override the global print defaults, and the Reprint-a-PDF-link box honours the matching rule. The lab recipe: rule 1 PDF reports &rarr; laser (Auto/PDF + Paper A5/A4), rule 2 ZPL label pages &rarr; Zebra, rule 3 receipt text &rarr; thermal - the per-job printer name always wins over the destination card, so all printers run at the same time.<br><br><b>v3.0.2 — POPUP HOOK SWITCH REMOVED + MULTI-PRINTER GUIDE.</b> The popup's window.print() hook switch is gone - Options &gt; Power switches &gt; Intercept window.print() is the ONE switch in ONE place (same hookPrint setting). New docs/MULTI-PRINTER.md (and section 6.6 above) explains how one PC runs the A4/A5 PDF report printer AND a Zebra label printer at the same time: per-job printer name wins, the payload type decides the pipeline (ZPL/ESC-POS/PostScript/PCL raw passthrough), printer groups fail over.<br><br><b>v3.0.1 — TRAY MENU CLICK FIX + HOOK SWITCH INTO POWER.</b> The tray menu bug where 'the text and the click are not the same' is fixed at the root: the click handler used a selectable-row number as a raw item index, so every item after the first separator ran the WRONG command (Pause queue did nothing, Start at logon paused the queue, Restart hub toggled autostart, Allow LAN in firewall restarted the hub, Exit opened the firewall prompt). Now every item triggers its own action. The Intercept window.print() switch moved into Options &gt; Power switches, next to the master switch (same hookPrint setting as the popup toggle).<br><br><b>v3.0.0 — RENUMBERED RELEASE.</b> The v2.9.1 packages were already distributed, so this release ships the identical v2.9.1 feature set under the clean new number 3.0.0 - no feature added or removed; every surface (hub, dashboard badge, extension, Setup exe, deb, docs) says 3.0.0 and the new packages can never collide with installed 2.9.1 copies. Installs straight over 2.8.2 / 2.9.0 / 2.9.1.<br><br><b>v2.9.1 — RESPONSIVE DASHBOARD + POLISH.</b> The dashboard tables (LAN card, Debug, Printers, Queue, Job history, Audit, <b>Print destination</b>) no longer push wide rows into an inner horizontal scrollbar: cells wrap, long titles break, action buttons flow onto the next line - <b>every column and option is visible the moment the page loads</b>, on any window width (and on phones the cards go 2-up, controls shrink). The IP / Port / Proto fields of the Print destination card stack cleanly when they appear. Pure CSS/JS change - no settings, no data migration, install over 2.9.0 (or 2.8.2) and refresh.<br><br>
+<b>v2.9.0 — NETWORK PRINTER MODE + PHONE AUTH FIX + SMOOTH TRAY.</b> The hub is now a real IP-printable network printer: add it from another PC with “Select a shared printer by name” → <span class="mono">http://&lt;this-PC-IP&gt;:9235/ipp/print</span> (Windows installs it with the built-in Microsoft IPP Class Driver) or the classic <b>“Add a printer using TCP/IP address”</b> flow — the hub listens on <b>TCP 9100</b> (JetDirect RAW) while LAN sharing is ON. PDF, JPEG, PostScript, PCL, ESC/POS and ZPL payloads are all routed to the real printer and every job lands in History + Audit. <b>Print destination — ANY printer:</b> the new dashboard card picks where every job prints — the OS <b>default printer</b>, <b>any installed printer</b>, or an upstream <b>IP printer</b> (a real network printer at IP:port, RAW JetDirect or IPP; the <b>Test</b> button pings it, and with <span class="mono">dest_mode:"ip"</span> the queue holds jobs while that printer is unreachable). Phones and PCs that added this hub as their IP printer print through exactly that destination; the LAN card <b>“IP Printer mode”</b> row shows the whole chain with a one-click <b>Turn on</b>. The phone <b>“Auth fail” on the Send portal QR is fixed</b> (the portal upload now accepts the token from the QR link in every token mode). The extension shows <b>one version everywhere</b> (read from the manifest), and every tray action runs in its own thread so the menu never lags.<br><br><b>v2.8.2 — LAN SHARING APPLIES LIVE + FIREWALL ONE-CLICK.</b> The reported problem “LAN sharing ON but the LAN IP does not answer” is fixed at the root: no restart needed any more, the firewall state is visible, one click adds the rule, and Test LAN pinpoints the failing side.<br><br>
+<b>v2.8.1 — QR CODE FOR PHONES + ONE-CLICK INVITE (both 100% local).</b><br>
+<b>Send portal (phones)</b> row on the dashboard LAN card: <b>Copy send URL</b> copies
+<span class="mono">http://&lt;this-PC-ip&gt;:9235/send?token=…</span> and <b>QR code</b> shows the same URL
+as a scannable QR (generated inside the hub — no internet, no CDN). Any phone or tablet on the same
+Wi-Fi scans it, opens the Send portal, picks a PDF — it prints on this PC's default printer seconds later.<br>
+<b>Connect another PC</b> row: <b>Copy invite link</b> copies
+<span class="mono">http://&lt;this-PC-ip&gt;:9235/connect?t=&lt;token&gt;&amp;n=&lt;PC-name&gt;</span>. Open that link on the
+OTHER PC (chat, e-mail, QR — any way): it shows a confirmation page with an <b>Add "PC-name" as a LAN print
+peer</b> button. One click saves this hub into the other PC's <span class="mono">peer_hubs</span> automatically
+(its own hub does the writing via <span class="mono">POST /peer-connect</span>), checks the hub is online and
+shows the peer's version. No retyping IP or token, no config.json editing. Safe by design: loopback-only,
+private-LAN URLs only, explicit click required, Origin must match the added hub, and every accept is audited
+(<span class="mono">peer.connected</span>). API: <span class="mono">GET /qr?token=…&amp;kind=send|invite</span>
+returns the QR as SVG.
+</div>
+<div class="note" style="border:1px solid #bfdbfe;background:#eff6ff;border-radius:10px;padding:12px 14px;margin:10px 0 14px">
+<b>v2.8.0 — TWO HUB PROFILES (Self PC + LAN PC).</b> The extension now keeps two complete
+hub profiles. <b>Connection 1 - Self PC</b> = this computer's hub URL + token (used when
+Share Send is OFF — the default). <b>Connection 2 - LAN PC</b> = the OTHER PC's hub URL +
+its token. The popup <b>Share Send Mode</b> toggle is the routing switch:
+<b>ON → every print job prints on the LAN PC</b>; OFF → prints on this PC. Recent jobs and
+Pause/Resume in the popup follow the active target, and Options has four buttons —
+Open dashboard / audit log — Self PC and — LAN PC. Receiving (Share Receive Mode,
+hub <span class="mono">share_lan</span>) is configured on the PC that OWNS the printer;
+a sender only needs that PC's URL + token. The setup adds the TCP 9235 firewall rule
+automatically, so "restart the hub and allow the port" is usually the only manual step.
+</div>
+<ol>
+<li>On the <b>printer PC</b>: extension Options → LAN / PCs → <b>Enable LAN sharing</b> (or dashboard → LAN card). Restart the hub.</li>
+<li>Firewall: allow inbound TCP 9235 (Windows: <span class="mono">netsh advfirewall firewall add rule name="AdvPrint Pro" dir=in action=allow protocol=TCP localport=9235</span> — run once as admin).</li>
+<li>On each <b>client PC</b>: install the extension, set <b>Hub URL</b> to <span class="mono">http://&lt;printer-PC-ip&gt;:9235</span>, press <b>Detect token</b> on the printer PC (or paste the token) → Connect.</li>
+<li>Every PC now prints to the shared printers; jobs can be <b>shifted</b> between PCs (single job or the whole waiting queue) when a PC goes down.</li>
+</ol>
+<div class="warn">The token is required from every LAN PC — no token, no printing (the hub rate-limits and
+locks out foreign IPs after too many bad tokens, while your own PC (127.0.0.1) is <b>never</b> locked out by default).</div>
+
+<!-- ============ 8 ============ -->
+<h2>8. Queue, History &amp; Audit trail</h2>
+<ul>
+<li><b>Queue mode ON</b>: jobs wait in FIFO order, Pause/Resume works, one job prints at a time.</li>
+<li><b>Queue mode OFF (instant)</b>: each job prints immediately; if the printer is not active the job is <b>auto-queued</b> (<span class="mono">instant_auto_queue</span>) and prints when the printer is back.</li>
+<li><b>Printer-status hold</b> (<span class="mono">hold_offline</span>): jobs whose printer reports offline/paper-out are held with a reason and auto-print on recovery — or hit <b>Release ALL held jobs</b> / per-job <b>Print now</b> to force.</li>
+<li><b>Retries</b>: failed jobs retry with exponential backoff (<span class="mono">max_retries</span> × <span class="mono">retry_base_seconds</span>).</li>
+<li><b>Duplicates</b>: identical jobs inside <span class="mono">dedupe_minutes</span> are blocked (double-click protection).</li>
+<li><b>History — v2.7.0 manager</b>: last 50/100/300/1000 jobs in the hub DB (SQLite), per-job file for reprints (<span class="mono">keep_files</span>); in the dashboard AND in Options &rarr; History: <b>filter</b> by status, <b>search</b>, <b>tick</b> rows, <b>Reprint selected</b>, <b>Reprint all non-printed</b>, <b>Clear ALL history</b> (finished jobs only — queued/held jobs survive). Export CSV from the dashboard. API: <span class="mono">POST /jobs/bulk-reprint</span> (<span class="mono">{"ids":[…]}</span> or <span class="mono">{"scope":"not_printed"}</span>), <span class="mono">POST /history/clear</span>.</li>
+<li><b>Audit trail</b>: who printed what, from which site/IP, reprint reasons, auth failures — CSV export too; disable with <span class="mono">audit_enabled:false</span>.</li>
+</ul>
+
+<!-- ============ 9 ============ -->
+<h2>9. Settings reference — every switch in one table</h2>
+<p>Change from: extension Options → Hub settings (live) · dashboard · <span class="mono">~/.advprint/config.json</span> ·
+environment variables (<span class="mono">ADVPRINT_*</span>; legacy <span class="mono">PRINTHUB_*</span> still honored).</p>
+<table>
+<tr><th>Key</th><th>Default</th><th>Meaning</th></tr>
+<tr><td class="mono">token</td><td>random per install</td><td>API token — rotate via /token/rotate. Old default PrintHub-2024 kept on legacy upgrades.</td></tr>
+<tr><td class="mono">token_header_only</td><td>false (true on fresh installs)</td><td>Strict mode: POST calls must send the X-AdvPrint-Token header.</td></tr>
+<tr><td class="mono">allowed_origins</td><td>[] (all)</td><td>Restrict which websites may print, e.g. ["https://www.htncr.org"].</td></tr>
+<tr><td class="mono">max_auth_failures / lockout_minutes / lockout_exempt_loopback</td><td>10 / 5 / true</td><td>Lockout policy for wrong tokens; loopback exempt by default (owner can never lock himself out).</td></tr>
+<tr><td class="mono">printer</td><td>"</td><td>Force a printer; empty = OS default; "__file__" = save as PDF.</td></tr>
+<tr><td class="mono">printer_groups</td><td>{}</td><td>{"Front Desk": ["A","B"]} — fallback printers in order.</td></tr>
+<tr><td class="mono">profiles</td><td>{}</td><td>{"Invoice": {"paper":"a4","duplex":true}} — named option sets; send "profile":"Invoice".</td></tr>
+<tr><td class="mono">queue_mode (extension)</td><td>true</td><td>FIFO queue vs instant print.</td></tr>
+<tr><td class="mono">max_retries / retry_base_seconds</td><td>2 / 30</td><td>Exponential retry of failed jobs.</td></tr>
+<tr><td class="mono">dedupe_minutes</td><td>5</td><td>Duplicate block window.</td></tr>
+<tr><td class="mono">hold_offline</td><td>true</td><td>Hold jobs while the printer reports offline/out of paper.</td></tr>
+<tr><td class="mono">instant_auto_queue</td><td>true</td><td>Instant mode falls back to queue when no printer is active.</td></tr>
+<tr><td class="mono">share_lan</td><td>false</td><td>Listen on 0.0.0.0 so other PCs can print (token always required).</td></tr>
+<tr><td class="mono">peer_hubs / peer_forwarding</td><td>[] / false</td><td>Other PCs' hubs for queue shifting / auto-forwarding.</td></tr>
+<tr><td class="mono">thermal_text_engine / escpos_codepage</td><td>auto / cp437</td><td>Raw text rendering (Bangla → browser engine) and ESC/POS codepage.</td></tr>
+<tr><td class="mono">audit_enabled / reprint_watermark / reprint_reason_required</td><td>true / false / false</td><td>Audit trail + compliance switches for reprints.</td></tr>
+<tr><td class="mono">file_dir / keep_files</td><td>~/Downloads/AdvPrint / true</td><td>Save-as-PDF destination; keep files for reprint.</td></tr>
+<tr><td class="mono">drop_enabled / drop_dir / drop_delete</td><td>true / "" / false</td><td><b>v2.8.0 DropZone</b>: watch a folder and print every PDF that lands in it (default folder <span class="mono">data\DropZone</span>; drop_delete=true deletes instead of moving to <span class="mono">done\</span>).</td></tr>
+<tr><td class="mono">sumatra_path</td><td>"</td><td>Manual SumatraPDF.exe path (empty = auto-find).</td></tr>
+<tr><td class="mono">dest_mode / printer</td><td>"" / ""</td><td><b>v2.9.0 Print destination</b>: where jobs print — <span class="mono">default</span> = OS default printer, <span class="mono">selected</span> = the printer named in <span class="mono">printer</span> (any installed printer), <span class="mono">ip</span> = forward to the upstream IP printer. A per-job <span class="mono">printer</span> always wins.</td></tr>
+<tr><td class="mono">ip_printer_host / ip_printer_port / ip_printer_proto</td><td>"" / 0 / raw</td><td><b>v2.9.0</b> the upstream IP printer: IP or hostname, port (0 = protocol default: RAW 9100 / IPP 631), protocol <span class="mono">raw</span> (JetDirect) or <span class="mono">ipp</span>. Test with <span class="mono">POST /ip-printer/test</span> or the card's Test button.</td></tr>
+<tr><td class="mono">ipp_printer / raw_printer_port</td><td>true / 9100</td><td><b>v2.9.0 IP printer (inbound)</b>: this hub IS a network printer — IPP at <span class="mono">/ipp/print</span> and the JetDirect RAW port for "Add a printer using TCP/IP address".</td></tr>
+<tr><td class="mono">debug</td><td>false</td><td>Verbose [DEBUG] logs + client error reports in /debug.</td></tr>
+<tr><td class="mono">log_max_mb / log_backups</td><td>5 / 3</td><td>hub.log rotation.</td></tr>
+</table>
+
+<!-- ============ 10 ============ -->
+<h2>10. Debug &amp; the Live Test tool</h2>
+<p><b>Four layers</b>, from one-click to full control:</p>
+<ol>
+<li><b>Full self-test (A-to-Z)</b> — v2.6: extension Debug tab button · dashboard “Full self-test” ·
+    <span class="mono">AdvPrint Tool</span> menu [11] · CLI <span class="mono">python advprint.py livetest</span>
+    (add <span class="mono">print</span> to also queue a real test page). Checks: Python, data folder writable,
+    token, SumatraPDF/lp, browser, port, queue DB mechanics, printers, default printer — each line
+    <span class="mono">[OK]</span> or <span class="mono">[!!]</span> with the fix. Exit code 0 = production-ready.</li>
+<li><b>Test print &amp; watch live</b> — dashboard button queues a real page and follows the job to the printer
+    with a verdict (REAL PRINTER HIT / SAVED / FAILED + reason). Tray icon → Print test page. CLI <span class="mono">testprint</span>.</li>
+<li><b>Debug mode</b> — verbose logs + browser error reports; the Debug tab and <span class="mono">/debug</span>
+    answer "WHY is nothing printing?" with concrete problems + fixes.</li>
+<li><b>Bundles for support</b> — <span class="mono">/diagnostics</span>, <span class="mono">/health</span>,
+    <span class="mono">/debug</span> JSON, audit CSV, history CSV, "Copy report" buttons. Token is redacted in diagnostics.</li>
+</ol>
+<pre>$ python advprint.py livetest
+  [OK] Python >= 3.8                        3.11.9
+  [OK] Data folder + history.db writable    /home/you/.advprint
+  [OK] API token configured                 private random token
+  [OK] CUPS lp command                      /usr/bin/lp
+  [OK] Chrome/Edge (page printing)          /usr/bin/chromium
+  [OK] Port 9235 available                  OK
+  [OK] Queue DB enqueue/read/update         job #42
+  [OK] Printers detected                    HP_LaserJet, XP-80C
+  [OK] Default printer                      HP_LaserJet
+
+  ALL CHECKS PASSED - AdvPrint Pro is ready for production.</pre>
+
+<!-- ============ 11 ============ -->
+<h2>11. Enterprise edition — silent install, policy, service</h2>
+<h3>11.1 Silent / scripted Windows install</h3>
+<pre>AdvPrint-Pro-Setup-2.9.0.exe /S          # silent (UAC once), hub auto-starts
+# enterprise rollout via Intune/GPO/SCCM: run per user, no elevation needed</pre>
+<h3>11.2 Managed policy (force settings on all PCs)</h3>
+<p>Deploy <span class="mono">extension/managed.json</span> content as Chrome policy
+<span class="mono">HKLM\SOFTWARE\Policies\Google\Chrome\ExtensionInstallForcelist</span> + managed storage, or simply
+push the keys. Forceable settings: <span class="mono">hubUrl</span>, <span class="mono">token</span>,
+<span class="mono">defaultPrinter</span>, <span class="mono">enabled</span>, <span class="mono">queueMode</span>,
+<span class="mono">retryOffline</span>, <span class="mono">lang</span>, <span class="mono">hookPrint</span>,
+<span class="mono">autoPrintAllPdfs</span>, <span class="mono">failFallback</span>, <span class="mono">closeAfterPrint</span>,
+<span class="mono">rules</span> (rules fully override local ones — central lockdown). Managed values win over user settings.</p>
+<h3>11.3 Windows service mode (headless)</h3>
+<pre>python advprint.py service-install     # UAC → registers services.msc: "AdvPrint Pro Service"
+python advprint.py service-status / service-remove</pre>
+<p>Service mode = no tray, runs before logon, perfect for a print-server PC. The normal Startup app stays
+the default on desktops; if both run, the second exits gracefully (port guard).</p>
+<h3>11.4 Lockdown checklist</h3>
+<ul>
+<li><span class="mono">allowed_origins</span> → only your web app may print.</li>
+<li><span class="mono">token_header_only:true</span> + rotated token on every PC.</li>
+<li><span class="mono">share_lan:false</span> everywhere except the print-server PC; that one keeps <span class="mono">lockout_exempt_loopback</span> and strict lockouts for foreign IPs.</li>
+<li><span class="mono">audit_enabled:true</span> + <span class="mono">reprint_reason_required:true</span> for compliance; audit CSV ships out nightly.</li>
+<li>LAN firewall rule only where needed (§7).</li>
+</ul>
+
+<!-- ============ 12 ============ -->
+<h2>12. HTTP API quick reference</h2>
+<p>Auth: header <span class="mono">X-AdvPrint-Token</span> (legacy <span class="mono">X-PrintHub-Token</span> accepted),
+or <span class="mono">?token=</span> on GET navigation. Full docs: <span class="mono">docs/API.md</span> and the hub's own <span class="mono">/docs</span> page.</p>
+<pre># v2.9.x - NETWORK PRINTER MODE: print INTO this hub from any device
+#   IPP (Windows "Select a shared printer by name", phones):
+curl -X POST -H "Content-Type: application/pdf" --data-binary @report.pdf \
+     http://<lan-ip>:9235/ipp/print            # no token - printer protocol
+#   RAW JetDirect: anything streamed to TCP 9100 prints the same way.
+# Print destination - route every job to an upstream IP printer:
+curl -X POST -H "X-AdvPrint-Token: $TOKEN" -H "Content-Type: application/json" \
+  -d '{"dest_mode":"ip","ip_printer_host":"192.168.1.50",
+       "ip_printer_port":9100,"ip_printer_proto":"raw"}' \
+  http://127.0.0.1:9235/config
+curl -X POST -H "X-AdvPrint-Token: $TOKEN" \
+     "http://127.0.0.1:9235/ip-printer/test?host=192.168.1.50&port=9100&proto=raw"
+
+# v2.8.0 - DropZone / send portal / restart (no extension needed)
+curl -H "X-AdvPrint-Token: $TOKEN" http://127.0.0.1:9235/dropzone
+curl -X POST -H "X-AdvPrint-Token: $TOKEN" -F "file=@report.pdf" \
+     "http://127.0.0.1:9235/send?title=Report"   # upload + print
+curl -X POST -H "X-AdvPrint-Token: $TOKEN" http://127.0.0.1:9235/restart
+
+# status
+curl http://127.0.0.1:9235/health
+curl -H "X-AdvPrint-Token: $TOKEN" http://127.0.0.1:9235/printers
+# print a PDF from bytes (silent)
+curl -X POST -H "X-AdvPrint-Token: $TOKEN" -H "Content-Type: application/pdf" \
+     --data-binary @report.pdf "http://127.0.0.1:9235/print?title=Report"
+# print a page with options
+curl -X POST -H "X-AdvPrint-Token: $TOKEN" -H "Content-Type: application/json" \
+  -d '{"url":"https://intranet/roster","paper":"a4","duplex":"duplex","copies":2}' \
+  http://127.0.0.1:9235/print
+# queue control / tokens / settings
+curl -X POST -H "X-AdvPrint-Token: $TOKEN" http://127.0.0.1:9235/queue/pause
+curl -X POST -H "X-AdvPrint-Token: $TOKEN" http://127.0.0.1:9235/token/rotate
+curl -H "X-AdvPrint-Token: $TOKEN" http://127.0.0.1:9235/config
+# live test over HTTP (same check as the CLI)
+curl -X POST -H "X-AdvPrint-Token: $TOKEN" http://127.0.0.1:9235/livetest</pre>
+<p>Page-side API (in any web page once the extension is installed):
+<span class="mono">printPdfLink(url, title, opts)</span> ·
+<span class="mono">window.advprint.printPdf/printPage/printers/status/history</span>.</p>
+
+<!-- ============ 13 ============ -->
+<h2>13. Troubleshooting — every known problem and its fix</h2>
+<table>
+<tr><th>Symptom</th><th>Cause → Fix</th></tr>
+<tr><td>Setup says <i>cannot access / Access is denied</i></td><td>Incomplete/damaged download (pre-2.6 bug) or Mark-of-the-Web → re-download the 2.8.1 zip (setup ≈ 9.7 MB), right-click zip → Properties → Unblock, or run <span class="mono">install-windows.bat</span> which unblocks automatically.</td></tr>
+<tr><td>Dashboard shows “needs the current token”</td><td>Stale bookmark → press the green <b>Fix it now</b> button on that very page (hub PC), or tray → Open dashboard, or extension → Detect token.</td></tr>
+<tr><td>Extension shows 401 / token rejected</td><td>Options → Settings → <b>Detect token</b> (or paste the token from <span class="mono">advprint token</span>). After a rotation always re-detect.</td></tr>
+<tr><td>Nothing prints, no error</td><td>Debug tab → Run full self-test → fix the [!!] line (usually SumatraPDF missing or no default printer). Then send a test print &amp; watch live.</td></tr>
+<tr><td>Jobs stuck “queued”</td><td>Queue paused → Resume; printer held → <b>Print now</b> or Release ALL held jobs; check printer status in the dashboard Printers card.</td></tr>
+<tr><td>Jobs stuck “held”</td><td>That is the printer-status hold doing its job — fix the printer or <b>Print now</b>; disable hold in Hub settings (<span class="mono">hold_offline</span>).</td></tr>
+<tr><td>Bangla/receipt text is garbage</td><td>Hub settings → thermal engine <span class="mono">auto</span> (browser render) + correct codepage; browser printing needs Chrome/Edge installed.</td></tr>
+<tr><td>LAN PC cannot connect</td><td><span class="mono">share_lan</span> ON + hub restarted + firewall TCP 9235 + correct Hub URL + token; check the LAN/PCs tab shows the PC's URL.</td></tr>
+<tr><td>“python” in Task Manager</td><td>You started with system python — the installer's <span class="mono">AdvPrintPro.exe</span> (renamed pythonw) shows “AdvPrintPro”; re-run setup or the Startup shortcut.</td></tr>
+<tr><td>Auto-run missing</td><td>Task Manager → Startup apps → “AdvPrint Pro” enable; or tray menu → Start at Windows logon.</td></tr>
+<tr><td>Old PrintHub Pro traces after upgrade</td><td>Setup 2.6 removes the old Startup app/task/service/registry keys automatically; leftovers: uninstall the old version once, or delete <span class="mono">%LOCALAPPDATA%\PrintHubPro</span>.</td></tr>
+<tr><td>Hub shows OFFLINE / start “did not answer”</td><td>Open the desktop tool → <b>[13] Diagnose &amp; fix</b>: it unblocks the folder (Mark-of-the-Web), frees port 9235 from zombies, then starts the hub in plain view so the real error shows as text. Ends with the hub.log tail + a copy/paste start command with the full path.</td></tr>
+<tr><td>Tool prints the diagnosis but hub.log is empty</td><td>The hub died before logging (AV quarantined the fresh exe) → add the AdvPrint folder to the antivirus exclusions, run [13] again (it unblocks), then [1] Start.</td></tr>
+<tr><td>“python advprint.py serve” says <i>can't open file</i></td><td>You are in the wrong folder — that command needs the file's real location. Use the tool's copy/paste command (menu [13], step [5/5]) or just menu [1].</td></tr>
+<tr><td>Dashboard tables show “-” and buttons do nothing</td><td>Old-build JS bug (one broken quote killed the whole dashboard script) — <b>fixed in 2.6.4</b>; update, hard-refresh the dashboard (Ctrl+F5).</td></tr>
+<tr><td>Tray icon missing</td><td>Fixed in 2.6.4 (embedded-runtime isolated mode). Update + start the hub; the icon sits next to the clock — may hide under the <span class="mono">^</span> arrow. If the hub is not running there is no tray — start with [1] first.</td></tr>
+<tr><td>Hub will not start (port busy)</td><td>Another instance runs — check the tray icon; the hub exits gracefully with a clear message instead of crashing; [13] can free the port for you.</td></tr>
+<tr><td>Screen “glitch” / black console flashes every few seconds</td><td>Old build (pre-2.6.6): the hub polled the service state with <span class="mono">sc query</span> without the windowless flag — Windows flashed a console each time. <b>Fixed in 2.6.6</b> — every background child now runs windowless; update.</td></tr>
+<tr><td><span class="mono">save-as-PDF failed: [Errno 13] Permission denied</span></td><td>A real-time antivirus / indexer briefly locked the fresh PDF. <b>Fixed in 2.6.7</b> — the hub now writes atomically and retry-reads ~4 s. If it still repeats: add <span class="mono">C:\Users\&lt;you&gt;\.advprint</span> to your AV exclusions, then <b>Retry</b> the job from History.</td></tr>
+<tr><td><span class="mono">print backend exit 1:</span> with no message (File (PDF))</td><td><b>Fixed in 2.6.7</b> — “File (PDF)” is now a virtual printer: the PDF is <b>saved</b> to <span class="mono">Downloads\AdvPrint</span> with status “saved” (also with Queue Mode OFF). The backend's stdout is captured too, so real printer errors now show a readable reason.</td></tr>
+<tr><td>Windows service “AdvPrint” stuck in <i>start pending</i></td><td>A stale state left by an older service process — the hub actually runs from the Startup app / tray. Fix: <span class="mono">services.msc</span> → AdvPrint → Restart (or reboot), or run <span class="mono">service-remove</span> — keep only ONE of service / Startup app active. The Debug tab lists this automatically.</td></tr>
+<tr><td><span class="mono">printer 'X...X not found</span> — the name shows TWICE in a row (e.g. <span class="mono">CanonCanon</span>)</td><td>A stored printer name was typed/pasted twice. <b>Self-healed in 2.6.8</b> — the hub collapses the doubled name to the real printer, prints, and corrects the history (audit: <span class="mono">printer.corrected</span>). Old dead jobs: just press <b>Retry</b>. Still check Settings → Printer for the stale entry.</td></tr>
+<tr><td>Every page prints TWICE — two sheets, and the log shows two <span class="mono">[OK] job #N</span> lines</td><td>Queue Mode OFF race in v2.6.8 and earlier: the FIFO worker and the direct thread both grabbed the same job. <b>Fixed in 2.6.9</b> — the job row is created in its final state, one job = one sheet. Not a printer or driver problem (the printer was innocent). Upgrade the hub to 2.6.9+; nothing to change on the printer.</td></tr>
+<tr><td>Right-click "Print this page" fails with <i>Cannot access contents of url chrome-extension://…</i></td><td>The menu was used on a browser-internal page (chrome://, settings, extension page). <b>Fixed in 2.6.8</b> — the menu now only appears on printable pages (http/https/file) and shows a friendly notice otherwise.</td></tr>
+<tr><td>Phone shows <i>invalid or missing token</i> (“Auth fail”) on the Send portal</td><td>Old builds accepted the token header only, which a phone browser cannot send. <b>Fixed in 2.9.0</b> - the /send upload accepts the token from the QR link itself in every token mode; re-open the QR URL (regenerate it from the LAN card if the token was rotated).</td></tr>
+<tr><td>Jobs show <i>held - IP printer x.x.x.x:9100 is unreachable</i></td><td><span class="mono">dest_mode:"ip"</span> and the Test/probe says the upstream printer is down: fix the printer (power/cable/IP change), then <b>Print now</b> or Release ALL held jobs. Check the address with the card's <b>Test</b> button first.</td></tr>
+<tr><td>Dashboard tables/buttons are cut off, must scroll inside the card to see all options</td><td><b>Fixed in 2.9.1</b> - tables wrap instead of scrolling; update the hub and hard-refresh the dashboard (Ctrl+F5).</td></tr>
+<tr><td>HP Laser 103/107/108 shows <i>offline</i></td><td>That is the printer device itself (USB/network/sleep), not a hub error — check cable/power, set it online in Windows, then <b>Retry</b> the held jobs.</td></tr>
+</table>
+
+<!-- ============ 14 ============ -->
+<h2>14. Upgrade, uninstall, files &amp; folders</h2>
+<div class="note" style="border:1px solid #bbf7d0;background:#f0fdf4;border-radius:10px;padding:12px 14px;margin:10px 0 14px">
+<b>v2.8.0 — BULLET-PROOF UPGRADE &amp; UNINSTALL.</b> Setup runs <span class="mono">hub-stop.ps1</span>
+BEFORE touching files: it stops the optional <i>AdvPrint</i> service (wait + PID kill when stuck),
+<b>deletes the service registration</b> (it is reinstalled fresh automatically on upgrade), kills every
+process under the install folder and frees TCP 9235. Old program folders are wiped first, so no stale
+file can abort the new install any more. The uninstaller uses the same stop, removes the firewall rule
+and retries the folder sweep 3×. Silent install: <span class="mono">AdvPrint-Pro-Setup-2.8.0.exe /S</span>
+(UAC once — the exe requests admin itself; the hub auto-starts afterwards).
+</div>
+<h3>14.1 Upgrade</h3>
+<p>Run the new setup over the old one (same per-user location, settings/history kept) — or replace the portable
+folder. The extension updates by Remove + Load unpacked (or GitHub update check → new zip). Data folders migrate:
+<span class="mono">~/.printhub</span> → <span class="mono">~/.advprint</span> automatically.</p>
+<h3>14.2 Uninstall</h3>
+<p>Windows: Start Menu → Uninstall AdvPrint Pro (or Apps &amp; features). Service: removed automatically.
+History/settings in <span class="mono">~/.advprint</span> are kept (delete manually if unwanted).
+Linux: <span class="mono">sudo apt remove advprint-pro</span> + <span class="mono">uninstall-unix.sh</span>.</p>
+<h3>14.3 Where everything lives</h3>
+<table>
+<tr><th>What</th><th>Path</th></tr>
+<tr><td>Program (Windows)</td><td><span class="mono">%LOCALAPPDATA%\AdvPrintPro</span> (hub, runtime, install scripts, extension, docs)</td></tr>
+<tr><td>Data (config, history.db, hub.log, files)</td><td><span class="mono">%USERPROFILE%\.advprint</span> (migrated from <span class="mono">.printhub</span>)</td></tr>
+<tr><td>Auto-run</td><td>Startup app “AdvPrint Pro” (Task Manager) · optional service “AdvPrint” (services.msc)</td></tr>
+<tr><td>Program (Linux deb)</td><td><span class="mono">/opt/advprint</span> + <span class="mono">/usr/bin/advprint*</span> · data <span class="mono">~/.advprint</span></td></tr>
+<tr><td>Logs</td><td><span class="mono">~/.advprint/hub.log</span> (rotating)</td></tr>
+</table>
+
+<div class="tip"><b>You are never locked out:</b> the hub never locks out your own PC (127.0.0.1) by default,
+the tray always opens the dashboard with the right token, and the error page itself offers the one-click fix.
+That is the v2.6 promise: <b>auto security, zero manual Security-tab surgery</b>.</div>
+
+<p style="margin-top:18px;color:#64748b;font-size:9.5px">AdvPrint Pro (Advanced Printer) v3.0.7 —
+by Bit Dream IT — Innovative Healthcare Solutions — MIT license — 100% local, no cloud, no tracking.
+Repository: github.com/bitdreamit/AdvPrint-Pro</p>
+
+</body>
+</html>

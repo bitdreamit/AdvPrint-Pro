@@ -1,4 +1,4 @@
-"""v3.3.5 - MULTI-PRINTER IPP ADD + POPUP PRINTER/RELOAD/NETWORK RELEASE.
+"""v3.4.6 - MULTI-PRINTER IPP ADD + POPUP PRINTER/RELOAD/NETWORK RELEASE.
 
 Three real-world reports, each locked here:
 
@@ -259,7 +259,7 @@ def test_set_default_requires_printer_name(hub, printer_env):
 
 
 # ---------------------------------------------------------------
-# POPUP v3.3.5 - change-only guard + UI surface
+# POPUP v3.4.6 - change-only guard + UI surface
 # ---------------------------------------------------------------
 
 def _popup_js():
@@ -308,7 +308,7 @@ def test_background_routes_hub_set_default():
 
 def test_popup_ui_surface_present():
     html = _popup_html()
-    # v3.3.5 ONE design (user-approved): the printer selector is
+    # v3.4.6 ONE design (user-approved): the printer selector is
     # #selPrinter, the reload arrow #bRefreshPrinters, the header
     # NETWORK icon #netIcon - and the LAN switch reads SHARING with
     # the network/connection icon (the old download icon is gone).
@@ -477,19 +477,19 @@ def test_bat_has_hklm_hkcu_menu_and_scripted_args():
 
 def test_version_coherence_334():
     vtxt = open(os.path.join(ROOT, "VERSION.txt"), encoding="utf-8").read()
-    assert "3.3.5" in vtxt
-    assert advprint.VERSION == "3.3.5"
+    assert "3.4.6" in vtxt
+    assert advprint.VERSION == "3.4.6"
     manifest = json.load(open(os.path.join(ROOT, "extension",
                                            "manifest.json"),
                               encoding="utf-8"))
-    assert manifest["version"] == "3.3.5"
-    assert '"version": "3.3.5"' in _popup_html().replace("v3.3.5",
-                                                         '"3.3.5"') or \
-        "v3.3.5" in _popup_html()
+    assert manifest["version"] == "3.4.6"
+    assert '"version": "3.4.6"' in _popup_html().replace("v3.4.6",
+                                                         '"3.4.6"') or \
+        "v3.4.6" in _popup_html()
     i18n = _i18n_js()
-    assert i18n.count("3.3.5") >= 2          # brandLine en + bn
+    assert i18n.count("3.4.6") >= 2          # brandLine en + bn
     guide = os.path.join(ROOT, "docs",
-                         "AdvPrint-Pro-v3.3.5-A-to-Z-DEV-GUIDE.md")
+                         "AdvPrint-Pro-v3.4.6-A-to-Z-DEV-GUIDE.md")
     assert os.path.isfile(guide)
 
 

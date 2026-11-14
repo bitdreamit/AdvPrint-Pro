@@ -1,10 +1,18 @@
-/* AdvPrint Pro - popup logic (ONE design, v3.3.4)
+/* AdvPrint Pro - popup logic (ONE design, v3.4.6)
  * PRINTER SELECTOR (change-only set-default, never on popup
  * open/reload), RELOAD button, NETWORK icon in the header (LAN share
  * state at a glance) and a refresh() in-flight guard so popup reloads
  * can no longer stack duplicate hub calls ("cmd runs multiple times").
  * The LAN switch is labelled SHARING now and carries the network/
- * connection icon (popup.html). */
+ * connection icon (popup.html).
+ * v3.4.6 PRINTER MEMORY: the selector used to fall back to the FIRST
+ * printer on every popup open/reload because it read "default_printer"
+ * - a field the hub never sends (the hub answers "default"). Fixed,
+ * and the popup now also REMEMBERS the last printer the user picked
+ * (chrome.storage.local advLastPrinter) and auto-selects it on the
+ * next open when the hub's default is unknown; the OS default is
+ * marked in the list. Selecting a printer still sends the set-default
+ * command exactly once per real change. */
 const $ = (id) => document.getElementById(id);
 let paused = false;
 let _refreshBusy = false;        // v3.3.4: one refresh at a time
@@ -160,10 +168,18 @@ function renderNetIcon(state, detail) {
   el.title = detail || "";
 }
 
-/* ---------- v3.3.4: PRINTER SELECTOR (change-only set-default) ------
- * The hub's printer list fills the <select>; the hub's CURRENT OS
- * default is preselected. The set-default command is sent ONLY when
- * the user picks a DIFFERENT printer:
+/* ---------- v3.4.6: PRINTER SELECTOR (change-only set-default +
+ * last-used memory) ----------------------------------------------
+ * The hub's printer list fills the <select>. Selection priority on
+ * open/reload:
+ *   1. the hub's CURRENT OS default ("default" - v3.4.6 field fix;
+ *      the old code read "default_printer", which the hub never
+ *      sends, so the FIRST printer was always shown);
+ *   2. the LAST printer the user picked here (chrome.storage
+ *      advLastPrinter - survives popup close/reopen);
+ *   3. the first printer in the list.
+ * The OS default is marked "[default]" in the list. The set-default
+ * command is sent ONLY when the user picks a DIFFERENT printer:
  *   - popup open/reload only SELECTS an option programmatically, and a
  *     programmatic value set fires no change event;
  *   - even if something re-enters, the _printerApplied guard blocks a
@@ -188,26 +204,45 @@ async function loadPrinters() {
     return;
   }
   _printerMap = r.printers.map((p) => p.name).filter(Boolean);
-  _printerApplied = r.default_printer || "";
-  const wanted = _printerApplied;
+  // v3.4.6 FIELD FIX: the hub reports the default as "default"
+  // ("default_printer" never existed - the selector ignored it and
+  // always showed the first printer). Read both, prefer the real one.
+  _printerApplied = r.default || r.default_printer || "";
+  // v3.4.6: the remembered choice - what THIS popup last picked
+  const mem = await chrome.storage.local
+    .get({ advLastPrinter: "" }).catch(() => ({ advLastPrinter: "" }));
+  const remembered = mem.advLastPrinter || "";
+  let wanted = "";
+  if (_printerMap.includes(_printerApplied)) wanted = _printerApplied;
+  else if (remembered && _printerMap.includes(remembered))
+    wanted = remembered;
+  else wanted = _printerMap[0] || "";
+  const fromMemory = wanted !== _printerApplied && wanted === remembered;
   sel.innerHTML = "";
   for (const p of r.printers) {
     if (!p.name) continue;
     const o = document.createElement("option");
     o.value = p.name;
-    o.textContent = p.name + (p.status && p.status !== "unknown"
-                              ? "  (" + p.status + ")" : "");
+    o.textContent = p.name +
+      (p.is_default
+        ? "  [" + AdvPrintI18n.t("popPrinterDefaultTag") + "]"
+        : "") +
+      (p.status && p.status !== "unknown"
+        ? "  (" + p.status + ")" : "");
     sel.appendChild(o);
   }
   // programmatic select - fires NO change event, so nothing is sent
-  sel.value = _printerMap.includes(wanted) ? wanted : (_printerMap[0] || "");
+  sel.value = wanted;
   sel.disabled = false;
   // v3.3.4 ONE design: the applied default lives in the tooltip (the
   // design has no sub-label under the selector)
-  sel.title = wanted
-    ? (AdvPrintI18n.t("popPrinterNow") + " " + wanted +
+  sel.title = fromMemory
+    ? (AdvPrintI18n.t("popPrinterLastUsed") + " " + wanted +
        " - picking another printer makes THAT the OS default")
-    : AdvPrintI18n.t("popPrinterNoDefault");
+    : _printerApplied
+      ? (AdvPrintI18n.t("popPrinterNow") + " " + _printerApplied +
+         " - picking another printer makes THAT the OS default")
+      : AdvPrintI18n.t("popPrinterNoDefault");
 }
 
 $("selPrinter").addEventListener("change", async () => {
@@ -224,6 +259,8 @@ $("selPrinter").addEventListener("change", async () => {
   sel.disabled = false;
   if (r && r.ok) {
     _printerApplied = r.default || name;
+    // v3.4.6: remember the choice - the next popup open auto-selects it
+    chrome.storage.local.set({ advLastPrinter: name }).catch(() => {});
     sel.value = _printerMap.includes(_printerApplied)
       ? _printerApplied : sel.value;
     sel.title = AdvPrintI18n.t("popPrinterNow") + " " + _printerApplied;

@@ -13,22 +13,48 @@ Web page ──► Chrome extension ──► AdvPrint Pro hub (localhost:9235) 
 
 ---
 
-## What's new in v3.3.5 (DEDICATED QUEUE PORTS + MANUAL RE-SCAN + AUTO-CRX-ON-INSTALL)
+## What's new in v3.4.6 (ONE PORT FOR EVERYTHING + POPUP REMEMBERS THE LAST PRINTER)
 
-One still-broken report + two new requests, all fixed and locked by
-`tests/test_v335.py`. Full details in `CHANGELOG.md`; developer delta
-in `docs/AdvPrint-Pro-v3.3.5-A-to-Z-DEV-GUIDE.md`.
+The user asked the right question about v3.3.5: *"why not the hub
+default port only - one port to handle different PCs to connect
+through IPP or other?"* Fixed and locked by `tests/test_v346.py`.
+Full details in `CHANGELOG.md`; developer delta in
+`docs/AdvPrint-Pro-v3.4.6-A-to-Z-DEV-GUIDE.md`.
 
-1. **Multi-printer add REALLY works now (the deep fix).** v3.3.4 made
-   every queue unique (uuid), but all queues still answered on the SAME
-   ip:port - and Windows refuses a second queue on the same endpoint.
-   The hub now opens ONE DEDICATED TCP PORT PER PRINTER (9236, 9237,
-   ...): each printer is its own endpoint
-   `http://<hub-ip>:<own-port>/ipp/print`, mDNS advertises one SRV per
-   printer (own port), ports stay stable across restarts. The central
-   queue (`ip:9235/ipp/print`, hub default) and the path queues
-   (`ip:9235/ipp/print/<printer>`) keep working; the Setup opens the
-   port range (TCP 9235-9259) in the firewall.
+1. **ONE TCP port again - the hub port 9235 serves EVERY printer for
+   every PC.** The v3.3.5 dedicated per-printer ports (9236, 9237,
+   ... + the TCP 9235-9259 firewall range) are removed. Exactly like a
+   CUPS server, the queues are distinguished by their FULL URI
+   (`/ipp/print` = the default queue, `/ipp/print/<printer>` = that
+   one printer) plus the per-queue identity (unique printer-name,
+   stable unique printer-uuid, the client's own URI echoed, one mDNS
+   service per queue with its own `rp` and uuid on the SAME SRV
+   port). Fewer sockets, ONE firewall rule (TCP 9235 + 9100 + 631 +
+   UDP 5353), no port exhaustion - and every printer still adds side
+   by side. The v3.3.4-era add failure was the shared queue IDENTITY,
+   not the shared port.
+2. **The popup shows the RIGHT printer now - and remembers it.** The
+   selector always fell back to the FIRST printer after every
+   popup open/reload because it read `default_printer` - a field the
+   hub never sends (the hub answers `default`). Fixed, the popup now
+   REMEMBERS the last printer you picked (`advLastPrinter`) and
+   auto-selects it on the next open, falls back to the hub's current
+   default, and marks the OS default with `[default]` in the list.
+3. **v3.3.5 features all stay**: the "Show other PCs (LAN / IPP)"
+   list stays MANUAL (Re-scan button only), the tool still installs
+   and auto-updates its own extension (auto CRX on install + the
+   silent per-start HKCU pass), the v3.3.4 multi-printer uuid fix and
+   the idempotent set-default are untouched.
+
+## What was new in v3.3.5 (DEDICATED QUEUE PORTS + MANUAL RE-SCAN + AUTO-CRX-ON-INSTALL)
+
+Two new features locked by `tests/test_v335.py` (the dedicated
+queue-port experiment was replaced by the v3.4.6 one-port design
+above). Full details in `CHANGELOG.md`; developer delta in
+`docs/AdvPrint-Pro-v3.3.5-A-to-Z-DEV-GUIDE.md`.
+
+1. ~~**One dedicated TCP port per printer (9236, 9237, ...)**~~ -
+   superseded by v3.4.6: ONE port serves every queue again.
 2. **"Show other PCs (LAN / IPP)" no longer auto-loads.** The Printers
    panel list renders from the LAST MANUAL SCAN and refreshes ONLY via
    the panel Re-scan button or the switch itself - the 3 s poll never
