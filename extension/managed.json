@@ -73,9 +73,10 @@
             "type": "string",
             "enum": [
               "glob",
-              "regex"
+              "regex",
+              "contains"
             ],
-            "description": "v2.0: how 'pattern' is interpreted - glob (1.x default) or regular expression."
+            "description": "v2.0: how 'pattern' is interpreted - glob (1.x default), regular expression (v2.0), or 'contains' plain text (v3.0.4). v3.4.7: the hub's ONE UI rule editor can set all three and the hub keeps the field."
           },
           "title": {
             "type": "string",

@@ -13,6 +13,42 @@ Web page ──► Chrome extension ──► AdvPrint Pro hub (localhost:9235) 
 
 ---
 
+## What's new in v3.4.7 (CONFIGURABLE HUB PORT + DROPZONE WATCH FIX + STRICT LAN SHARE + URL RULES THAT REALLY MATCH)
+
+The user said "current work fine" and asked for the next version with
+five items. Fixed and locked by `tests/test_v347.py`. Full details in
+`CHANGELOG.md`; developer delta in
+`docs/AdvPrint-Pro-v3.4.7-A-to-Z-DEV-GUIDE.md`; the URL rules guide is
+`docs/PRINT-RULES-RECIPES.md`.
+
+1. **The hub port is configurable.** Default 9235 stays, but when
+   another program on the PC already owns it: ONE UI Settings > HUB
+   PORT (saves for real now), `python advprint.py port 9300`,
+   `"port"` in config.json, or `ADVPRINT_PORT` env (wins over
+   config.json). Validated 1024-65535 (631/5353/9100 refused);
+   applied on restart; a busy port at boot logs every way to move.
+2. **The DropZone watch button really toggles.** It used to be a
+   static "Disable" that always sent `drop_enabled:false` - the watch
+   could never be turned on from the ONE UI. Now Enable/Disable
+   follows the live state.
+3. **Strict LAN share.** Switch it ON and the hub lists EVERY IP that
+   hits it (even refused ones) with hit counts; one click on Allow
+   puts the IP on the Allowed-IPs list (first Allow replaces `*` and
+   locks the hub down to real entries). `GET /lan/hits`,
+   `POST /lan/allow`, `/lan/hits/clear`.
+4. **URL print rules that really match.** The rule editor can pick the
+   pattern type (glob / regex / contains - the hub keeps the field it
+   used to strip), a recipe dropdown preloads the htncr.org lab set
+   (single-test-id report, sample->ZPL, receipt client/all/lab/admin
+   ->A5), and "Which rule fires?" REALLY tests a URL against the
+   extension's engine (`POST /rules/test`) before anybody trusts it.
+5. **No version prefixes in the UI notes.** "v2.8 ·", "v3.2.6 ·" and
+   friends are gone from every panel and dashboard note.
+
+The v3.4.6 one-port design (below) is unchanged.
+
+---
+
 ## What's new in v3.4.6 (ONE PORT FOR EVERYTHING + POPUP REMEMBERS THE LAST PRINTER)
 
 The user asked the right question about v3.3.5: *"why not the hub

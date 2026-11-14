@@ -1,4 +1,4 @@
-/* AdvPrint Pro v3.4.6 - UI language: English + Bangla (বাংলা).
+/* AdvPrint Pro v3.4.7 - UI language: English + Bangla (বাংলা).
  * Used by the popup, the options page and the notifications (the popup
  * is BACK in v3.2.5 with its branding-only footer; the toolbar icon
  * opens the popup, exactly like before v3.2.2).
@@ -78,7 +78,7 @@
       popPrinterNoneSub: "the hub reports no printer - connect one first",
       popPrinterNow: "OS default:",
       popPrinterNoDefault: "no OS default set - pick one",
-      // v3.4.6: the popup remembers the last picked printer + marks the OS default
+      // v3.4.7: the popup remembers the last picked printer + marks the OS default
       popPrinterDefaultTag: "default",
       popPrinterLastUsed: "Last used:",
       popPrinterSetting: "Setting the default printer...",
@@ -104,7 +104,7 @@
       optTypeGlob: "Glob (* wildcard)",
       optTypeRegex: "Regex",
       // about / branding
-      brandLine: "Version 3.4.6 - AdvPrint Pro (Advanced Printer) by Bit Dream IT - Innovative Healthcare Solutions - MIT license - 100% local - no cloud, no tracking."
+      brandLine: "Version 3.4.7 - AdvPrint Pro (Advanced Printer) by Bit Dream IT - Innovative Healthcare Solutions - MIT license - 100% local - no cloud, no tracking."
     },
     bn: {
       appName: "AdvPrint Pro",
@@ -192,7 +192,7 @@
       optRulesType: "ধরন",
       optTypeGlob: "Glob (* ওয়াইল্ডকার্ড)",
       optTypeRegex: "Regex",
-      brandLine: "সংস্করণ 3.4.6 - AdvPrint Pro (Advanced Printer) by Bit Dream IT - Innovative Healthcare Solutions - MIT লাইসেন্স - ১০০% লোকাল - কোনো ক্লাউড নেই, কোনো ট্র্যাকিং নেই।"
+      brandLine: "সংস্করণ 3.4.7 - AdvPrint Pro (Advanced Printer) by Bit Dream IT - Innovative Healthcare Solutions - MIT লাইসেন্স - ১০০% লোকাল - কোনো ক্লাউড নেই, কোনো ট্র্যাকিং নেই।"
     }
   };
 

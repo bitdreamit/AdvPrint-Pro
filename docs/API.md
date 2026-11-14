@@ -461,3 +461,49 @@ Jobs for an offline printer are parked as `held` with `held_reason`
 Printing to "Microsoft Print to PDF" is auto-routed to a direct PDF save
 (status `saved`, `file` = full path) — no renderer, no Save-As dialog,
 works with no physical printer installed.
+
+## v3.4.7 — configurable hub port, strict LAN share, rule testing
+
+### The hub port is configurable
+`port` is a normal config key now (default **9235**). Change it in the
+ONE UI → Settings → HUB PORT, with `python advprint.py port 9300`, or by
+editing `config.json`. Validation: 1024–65535, and 631 / 5353 / 9100 are
+refused (the hub's own IPP mirror, mDNS and RAW listener). The env
+`ADVPRINT_PORT` still wins over config.json. The listener rebinds on the
+next restart; `POST /config {"port": ...}` answers with `"restart": true`
+and a note. If the port is busy at boot, hub.log prints every way to move
+the hub to a free one.
+
+### GET /lan/hits — strict LAN share hit list
+Recorded while `lan_strict` is ON (config key, default false): every
+distinct client IP that touches the hub, allowed or refused.
+`{"ok":true,"strict":true,"allowed":["10.26.94.100"],"hits":[
+ {"ip":"10.26.94.206","count":42,"first":"...","last":"...","allowed":true},
+ {"ip":"10.26.94.77","count":3,"first":"...","last":"...","allowed":false}]}`
+Newest first, capped at 128 addresses. Loopback is recorded as allowed.
+
+### POST /lan/allow — one-click allow / remove
+Body: `{"ip":"10.26.94.77"}` (or `{"ip":"10.26.94.0/24"}`,
+`{"ip":"10.26.*"}`) appends to `allowed_ips` — if the list was `["*"]` it
+is REPLACED, which locks the hub down to real entries (the response says
+so). Body `{"ip":"...","remove":true}` takes the entry off again.
+`127.0.0.1` is always allowed and refused as an argument.
+
+### POST /lan/hits/clear
+Forgets every recorded hit. `{"ok":true,"hits":[]}`.
+
+### POST /rules/test + GET /rules/test?url=... — which rule would fire?
+Evaluates `rules_mirror` with the SAME semantics as the browser extension
+(glob / regex / contains, top to bottom, first match wins, `on`/`enabled`
+respected, optional title/kind filters). Body:
+`{"url":"https://www.htncr.org/lab/sample/203182","kind":"zpl"}`
+(`kind` and `title` optional). Answer when a rule matches:
+`{"ok":true,"matched":true,"total_rules":3,"rule":{"name":"Sample label
+ZPL","pattern":"htncr\\.org/lab/sample/\\d+$","type":"regex","printer":
+"Zebra GK420d","action":"raw","copies":1,"paper":""},"printer":"Zebra
+GK420d","note":"rule matched - ..."}`; when none matches:
+`{"ok":true,"matched":false,"printer":"OS default printer","note":
+"no rule matched - ..."}`. Nothing is printed by this endpoint.
+`rules_mirror` entries now keep their `type` field
+(`"glob" | "regex" | "contains"`; default `glob`).
+See `docs/PRINT-RULES-RECIPES.md` for the full URL recipes guide.

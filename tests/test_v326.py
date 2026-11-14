@@ -202,7 +202,11 @@ def test_v326_no_backdated_307_strings():
         "the self-host extension page must show the CURRENT version"
     assert "v3.0.7: Chrome/Edge/Brave" not in ADVPRINT_SRC, \
         "the /docs install section must not claim v3.0.7"
-    assert "v@@VERSION@@: Chrome/Edge/Brave" in ADVPRINT_SRC
+    # v3.4.7: version prefixes are gone from the UI notes (user
+    # request) - the extension card keeps the CURRENT-version live
+    # markers (extVer / CRX v... chips), not a backdated literal
+    assert "Chrome/Edge/Brave install the extension BY POLICY" in ADVPRINT_SRC
+    assert "v3.0.7: Chrome/Edge/Brave" not in ADVPRINT_SRC
 
 
 def test_v326_in_ui_docs_modal():
@@ -307,7 +311,8 @@ def test_v326_loopback_ui_still_serves_console(hub):
 
 
 def test_v326_lan_security_note_in_console():
-    assert "v3.2.6 security" in CONSOLE
+    # v3.4.7: the note lost its version prefix (user request)
+    assert "Security model" in CONSOLE
     assert "only on this PC" in CONSOLE
 
 
@@ -397,19 +402,19 @@ def test_v326_tray_menu_is_dashboard_restart_exit():
 # version coherence 3.2.6
 # ------------------------------------------------------------
 def test_v326_version_coherence():
-    assert advprint.VERSION == "3.4.6"
-    assert advprint.VERSION_NAME.startswith("v3.4.6")
+    assert advprint.VERSION == "3.4.7"
+    assert advprint.VERSION_NAME.startswith("v3.4.7")
     vt = open(os.path.join(ROOT, "VERSION.txt"), encoding="utf-8").read()
-    assert "3.4.6" in vt
+    assert "3.4.7" in vt
     man = json.load(open(os.path.join(EXT, "manifest.json"),
                          encoding="utf-8"))
-    assert man["version"] == "3.4.6"
-    assert 'VIProductVersion "3.4.6.0"' in NSI
-    assert "AdvPrint-Pro-Setup-3.4.6.exe" in NSI
+    assert man["version"] == "3.4.7"
+    assert 'VIProductVersion "3.4.7.0"' in NSI
+    assert "AdvPrint-Pro-Setup-3.4.7.exe" in NSI
     popup = open(os.path.join(EXT, "popup.html"), encoding="utf-8").read()
-    assert "v3.4.6" in popup
+    assert "v3.4.7" in popup
     i18n = open(os.path.join(EXT, "i18n.js"), encoding="utf-8").read()
-    assert "Version 3.4.6" in i18n
+    assert "Version 3.4.7" in i18n
     # the embedded console matches the standalone file exactly
     m = re.search(r'CONSOLE_HTML = r"""(.*?)"""', ADVPRINT_SRC, re.S)
     assert m and m.group(1).rstrip("\n") == CONSOLE.rstrip("\n"), "embedded console is stale"
@@ -420,5 +425,5 @@ def test_v326_extension_page_serves_current_version(hub):
     txt = page.decode("utf-8", "replace") if isinstance(page, bytes) \
         else str(page)
     assert code == 200
-    assert "(v3.4.6)" in txt, "the self-host page must not be backdated"
+    assert "(v3.4.7)" in txt, "the self-host page must not be backdated"
     assert "v3.0.7" not in txt

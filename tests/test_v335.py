@@ -1,6 +1,6 @@
 """v3.3.5 - MANUAL RE-SCAN + AUTO-CRX-ON-INSTALL (two features survive
-into v3.4.6 unchanged; the third, the DEDICATED QUEUE PORTS
-experiment, was REMOVED again in v3.4.6 - ONE port serves every queue
+into v3.4.7 unchanged; the third, the DEDICATED QUEUE PORTS
+experiment, was REMOVED again in v3.4.7 - ONE port serves every queue
 now, see tests/test_v346.py).
 
 FEATURE 2 "printer page when Show other PCs (LAN / IPP) on it auto
@@ -206,7 +206,7 @@ def test_serve_starts_the_autocrx_thread():
 
 
 def test_installer_has_the_full_policy_and_cleanup_rule():
-    """v3.4.6: the FULL policy stays; the queue-port RANGE rule is gone
+    """v3.4.7: the FULL policy stays; the queue-port RANGE rule is gone
     (ONE port again) but its delete-rule survives so an upgrade from a
     v3.3.5 install removes the leftover 9235-9259 firewall rule."""
     nsi = open(os.path.join(ROOT, "installer", "setup.nsi"),
@@ -232,19 +232,19 @@ def test_installer_has_the_full_policy_and_cleanup_rule():
 # ---------------------------------------------------------------
 
 def test_version_coherence_346():
-    assert advprint.VERSION == "3.4.6"
+    assert advprint.VERSION == "3.4.7"
     vtxt = open(os.path.join(ROOT, "VERSION.txt"), encoding="utf-8").read()
-    assert "3.4.6" in vtxt
+    assert "3.4.7" in vtxt
     manifest = json.load(open(os.path.join(ROOT, "extension",
                                            "manifest.json"),
                               encoding="utf-8"))
-    assert manifest["version"] == "3.4.6"
+    assert manifest["version"] == "3.4.7"
     popup = open(os.path.join(ROOT, "extension", "popup.html"),
                  encoding="utf-8").read()
-    assert 'id="ver">v3.4.6<' in popup
+    assert 'id="ver">v3.4.7<' in popup
     i18n = open(os.path.join(ROOT, "extension", "i18n.js"),
                 encoding="utf-8").read()
-    assert i18n.count("3.4.6") >= 2          # brandLine en + bn
+    assert i18n.count("3.4.7") >= 2          # brandLine en + bn
 
 
 def test_hub_copies_byte_identical():

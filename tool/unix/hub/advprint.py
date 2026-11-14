@@ -96,33 +96,33 @@ if _HUB_DIR not in sys.path:
     sys.path.insert(0, _HUB_DIR)
 
 
-VERSION = "3.4.6"
-VERSION_NAME = ("v3.4.6 (ONE PORT FOR EVERYTHING + POPUP REMEMBERS THE "
-    "LAST PRINTER. The user asked the right question about v3.3.5: "
-    "\"why not [the] hub default port - only one port to handle "
-    "different PCs to connect through IPP or other?\" - so the "
-    "DEDICATED PER-PRINTER QUEUE PORTS (9236, 9237, ..., firewall "
-    "9235-9259) are REMOVED again. ONE TCP port - the hub port 9235 - "
-    "serves EVERY queue for every PC, exactly like a CUPS server: the "
-    "queues are distinguished by their FULL URI "
-    "(/ipp/print = default queue, /ipp/print/<printer> = that one "
-    "printer) plus the per-queue identity v3.3.4/v3.3.5 already taught "
-    "the hub to answer - unique printer-name, STABLE unique "
-    "printer-uuid (token|host|slug), the exact client URI echoed in "
-    "printer-uri-supported, one mDNS service per queue with its own rp "
-    "and uuid on the SAME SRV port. The v3.3.4-era add failure was the "
-    "shared queue IDENTITY, not the shared port - with identity fixed, "
-    "the extra ports were masking tape, and the firewall goes back to "
-    "the single AdvPrint Pro rule TCP 9235 (+ 9100 RAW, 631 IPP "
-    "mirror, 5353 mDNS). FEATURE - POPUP PRINTER SELECT: the popup "
-    "always showed the FIRST printer after a reload because it read a "
-    "field the hub never sends (default_printer vs default) - fixed, "
-    "and the popup now REMEMBERS the last printer you picked "
-    "(chrome.storage advLastPrinter) and auto-selects it on open, "
-    "falls back to the hub's current default, and marks the OS default "
-    "in the list. On top of v3.3.5: manual LAN/IPP re-scan, auto-CRX "
-    "on install, the v3.3.4 uuid fix and the idempotent set-default "
-    "all stay unchanged.")
+VERSION = "3.4.7"
+VERSION_NAME = ("v3.4.7 (CONFIGURABLE HUB PORT + DROPZONE WATCH FIX + "
+    "STRICT LAN SHARE WITH IP HIT LIST + URL RULES THAT REALLY MATCH "
+    "+ CLEAN UI NOTES). The user said \"current work fine\" and asked "
+    "for the next version: 1) the hub port is no longer hardwired - "
+    "9235 stays the default, but when ANOTHER program on the PC "
+    "already owns 9235 the owner can move the hub to any free port "
+    "(ONE UI > Settings > HUB PORT now REALLY saves, "
+    "`python advprint.py port 9300`, or \"port\" in config.json; "
+    "ADVPRINT_PORT env still wins; the hub listens on the new port "
+    "after its restart and every URL - browser, other PCs, IPP - "
+    "uses it); 2) the DropZone watch button in the ONE UI always "
+    "showed Disable and always sent drop_enabled:false, so the watch "
+    "turned OFF when clicked - the button is a real Enable/Disable "
+    "toggle now; 3) STRICT LAN SHARE: while ON the hub records every "
+    "distinct IP that hits it (GET /lan/hits) and the LAN panels show "
+    "each IP with one-click Allow - the IP lands in allowed_ips and "
+    "only listed IPs may print through the hub; 4) the ONE UI rule "
+    "editor can now choose the URL pattern type (glob / regex / "
+    "contains), the hub KEeps the type field it used to strip, and a "
+    "new POST /rules/test + a Test URL box prove which rule matches "
+    "which printer before trusting it (the htncr.org recipes are "
+    "built-in presets); 5) version prefixes (v2.8 ·, v3.2.6 ·, ...) "
+    "are gone from every UI note. On top of v3.4.6: one port for "
+    "every queue, the popup that remembers the last printer, manual "
+    "LAN/IPP re-scan, auto-CRX on install and the idempotent "
+    "set-default all stay unchanged.")
 FULL_BRAND = ("AdvPrint Pro (Advanced Printer) by "
               "Bit Dream IT - Innovative Healthcare Solutions")
 BRANDING = ("AdvPrint Pro (Advanced Printer) - Version %s - by "
@@ -196,6 +196,12 @@ def _env(name, default=""):
 #   peer_forwarding False   = never forward jobs to peer hubs (as before)
 CFG = {
     "host": _env("HOST", "127.0.0.1"),                        # localhost by default
+    # v3.4.7 CONFIGURABLE HUB PORT - default 9235, but the owner can move
+    # the hub to ANY free port (a PC may already run OTHER software on
+    # 9235). Sources, strongest first: ADVPRINT_PORT env > config.json
+    # "port" > 9235. Change it in the ONE UI (Settings > HUB PORT), with
+    # `python advprint.py port 9300`, or by editing config.json - the hub
+    # listens on the new port after its next restart.
     "port": int(_env("PORT", "9235")),
     "token": _env("TOKEN", LEGACY_TOKEN),
     "printer": _env("PRINTER", ""),                           # empty = OS default
@@ -356,6 +362,20 @@ CFG = {
                                       #  hub PC itself (127.0.0.1) is
                                       #  ALWAYS allowed. Edit in THE ONE
                                       #  UI > LAN Sharing > Allowed IPs.
+    "lan_strict": False,              # v3.4.7 STRICT LAN SHARE: while ON
+                                      #  the hub records EVERY distinct IP
+                                      #  that hits it (GET /lan/hits) and
+                                      #  the LAN panel shows each one with
+                                      #  an "Allow" button - one click
+                                      #  moves the IP into allowed_ips so
+                                      #  THAT PC may print through the
+                                      #  hub. Strict mode itself does not
+                                      #  block: blocking is what the
+                                      #  allowed_ips list does ("*" =
+                                      #  everyone). The workflow: switch
+                                      #  strict ON, watch the hits, add
+                                      #  the real PCs, and the list - no
+                                      #  longer "*" - locks the hub down.
     "history_days": 30,               # v3.2.1 Settings tab: keep jobs (days)
     "log_level": "info",              # v3.2.1 Settings tab: info|debug|warn|error
 }
@@ -364,7 +384,9 @@ CFG = {
 for _k in ("token", "printer", "file_dir"):
     pass  # already applied above; config.json is applied in init_config()
 
-CONFIG_KEYS = ("token", "token_header_only", "allowed_origins",
+CONFIG_KEYS = ("port",   # v3.4.7: the hub port is saved in config.json
+                        #  (default 9235; ADVPRINT_PORT still wins)
+               "token", "token_header_only", "allowed_origins",
                "pdf_url_allowed_hosts", "max_auth_failures",
                "lockout_minutes", "lockout_exempt_loopback",
                "printer_groups", "profiles",
@@ -386,8 +408,10 @@ CONFIG_KEYS = ("token", "token_header_only", "allowed_origins",
                "drop_enabled", "drop_dir", "drop_delete",
                "rules_mirror", "ext_api_sites", "ext_sync_at",
                "ext_prefs", "history_days", "log_level",
-               "allowed_ips")
-CONFIG_TYPES = {"token_header_only": bool, "allowed_origins": list,
+               "allowed_ips", "lan_strict")
+CONFIG_TYPES = {"port": int,   # v3.4.7: validated in POST /config
+                               #  (1024-65535, not 631/5353/9100)
+                "token_header_only": bool, "allowed_origins": list,
                 "pdf_url_allowed_hosts": list, "max_auth_failures": int,
                 "lockout_minutes": int, "lockout_exempt_loopback": bool,
                 "printer_groups": dict,
@@ -421,10 +445,15 @@ CONFIG_TYPES = {"token_header_only": bool, "allowed_origins": list,
                 # Hub switches ever persisted (THE switch bug the user hit)
                 "escpos_codepage": str,
                 "thermal_text_engine": str,
-                "allowed_ips": list}   # v3.2.3 ALLOWED IPS (LAN Sharing tab)
+                "allowed_ips": list,   # v3.2.3 ALLOWED IPS (LAN Sharing tab)
+                "lan_strict": bool}    # v3.4.7 STRICT LAN SHARE
 
 DEFAULT_TOKEN_WARNING = False   # True while the legacy default token is active
 BOUND_LAN = False               # True once the listener actually bound 0.0.0.0
+_BOOT_PORT = None               # v3.4.7: the port the RUNNING loopback
+                                #  listener actually bound at boot - the
+                                #  configured port may differ until the
+                                #  hub restarts to apply it
 
 
 def cli_cmd(args):
@@ -496,6 +525,9 @@ def init_config():
     fresh = not os.path.isfile(db_path()) and not disk
     for key in CONFIG_KEYS:
         if key in disk:
+            if key == "port" and _env("PORT"):
+                continue      # v3.4.7: an explicit ADVPRINT_PORT env
+                              #  always wins over config.json
             want = CONFIG_TYPES.get(key)
             v = disk[key]
             try:
@@ -1637,6 +1669,72 @@ def ip_allowed_by_list(ip, rules):
     return False
 
 # ------------------------------------------------------------
+# v3.4.7 STRICT LAN SHARE - THE IP HIT LIST
+# The user request: "Strict mode lan share if on it show which ip hit
+# this printer all diffrent hited ip show here then hit add allow list
+# then this printer can print through hub". While lan_strict is ON the
+# hub records EVERY distinct client IP that touches the HTTP gate
+# (allowed or denied), and GET /lan/hits returns the list; the LAN
+# panels render each IP with a one-click Allow that moves it into
+# allowed_ips. The map is a small capped ring in memory - hit tracking
+# must never cost anything once strict mode is OFF.
+# ------------------------------------------------------------
+_IP_HITS = {}                     # ip -> {count, first, last, allowed}
+_IP_HITS_LOCK = threading.Lock()
+_IP_HITS_CAP = 128                # keep the most recent 128 addresses
+
+def _ip_hit_record(ip, allowed):
+    """Record one HTTP hit for the /lan/hits list (no-op unless
+    lan_strict is ON or the IP is new while strict is toggling)."""
+    if not CFG.get("lan_strict"):
+        return
+    ip = str(ip or "").strip()[:64]
+    if not ip:
+        return
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with _IP_HITS_LOCK:
+        e = _IP_HITS.get(ip)
+        if e is None:
+            if len(_IP_HITS) >= _IP_HITS_CAP:
+                try:                # evict the OLDEST entry
+                    oldest = min(_IP_HITS.items(),
+                                 key=lambda kv: kv[1]["last"])
+                    del _IP_HITS[oldest[0]]
+                except Exception:
+                    _IP_HITS.clear()
+            e = {"count": 0, "first": now, "last": now,
+                 "allowed": bool(allowed)}
+            _IP_HITS[ip] = e
+        e["count"] += 1
+        e["last"] = now
+        e["allowed"] = bool(allowed)
+
+def ip_hits_snapshot():
+    """Payload for GET /lan/hits - strict state + recent hits (newest
+    first) + the current allow list so the UI can render buttons."""
+    with _IP_HITS_LOCK:
+        rows = [dict(v, ip=k) for k, v in _IP_HITS.items()]
+    rows.sort(key=lambda r: (r["last"], r["first"]), reverse=True)
+    return {"ok": True,
+            "strict": bool(CFG.get("lan_strict")),
+            "allowed": [str(x) for x in
+                        (CFG.get("allowed_ips") or ["*"])],
+            "hits": rows[:_IP_HITS_CAP]}
+
+def ip_hits_clear():
+    """POST /lan/hits/clear - forget every recorded hit."""
+    with _IP_HITS_LOCK:
+        _IP_HITS.clear()
+
+def ip_hits_set_allowed(ip, allowed):
+    """After an Allow/Remove the row flips without waiting for the next
+    hit from that address."""
+    ip = str(ip or "").strip()[:64]
+    with _IP_HITS_LOCK:
+        if ip in _IP_HITS:
+            _IP_HITS[ip]["allowed"] = bool(allowed)
+
+# ------------------------------------------------------------
 # v3.2.6 UI SECURITY GATE - "only own IP or loopback IP can show UI"
 # ------------------------------------------------------------
 # The user report: "currently any one can change different HUB UI
@@ -1767,6 +1865,10 @@ def build_health_snapshot():
         # v3.2.3 ALLOWED IPS: live state for the LAN tab card
         "allowed_ips": list(CFG.get("allowed_ips") or ["*"]),
         "acl_restricted": "*" not in (CFG.get("allowed_ips") or ["*"]),
+        # v3.4.7: the configured port reaches the ONE UI Settings panel
+        # (cfgCache.port) and the strict-LAN card
+        "port": int(CFG.get("port", 9235)),
+        "lan_strict": bool(CFG.get("lan_strict")),
         "ipp_printer": bool(CFG.get("ipp_printer", True)),
         "ipp_url": ("http://%s:%d/ipp/print" % (lan_ip(), CFG["port"]))
                    if CFG.get("share_lan") else None,
@@ -5199,14 +5301,23 @@ class Handler(BaseHTTPRequestHandler):
         The moment the hub owner adds real entries (LAN Sharing >
         Allowed IPs) the request IP must match one, otherwise the caller
         gets a branded 403 (HTML for browsers, JSON for API clients) and
-        the denial is audited (max 1 row per 10 s per IP)."""
-        if self._is_loopback():
-            return True
+        the denial is audited (max 1 row per 10 s per IP).
+        v3.4.7 STRICT LAN SHARE: every hit (loopback included, allowed
+        or refused) is recorded for the /lan/hits list while strict is
+        ON - the record never decides the answer, the ACL below does."""
+        loopback = self._is_loopback()
         rules = CFG.get("allowed_ips") or ["*"]
+        ip = self._client_ip() or ""
+        allowed = loopback or ("*" in rules) or ip_allowed_by_list(ip, rules)
+        try:
+            _ip_hit_record("127.0.0.1" if loopback else ip, allowed)
+        except Exception:
+            pass
+        if loopback:
+            return True
         if "*" in rules:
             return True
-        ip = self._client_ip() or ""
-        if ip_allowed_by_list(ip, rules):
+        if allowed:
             return True
         log("[ACL] %s denied - not in allowed_ips (%s)"
             % (ip, ",".join(str(r) for r in rules[:6])))
@@ -6517,6 +6628,21 @@ class Handler(BaseHTTPRequestHandler):
             st["custom_dir"] = (CFG.get("drop_dir") or "").strip()
             st["is_default"] = not st["custom_dir"]
             return self._send(200, st)
+        if route == "/lan/hits":                   # v3.4.7 STRICT LAN SHARE
+            # Who is hitting this hub? Recorded while lan_strict is ON;
+            # the LAN panels render each IP with a one-click Allow.
+            return self._send(200, ip_hits_snapshot())
+        if route == "/rules/test":                 # v3.4.7 URL RULE TEST
+            # GET form for the browser bar / curl:
+            # /rules/test?url=https%3A%2F%2Fwww.htncr.org%2Flab%2Fsample%2F1
+            u_test = (q.get("url", [""])[0] if q else "").strip()[:2000]
+            if not u_test:
+                return self._send(400, {
+                    "ok": False,
+                    "error": "call /rules/test?url=<the address to test>"
+                             " (or POST {\"url\": \"...\"})"})
+            res = rule_test_result(u_test)
+            return self._send(200, res)
         if route == "/lan/selftest":                # v2.8.2 one-click check
             # Answers "why can the other PC not connect?": the hub tests
             # its own LAN URL server-side. A PASS proves the listener is
@@ -7603,6 +7729,28 @@ class Handler(BaseHTTPRequestHandler):
                             "error": "escpos_codepage looks wrong"
                                      " (examples: cp437, cp850, cp866)"})
                     val = str(val).lower()
+                if key == "port":
+                    # v3.4.7 CONFIGURABLE HUB PORT - validate BEFORE it
+                    # reaches config.json. A PC may already run other
+                    # software on 9235; the hub can move to any free
+                    # port. Reserved: 631 (the hub's own IPP mirror),
+                    # 5353 (mDNS) and 9100 (the hub's own RAW listener).
+                    try:
+                        _p = int(val)
+                    except (TypeError, ValueError):
+                        _p = -1
+                    if not (1024 <= _p <= 65535):
+                        return self._send(400, {
+                            "ok": False,
+                            "error": "port must be a number between 1024"
+                                     " and 65535 (got %r)" % (val,)})
+                    if _p in (631, 5353, 9100):
+                        return self._send(400, {
+                            "ok": False,
+                            "error": "port %d is reserved by the hub"
+                                     " itself (631 IPP mirror, 5353 mDNS,"
+                                     " 9100 RAW) - pick another one" % _p})
+                    val = _p
                 want = CONFIG_TYPES[key]
                 try:
                     if want is bool:
@@ -7642,13 +7790,23 @@ class Handler(BaseHTTPRequestHandler):
                             # v3.2.0 ONE UI: central rule manager entries
                             # are DICTS - a generic [str(x)] would corrupt
                             # them into repr strings. Clean with defaults.
+                            # v3.4.7: the "type" field (glob | regex |
+                            # contains) is KEPT now - the hub used to strip
+                            # it, so every rule degraded to a glob and
+                            # regex patterns with dynamic ids (\d+ test
+                            # ids, (client|all|lab|admin) alternations)
+                            # were impossible from the ONE UI.
                             cleaned = []
                             for x in val:
                                 if isinstance(x, dict):
+                                    _t = str(x.get("type") or "glob").lower()
+                                    if _t not in ("glob", "regex", "contains"):
+                                        _t = "glob"
                                     cleaned.append({
                                         "id": x.get("id"),
                                         "name": str(x.get("name") or "")[:80],
                                         "pattern": str(x.get("pattern") or "*")[:300],
+                                        "type": _t,
                                         "match": "content" if x.get("match") == "content" else "url",
                                         "kind": str(x.get("kind") or "")[:12],
                                         "printer": str(x.get("printer") or "")[:120],
@@ -7702,6 +7860,8 @@ class Handler(BaseHTTPRequestHandler):
                 updates["ipp_printer"] = True
                 ipp_link = True
             if updates:
+                _prev_port = int(CFG.get("port", 9235))   # v3.4.7: for the
+                #  restart note (the listener rebinds only on restart)
                 CFG.update(updates)
                 changed = list(updates.keys())
                 if "peer_hubs" in updates:
@@ -7724,6 +7884,8 @@ class Handler(BaseHTTPRequestHandler):
                     build_health_snapshot()
                 except Exception:
                     pass
+            changed = (locals().get("changed") or [])   # v3.4.7 guard: a
+            #  body with zero valid keys used to NameError below
             lan_info = None
             if "share_lan" in changed:
                 # v2.8.2: LAN sharing applies LIVE - the dedicated LAN
@@ -7755,6 +7917,21 @@ class Handler(BaseHTTPRequestHandler):
                     "config": redacted_config()}
             if lan_info:
                 resp["lan"] = lan_info
+            if "port" in changed and (
+                    _prev_port != int(CFG.get("port", 9235)) or
+                    (_BOOT_PORT is not None and
+                     _BOOT_PORT != int(CFG.get("port", 9235)))):
+                # v3.4.7: the running listener keeps the OLD port until the
+                # hub restarts - tell the owner loudly, and where to click.
+                resp["restart"] = True
+                resp["note"] = (
+                    "Hub port saved: %d. The hub keeps answering on the"
+                    " OLD port until it RESTARTS - press 'Restart hub'"
+                    " (Settings panel) or use the tray icon. After the"
+                    " restart use the NEW port everywhere: this browser's"
+                    " hub URL, every other PC's pairing URL, and the IPP"
+                    " printer URL. The ONE UI Settings > HUB PORT shows"
+                    " the port the hub is live on." % CFG["port"])
             return self._send(200, resp)
 
         # POST /ip-printer/test - v2.9: check the upstream IP printer
@@ -7808,6 +7985,110 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200 if ok else 400,
                               {"ok": ok, "error": err,
                                "firewall_ok": firewall_rule_ok()})
+
+        # POST /lan/allow - v3.4.7 STRICT LAN SHARE: move a hitting IP
+        # into (or out of) allowed_ips with ONE click from the LAN
+        # panel's hit list. Body: {"ip": "10.26.94.100",
+        # "remove": true|false}. Accepts the same shapes the Allowed-IPs
+        # card takes: an exact IP, a CIDR (10.26.94.0/24) or a wildcard
+        # (10.26.*). The hub PC itself is always allowed - adding it is
+        # refused with a hint instead of a duplicate row.
+        if route == "/lan/allow":
+            b = body or {}
+            ipx = str(b.get("ip") or "").strip()[:64]
+            removing = bool(b.get("remove"))
+            if not ipx:
+                return self._send(400, {
+                    "ok": False,
+                    "error": "which IP? send {\"ip\": \"10.26.94.100\"}"
+                             " (a CIDR like 10.26.94.0/24 or a wildcard"
+                             " like 10.26.* works too)"})
+            if re.search(r"[\s\\{}<>\"']", ipx):
+                return self._send(400, {
+                    "ok": False,
+                    "error": "that does not look like an IP / CIDR /"
+                             " wildcard entry"})
+            if ipx in ("127.0.0.1", "::1", "::ffff:127.0.0.1"):
+                return self._send(400, {
+                    "ok": False,
+                    "error": "this PC (127.0.0.1) is ALWAYS allowed -"
+                             " there is nothing to add"})
+            lst = [str(x) for x in (CFG.get("allowed_ips") or ["*"])]
+            if removing:
+                lst = [x for x in lst if x != ipx]
+                if not lst:
+                    lst = ["*"]      # an empty list means all-LAN again
+                note = ("%s removed from allowed_ips - it is refused"
+                        " again (unless another rule still covers it)"
+                        % ipx)
+                audit_act = "acl.removed"
+            else:
+                if "*" in lst:
+                    # replacing "*" LOCKS the hub down to real entries -
+                    # say so in the audit row, this is the big switch
+                    lst = [ipx]
+                    note = ("%s added - and because the list was \"*\","
+                            " it now contains ONLY real entries: every"
+                            " other device is refused from now on"
+                            % ipx)
+                elif ipx not in lst:
+                    lst.append(ipx)
+                    note = ("%s added to allowed_ips - it can print"
+                            " through this hub now" % ipx)
+                else:
+                    note = ("%s was already on the allowed_ips list"
+                            % ipx)
+                audit_act = "acl.allowed"
+            CFG["allowed_ips"] = lst
+            write_config_file({k: CFG[k] for k in CONFIG_KEYS})
+            db_audit(audit_act, ip=ip, site=site, details=note)
+            log("[ACL] %s" % note)
+            ip_hits_set_allowed(ipx, not removing)
+            try:
+                build_health_snapshot()
+            except Exception:
+                pass
+            return self._send(200, {
+                "ok": True, "allowed_ips": lst, "note": note,
+                "acl_restricted": "*" not in lst,
+                "strict": bool(CFG.get("lan_strict"))})
+
+        # POST /lan/hits/clear - v3.4.7: forget every recorded hit
+        if route == "/lan/hits/clear":
+            ip_hits_clear()
+            db_audit("acl.hits-cleared", ip=ip, site=site,
+                     details="the strict-LAN IP hit list was cleared")
+            return self._send(200, {"ok": True, "hits": [],
+                                    "strict": bool(CFG.get("lan_strict"))})
+
+        # POST /rules/test (+ GET /rules/test?url=...) - v3.4.7: WHICH
+        # rule would fire for THIS url? The ONE UI Rules panel "Test
+        # URL" box calls it; the hub evaluates rules_mirror with the
+        # SAME semantics as the browser extension (glob / regex /
+        # contains, first match wins, on/enabled respected) and answers
+        # with the winning rule + printer + action - or no-match, which
+        # means "prints with the OS default printer through the normal
+        # auto pipeline". No printing happens here; this only PROVES
+        # the recipe before the lab trusts it.
+        if route == "/rules/test":
+            b = body if isinstance(body, dict) else {}
+            u_test = str(b.get("url")
+                         or (q.get("url", [""])[0] if q else "")
+                         or "").strip()[:2000]
+            if not u_test:
+                return self._send(400, {
+                    "ok": False,
+                    "error": "paste a URL to test - the body is"
+                             " {\"url\": \"https://...\"} (or call"
+                             " GET /rules/test?url=...)"})
+            res = rule_test_result(u_test, str(b.get("title") or ""),
+                                   str(b.get("kind") or ""))
+            if res.get("matched"):
+                db_audit("rules.test", ip=ip, site=site,
+                         details="url test: rule '%s' -> %s"
+                                 % ((res["rule"].get("name") or "?"),
+                                    res.get("printer") or "default"))
+            return self._send(200, res)
 
         # POST /debug/report - v2.3: the extension (Debug mode ON) and
         # the desktop tool send every error HERE so /debug can show why
@@ -8328,6 +8609,104 @@ def redacted_config():
     c["hint"] = ("POST the same keys to /config to change them;"
                  " use POST /token/rotate for the token")
     return c
+
+# ------------------------------------------------------------
+# v3.4.7 URL RULE ENGINE - the server-side mirror of the extension's
+# matcher (extension/background.js patternToRegex + matchRule) plus
+# POST /rules/test. The ONE UI rule editor now offers the pattern type
+# (glob / regex / contains) and the "Test URL" box PROVES which rule
+# fires for a given address BEFORE anybody trusts it - so recipes like
+# "single tests[] id -> report printer, multi-id URL -> default A4"
+# can be written and verified without touching a browser.
+# ------------------------------------------------------------
+RULE_TYPES = ("glob", "regex", "contains")
+
+def rule_pattern_to_regex(pattern, rtype):
+    """Python mirror of the extension's patternToRegex():
+      glob     '*' -> '.*', everything else literal, anchored ^...$ (1.x)
+      regex    the pattern IS a regular expression (v2.0, case-insensitive)
+      contains the URL only has to CONTAIN the text (v3.0.4)
+    Bad regex patterns raise re.error - callers decide what that means
+    (the extension skips the rule; /rules/test reports it)."""
+    pattern = str(pattern or "")
+    rtype = str(rtype or "glob").lower()
+    if rtype not in RULE_TYPES:
+        rtype = "glob"
+    if rtype == "contains":
+        return re.compile(re.escape(pattern), re.I)
+    if rtype == "regex":
+        return re.compile(pattern, re.I)
+    rx = ""
+    for ch in pattern:
+        if ch == "*":
+            rx += ".*"
+        else:
+            rx += re.escape(ch)
+    return re.compile("^" + rx + "$", re.I)
+
+def rule_matches(rule, url, title="", kind=""):
+    """Same semantics as the extension's matchRule(): a rule is skipped
+    when it is off (on/enabled False), a URL rule needs its pattern to
+    match (type decides HOW), a content rule needs the detected kind,
+    an optional title filter must sit inside the page title, and FIRST
+    match wins (evaluate_rules handles the order)."""
+    if not isinstance(rule, dict):
+        return False
+    if rule.get("on") is False or rule.get("enabled") is False:
+        return False
+    by_content = (rule.get("match") == "content" or
+                  (not rule.get("pattern") and bool(rule.get("kind"))))
+    pattern = str(rule.get("pattern") or "")
+    if pattern and pattern != "*":
+        try:
+            if not rule_pattern_to_regex(
+                    pattern, rule.get("type")).search(url or ""):
+                return False
+        except re.error:
+            return False            # a broken pattern never matches
+    elif not by_content:
+        return False                # URL rule without a pattern
+    if by_content:
+        if not rule.get("kind") or not kind or \
+                str(rule.get("kind")) != str(kind):
+            return False
+    t = str(rule.get("title") or "")
+    if t and t.lower() not in str(title or "").lower():
+        return False
+    return True
+
+def evaluate_rules(rules, url, title="", kind=""):
+    """First matching rule of `rules` for `url`, or None - the exact
+    order the browser extension uses when it auto-prints a tab."""
+    for r in (rules or []):
+        try:
+            if rule_matches(r, url, title, kind):
+                return r
+        except Exception:
+            continue
+    return None
+
+def rule_test_result(url, title="", kind=""):
+    """Full /rules/test payload: which rule wins, which printer it
+    selects, what the hub would do without it."""
+    rules = CFG.get("rules_mirror") or []
+    hit = evaluate_rules(rules, url, title, kind)
+    if hit:
+        return {"ok": True, "matched": True, "total_rules": len(rules),
+                "rule": {"name": hit.get("name") or "(unnamed)",
+                         "pattern": hit.get("pattern") or "*",
+                         "type": hit.get("type") or "glob",
+                         "printer": hit.get("printer") or "",
+                         "action": hit.get("action") or "auto",
+                         "copies": hit.get("copies") or 1,
+                         "paper": hit.get("paper") or ""},
+                "printer": hit.get("printer") or "OS default printer",
+                "note": "rule matched - the page auto-prints to this"
+                        " printer with the rule's action"}
+    return {"ok": True, "matched": False, "total_rules": len(rules),
+            "printer": "OS default printer",
+            "note": "no rule matched - the page prints through the"
+                    " normal auto pipeline with the OS default printer"}
 
 _PEER_CACHE = {"t": 0.0, "v": []}
 
@@ -9302,7 +9681,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
     <!-- ================= TITLE BAR ================= -->
     <div class="titlebar">
       <div class="logo">AP</div>
-      <div class="t-main">AdvPrint Pro — Printing Hub <small>· All-in-One Console v3.2.1 · AI-Lab · THE ONE UI</small></div>
+      <div class="t-main">AdvPrint Pro — Printing Hub <small>· All-in-One Console · AI-Lab · THE ONE UI</small></div>
       <div class="spacer"></div>
       <button class="winbtn">&#x2500;</button>
       <button class="winbtn">&#x25A1;</button>
@@ -9707,7 +10086,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
               <div class="frow" style="margin-bottom:0">
                 <span class="tgl"><span class="sw"><span class="switch" id="showRemoteSw"></span></span></span>
                 <b>Show other PCs (LAN / IPP)</b>
-                <span class="note" style="margin:0 0 0 8px">v3.3.5 - <b>manual only</b>: flip this on, then press the panel's
+                <span class="note" style="margin:0 0 0 8px"><b>manual only</b>: flip this on, then press the panel's
                   <b>&#8635; Re-scan</b> to load the paired LAN PC's printers (Connections &rarr; Another PC) with a
                   <b>LAN PC &middot; IPP</b> badge, its ip:port and a ipp:// URL per device. No automatic loading.</span>
               </div>
@@ -9808,7 +10187,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
         <!-- ============ LAN SHARING ============ -->
         <section class="panel" id="p-lan">
           <div class="p-head">
-            <h2>LAN Sharing &amp; Other PCs</h2><span class="sub">v3.2.6 · share printing over the network · the UI stays on this PC — LAN PCs print via Send / IPP</span>
+            <h2>LAN Sharing &amp; Other PCs</h2><span class="sub">share printing over the network · the UI stays on this PC — LAN PCs print via Send / IPP</span>
             <div class="right"><button class="btn" id="lanTopToggle">Disable</button><button class="btn" id="ippTopToggle">IPP: ON</button><button class="btn blue">Copy URL</button></div>
           </div>
 
@@ -9821,15 +10200,15 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
             <div class="lrow"><span class="lk">Network printer (IPP) <small>built-in IPP Class Driver, no tools</small></span><span class="chip ok">READY</span><span class="lv">http://10.26.94.206:9235/ipp/print</span><span class="sp"></span><span class="ops"><button class="btn small ipp-tgl">Disable</button><button class="btn small blue">Copy printer URL</button><button class="btn small" data-qr="ipp">QR</button></span></div>
             <div class="lrow" id="row-mdns"><span class="lk">AirPrint / mDNS discovery <small>the printer appears BY ITSELF in phone &amp; PC lists</small></span><span class="chip gray">STARTING</span><span class="lv plain">Bonjour/_ipp._tcp broadcast on the LAN</span><span class="sp"></span><span class="ops"></span></div>
             <div class="lrow" id="row-ipp631"><span class="lk">Standard IPP port 631 <small>mirror of /ipp/print — Android &amp; printer defaults</small></span><span class="chip gray">STARTING</span><span class="lv plain">http://IP:631/ipp/print answers like a real printer</span><span class="sp"></span><span class="ops"></span></div>
-            <div class="lrow" id="row-hubips"><span class="lk">Hub addresses <small>v3.3.0 — EVERY interface IP, IPv4 + IPv6; pick the one YOUR PC reaches</small></span><span class="chip info">ALL IPs</span><span class="lv plain" id="hubIpList"></span><span class="sp"></span><span class="ops"></span></div>
+            <div class="lrow" id="row-hubips"><span class="lk">Hub addresses <small>EVERY interface IP, IPv4 + IPv6; pick the one YOUR PC reaches</small></span><span class="chip info">ALL IPs</span><span class="lv plain" id="hubIpList"></span><span class="sp"></span><span class="ops"></span></div>
             <div class="lrow"><span class="lk">RAW printer port <small>JetDirect, port 9100</small></span><span class="chip ok">LISTENING</span><span class="lv">10.26.94.206:9100</span><span class="sp"></span><span class="ops"><button class="btn small">How to add</button></span></div>
             <div class="lrow"><span class="lk">Windows firewall <small>inbound rule for LAN PCs</small></span><span class="chip ok">ALLOWED</span><span class="lv plain">inbound TCP 9235 allowed for LAN PCs</span><span class="sp"></span><span class="ops"><button class="btn small">Test LAN</button></span></div>
             <div class="lrow"><span class="lk">Printer status hold <small>pause jobs while a printer is offline</small></span><span class="chip ok">ON</span><span class="lv plain">jobs wait while the printer reports offline</span><span class="sp"></span><span class="ops"><button class="btn small">Disable</button></span></div>
-            <div class="note" id="lanSecurityNote" style="margin-top:10px"><b>&#128274; v3.2.6 security:</b> the console UI and every setting answer <b>only on this PC</b> (loopback or this machine's own IP). Other PCs and phones keep full print access &#8212; Send portal, IPP printer URL, print API, ports 9235/631/9100 &#8212; exactly per the Allowed-IPs list below; they simply cannot open the UI or change anything. Opening the share URL from another PC shows a friendly locked page with the print instructions. Switching LAN sharing ON also turns the IPP printer ON automatically.</div>
+            <div class="note" id="lanSecurityNote" style="margin-top:10px"><b>&#128274; Security model:</b> the console UI and every setting answer <b>only on this PC</b> (loopback or this machine's own IP). Other PCs and phones keep full print access &#8212; Send portal, IPP printer URL, print API, ports 9235/631/9100 &#8212; exactly per the Allowed-IPs list below; they simply cannot open the UI or change anything. Opening the share URL from another PC shows a friendly locked page with the print instructions. Switching LAN sharing ON also turns the IPP printer ON automatically.</div>
           </div>
 
           <div class="card">
-            <div class="card-h">&#128274; Allowed IPs &#8212; who may reach this hub <span class="r">v3.2.3 · * = every device on this LAN · once you add IPs, ONLY those may connect</span></div>
+            <div class="card-h">&#128274; Allowed IPs &#8212; who may reach this hub <span class="r">* = every device on this LAN · once you add IPs, ONLY those may connect</span></div>
             <div class="card-b">
               <div class="frow" style="margin-bottom:6px">
                 <span class="chip ok" id="aclMode">ALL LAN (*)</span>
@@ -9839,6 +10218,25 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
               </div>
               <div id="aclList" style="display:flex;gap:8px;flex-wrap:wrap;min-height:6px"></div>
               <div class="note">The hub PC itself (<span class="mono">127.0.0.1</span>) can ALWAYS reach the hub. Any device NOT on the list gets <b>403 access denied</b> &#8212; the console, the send portal, the API, IPP printing (9235 + 631) and the RAW 9100 port included. Every denial lands in the Audit trail (<span class="mono">acl.denied</span>).</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-h">&#128269; Strict LAN mode — watch who hits this hub <span class="r">ON = every hitting IP is listed here; one click on Allow puts it on the list above</span></div>
+            <div class="card-b">
+              <div class="frow" style="margin-bottom:8px;align-items:center;gap:10px">
+                <span class="switch" id="strictSwitch"></span>
+                <b style="font-size:12px">Strict mode</b>
+                <span style="font-size:11.5px;color:var(--ink-2);flex:1" id="strictHint">OFF — hit tracking is off; the Allowed-IPs list above still decides who may connect.</span>
+                <button class="btn small" id="hitsClear">Clear list</button>
+                <button class="btn small blue" id="hitsRefresh">Refresh</button>
+              </div>
+              <table class="tbl" style="width:100%"><thead><tr>
+                <th style="width:24%">IP that hit this hub</th><th style="width:7%">Hits</th><th style="width:13%">First seen</th><th style="width:13%">Last hit</th><th style="width:17%">Status</th><th></th>
+              </tr></thead><tbody id="hitsBody">
+                <tr><td colspan="6" style="color:var(--muted)">loading&#8230;</td></tr>
+              </tbody></table>
+              <div class="note">While Strict mode is ON the hub records every distinct address that touches it — console, send portal, print API, IPP — even a REFUSED one. One click on <b>Allow</b> moves the IP into Allowed IPs (if the list was <span class="mono">*</span>, it becomes that IP ONLY — the hub locks down to real entries from that moment); <b>Remove</b> takes it off again. The switch itself blocks nothing — blocking is exactly what the Allowed-IPs list above does.</div>
             </div>
           </div>
 
@@ -9855,7 +10253,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
           </div>
 
           <div class="card">
-            <div class="card-h">&#128421; Add this PC as a printer — EVERY device, both URL styles <span class="r">v3.2.3 · ipp:// and http:// both work</span></div>
+            <div class="card-h">&#128421; Add this PC as a printer — EVERY device, both URL styles <span class="r">ipp:// and http:// both work</span></div>
             <div class="card-b" style="font-size:11.5px;color:var(--ink-2);line-height:1.7">
               <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
                 <span class="mono" id="ippUrlIpp" style="background:#f1f5f9;border:1px solid #e2e8f0;border-radius:4px;padding:2px 8px;color:var(--blue-deep)">ipp://10.26.94.206:9235/ipp/print</span>
@@ -9876,7 +10274,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:12px}
                   Open anything printable &#8594; Share &#8594; <b>Print</b> &#8594; Select Printer — <b>AdvPrint Pro appears by itself</b> (AirPrint) while the phone is on the same Wi-Fi.</td></tr>
                 <tr><td><b>Android</b></td><td>
                   Print from any app &#8594; <b>Default Print Service / Mopria</b> — the printer is discovered automatically (mDNS).
-                  Manual add: Default Print Service &#8594; &#8942; &#8594; Add printer &#8594; <b>IP address</b> &#8594; <span class="mono" id="ippGuideAndroid">10.26.94.206</span> — Android tries the standard port <b>631</b> first, where this hub mirrors <span class="mono" id="ippGuideAndroid631">http://10.26.94.206:631/ipp/print</span> (v3.2.2 fix — Android ignores custom ports on manual add).</td></tr>
+                  Manual add: Default Print Service &#8594; &#8942; &#8594; Add printer &#8594; <b>IP address</b> &#8594; <span class="mono" id="ippGuideAndroid">10.26.94.206</span> — Android tries the standard port <b>631</b> first, where this hub mirrors <span class="mono" id="ippGuideAndroid631">http://10.26.94.206:631/ipp/print</span> (Android ignores custom ports on manual add — the hub mirrors IPP on 631 for it).</td></tr>
               </table>
               <div class="note" style="margin:10px 0 0">RAW / JetDirect lovers: add a <b>Standard TCP/IP port</b> — IP <span class="mono" id="ippGuideRawIp">10.26.94.206</span>, port <span class="mono">9100</span>, device type <b>Generic Network Card</b>. Prints go to THIS PC's printer through the AdvPrint Pro hub — 100% local, no cloud.</div>
             </div>
@@ -9985,7 +10383,7 @@ https://reports.example.com/*</textarea>
               <div class="tgl"><span class="sw"><span class="switch on"></span></span>
                 <div><b>Strict token mode (header only)</b><p>ON = mutating calls (POST) must send the token in the X-PrintHub-Token header (the extension does this anyway).</p></div></div>
               <div class="tgl"><span class="sw"><span class="switch on" style="opacity:.55;pointer-events:none"></span></span>
-                <div><b>Never lock out this PC (127.0.0.1)</b><p>ALWAYS ON since v2.6.4 — built into the hub, cannot be switched off.</p></div></div>
+                <div><b>Never lock out this PC (127.0.0.1)</b><p>ALWAYS ON — built into the hub, cannot be switched off.</p></div></div>
               <div class="frow" style="margin-top:8px"><label>Allowed origins</label><input class="inp" placeholder="(empty = all websites may print) e.g. https://www.htncr.org"></div>
 
               <div class="h3sec">Reprint &amp; audit</div>
@@ -10015,8 +10413,8 @@ https://reports.example.com/*</textarea>
         <!-- ============ DROPZONE ============ -->
         <section class="panel" id="p-dropzone">
           <div class="p-head">
-            <h2>DropZone</h2><span class="sub">v2.8 · print WITHOUT the extension — save a PDF into the folder, AdvPrint prints it (works from any Windows app, MS Word style)</span>
-            <div class="right"><button class="btn">Disable</button></div>
+            <h2>DropZone</h2><span class="sub">print WITHOUT the extension — save a PDF into the folder, AdvPrint prints it (works from any Windows app, MS Word style)</span>
+            <div class="right"><button class="btn" id="dzWatchBtn">Disable</button></div>
           </div>
 
           <div class="stats" style="grid-template-columns:repeat(4,1fr)">
@@ -10071,7 +10469,7 @@ https://reports.example.com/*</textarea>
           <div class="card">
             <div class="card-h">&#128218; How you set which rule for which <span class="r">3 steps, one dialog — press New rule or Edit on any row</span></div>
             <div class="card-b" style="font-size:11.5px;color:var(--ink-2);line-height:1.65">
-              <b style="color:var(--blue-deep)">1. Match by</b> — <b>URL / address filter</b> (Chrome match pattern, e.g. <span class="mono">*://www.htncr.org/lab/*</span>),
+              <b style="color:var(--blue-deep)">1. Match by</b> — <b>URL / address filter</b> with a <b>pattern type</b>: <b>glob</b> (<span class="mono">*</span> wildcard, e.g. <span class="mono">*://www.htncr.org/lab/*</span>), <b>regex</b> for dynamic ids (e.g. <span class="mono">htncr\.org/lab/sample/\d+</span>) or <b>contains</b> (the URL just has to contain the text),
               optional <b>page content</b> (text the page must contain, e.g. <span class="mono">ZPL</span> or <span class="mono">Patient Report</span>) and
               <b>URL type</b> (any / PDF link / web page / plain text). All conditions must pass.
               <b style="color:var(--blue-deep);margin-left:6px">2. Then print</b> — pick the <b>printer</b>, <b>what to print</b> (whole page, linked PDF, raw stream, selected element),
@@ -10091,28 +10489,28 @@ https://reports.example.com/*</textarea>
               <span class="pattern-chip" data-use-url="*://billing.local/pos/*"><span class="use">USE</span>*://billing.local/pos/*<small>POS screens</small></span>
               <span class="pattern-chip" data-use-url="*://intranet/certificates/*"><span class="use">USE</span>*://intranet/certificates/*<small>certificate pages</small></span>
               <span class="pattern-chip" data-use-url="https://reports.example.com/invoice-*"><span class="use">USE</span>https://reports.example.com/invoice-*<small>prefix match</small></span>
-              <div class="note" style="margin-bottom:0"><b>Syntax</b> = Chrome match patterns: <span class="mono">scheme://host/path</span> with <span class="mono">*</span> wildcards
-                (<span class="mono">*</span> = any scheme, <span class="mono">*.host</span> = subdomains, trailing <span class="mono">*</span> = any path).
+              <div class="note" style="margin-bottom:0"><b>Syntax</b> — three pattern types, picked in the rule editor: <b>glob</b> (<span class="mono">*</span> = anything, e.g. <span class="mono">*://*.host/*</span>), <b>regex</b> (full regular expressions — dynamic ids like <span class="mono">\d+</span>, alternations like <span class="mono">(client|all|lab|admin)</span>, end-anchors like <span class="mono">$</span>) and <b>contains</b> (plain text). Regex is case-insensitive; the browser URL keeps <span class="mono">%5B%5D</span> for <span class="mono">[]</span>, so query filters read e.g. <span class="mono">tests%5B%5D=\d+$</span>.
                 <b>Learned from History</b> (top printed this week): <span class="mono">www.htncr.org/lab/&#8230;</span> 47 jobs ·
                 <span class="mono">billing.local/pos/&#8230;</span> 23 · <span class="mono">intranet/certificates/&#8230;</span> 9 — press a chip above to turn one into a rule.</div>
             </div>
           </div>
 
-          <!-- TEST BOX -->
+          <!-- TEST BOX (v3.4.7: REALLY wired to POST /rules/test) -->
           <div class="card">
-            <div class="card-h">&#128269; Test which rule fires <span class="r">prints nothing — safe</span></div>
+            <div class="card-h">&#128269; Test which rule fires <span class="r">prints nothing — safe · same engine as the extension</span></div>
             <div class="card-b">
               <div class="frow" style="margin-bottom:6px">
                 <label style="min-width:auto">Test a URL</label>
-                <input class="inp mono" style="flex:1;min-width:260px;font-size:11px" value="https://www.htncr.org/lab/medical_reports/pdf/4711">
-                <button class="btn blue">Which rule fires?</button>
+                <input class="inp mono" id="ruleTestUrl" style="flex:1;min-width:260px;font-size:11px" value="https://www.htncr.org/lab/medical_reports/pdf/203182?tests%5B%5D=671839">
+                <button class="btn blue" id="ruleTestBtn">Which rule fires?</button>
               </div>
               <div class="frow" style="margin-bottom:0">
-                <label style="min-width:auto">Test label / receipt text</label>
-                <input class="inp mono" style="flex:1;min-width:260px;font-size:11px" value="^XA^LL200^FO30^FDLAB-4711^FS^XZ">
-                <button class="btn blue">Which rule fires?</button>
+                <label style="min-width:auto">Simulate page kind</label>
+                <select class="inp" id="ruleTestKind" style="min-width:130px"><option value="">(none)</option><option value="zpl">ZPL label page</option><option value="pdf">PDF page</option><option value="image">Image page</option><option value="text">Plain text page</option><option value="html">Web page</option></select>
+                <input class="inp mono" id="ruleTestUrl2" style="flex:1;min-width:220px;font-size:11px" value="https://www.htncr.org/lab/sample/203182">
+                <button class="btn blue" id="ruleTestBtn2">Which rule fires?</button>
               </div>
-              <div class="note" style="margin-top:10px;margin-bottom:0">&#128269; URL test result: fires <b>Rule 1 "Lab PDF reports"</b> &#8594; printer <b>HP Laser 103 107 108</b>, action <b>PDF</b>, paper <b>A5</b>, 1 copy. The URL was fetched once (with your login) — content type detected: <span class="mono">application/pdf</span>. Nothing was printed.</div>
+              <div class="note" id="ruleTestOut" style="margin-top:10px;margin-bottom:0">Paste an address and press <b>Which rule fires?</b> — the hub evaluates every rule with the SAME engine the extension uses (glob / regex / contains, top to bottom, first match wins) and answers which rule hits, which printer it selects — or “no rule”: the page then prints through the normal auto pipeline with the OS default printer. Nothing is printed.</div>
             </div>
           </div>
 
@@ -10184,7 +10582,7 @@ https://reports.example.com/*</textarea>
         <!-- ============ POWER SWITCHES ============ -->
         <section class="panel" id="p-power">
           <div class="p-head">
-            <h2>Power Switches</h2><span class="sub">every silent / background behavior of the extension — one switch each · v3.2.2: every switch SAVES the moment you flip it</span>
+            <h2>Power Switches</h2><span class="sub">every silent / background behavior of the extension — one switch each · every switch SAVES the moment you flip it</span>
           </div>
           <div class="card">
             <div class="card-h">&#9889; Power switches <span class="r">same switches as the extension options — now in the ONE UI</span></div>
@@ -10205,7 +10603,7 @@ https://reports.example.com/*</textarea>
                 <div><b>UI language</b><p>English or &#2476;&#2494;&#2434;&#2455;&#2509;&#2482;&#2494; for the extension pages and notifications. "Automatic" follows the browser language.</p></div></div>
             </div>
           </div>
-          <div class="note">These switches live in the paired browsers. Flip a switch and it is saved <b>instantly</b> — every paired Chrome/Edge adopts the new settings within a minute, no save button needed (v3.2.2: the switches finally work).</div>
+          <div class="note">These switches live in the paired browsers. Flip a switch and it is saved <b>instantly</b> — every paired Chrome/Edge adopts the new settings within a minute, no save button needed.</div>
         </section>
 
         <!-- ============ BROWSER BEHAVIOR ============ -->
@@ -10286,7 +10684,7 @@ https://reports.example.com/*</textarea>
               </div>
               <div class="frow" style="margin:10px 0 0;padding-top:10px;border-top:1px dashed var(--blue-line)">
                 <button class="btn small" style="background:var(--blue);border-color:var(--blue);color:#fff;font-weight:700">Auto-integrate (admin)</button>
-                <span style="font-size:10.5px;color:var(--muted);line-height:1.5">v3.3.4 AUTOCRX — <b>no extra .bat needed</b>: one click runs the policy pass internally
+                <span style="font-size:10.5px;color:var(--muted);line-height:1.5">AUTOCRX — <b>no extra .bat needed</b>: one click runs the policy pass internally
                   with an elevated PowerShell (a single UAC prompt) and writes Forcelist + Allowlist + Sources for <b>every</b> Chromium
                   browser, HKLM (all users of this PC) + HKCU (current user). CLI: <span class="mono">python advprint.py activate-extension</span>.
                   The .bat in prebuilt/ stays only as an offline manual fallback.</span>
@@ -10294,7 +10692,7 @@ https://reports.example.com/*</textarea>
               <div class="frow" style="margin:8px 0 0">
                 <span class="tgl"><span class="sw"><span class="switch" id="autocrxHkcuSw"></span></span></span>
                 <b style="font-size:11.5px">Auto-install/update the extension (this PC)</b>
-                <span style="font-size:10.5px;color:var(--muted);line-height:1.5">v3.3.5 — <b>the tool does it itself</b>: right after every hub start the
+                <span style="font-size:10.5px;color:var(--muted);line-height:1.5">AUTO ON INSTALL — <b>the tool does it itself</b>: right after every hub start the
                   built-in CRX policy is written for THIS user (HKCU, silent — no UAC, no .bat), so the extension installs and
                   auto-updates from this hub in every Chromium browser. Turn OFF if a company policy manages the browsers.</span>
               </div>
@@ -10398,7 +10796,7 @@ https://reports.example.com/*</textarea>
           </div>
 
           <div class="card">
-            <div class="card-h">&#128300; Live debug &amp; test tool <span class="r">v3.2.1 · runs on this PC immediately</span></div>
+            <div class="card-h">&#128300; Live debug &amp; test tool <span class="r">runs on this PC immediately</span></div>
             <div class="card-b" style="display:flex;gap:8px;flex-wrap:wrap">
               <button class="btn blue">&#128424; REAL test print</button>
               <button class="btn">&#9889; Release ALL held</button>
@@ -10469,7 +10867,7 @@ https://reports.example.com/*</textarea>
             <h2>Settings</h2><span class="sub">stored in hub config · applied live</span>
           </div>
           <div class="form">
-            <div class="f-row"><label>HUB PORT</label><input class="inp" value="9235"><div class="hint">Default 9235 · restart required</div></div>
+            <div class="f-row"><label>HUB PORT</label><input class="inp" value="9235" inputmode="numeric"><div class="hint">Default 9235 · change it when another program on this PC already owns the port · <b>restart required</b> · CLI: <span class="mono">python advprint.py port 9300</span> · env <span class="mono">ADVPRINT_PORT</span> wins over config</div></div>
             <div class="f-row"><label>AUTH TOKEN</label><input class="inp mono" value="mPz5HFOsB9xaJ36isQ7kDfjaaNrERnXs"><div class="hint">Sent as X-PrintHub-Token header · <button class="btn small" style="height:20px">Rotate token</button></div></div>
             <div class="f-row"><label>START WITH WINDOWS</label><div style="display:flex;align-items:center;gap:10px"><span class="switch on"></span><span style="font-size:11.5px;color:var(--ink-2)">Auto-start hub at login (tray mode)</span></div></div>
             <div class="f-row"><label>MINIMIZE TO TRAY</label><div style="display:flex;align-items:center;gap:10px"><span class="switch on"></span><span style="font-size:11.5px;color:var(--ink-2)">Close button hides the window</span></div></div>
@@ -10495,7 +10893,7 @@ https://reports.example.com/*</textarea>
               <div style="flex:1;min-width:260px">
                 <div style="font-size:17px;font-weight:800;color:var(--ink)">AdvPrint Pro — Printing Hub <span class="chip ok" style="margin-left:8px">v3.2.1 · UP TO DATE</span></div>
                 <div style="font-size:12px;color:var(--ink-2);margin-top:4px">by <b>Bit Dream IT — Innovative Healthcare Solutions</b></div>
-                <div style="font-size:11.5px;color:var(--muted);margin-top:2px">Chrome silent-print extension + local print hub · port 9235 · 100% local, no cloud</div>
+                <div style="font-size:11.5px;color:var(--muted);margin-top:2px">Chrome silent-print extension + local print hub · port 9235 by default (changeable in Settings) · 100% local, no cloud</div>
                 <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
                   <button class="btn small">GitHub repo</button>
                   <button class="btn small">Releases</button>
@@ -10513,7 +10911,7 @@ https://reports.example.com/*</textarea>
               the old Jobs page &#8594; <b>separate Queue and History tabs</b>,
               the extension options switches &#8594; <b>Power Switches / Browser / Rules / Connections / Hub</b>,
               and the debug cards &#8594; <b>Debug &amp; Tools</b>.
-              It is served by the hub at <span class="mono">/ui</span> with <b>zero external files</b> (the v3.1.2 "console.html was not found" error can never happen again),
+              It is served by the hub at <span class="mono">/ui</span> with <b>zero external files</b> (the old "console.html was not found" error can never happen again),
               opens identically in the native window, in Chrome, and inside the extension options tab.
             </div>
           </div>
@@ -10533,7 +10931,7 @@ https://reports.example.com/*</textarea>
       <span class="sb-pane">DropZone <b>ON</b></span>
       <span class="sb-pane grow"></span>
       <span class="sb-pane">Uptime 04:12:37</span>
-      <span class="sb-pane"><b>Printing Hub v3.2.1</b> · Bit Dream IT</span>
+      <span class="sb-pane"><b>Printing Hub</b> · Bit Dream IT</span>
     </div>
 
   </div>
@@ -10594,11 +10992,17 @@ https://reports.example.com/*</textarea>
       <div class="re-step"><span class="n">1</span><b>Match by — which pages does this rule catch?</b></div>
       <div class="re-grid">
         <div class="full">
-          <label class="rl">URL / ADDRESS FILTER (chrome match pattern)</label>
-          <input class="inp2 mono" id="re-url" value="*://www.htncr.org/lab/*">
-          <div class="hint2">Suggested: <span class="pattern-chip" data-fill-url="*://*.htncr.org/*" style="margin:0 4px 0 0">*://*.htncr.org/*</span>
-            <span class="pattern-chip" data-fill-url="*://*/*.pdf" style="margin:0 4px 0 0">*://*/*.pdf</span>
-            <span class="pattern-chip" data-fill-url="*://intranet/certificates/*" style="margin:0">*://intranet/certificates/*</span> — click to fill</div>
+          <label class="rl">URL / ADDRESS FILTER — the pattern type decides how it is read</label>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            <input class="inp2 mono" id="re-url" style="flex:1;min-width:230px" value="*://www.htncr.org/lab/*">
+            <select class="inp2" id="re-ptype" style="min-width:190px">
+              <option value="glob">Glob — * wildcard (default)</option>
+              <option value="regex">Regex — dynamic ids (advanced)</option>
+              <option value="contains">Contains text (easiest)</option>
+            </select>
+          </div>
+          <div class="hint2">Glob: <span class="mono">*</span> = anything (e.g. <span class="mono">*://www.htncr.org/lab/*</span>). Regex: full expressions with dynamic ids, case-insensitive — <span class="mono">htncr\.org/lab/sample/\d+</span> hits ANY sample id; browser URLs keep <span class="mono">%5B%5D</span> for <span class="mono">[]</span>. Contains: the URL only has to CONTAIN the text.
+            Ready recipes: <select class="inp2" id="re-recipe" style="height:22px;font-size:10.5px;max-width:340px"><option value="">load a ready recipe&#8230;</option></select></div>
         </div>
         <div>
           <label class="rl">PAGE CONTENT MUST CONTAIN (optional)</label>
@@ -10611,7 +11015,7 @@ https://reports.example.com/*</textarea>
           <div class="hint2">PDF link = the job is the .pdf file itself.</div>
         </div>
         <div class="full">
-          <div class="note" style="margin:0;font-size:10.5px">&#128269; Live test: <span class="mono">https://www.htncr.org/lab/medical_reports/pdf/4711</span> &#8594; <b style="color:var(--ok)">matches</b> this rule (scheme &#10003; host &#10003; path &#10003; content-type application/pdf).</div>
+          <div class="note" style="margin:0;font-size:10.5px">&#128269; Test THIS pattern before saving: paste a full address into the <b>Test a URL</b> box on the Rules panel (above the table) and press <b>Which rule fires?</b> — the hub answers with the matching rule and its printer, or "no rule". Nothing is printed.</div>
         </div>
       </div>
 
@@ -10812,6 +11216,7 @@ function showTab(name){
   if (name === "logs") loadLogs();
   if (name === "dropzone") loadDropzone();
   if (name === "connections") loadConnections();
+  if (name === "lan") loadLanHits();   /* v3.4.7 strict-LAN hit list */
   if (name === "hub") refreshHubPanel();
   if (name === "audit") renderAudit(auditRows);
   if (name === "rules") renderRules();
@@ -11418,6 +11823,104 @@ function renderAcl(){
     if (e.key === "Enter") { e.preventDefault(); addOne(); } });
 })();
 
+/* ---- v3.4.7 STRICT LAN SHARE - the IP hit list ----
+   While lan_strict is ON the hub records every distinct client IP that
+   touches it (GET /lan/hits); this renders the rows and wires the
+   Strict switch, the Clear button and the per-row Allow / Remove that
+   talk to POST /lan/allow. First match wins for the user's workflow:
+   switch Strict ON, watch the hits, click Allow on the real PCs -
+   the list (no longer "*") locks the hub down by itself. */
+async function loadLanHits(){
+  try {
+    var d = await api("/lan/hits");
+    var sw = $("strictSwitch");
+    if (sw && !dirtyKeys.strict) sw.classList.toggle("on", !!d.strict);
+    var hint = $("strictHint");
+    if (hint) hint.textContent = d.strict
+      ? "ON \u2014 every distinct IP that touches this hub is recorded below; click Allow to let a PC print through the hub."
+      : "OFF \u2014 hit tracking is off; the Allowed-IPs list above still decides who may connect.";
+    var body = $("hitsBody");
+    if (!body) return;
+    var hits = d.hits || [];
+    if (!hits.length) {
+      body.innerHTML = '<tr><td colspan="6" style="color:var(--muted)">' +
+        (d.strict
+          ? "no IPs recorded yet \u2014 as soon as a PC, phone or other device touches the hub it appears here"
+          : "strict mode is OFF \u2014 switch it ON to record who is hitting this hub") +
+        "</td></tr>";
+      return;
+    }
+    body.innerHTML = hits.map(function(h){
+      var st = h.allowed
+        ? '<span class="chip ok"><span class="d"></span>ALLOWED</span>'
+        : '<span class="chip warn"><span class="d"></span>NOT ON THE LIST</span>';
+      var op = '<button class="btn small ' + (h.allowed ? "" : "blue") +
+        '" data-hallow="' + esc(h.ip) + '" data-hremove="' +
+        (h.allowed ? "1" : "0") + '">' + (h.allowed ? "Remove" : "Allow") +
+        "</button>";
+      return "<tr><td class='mono'>" + esc(h.ip) + "</td><td>" + h.count +
+        "</td><td>" + esc(String(h.first).slice(11, 19)) + "</td><td>" +
+        esc(String(h.last).slice(11, 19)) + "</td><td>" + st + "</td><td>" +
+        op + "</td></tr>";
+    }).join("");
+  } catch (e) { /* the card just stays on its loading row */ }
+}
+(function strictWire(){
+  var body = $("hitsBody");
+  if (body && !body.dataset.hbound) {
+    body.dataset.hbound = "1";
+    body.addEventListener("click", function(ev){
+      var t = ev.target;
+      while (t && t !== body && !(t.getAttribute && t.getAttribute("data-hallow")))
+        t = t.parentNode;
+      if (!t || t === body || !(t.getAttribute && t.getAttribute("data-hallow"))) return;
+      var ipx = t.getAttribute("data-hallow");
+      var rm = t.getAttribute("data-hremove") === "1";
+      api("/lan/allow", { method: "POST", body: { ip: ipx, remove: rm } })
+        .then(function(r){
+          toast(r.note || (rm ? ipx + " removed from the list" : ipx + " allowed"),
+                rm ? "warn" : "ok");
+          loadLanHits(); renderLanRows(); })
+        .catch(function(e){ toast(e.message, "err"); });
+    });
+  }
+  var sw = $("strictSwitch");
+  if (sw && !sw.dataset.hbound) {
+    sw.dataset.hbound = "1";
+    sw.addEventListener("click", function(){
+      var want = !sw.classList.contains("on");
+      sw.classList.toggle("on", want);
+      dirtyKeys.strict = true;
+      api("/config", { method: "POST", body: { lan_strict: want } })
+        .then(function(){
+          delete dirtyKeys.strict;
+          toast("Strict LAN mode " + (want
+            ? "ON \u2014 every IP that hits the hub is recorded and listed below; Allow moves it onto the Allowed-IPs list"
+            : "OFF \u2014 hit tracking stopped (the Allowed-IPs list still applies)"),
+            want ? "ok" : "warn");
+          loadLanHits(); poll(); })
+        .catch(function(e){ delete dirtyKeys.strict;
+          sw.classList.toggle("on", !want);
+          toast(e.message, "err"); });
+    });
+  }
+  var hc = $("hitsClear");
+  if (hc && !hc.dataset.hbound) {
+    hc.dataset.hbound = "1";
+    hc.addEventListener("click", function(){
+      api("/lan/hits/clear", { method: "POST", body: {} })
+        .then(function(){ toast("IP hit list cleared", "warn"); loadLanHits(); })
+        .catch(function(e){ toast(e.message, "err"); });
+    });
+  }
+  var hr = $("hitsRefresh");
+  if (hr && !hr.dataset.hbound) {
+    hr.dataset.hbound = "1";
+    hr.addEventListener("click", function(){
+      loadLanHits(); toast("Hit list refreshed", "ok"); });
+  }
+})();
+
 /* ---- v3.3.2 SHARE SEND MODE - the LAN PC card ----
    The card reads the PERSISTED pairing (GET /peer/status) on every
    poll, so a page reload / hub restart always shows the real state -
@@ -11985,6 +12488,115 @@ function renderAudit(rows){
 var KIND_LABELS = { "": "Any", pdf: "PDF link", web: "Web page", text: "Plain text / stream", url: "URL type" };
 var ACTION_LABELS = { auto: "Auto (PDF as-is)", web: "Entire web page", sel: "Selected element only",
   raw: "Raw text / ZPL / ESC-POS stream", pdf: "Linked PDF only" };
+/* v3.4.7 PATTERN TYPES + RECIPES: a rule's "type" decides how the
+   pattern is read - glob (* wildcard, the old default), regex (dynamic
+   ids like \\d+, alternations, $ anchors) or contains (plain text).
+   The hub keeps the type field since v3.4.7 and the browser extension
+   has understood all three for years. The recipes are the htncr.org
+   lab set the user asked about - load one, pick the printer, save,
+   verify with the Test box above the table. */
+var RULE_TYPE_LABEL = { glob: "GLOB", regex: "REGEX", contains: "CONTAINS" };
+var RULE_RECIPES = [
+  { label: "Lab report \u2014 ONE test id only \u2192 report printer (regex)",
+    name: "Single-test report",
+    pattern: "htncr\\.org/lab/medical_reports/pdf/\\d+\\?tests%5B%5D=\\d+$",
+    type: "regex" },
+  { label: "Sample page \u2192 Zebra ZPL printer (regex)",
+    name: "Sample label ZPL",
+    pattern: "htncr\\.org/lab/sample/\\d+$", type: "regex" },
+  { label: "Receipt print client/all/lab/admin \u2192 A5 printer (regex)",
+    name: "Receipt A5",
+    pattern: "htncr\\.org/lab/receipt-print/\\d+/(client|all|lab|admin)$",
+    type: "regex" },
+  { label: "Whole domain, every page (glob)",
+    name: "Whole domain", pattern: "*://www.htncr.org/*", type: "glob" },
+  { label: "Any direct PDF link (glob)",
+    name: "PDF links", pattern: "*://*/*.pdf", type: "glob" },
+  { label: "URL contains a word (contains)",
+    name: "Contains receipt-print", pattern: "receipt-print", type: "contains" }
+];
+function fillRuleRecipes(){
+  var sel = $("re-recipe");
+  if (!sel || sel.dataset.filled) return;
+  sel.dataset.filled = "1";
+  RULE_RECIPES.forEach(function(r, i){
+    var o = document.createElement("option");
+    o.value = String(i); o.textContent = r.label;
+    sel.appendChild(o);
+  });
+  sel.addEventListener("change", function(){
+    var r = RULE_RECIPES[parseInt(sel.value, 10)];
+    if (!r) return;
+    var u = $("re-url"); if (u) u.value = r.pattern;
+    var t = $("re-ptype"); if (t) t.value = r.type;
+    toast("Recipe loaded \u2014 pick the printer (step 2), save, then verify with the Test box", "ok");
+  });
+}
+/* v3.4.7: the "Which rule fires?" buttons REALLY test now. They call
+   /rules/test - the hub evaluates rules_mirror with the SAME semantics
+   as the browser extension (glob / regex / contains, top to bottom,
+   first match wins) and answers the winning rule + printer, or
+   "no rule" = OS default through the normal auto pipeline. */
+async function ruleTestRun(){
+  var out = $("ruleTestOut");
+  var u = ($("ruleTestUrl") && $("ruleTestUrl").value || "").trim();
+  if (!u) { if (out) out.innerHTML = "Type an address first."; return; }
+  if (out) out.innerHTML = "testing\u2026";
+  try {
+    var r = await api("/rules/test", { method: "POST", body: { url: u } });
+    renderRuleTestOut(r, u);
+  } catch (e) {
+    if (out) out.innerHTML = "<b style='color:#b91c1c'>test failed:</b> " + esc(e.message);
+  }
+}
+async function ruleTestRun2(){
+  var out = $("ruleTestOut");
+  var u = ($("ruleTestUrl2") && $("ruleTestUrl2").value || "").trim();
+  var k = ($("ruleTestKind") && $("ruleTestKind").value) || "";
+  if (!u) { if (out) out.innerHTML = "Type an address first."; return; }
+  if (out) out.innerHTML = "testing\u2026";
+  try {
+    var r = await api("/rules/test", { method: "POST",
+      body: { url: u, kind: k } });
+    renderRuleTestOut(r, u, k);
+  } catch (e) {
+    if (out) out.innerHTML = "<b style='color:#b91c1c'>test failed:</b> " + esc(e.message);
+  }
+}
+function renderRuleTestOut(r, u, kind){
+  var out = $("ruleTestOut");
+  if (!out) return;
+  if (r && r.matched) {
+    var rl = r.rule || {};
+    out.innerHTML = "&#128269; <b style='color:var(--ok)'>Rule fires</b> \u2014 \u201c" +
+      esc(rl.name || "(unnamed)") + "\u201d \u2192 printer <b>" +
+      esc(r.printer || "OS default") + "</b>, action <b>" +
+      esc(ACTION_LABELS[rl.action] || rl.action || "auto") + "</b>" +
+      (rl.paper ? ", paper <b>" + esc(rl.paper) + "</b>" : "") +
+      ", " + (rl.copies || 1) + " copy(s) \u00b7 matched by " +
+      esc((rl.type || "glob").toUpperCase()) +
+      " pattern <span class='mono'>" + esc(rl.pattern || "*") + "</span>" +
+      (kind ? " \u00b7 simulated page kind: <b>" + esc(kind) + "</b>" : "") +
+      ". Nothing was printed.";
+  } else {
+    out.innerHTML = "&#128269; <b>No rule fires</b> for this address" +
+      (kind ? " (kind " + esc(kind) + ")" : "") +
+      " \u2014 the page prints through the normal auto pipeline with the <b>OS default printer</b>. " +
+      esc((r && r.note) || "");
+  }
+}
+(function ruleTestWire(){
+  var b1 = $("ruleTestBtn");
+  if (b1) b1.addEventListener("click", ruleTestRun);
+  var i1 = $("ruleTestUrl");
+  if (i1) i1.addEventListener("keydown", function(e){
+    if (e.key === "Enter") { e.preventDefault(); ruleTestRun(); } });
+  var b2 = $("ruleTestBtn2");
+  if (b2) b2.addEventListener("click", ruleTestRun2);
+  var i2 = $("ruleTestUrl2");
+  if (i2) i2.addEventListener("keydown", function(e){
+    if (e.key === "Enter") { e.preventDefault(); ruleTestRun2(); } });
+})();
 function renderRules(){
   var rules = cfgCache.rules_mirror || [];
   rulesCache = rules;
@@ -11997,7 +12609,9 @@ function renderRules(){
     var tr = tmpl.cloneNode(true), td = tr.querySelectorAll("td");
     td[0].textContent = "\u2630 " + (i + 1);
     td[1].innerHTML = "<b>" + esc(r.name || "(unnamed)") + "</b>";
-    td[2].textContent = r.pattern || "*";
+    td[2].innerHTML = '<span class="mono doc">' + esc(r.pattern || "*") +
+      "</span> <span class=\"chip info\" style=\"font-size:9px\">" +
+      esc(RULE_TYPE_LABEL[String(r.type || "glob").toLowerCase()] || "GLOB") + "</span>";
     td[3].innerHTML = '<span class="chip info">' + (r.match === "content" ? "CONTENT" : "URL") + "</span>";
     td[4].textContent = r.match === "content" ? (r.content || "(any content)") : "\u2014";
     td[5].textContent = KIND_LABELS[r.kind] || r.kind || "Any";
@@ -12037,6 +12651,12 @@ function openRuleEditor(idx){
   ruleEditIdx = typeof idx === "number" ? idx : -1;
   $("re-title").textContent = r.isNew ? "New rule \u2014 step 1: match by" : "Edit rule \u2014 " + (r.name || "");
   $("re-url").value = r.pattern === "*" ? "" : (r.pattern || "");
+  /* v3.4.7: the pattern type (glob / regex / contains) - defaults to
+     glob so every rule saved by an older build keeps matching */
+  var pt = $("re-ptype");
+  if (pt) pt.value = (String(r.type || "glob").toLowerCase() in RULE_TYPE_LABEL)
+    ? String(r.type || "glob").toLowerCase() : "glob";
+  fillRuleRecipes();
   $("re-content").value = r.content || "";
   setSel($("re-type"), KIND_LABELS[r.kind] || "Any");
   var sel = $("re-printer");
@@ -12080,6 +12700,12 @@ async function saveRule(){
     name: (ruleEditIdx >= 0 && rulesCache[ruleEditIdx] && rulesCache[ruleEditIdx].name) ||
           ($("re-url").value || "rule " + (rules.length + 1)),
     pattern: $("re-url").value.trim() || "*",
+    /* v3.4.7: the pattern type survives the round trip now - a regex
+       recipe with dynamic ids stays regex (the hub used to strip the
+       field, silently degrading every rule to a glob) */
+    type: (function(){ var pt = $("re-ptype");
+      return (pt && ["glob", "regex", "contains"].indexOf(pt.value) >= 0)
+        ? pt.value : "glob"; })(),
     content: $("re-content").value.trim(),
     match: $("re-content").value.trim() ? "content" :
       ($("re-type").selectedIndex === 3 ? "url" : "url"),
@@ -12114,14 +12740,28 @@ async function saveRule(){
 
 /* ---- dropzone ---- */
 var dzCount = 0;
+var dzWatchOn = false;   /* v3.4.7: the LIVE watch state behind the toggle */
 async function loadDropzone(){
   try {
     var d = await api("/dropzone");
     dzCount = d.waiting != null ? d.waiting : (d.files || 0);
+    dzWatchOn = !!d.enabled;
+    /* v3.4.7 DROPZONE WATCH FIX: the p-head button is the watch toggle.
+       It used to be a static "Disable" that ALWAYS posted
+       drop_enabled:false - clicking it with the watch OFF did nothing
+       useful and clicking it with the watch ON killed it (the user
+       report: "always disable dropzone watch off when click"). Now the
+       label follows the real state on every refresh and the click posts
+       the OPPOSITE of the current state. */
+    var dzBtn = document.querySelector("#dzWatchBtn");
+    if (dzBtn) {
+      dzBtn.textContent = dzWatchOn ? "Disable" : "Enable";
+      dzBtn.classList.toggle("blue", !dzWatchOn);
+    }
     var stats = qsa("#p-dropzone .stats .stat");
     if (stats.length >= 4) {
       stats[0].querySelector(".v").textContent = d.done != null ? d.done : 0;
-      stats[1].querySelector(".v").textContent = d.enabled ? 1 : 0;
+      stats[1].querySelector(".v").textContent = d.enabled ? "ON" : "OFF";
       stats[2].querySelector(".v").textContent = d.delete ? "del" : "move";
       stats[2].querySelector(".l").textContent = d.delete ? "Delete-After-Print ON" : "Delete-After-Print OFF";
     }
@@ -12299,7 +12939,7 @@ function renderExt(audit){
     rows.slice(0, 6).forEach(function(r2){
       var tr = tmpl.cloneNode(true), td = tr.querySelectorAll("td");
       td[0].innerHTML = "<b>" + esc(r2.who) + "</b>";
-      td[1].textContent = "v" + (BOOT.version || "3.4.6");
+      td[1].textContent = "v" + (BOOT.version || "3.4.7");
       td[2].textContent = r2.at ? r2.at.slice(11, 19) : "\u2014";
       td[3].innerHTML = '<span class="chip ok"><span class="d"></span>PAIRED</span>';
       tbl.appendChild(tr);
@@ -12321,7 +12961,7 @@ function renderExt(audit){
       m2.textContent = BASE + "/extension/updates.xml";
   });
   var crxChip = document.querySelector("#p-extension .frow .chip.ok");
-  if (crxChip) crxChip.innerHTML = '<span class="d"></span>CRX v' + (BOOT.version || "3.4.6") + " READY";
+  if (crxChip) crxChip.innerHTML = '<span class="d"></span>CRX v' + (BOOT.version || "3.4.7") + " READY";
   /* v3.2.8 STALE-CRX GUARD: ask the hub which package it really
    * serves (/extension/info is open, no token). Older than the hub
    * itself -> Chrome never updates -> browsers keep the old bugs.
@@ -12527,7 +13167,7 @@ async function renderUpdate(res){
    full-page /docs stays available via the "Full guide page" button.
    ============================================================ */
 function docsHtml(){
-  var v = esc(BOOT.version || "3.4.6");
+  var v = esc(BOOT.version || "3.4.7");
   var ip = esc(BOOT.lan_ip || location.hostname || "127.0.0.1");
   var port = esc(String(BOOT.port || location.port || "9235"));
   var base = "http://" + ip + ":" + port;
@@ -13108,10 +13748,27 @@ function bindButtons(){
   btnLike("#p-hub", /Reload from hub/i, function(){ refreshHubPanel(); toast("Reloaded from hub", "ok"); });
   /* dropzone */
   btnLike("#p-dropzone", /Open folder/i, function(){ ACTIONS["open-dropzone"](); });
-  btnLike("#p-dropzone", /^Disable$/, function(){
-    api("/config", { method: "POST", body: { drop_enabled: false } })
-      .then(function(){ toast("DropZone watch OFF", "warn"); loadDropzone(); })
-      .catch(function(e){ toast(e.message, "err"); }); });
+  /* v3.4.7 DROPZONE WATCH FIX: a real Enable/Disable toggle bound ONCE
+     by id - it reads the current state (kept fresh by loadDropzone),
+     posts the opposite, and never silently disables. */
+  (function(){
+    var dzBtn = document.querySelector("#dzWatchBtn");
+    if (dzBtn && !dzBtn.dataset.dzBound) {
+      dzBtn.dataset.dzBound = "1";
+      dzBtn.addEventListener("click", function(){
+        var want = !dzWatchOn;
+        api("/config", { method: "POST", body: { drop_enabled: want } })
+          .then(function(){
+            dzWatchOn = want;
+            toast("DropZone watch " + (want
+              ? "ON - PDFs saved into the folder print automatically"
+              : "OFF - the folder is not watched any more"),
+              want ? "ok" : "warn");
+            loadDropzone(); })
+          .catch(function(e){ toast(e.message, "err"); });
+      });
+    }
+  })();
   btnLike("#p-dropzone", /^Save$/, function(){
     var inp = qsa("#p-dropzone input.inp")[1];
     api("/config", { method: "POST", body: { drop_dir: inp ? inp.value.trim() : "" } })
@@ -13493,13 +14150,27 @@ async function saveSettingsPanel(){
     var sws = qsa("#p-settings .f-row .switch");
     if (sws[2]) patch.share_lan = sws[2].classList.contains("on");
     if (sws[3]) patch.hold_offline = sws[3].classList.contains("on");
+    /* v3.4.7 CONFIGURABLE HUB PORT: the HUB PORT row is REAL now - the
+       value is validated and saved to config.json; the hub rebinds on
+       its next restart (the toast says exactly what to click). */
+    var portChanged = false, newPort = null;
+    if (ins[0]) {
+      var pv = parseInt(ins[0].value, 10);
+      if (!isNaN(pv) && pv > 0 && pv !== (cfgCache.port || 9235)) {
+        if (pv < 1024 || pv > 65535) {
+          toast("Port must be a number between 1024 and 65535", "err");
+          return;
+        }
+        patch.port = pv; portChanged = true; newPort = pv;
+      }
+    }
     await api("/config", { method: "POST", body: patch });
     Object.keys(dirtyKeys).forEach(function(k){
-      if (["autostart", "minimize", "lan", "hold"].indexOf(k) >= 0) delete dirtyKeys[k]; });
-    var port = parseInt(ins[0].value, 10);
-    if (port && port !== (BOOT.port || 9235))
-      toast("Port lives in config.json / the installer \u2014 the hub rebinds on restart only (asked at install time)", "warn");
-    else toast("Settings saved", "ok");
+      if (["autostart", "minimize", "lan", "hold", "port"].indexOf(k) >= 0) delete dirtyKeys[k]; });
+    if (portChanged)
+      toast("Hub port saved: " + newPort + " \u2014 press \u2018Restart hub\u2019 below to listen on it. After the restart every hub URL uses the NEW port (browser, other PCs, IPP printer URL).", "warn");
+    else
+      toast("Settings saved", "ok");
     poll();
   } catch (e) { toast("Save failed: " + e.message, "err"); }
 }
@@ -13833,6 +14504,9 @@ async function poll(){
        OFFLINE in the table until a manual reload. /peers is cached
        15 s server-side, so this costs the hub nothing. */
     loadConnections();
+    /* v3.4.7 STRICT LAN SHARE: the hit list refreshes with the poll
+       (the endpoint is a cheap in-memory snapshot) */
+    loadLanHits();
     var srsw = $("showRemoteSw");
     if (srsw) srsw.classList.toggle("on", !!cfgCache.show_remote_printers);
     /* v3.3.5: the AUTO CRX (this PC) switch mirrors the live config */
@@ -14701,10 +15375,10 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     <div class="card"><b id="cPrinters">-</b><span>printers ready</span></div>
     <div class="card"><b id="cVer">v@@VERSION@@</b><span>hub version</span></div>
   </div>
-  <h2>LAN sharing &amp; other PCs <small style="text-transform:none;letter-spacing:0">&nbsp;- v2.2: share this printer over the network, shift jobs to another PC</small></h2>
+  <h2>LAN sharing &amp; other PCs <small style="text-transform:none;letter-spacing:0">&nbsp;- share this printer over the network, shift jobs to another PC</small></h2>
   <div class="panel" id="lanCard"><table><tbody id="lanBody">
     <tr><td>Loading LAN status...</td></tr></tbody></table></div>
-  <h2>DropZone - print WITHOUT the extension <small style="text-transform:none;letter-spacing:0">&nbsp;- v2.8: save a PDF into the folder, AdvPrint prints it (works from any Windows app, MS Word style)</small></h2>
+  <h2>DropZone - print WITHOUT the extension <small style="text-transform:none;letter-spacing:0">&nbsp;- save a PDF into the folder, AdvPrint prints it (works from any Windows app, MS Word style)</small></h2>
   <div class="panel ltbox" id="dzCard">
     <div class="hbar">
       <b>DropZone: </b><span id="dzState" class="st queued">loading...</span>
@@ -14721,10 +15395,10 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     </div>
     <p style="font-size:13px;color:#334155;margin:2px 0 0">Print from ANY app without the extension: <b>Print</b> &rarr; choose <b>Microsoft Print to PDF</b> &rarr; save the PDF into the DropZone folder. AdvPrint Pro prints it seconds later (the file moves to <span class="mono">done\</span>). Phones/tablets print through the <b>Send portal</b> button above (or <span class="mono">/send</span>) - also 100% local.</p>
   </div>
-  <h2>Debug <small style="text-transform:none;letter-spacing:0">&nbsp;- v2.3: WHY is nothing printing? one card, one answer</small></h2>
+  <h2>Debug <small style="text-transform:none;letter-spacing:0">&nbsp;- WHY is nothing printing? one card, one answer</small></h2>
   <div class="panel" id="dbgCard"><table><tbody id="dbgBody">
     <tr><td>Loading debug status...</td></tr></tbody></table></div>
-  <h2>Live debug &amp; test tool <small style="text-transform:none;letter-spacing:0">&nbsp;- send a REAL print and watch every step live (v@@VERSION@@)</small></h2>
+  <h2>Live debug &amp; test tool <small style="text-transform:none;letter-spacing:0">&nbsp;- send a REAL print and watch every step live</small></h2>
   <div class="panel ltbox" id="livetest">
     <p>Send a REAL test print and watch every step live until it hits the
        printer - or see exactly why it did not (offline, held, SumatraPDF...).</p>
@@ -14745,7 +15419,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
       <span id="ltCfgMsg" style="font-size:12px;color:var(--mut)"></span>
     </div>
   </div>
-  <h2>Print destination <small style="text-transform:none;letter-spacing:0">&nbsp;- v2.9: ANY printer - OS default / selected / IP printer (network)</small></h2>
+  <h2>Print destination <small style="text-transform:none;letter-spacing:0">&nbsp;- ANY printer - OS default / selected / IP printer (network)</small></h2>
   <div class="panel ltbox">
     <div class="hbar">
       <label>Print to: <select id="destSel" onchange="destPick()"></select></label>
@@ -14763,7 +15437,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     </div>
     <p style="font-size:13px;color:#334155;margin:2px 0 0">Where every job prints: the OS <b>default printer</b>, <b>any installed printer</b> (picked from the list), or an <b>IP printer</b> - a real network printer at IP:port (RAW&nbsp;9100 or IPP). PCs and phones that added <i>this</i> hub as their network printer print through exactly this destination, so one setting routes everything.</p>
   </div>
-  <h2>Browser extension - silent install <small style="text-transform:none;letter-spacing:0">&nbsp;- v@@VERSION@@: Chrome/Edge/Brave install the extension BY POLICY - no chrome://extensions, no Load unpacked</small></h2>
+  <h2>Browser extension - silent install <small style="text-transform:none;letter-spacing:0">&nbsp;- Chrome/Edge/Brave install the extension BY POLICY - no chrome://extensions, no Load unpacked</small></h2>
   <div class="panel ltbox">
     <div class="hbar">
       <span class="mono">ID: <span id="extId">-</span></span>
@@ -14783,7 +15457,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   <div class="panel"><table><thead><tr>
     <th>#</th><th>Title</th><th>Printer</th><th>Status</th><th></th>
   </tr></thead><tbody id="queue"><tr><td>-</td></tr></tbody></table></div>
-  <h2>Job history <small style="text-transform:none;letter-spacing:0">&nbsp;- v2.7.0: filter, tick, REPRINT selected / non-printed, clear ALL</small></h2>
+  <h2>Job history <small style="text-transform:none;letter-spacing:0">&nbsp;- filter, tick, REPRINT selected / non-printed, clear ALL</small></h2>
   <div class="panel" style="padding:10px 12px">
     <div class="hbar">
       <select id="hFilter" onchange="HIST.page=1;renderHistory()">
@@ -15089,6 +15763,28 @@ async function loadLan(){
         rows+="<tr><td><b>LAN check: </b></td><td class='mono'>does the listener answer on this PC's LAN IP?</td><td><button onclick='lanSelftest()'>Test LAN</button></td></tr>";
       }
     }
+    /* v3.4.7 STRICT LAN SHARE - watch who hits this hub, allow with
+       one click. Shows even while LAN sharing is OFF (the record only
+       fills while strict is ON). */
+    try{
+      const hd=await jget("/lan/hits");
+      const hits=(hd.hits||[]).slice(0,10);
+      rows+="<tr><td><b>Strict LAN mode: </b>"+(hd.strict?"<span class='st queued'>ON - recording hits</span>":"<span class='st held'>OFF</span>")+"</td>"+
+        "<td class='mono'>"+(hd.strict?("allowed_ips: "+esc((hd.allowed||[]).join(", "))):"records every IP that hits the hub - click Allow to let a PC print through")+"</td>"+
+        "<td><button onclick='strictToggle("+(hd.strict?"false":"true")+")'>"+(hd.strict?"Turn OFF":"Turn ON")+"</button> "+
+        ((hd.strict&&hits.length)?"<button onclick='hitsClearAll()'>Clear list</button>":"")+"</td></tr>";
+      if(hd.strict){
+        if(hits.length){
+          for(const h of hits){
+            rows+="<tr><td class='mono'>"+esc(h.ip)+" <small>"+h.count+" hits &middot; last "+esc(String(h.last).slice(11,19))+"</small></td>"+
+              "<td>"+(h.allowed?"<span class='st queued'>ALLOWED</span>":"<span class='st held'>not on the list</span>")+"</td>"+
+              "<td><button onclick='lanAllow(\""+esc(h.ip)+"\","+(h.allowed?"true":"false")+")'>"+(h.allowed?"Remove from list":"Allow - add to list")+"</button></td></tr>";
+          }
+        } else {
+          rows+="<tr><td colspan='3'><small>Strict mode is ON - no IPs recorded yet. As soon as any PC or phone touches this hub (even a refused one) it appears here with an Allow button. When the list was <b>*</b>, the first Allow LOCKS the hub down to real entries.</small></td></tr>";
+        }
+      }
+    }catch(_){}
     rows+="<tr><td><b>Printer status hold: </b>"+(HOLD_OFF?"<span class='st queued'>ON</span>":"<span class='st held'>OFF</span>")+"</td><td class='mono'>jobs wait while the printer reports offline</td><td><button onclick='toggleHold(+(!HOLD_OFF))'>"+(HOLD_OFF?"Disable":"Enable")+"</button></td></tr>";
     try{const pr=await jget("/peers");PEERS=(pr&&pr.peers)||pr||[];}catch(_){PEERS=[];}
     for(const p of (PEERS||[])){
@@ -15187,6 +15883,25 @@ async function fwAllow(){
   if(r.ok)msg("Firewall rule added - LAN PCs can now reach the hub. Try printing from the other PC.");
   else msg(r.error||"could not add the rule");
   setTimeout(loadLan,600);
+}
+/* ---- v3.4.7 STRICT LAN SHARE helpers ---- */
+async function strictToggle(on){
+  const r=await act("/config",{lan_strict:on});
+  if(r.ok)msg(on?"Strict LAN mode ON - every IP that hits the hub is recorded in the LAN card; click Allow to let a PC print through the hub. When the list was '*', the first Allow locks the hub down to real entries.":"Strict LAN mode OFF - hit tracking stopped (the Allowed-IPs list still applies).");
+  else msg(r.error||"failed");
+  setTimeout(loadLan,400);
+}
+async function lanAllow(ip,remove){
+  const r=await act("/lan/allow",{ip:ip,remove:!!remove});
+  if(r.ok)msg(r.note||"saved");
+  else msg(r.error||"failed");
+  setTimeout(loadLan,300);
+}
+async function hitsClearAll(){
+  const r=await act("/lan/hits/clear",{});
+  if(r.ok)msg("IP hit list cleared");
+  else msg(r.error||"failed");
+  setTimeout(loadLan,300);
 }
 async function lanSelftest(){
   /* v2.8.2: the hub connects to its own LAN URL - proves the listener
@@ -19228,13 +19943,8 @@ def cmd_serve():
         log(traceback.format_exc())
         raise
     host = CFG["host"]
-    # v2.8.2: the main listener ALWAYS stays on its normal bind
-    # (127.0.0.1 unless ADVPRINT_HOST pins it). LAN sharing no longer
-    # rebinds THIS socket - a second listener on the specific LAN IP
-    # starts right after the loopback one is up (lan_listen_start), so
-    # "Enable LAN sharing" works instantly and a LAN bind failure can
-    # never take local printing down.
-    global BOUND_LAN
+    global BOUND_LAN, _BOOT_PORT
+    _BOOT_PORT = int(CFG.get("port", 9235))   # v3.4.7: what we bind NOW
     BOUND_LAN = (host in ("0.0.0.0", "::"))
     if CFG.get("share_lan") and not _env("HOST"):
         log("[LAN] printer sharing ON at boot - the LAN listener starts"
@@ -19278,6 +19988,20 @@ def cmd_serve():
             # second instance guard: hub already running? do not scare the user
             log("FATAL: cannot bind %s:%d (%s)"
                 % (CFG["host"], CFG["port"], e))
+            # v3.4.7 CONFIGURABLE PORT: reaching this line means OUR hub is
+            # not the one answering (the single-instance probe above would
+            # have exited already) - so something ELSE on this PC owns the
+            # port. Give the owner every way to move the hub off it.
+            log("[PORT] port %d is taken by ANOTHER program on this PC."
+                " Move the AdvPrint hub to a free port in ONE of these"
+                " ways:" % CFG["port"])
+            log("[PORT]   1. config.json:  set \"port\": 9300 in %s"
+                % config_path())
+            log("[PORT]   2. command line:  %s" % cli_cmd("port 9300"))
+            log("[PORT]   3. environment:   set ADVPRINT_PORT=9300"
+                " (wins over config.json)")
+            log("[PORT] then start the hub again - other PCs / browsers"
+                " must use the NEW port in their hub URL.")
             log("AdvPrint Pro is probably ALREADY running (check the tray icon"
                 " near the clock, or Task Manager -> 'AdvPrintPro'). Exiting.")
             time.sleep(1.2)
@@ -19635,6 +20359,67 @@ def cmd_livetest(do_print=False):
     return 0 if res["all_ok"] else 1
 
 
+def cmd_port(new_port=None):
+    """v3.4.7 CONFIGURABLE HUB PORT: 'python advprint.py port' shows the
+    current port; 'python advprint.py port 9300' saves 9300 to
+    config.json (validated, busy-checked). The hub listens on the new
+    port after its next restart - needed when ANOTHER program on this
+    PC already owns 9235."""
+    db_init()
+    init_config()
+    print(BANNER)
+    cur = int(CFG.get("port", 9235))
+    if new_port is None:
+        print("  Hub port (current): %d" % cur)
+        print("  Change it with:  %s" % cli_cmd("port 9300"))
+        print("  Or: ONE UI > Settings > HUB PORT, or \"port\" in"
+              " config.json (ADVPRINT_PORT env wins over config.json).")
+        print("  The hub listens on the saved port after its next restart.")
+        return 0
+    try:
+        p = int(str(new_port).strip())
+    except ValueError:
+        print("  !! '%s' is not a port number (use 1024-65535)" % new_port)
+        return 1
+    if not (1024 <= p <= 65535):
+        print("  !! port must be between 1024 and 65535")
+        return 1
+    if p in (631, 5353, 9100):
+        print("  !! port %d is reserved by the hub itself"
+              " (631 IPP mirror, 5353 mDNS, 9100 RAW)" % p)
+        return 1
+    busy = False
+    try:
+        sk = socket.socket()
+        sk.settimeout(0.8)
+        sk.connect(("127.0.0.1", p))
+        busy = True
+    except OSError:
+        busy = False
+    finally:
+        try:
+            sk.close()
+        except Exception:
+            pass
+    CFG["port"] = p
+    write_config_file({k: CFG[k] for k in CONFIG_KEYS})
+    db_audit("config.changed", ip="127.0.0.1", site="cli",
+             details="port: %d -> %d" % (cur, p))
+    log("[CONFIG] hub port saved: %d -> %d%s"
+        % (cur, p, "  [WARNING: something already LISTENS on %d - the"
+                  " hub cannot start until that program stops or the"
+                  " port is changed again]" % p if busy else ""))
+    print("  Hub port saved: %d -> %d%s"
+          % (cur, p, "  [!! WARNING: something already listens on that"
+                     " port - pick a free one]" if busy else ""))
+    print("  Restart the hub to listen on the new port (tray icon,"
+          " ONE UI Settings > Restart hub, or: python advprint.py serve).")
+    print("  After the restart use the NEW port everywhere: the browser"
+          " hub URL, every other PC's pairing URL, and the IPP printer"
+          " URL (e.g. ipp://192.168.1.50:%d/ipp/print)." % p)
+    return 0
+
+
 def cmd_doctor():
     print(BANNER)
     results = []
@@ -19700,6 +20485,9 @@ def cmd_help():
                             queues a REAL test page on the printer)
   token                     Show the current API token
   token-rotate              Generate a NEW random token (old one stops)
+  port [N]                  v3.4.7: show the hub port; with N save a NEW
+                            hub port to config.json (for PCs where other
+                            software already owns 9235). Restart applies.
   diagnostics               Export a support bundle (JSON, token redacted)
   service-install           Install AdvPrint as a Windows service (UAC)
   service-remove            Remove the Windows service (UAC)
@@ -19772,6 +20560,9 @@ def main():
                 do_print=(len(args) > 1 and args[1] == "print")))
         elif cmd == "token":
             cmd_token()
+        elif cmd == "port":
+            # v3.4.7: show / set the hub port (config.json)
+            sys.exit(cmd_port(args[1] if len(args) > 1 else None))
         elif cmd == "token-rotate":
             cmd_token_rotate()
         elif cmd == "diagnostics":

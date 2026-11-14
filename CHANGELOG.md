@@ -1,6 +1,121 @@
 # Changelog - AdvPrint Pro (Advanced Printer)
 by Bit Dream IT - Innovative Healthcare Solutions
 
+## v3.4.7 - CONFIGURABLE HUB PORT + DROPZONE WATCH FIX + STRICT LAN SHARE + URL RULES THAT REALLY MATCH (2026-11-14)
+
+Base: v3.4.6 (one port for every queue, the popup that remembers the
+last printer, manual LAN/IPP re-scan, auto-CRX on install). The user
+said "current work fine" and asked for the next version with five
+items. Every item is locked by `tests/test_v347.py`.
+
+### 1. THE HUB PORT IS CONFIGURABLE - "user can also change hub port
+### to dynamic any port ... needed if any pc has already exist same
+### port for diffrent software"
+
+`port` is a normal config key now (default **9235**). The ONE UI
+Settings > HUB PORT row existed since v3.2.1 but only toasted
+"port lives in config.json" - it saves for real now (validated, with a
+restart hint). Three more ways to move the hub: `python advprint.py
+port 9300` (new CLI: shows the port with no argument, saves with one),
+`"port": 9300` in config.json, and the `ADVPRINT_PORT` env (still wins
+over config.json, as always). Validation: 1024-65535, and 631 / 5353 /
+9100 are refused (the hub's own IPP mirror / mDNS / RAW listener).
+`POST /config {"port": ...}` answers `restart:true` + a note that says
+exactly what to click and which URLs must change (browser, other PCs,
+IPP printer URL). The hub's boot payload carries the LIVE port
+(`BOOT.port`), the Settings panel shows it, and if the port is taken
+at boot by ANOTHER program, hub.log now prints all four ways to move
+the hub off it. After the restart the hub shows its default-for-this-PC
+port everywhere: banner, /health, pairing URLs, IPP URLs, mDNS.
+
+### 2. DROPZONE WATCH FIX - "drop zone not work last few version
+### alwase disable dropzone watch off when click to open"
+
+Root cause found: the ONE UI DropZone panel's header button was a
+static "Disable" whose handler ALWAYS posted `drop_enabled:false` -
+clicking it with the watch ON killed the watch, clicking it with the
+watch OFF did nothing useful, and no button anywhere could ever turn
+the watch ON. The backend watcher was never broken (it re-reads the
+config every poll, exactly as built in v2.8.1). The button is a real
+Enable/Disable toggle now: bound once by id, label follows the live
+state on every refresh (blue "Enable" when off), posts the OPPOSITE
+of the current state, and the "watching" stat shows ON/OFF instead of
+1/0. The classic dashboard's DropZone toggle was already correct and
+stays.
+
+### 3. STRICT LAN SHARE - "show which ip hit this printer all
+### diffrent hited ip show here then hit add allow list then this
+### printer can print through hub"
+
+New config key `lan_strict` (default OFF). While it is ON the hub
+records EVERY distinct client IP that touches the HTTP gate - allowed
+or REFUSED, console / send portal / API / IPP - in a capped in-memory
+ring (128 newest). New endpoints: `GET /lan/hits` (strict state +
+newest-first rows + the current allow list), `POST /lan/allow`
+(`{"ip": ...}` appends to allowed_ips - if the list was `["*"]` it is
+REPLACED, which is the lock-down moment and the response says so;
+`{"ip": ..., "remove": true}` takes it off; 127.0.0.1 is refused as
+"always allowed"), `POST /lan/hits/clear`. The ONE UI LAN panel gets a
+"Strict LAN mode" card (switch + hits table with per-row Allow /
+Remove + Clear + Refresh, refreshed by the 3 s poll), the classic
+dashboard LAN card renders the same list inline. Denials keep landing
+in the audit trail (`acl.denied`), allows/removes too (`acl.allowed` /
+`acl.removed`). The switch itself blocks nothing - blocking is what
+the Allowed-IPs list does; the workflow is: switch ON, watch the hits,
+Allow the real PCs, the list locks the hub down by itself.
+
+### 4. URL RULES THAT REALLY MATCH - "how handel those kind regex
+### uri/url rule dynamic id or any needed or domain" (the htncr.org
+### lab set)
+
+The ONE UI rule editor had two real defects: it never saved a pattern
+TYPE (the hub's rules_mirror cleaner STRIPPED the `type` field, so
+every rule degraded to a glob - regex with dynamic ids was impossible
+from the UI), and its "Test which rule fires" card was static demo
+content - the buttons were wired to nothing. Fixed and expanded:
+
+- The hub keeps `type` ("glob" | "regex" | "contains") in
+  rules_mirror now; the extension has understood all three for years.
+- The rule editor has a **pattern type** select (Glob - `*` wildcard /
+  Regex - dynamic ids / Contains - easiest) and a **"load a ready
+  recipe..." dropdown** preloaded with the user's lab set:
+  single-test-id report, sample->ZPL, receipt client/all/lab/admin->A5,
+  whole-domain glob, any-PDF glob, contains-text.
+- A server-side mirror of the extension's matcher
+  (`rule_pattern_to_regex` / `rule_matches` / `evaluate_rules`) plus
+  `POST /rules/test` + `GET /rules/test?url=...`: the hub evaluates
+  rules_mirror EXACTLY like the browser (top to bottom, first match
+  wins, on/enabled respected, optional title/kind filters) and answers
+  the winning rule + printer - or "no rule" = OS default through the
+  normal auto pipeline. Nothing is printed by the test.
+- The Rules panel's Test box is REAL: two rows (plain URL, and URL +
+  simulated page kind for content rules), Enter key works, the result
+  names the rule, printer, action, paper, copies and the matched
+  pattern + type. The rules table shows the type chip (GLOB/REGEX/
+  CONTAINS) on every row.
+- `docs/PRINT-RULES-RECIPES.md` - the proper doc the user asked for:
+  the four htncr.org recipes VERBATIM with the why (the `$` anchor
+  that separates ONE `tests[]` id from MANY, `%5B%5D` vs `[]`, `\d+`
+  dynamic ids, `(client|all|lab|admin)` alternations, domain locking),
+  the multi-test fall-through to default A4, the three ways to verify,
+  and the developer file map.
+
+### 5. NO MORE VERSION PREFIXES IN UI NOTES - "diffrent area show
+### difrent version note it show ugly so only not show version before
+### note"
+
+Every "v2.8 ·", "v3.2.6 ·", "- v2.2:", "since v2.6.4", "v3.3.5 -" and
+friends are gone from the ONE UI panel subs, card headers, notes and
+the dashboard section titles (24 replacements; the /docs manual keeps
+its version history - that is what docs are for). The About card now
+says "port 9235 by default (changeable in Settings)" instead of a
+hardcoded port.
+
+Also in this release: the POST /config handler no longer NameErrors
+when a body contains zero valid keys (a latent crash found while
+adding the port key). One port, the popup printer memory, the LAN/IPP
+manual re-scan and the auto-CRX machinery all stay unchanged.
+
 ## v3.4.6 - ONE PORT FOR EVERYTHING + POPUP REMEMBERS THE LAST PRINTER (2026-11-14)
 
 Base: v3.3.5. The user asked the right question about the v3.3.5
