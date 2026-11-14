@@ -1,6 +1,84 @@
 # Changelog - AdvPrint Pro (Advanced Printer)
 by Bit Dream IT - Innovative Healthcare Solutions
 
+## v3.5.0 - PRO THEMES + DASHBOARD DATA VIEW FIXES (theming + layout release on the working v3.4.8.1 base) (2026-11-14)
+
+The user applied the "ProTheme" design to the current console and asked
+for the full source + docs as v3.5.0. This release ports that theme onto
+the REAL hub console (the ONE UI that advprint.py serves at /ui), fixes
+the dashboard data view that "previously [was] not showing correctly",
+and bumps every version surface. Print, rule-matching, queue and network
+logic are untouched; `tests/test_v350.py` locks everything below and
+`tests/test_v348.py` still locks the v3.4.8 table fit.
+
+### 1. THE PRO THEME ENGINE - 7 themes, light/dark, density, corners, frame
+
+- 7 color themes: **Cobalt** (new default), **Classic IDM** (the original
+  v3.2.1 Windows-IDM blue, kept as a theme), **Emerald**, **Violet**,
+  **Graphite**, **Midnight** and **Carbon** (both full dark themes).
+- Light/dark via `data-mode`; density (comfortable / compact),
+  corners (rounded / sharp) and window frame (framed / borderless) via
+  `data-density` / `data-corners` / `data-frame`.
+- The state is saved in the browser (localStorage key
+  `"advprintTheme"`) and applied by an early-apply script in `<head>`,
+  BEFORE first paint - no wrong-theme flash on open.
+- Two entry points: the **Theme menu** in the menu bar (7 themes +
+  "System (auto light / dark)" + "Appearance settings...") and the
+  **Appearance card** in Settings (8 preview tiles, density / corners /
+  frame toggles, live status line, "Reset appearance").
+- The old dead `THEME` select row ("Windows IDM (Blue)" that did
+  nothing) is removed together with its JS reference.
+- Icon-only sidebar/toolbar items show their label as a tooltip on
+  hover / focus / tap (phone-friendly).
+
+### 2. DASHBOARD DATA VIEW SHOWS THE REAL STATE ("previously not showing correctly")
+
+- The "IPP printer" glance row was caught by the `ipp||mdns` branch and
+  showed mDNS discovery text; it has its own branch now and shows
+  `READY /ipp/print` (or OFF), and mDNS, RAW port and DropZone rows
+  render live (`LISTENING 10.26.94.206:9100`, `ON watching the
+  DropZone folder`).
+- The Printers-Ready stat counted an `idle` printer as down and said
+  "2/4 - 2 offline" while the Printers tab and the status bar said 3
+  usable. An idle printer is usable now (only `offline` is down), in
+  BOTH the dashboard stat and the status bar.
+- The In Queue stat showed "4 (+2)" - pending already contains the held
+  jobs, so they were counted twice. The big number is the queue total,
+  the held count moved into the corner label ("2 held").
+- Progress bars carry rounded widths (67%, not
+  66.66666666666667%).
+- The static fallback markup (visible before JS) uses the same
+  consistent values, and the sample jobs carry the page totals the
+  static table always claimed (18 / 4 / 1).
+
+### 3. LOCAL QR GENERATOR
+
+The QR tiles (hub / invite / IPP) render from a local SVG generator
+(`window.apQRsvg`) instead of probing the hub first, and the QR modal
+BASE uses `location.origin` (the string "null" on file:// before), so
+QRs appear even while the hub is restarting.
+
+### 4. THE RULE EDITOR KEEPS THE WORKING (REVERTED) v3.4.7 LOGIC
+
+The ProTheme source the UI was built from still carried the FIRST
+(buggy) v3.4.8 rule-editor remap: value attributes + ZPL/Image editor
+options, a web->html alias and a value-based save. The user reverted
+that build as "not work, fully bug" and v3.4.8.1 re-locked the v3.4.7
+behavior - v3.5.0 therefore strips the remap again (label-based select,
+positional save, no ZPL/Image editor options) and `tests/test_v350.py`
+re-locks it next to `tests/test_v348.py`.
+
+### 5. VERSION 3.5.0 EVERYWHERE
+
+VERSION.txt, both advprint.py copies (VERSION + VERSION_NAME), the
+embedded ONE UI console (unix + windows + installer stage), the
+extension (manifest, popup, options, i18n en+bn, api.js fallback,
+popup.js header), setup.nsi (OutFile / VIProductVersion /
+DisplayVersion / silent-install + damaged-file hints), the deb control,
+START-HERE.txt, README.md and this changelog. dist/ rebuilt with the
+repo's build-all.sh: signed CRX3 v3.5.0 (all embedded copies synced +
+verified), extension zip, Setup EXE, deb and SHA256SUMS-3.5.0.txt.
+
 ## v3.4.8 - RULES TABLE FITS (layout-only release on the working v3.4.7 base) (2026-11-14)
 
 The first v3.4.8 attempt bundled the table fix with three logic changes

@@ -32,9 +32,14 @@ def console():
 # ---------------- A. the table fix is present ---------------------------
 
 def test_tbl_wrap_css_present():
+    """v3.5.0 note: the Pro Theme density system restyled the compact
+    cells (7px comfortable + a 4px compact-density variant) - the wrap,
+    the clamp and the fix stay identical."""
     s = console()
     assert ".tbl-wrap{overflow-x:auto}" in s
-    assert ".tbl.compact th,.tbl.compact td{padding:6px 6px}" in s
+    assert ".tbl.compact th,.tbl.compact td{padding:7px 6px}" in s
+    assert ('.tbl.compact th,html[data-density="compact"] '
+            '.tbl.compact td{padding:4px 6px}') in s
     assert ".tbl.compact .doc{max-width:118px}" in s
 
 
@@ -46,7 +51,9 @@ def test_headers_may_wrap():
 
 def test_rules_table_compact_and_wrapped():
     s = console()
-    assert '<div class="tbl-wrap"><table class="tbl compact" style="font-size:10px">' in s
+    # v3.5.0: the ProTheme source formats the rules table multi-line
+    assert re.search(r'<div class="tbl-wrap">\s*<table class="tbl compact" '
+                     'style="font-size:10px">', s)
     # measured column widths
     for w in ('style="width:22px"', 'style="min-width:58px"',
               'style="min-width:80px"', 'style="min-width:70px"',
@@ -57,8 +64,9 @@ def test_rules_table_compact_and_wrapped():
 
 def test_all_one_ui_tables_wrapped_mtable_untouched():
     s = console()
-    assert s.count('<div class="tbl-wrap"><table class="tbl') == 13
-    assert '<div class="tbl-wrap"><table class="mtable">' not in s
+    # 13 wrapped tables (12 single-line + the multi-line rules table)
+    assert len(re.findall(r'<div class="tbl-wrap">\s*<table class="tbl', s)) == 13
+    assert re.search(r'<div class="tbl-wrap">\s*<table class="mtable">', s) is None
     assert '<table class="mtable">' in s
 
 
@@ -82,8 +90,8 @@ def test_embedded_console_fresh():
     m = re.search(r'CONSOLE_HTML = r"""(.*?)\n"""', src, re.S)
     assert m, "CONSOLE_HTML block not found"
     emb = m.group(1)
-    assert '<div class="tbl-wrap"><table class="tbl compact"' in emb
-    assert 'BOOT.version || "3.4.8"' in emb
+    assert re.search(r'<div class="tbl-wrap">\s*<table class="tbl compact"', emb)
+    assert 'BOOT.version || "3.5.0"' in emb
 
 
 # ---------------- B. the reverted risky changes stay absent --------------
@@ -139,30 +147,33 @@ def test_python_runtime_present():
     assert "AdvPrintPro.exe" in files, "pythonw-clone launcher missing"
 
 
-# ---------------- D. version coherence 3.4.8 -----------------------------
+# ---------------- D. version coherence -----------------------------
+# v3.5.0 note: this file locks the v3.4.8 table fix; the version block
+# tracks the CURRENT release (3.5.0) so a stale embed or a missed bump
+# still fails here.
 
 def test_version_everywhere():
     adv = open(os.path.join(ROOT, "tool", "unix", "hub", "advprint.py"),
                encoding="utf-8").read()
-    assert 'VERSION = "3.4.8"' in adv
-    assert 'VERSION_NAME = ("v3.4.8 (RULES TABLE FITS' in adv
+    assert 'VERSION = "3.5.0"' in adv
+    assert 'VERSION_NAME = ("v3.5.0 (PRO THEMES' in adv
     assert "CONFIGURABLE HUB PORT" in adv  # historical keyword kept
     vt = open(os.path.join(ROOT, "VERSION.txt"), encoding="utf-8").read()
-    assert "3.4.8" in vt
+    assert "3.5.0" in vt
     man = json.load(open(os.path.join(ROOT, "extension", "manifest.json"),
                          encoding="utf-8"))
-    assert man["version"] == "3.4.8"
+    assert man["version"] == "3.5.0"
     popup = open(os.path.join(ROOT, "extension", "popup.html"),
                  encoding="utf-8").read()
-    assert 'id="ver">v3.4.8</span>' in popup
+    assert 'id="ver">v3.5.0</span>' in popup
     i18n = open(os.path.join(ROOT, "extension", "i18n.js"),
                 encoding="utf-8").read()
-    assert i18n.count("3.4.8") >= 2  # brandLine en + bn
+    assert i18n.count("3.5.0") >= 2  # brandLine en + bn
     api = open(os.path.join(ROOT, "extension", "content", "api.js"),
                encoding="utf-8").read()
-    assert 'var _apVerFallback = "3.4.8";' in api
+    assert 'var _apVerFallback = "3.5.0";' in api
     nsi = open(os.path.join(ROOT, "installer", "setup.nsi"),
                encoding="utf-8").read()
-    assert 'OutFile "../dist/AdvPrint-Pro-Setup-3.4.8.exe"' in nsi
-    assert 'VIProductVersion "3.4.8.0"' in nsi
-    assert '"DisplayVersion" "3.4.8"' in nsi
+    assert 'OutFile "../dist/AdvPrint-Pro-Setup-3.5.0.exe"' in nsi
+    assert 'VIProductVersion "3.5.0.0"' in nsi
+    assert '"DisplayVersion" "3.5.0"' in nsi

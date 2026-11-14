@@ -13,7 +13,30 @@ Web page ──► Chrome extension ──► AdvPrint Pro hub (localhost:9235) 
 
 ---
 
-## What's new in v3.4.8 (RULES TABLE FITS - layout-only release)
+## What's new in v3.5.0 (PRO THEMES + DASHBOARD DATA VIEW FIXES)
+
+The console gets the **Pro Theme engine**: 7 color themes - Cobalt
+(new default), Classic IDM (the original v3.2.1 blue), Emerald,
+Violet, Graphite, Midnight and Carbon (both full dark) - plus
+light/dark, three densities, rounded/sharp corners and a
+framed/borderless window option. Pick from the **Theme menu** or
+**Settings > Appearance**; the choice is saved in the browser and
+applied **before first paint** (no wrong-theme flash), and icon-only
+sidebar/toolbar items show their label as a tooltip. The **dashboard
+data view now agrees with the rest of the UI**: the "IPP printer"
+glance row shows READY + the /ipp/print endpoint (mDNS discovery text
+hijacked it before), mDNS / RAW port / DropZone rows render live,
+idle printers count as usable, held jobs are no longer double-counted
+in In Queue, and progress widths are rounded. A local QR generator
+renders the QR tiles without the hub. No print / rule / queue /
+network logic changed - `tests/test_v350.py` locks the theme engine
+and the dashboard fixes, `tests/test_v348.py` still locks the rules
+table fit, and the rule editor keeps the reverted (working) v3.4.7
+kind handling. Full details in `CHANGELOG.md` and
+`docs/AdvPrint-Pro-v3.5.0-A-to-Z-DEV-GUIDE.md`.
+
+---
+## What was new in v3.4.8 (RULES TABLE FITS - layout-only release)
 
 The first v3.4.8 attempt did not work and was reverted per your
 request; this release is the working **v3.4.7** tree plus EXACTLY ONE

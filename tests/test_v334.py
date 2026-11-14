@@ -477,17 +477,15 @@ def test_bat_has_hklm_hkcu_menu_and_scripted_args():
 
 def test_version_coherence_334():
     vtxt = open(os.path.join(ROOT, "VERSION.txt"), encoding="utf-8").read()
-    assert "3.4.8" in vtxt
-    assert advprint.VERSION == "3.4.8"
+    assert "3.5.0" in vtxt
+    assert advprint.VERSION == "3.5.0"
     manifest = json.load(open(os.path.join(ROOT, "extension",
                                            "manifest.json"),
                               encoding="utf-8"))
-    assert manifest["version"] == "3.4.8"
-    assert '"version": "3.4.8"' in _popup_html().replace("v3.4.8",
-                                                         '"3.4.8"') or \
-        "v3.4.8" in _popup_html()
+    assert manifest["version"] == "3.5.0"
+    assert "v3.5.0" in _popup_html()
     i18n = _i18n_js()
-    assert i18n.count("3.4.8") >= 2          # brandLine en + bn
+    assert i18n.count("3.5.0") >= 2          # brandLine en + bn
     guide = os.path.join(ROOT, "docs",
                          "AdvPrint-Pro-v3.4.8-A-to-Z-DEV-GUIDE.md")
     assert os.path.isfile(guide)

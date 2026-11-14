@@ -63,17 +63,17 @@ CHANGELOG = open(os.path.join(ROOT, "CHANGELOG.md"),
 # ---------------------------------------------------------------
 
 def test_version_327_everywhere():
-    assert advprint.VERSION == "3.4.8"
-    assert advprint.VERSION_NAME.startswith("v3.4.8")
-    assert "CONFIGURABLE HUB PORT" in advprint.VERSION_NAME
-    assert re.search(r"3\.4\.8", VERSION_TXT), VERSION_TXT
-    assert MANIFEST["version"] == "3.4.8"
-    assert 'v3.4.8</span>' in open(os.path.join(
+    assert advprint.VERSION == "3.5.0"
+    assert advprint.VERSION_NAME.startswith("v3.5.0")
+    assert "configurable hub port" in advprint.VERSION_NAME
+    assert re.search(r"3\.5\.0", VERSION_TXT), VERSION_TXT
+    assert MANIFEST["version"] == "3.5.0"
+    assert 'v3.5.0</span>' in open(os.path.join(
         EXT, "popup.html"), encoding="utf-8").read()
-    assert "v3.4.8" in open(os.path.join(
+    assert "v3.5.0" in open(os.path.join(
         EXT, "options.html"), encoding="utf-8").read()
-    assert 'var _apVerFallback = "3.4.8";' in APIJS_SRC
-    assert 'BOOT.version || "3.4.8"' in CONSOLE
+    assert 'var _apVerFallback = "3.5.0";' in APIJS_SRC
+    assert 'BOOT.version || "3.5.0"' in CONSOLE
     assert "## v3.2.7 - THE DEVELOPER API RELEASE" in CHANGELOG
 
 
