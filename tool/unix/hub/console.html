@@ -2629,17 +2629,15 @@ function renderPrinters(list){
         "<span>Jobs <b>" + (p.jobs != null ? p.jobs : 0) + "</b></span>" +
         "<span>" + chip(p.status === "ready" ? "ready" : p.status) + "</span>";
       var url = c.querySelector(".url");
-      /* v3.4.6: ONE port again - this printer's per-printer queue URL
-         on the HUB port (ipp://ip:9235/ipp/print/<printer>) leads.
-         Every printer adds side by side from this one endpoint: the
-         queue is picked by the path + the unique per-queue identity
-         (printer-name/uuid), exactly like a CUPS server. */
-      var leadUrl = p.ipp_queue || "";
+      /* v3.3.5: the DEDICATED queue port URL leads (this printer's OWN
+         ip:port - the endpoint Windows can add side by side with every
+         other printer); the path queue stays on the Details button. */
+      var leadUrl = p.ipp_dedicated || p.ipp_queue;
       if (leadUrl) { url.innerHTML = ""; url.appendChild(document.createTextNode(leadUrl));
         var b = document.createElement("button"); b.className = "cp"; b.textContent = "COPY";
         b.setAttribute("data-cp", leadUrl); url.appendChild(b);
-        url.title = "Per-printer queue on the hub port (ONE port serves"
-          + " every printer - v3.4.6)"; }
+        if (p.ipp_dedicated) url.title = "Dedicated port " + p.ipp_port +
+          " - this printer's OWN endpoint (v3.3.5 multi-printer fix)"; }
       else { url.style.display = "none"; }
       var ops = c.querySelector(".ops");
       ops.innerHTML = '<button class="btn blue" data-ptest="' + esc(p.name) + '">Test Page</button>' +
@@ -3361,7 +3359,7 @@ function renderExt(audit){
     rows.slice(0, 6).forEach(function(r2){
       var tr = tmpl.cloneNode(true), td = tr.querySelectorAll("td");
       td[0].innerHTML = "<b>" + esc(r2.who) + "</b>";
-      td[1].textContent = "v" + (BOOT.version || "3.4.6");
+      td[1].textContent = "v" + (BOOT.version || "3.3.5");
       td[2].textContent = r2.at ? r2.at.slice(11, 19) : "\u2014";
       td[3].innerHTML = '<span class="chip ok"><span class="d"></span>PAIRED</span>';
       tbl.appendChild(tr);
@@ -3383,7 +3381,7 @@ function renderExt(audit){
       m2.textContent = BASE + "/extension/updates.xml";
   });
   var crxChip = document.querySelector("#p-extension .frow .chip.ok");
-  if (crxChip) crxChip.innerHTML = '<span class="d"></span>CRX v' + (BOOT.version || "3.4.6") + " READY";
+  if (crxChip) crxChip.innerHTML = '<span class="d"></span>CRX v' + (BOOT.version || "3.3.5") + " READY";
   /* v3.2.8 STALE-CRX GUARD: ask the hub which package it really
    * serves (/extension/info is open, no token). Older than the hub
    * itself -> Chrome never updates -> browsers keep the old bugs.
@@ -3589,7 +3587,7 @@ async function renderUpdate(res){
    full-page /docs stays available via the "Full guide page" button.
    ============================================================ */
 function docsHtml(){
-  var v = esc(BOOT.version || "3.4.6");
+  var v = esc(BOOT.version || "3.3.5");
   var ip = esc(BOOT.lan_ip || location.hostname || "127.0.0.1");
   var port = esc(String(BOOT.port || location.port || "9235"));
   var base = "http://" + ip + ":" + port;

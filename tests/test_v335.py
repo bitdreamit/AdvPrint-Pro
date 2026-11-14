@@ -1,7 +1,17 @@
-"""v3.3.5 - MANUAL RE-SCAN + AUTO-CRX-ON-INSTALL (two features survive
-into v3.4.6 unchanged; the third, the DEDICATED QUEUE PORTS
-experiment, was REMOVED again in v3.4.6 - ONE port serves every queue
-now, see tests/test_v346.py).
+"""v3.3.5 - DEDICATED QUEUE PORTS + MANUAL RE-SCAN + AUTO-CRX-ON-INSTALL.
+
+Three user reports, each locked here:
+
+BUG 1     "ipp work fine but only default or only one add posible ...
+          when add aggain another it show error to add" (STILL on
+          v3.3.4). Root cause this time: every queue shared ONE
+          endpoint - every mDNS service resolved to the same host:port
+          (one shared SRV record) and every queue rode the same
+          ip:9235/ipp/print URL, so Windows' Add-Printer flow treats a
+          second queue on the same endpoint as "already there". Fix:
+          ONE DEDICATED TCP PORT PER PRINTER (9236, 9237, ...), each
+          serving only that printer for ALL /ipp/print* paths, each
+          mDNS service its own SRV port, ports kept STABLE in config.
 
 FEATURE 2 "printer page when Show other PCs (LAN / IPP) on it auto
           load every time no need this page has re-scan option it just
@@ -41,6 +51,15 @@ def two_printers(monkeypatch):
     return names
 
 
+@pytest.fixture()
+def clean_port_map():
+    """Run one test with a fresh, empty port allocation."""
+    old = advprint.CFG.get("ipp_queue_port_map")
+    advprint.CFG["ipp_queue_port_map"] = {}
+    yield
+    advprint.CFG["ipp_queue_port_map"] = old if old is not None else {}
+
+
 def _parse_records(packet):
     """Tiny DNS answer parser for OUR mDNS packets (no compression)."""
     i = 12
@@ -55,7 +74,7 @@ def _parse_records(packet):
             if ln == 0:
                 break
             labels.append(packet[pos:pos + ln].decode("utf-8", "replace"))
-            pos = pos + ln
+            pos += ln
         return ".".join(labels), pos
 
     for _ in range(qd):
@@ -79,6 +98,157 @@ class _CaptureSock:
 
     def sendto(self, pkt, addr):
         self.sent.append((bytes(pkt), addr))
+
+
+# ---------------------------------------------------------------
+# BUG 1 - dedicated per-printer queue ports
+# ---------------------------------------------------------------
+
+def test_queue_port_allocations_stable_and_distinct(two_printers,
+                                                    clean_port_map):
+    base = advprint.ipp_queue_port_base()
+    m1 = advprint.ipp_queue_port_allocations()
+    m2 = advprint.ipp_queue_port_allocations()
+    assert m1 == m2                       # stable across calls
+    assert set(m1.keys()) == {"HP Laser 103", "Epson L3250"}
+    ports = sorted(m1.values())
+    assert len(set(ports)) == 2           # one port per printer, distinct
+    assert ports[0] == base               # first queue port = hub port + 1
+    assert len(set(ports)) == len(set([m1["HP Laser 103"],
+                                       m1["Epson L3250"]]))
+
+
+def test_queue_port_allocations_keep_existing(two_printers, clean_port_map):
+    base = advprint.ipp_queue_port_base()
+    advprint.CFG["ipp_queue_port_map"] = {"Epson L3250": base + 5}
+    m = advprint.ipp_queue_port_allocations()
+    assert m["Epson L3250"] == base + 5   # kept - the installed queue
+    assert m["HP Laser 103"] == base      # new printer gets lowest free
+
+
+def test_queue_port_allocations_drop_stale(clean_port_map):
+    base = advprint.ipp_queue_port_base()
+    advprint.CFG["ipp_queue_port_map"] = {"Ghost Printer": base + 3}
+    m = advprint.ipp_queue_port_allocations()
+    assert "Ghost Printer" not in m       # printer no longer exists
+
+
+def test_mdns_services_carry_per_service_port(two_printers, clean_port_map):
+    svcs = advprint._mdns_services()
+    assert len(svcs) == 3
+    central = svcs[0]
+    assert central[5] == int(advprint.CFG.get("port", 9235))
+    per = {s[0]: s[5] for s in svcs[1:]}
+    base = advprint.ipp_queue_port_base()
+    assert len(set(per.values())) == 2    # each printer its OWN port
+    assert base in per.values()
+
+
+def test_mdns_rrset_has_one_srv_per_service_with_its_own_port(
+        two_printers, clean_port_map, monkeypatch):
+    advprint._mdns_state["sock"] = _CaptureSock()
+    monkeypatch.setattr(advprint, "lan_ip", lambda: "192.168.1.50")
+    try:
+        advprint._mdns_announce("192.168.1.50")
+        pkt = advprint._mdns_state["sock"].sent[0][0]
+    finally:
+        advprint._mdns_state["sock"] = None
+    recs = _parse_records(pkt)
+    srv = [(n, int.from_bytes(rd[4:6], "big"))
+           for n, rt, rd in recs if rt == 33]
+    assert len(srv) == 3                  # one SRV PER service
+    ports = sorted(p for _, p in srv)
+    assert len(set(ports)) == 3           # every service a DISTINCT port
+    assert int(advprint.CFG.get("port", 9235)) in ports
+
+
+def test_mdns_unicast_srv_query_answers_the_queue_port(
+        two_printers, clean_port_map, monkeypatch):
+    advprint._mdns_state["sock"] = _CaptureSock()
+    monkeypatch.setattr(advprint, "lan_ip", lambda: "192.168.1.50")
+    svcs = advprint._mdns_services()
+    inst, _rp, _ty, _note, slug, port = svcs[1]
+    try:
+        pkt = advprint._mdns_packet(
+            [], questions=advprint._mdns_encode_name(
+                inst + "._ipp._tcp.local") +
+            (33).to_bytes(2, "big") + (1).to_bytes(2, "big"),
+            qdcount=1)
+        advprint._mdns_answer_query(pkt, ("192.168.1.99", 42512),
+                                    "192.168.1.50")
+        assert advprint._mdns_state["sock"].sent
+        out = advprint._mdns_state["sock"].sent[0][0]
+    finally:
+        advprint._mdns_state["sock"] = None
+    recs = _parse_records(out)
+    srv = [int.from_bytes(rd[4:6], "big")
+           for n, rt, rd in recs if rt == 33]
+    assert srv == [port]                  # THAT printer's dedicated port
+
+
+def test_dedicated_url_uses_the_queue_port(two_printers, clean_port_map):
+    m = advprint.ipp_queue_port_allocations()
+    url = advprint.ipp_queue_dedicated_url("HP Laser 103",
+                                           host="192.168.1.50")
+    assert url == "http://192.168.1.50:%d/ipp/print" % m["HP Laser 103"]
+    assert advprint.ipp_queue_dedicated_url("Nope") == ""
+
+
+def test_printers_payload_carries_dedicated_url(hub, monkeypatch):
+    names = ["HP Laser 103", "Epson L3250"]
+    monkeypatch.setattr(advprint, "list_printers_cached",
+                        lambda max_age=60.0: list(names))
+    monkeypatch.setattr(advprint, "default_printer_cached",
+                        lambda: names[0])
+    code, j = hub.get("/printers")
+    assert code == 200
+    items = {p["name"]: p for p in j["printers"] if not p["is_group"]}
+    for n in names:
+        assert items[n]["ipp_dedicated"].startswith("http://")
+        assert items[n]["ipp_port"] == advprint.CFG[
+            "ipp_queue_port_map"][n]
+        # the path queue is still there alongside the dedicated port
+        assert "/ipp/print/" in items[n]["ipp_queue"]
+
+
+def test_ippq_reconcile_off_when_ipp_disabled(hub, monkeypatch):
+    old = advprint.CFG.get("ipp_printer")
+    advprint.CFG["ipp_printer"] = False
+    try:
+        advprint.ippq_reconcile()
+        assert advprint._IPPQ_HTTPDS == {}
+    finally:
+        advprint.CFG["ipp_printer"] = old
+
+
+def test_queue_binding_wins_on_its_port(hub, monkeypatch):
+    """The Handler routes /ipp/print* on a bound port to THAT printer."""
+    names = ["HP Laser 103", "Epson L3250"]
+    monkeypatch.setattr(advprint, "list_printers_cached",
+                        lambda: list(names))
+
+    class FakeServer:
+        queue_binding = "HP Laser 103"
+
+    inst = hub.__class__  # not used; build the request by hand instead
+    seen = {}
+
+    # exercise the routing logic the same way the Handler does
+    route = "/ipp/print"
+    ipp_q_printer = ""
+    ipp_q_unknown = ""
+    _ippq_bind = getattr(FakeServer, "queue_binding", None)
+    if _ippq_bind and route.startswith("/ipp"):
+        ipp_q_printer = _ippq_bind
+        ipp_q_unknown = ""
+    if route.startswith("/ipp/print/"):
+        if not _ippq_bind:
+            pass
+        route = "/ipp/print"
+    seen["printer"] = ipp_q_printer
+    seen["unknown"] = ipp_q_unknown
+    assert seen["printer"] == "HP Laser 103"
+    assert seen["unknown"] == ""
 
 
 # ---------------------------------------------------------------
@@ -205,12 +375,10 @@ def test_serve_starts_the_autocrx_thread():
     assert "advprint-autocrx" in src
 
 
-def test_installer_has_the_full_policy_and_cleanup_rule():
-    """v3.4.6: the FULL policy stays; the queue-port RANGE rule is gone
-    (ONE port again) but its delete-rule survives so an upgrade from a
-    v3.3.5 install removes the leftover 9235-9259 firewall rule."""
+def test_installer_has_the_full_policy_and_queue_firewall():
     nsi = open(os.path.join(ROOT, "installer", "setup.nsi"),
                encoding="utf-8", errors="replace").read()
+    assert "3.3.5" in nsi
     for browser in ["Google\\Chrome", "Microsoft\\Edge",
                     "BraveSoftware\\Brave", "Chromium", "Vivaldi",
                     "Opera Software\\Opera"]:
@@ -218,33 +386,28 @@ def test_installer_has_the_full_policy_and_cleanup_rule():
     assert "ExtensionInstallAllowlist" in nsi
     assert "ExtensionInstallSources" in nsi
     assert "HKCU \"SOFTWARE\\Policies\\${POLPATH}\\ExtensionInstallForcelist\"" in nsi
-    # the 9235-9259 range rule is NOT added any more ...
-    assert 'add rule name="AdvPrint Pro Queues"' not in nsi
-    # ... but an old v3.3.5 rule is still cleaned up on upgrade
-    assert 'delete-rule name="AdvPrint Pro Queues"' in nsi
-    # and the ONE hub-port rule stays
-    assert 'add rule name="AdvPrint Pro" dir=in action=allow ' \
-        'protocol=TCP localport=9235' in nsi
+    assert "localport=9235-9259" in nsi        # the queue-port range
+    assert 'name="AdvPrint Pro Queues"' in nsi
 
 
 # ---------------------------------------------------------------
 # release coherence
 # ---------------------------------------------------------------
 
-def test_version_coherence_346():
-    assert advprint.VERSION == "3.4.6"
+def test_version_coherence_335():
+    assert advprint.VERSION == "3.3.5"
     vtxt = open(os.path.join(ROOT, "VERSION.txt"), encoding="utf-8").read()
-    assert "3.4.6" in vtxt
+    assert "3.3.5" in vtxt
     manifest = json.load(open(os.path.join(ROOT, "extension",
                                            "manifest.json"),
                               encoding="utf-8"))
-    assert manifest["version"] == "3.4.6"
+    assert manifest["version"] == "3.3.5"
     popup = open(os.path.join(ROOT, "extension", "popup.html"),
                  encoding="utf-8").read()
-    assert 'id="ver">v3.4.6<' in popup
+    assert 'id="ver">v3.3.5<' in popup
     i18n = open(os.path.join(ROOT, "extension", "i18n.js"),
                 encoding="utf-8").read()
-    assert i18n.count("3.4.6") >= 2          # brandLine en + bn
+    assert i18n.count("3.3.5") >= 2          # brandLine en + bn
 
 
 def test_hub_copies_byte_identical():

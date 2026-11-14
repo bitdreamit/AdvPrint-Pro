@@ -96,33 +96,36 @@ if _HUB_DIR not in sys.path:
     sys.path.insert(0, _HUB_DIR)
 
 
-VERSION = "3.4.6"
-VERSION_NAME = ("v3.4.6 (ONE PORT FOR EVERYTHING + POPUP REMEMBERS THE "
-    "LAST PRINTER. The user asked the right question about v3.3.5: "
-    "\"why not [the] hub default port - only one port to handle "
-    "different PCs to connect through IPP or other?\" - so the "
-    "DEDICATED PER-PRINTER QUEUE PORTS (9236, 9237, ..., firewall "
-    "9235-9259) are REMOVED again. ONE TCP port - the hub port 9235 - "
-    "serves EVERY queue for every PC, exactly like a CUPS server: the "
-    "queues are distinguished by their FULL URI "
-    "(/ipp/print = default queue, /ipp/print/<printer> = that one "
-    "printer) plus the per-queue identity v3.3.4/v3.3.5 already taught "
-    "the hub to answer - unique printer-name, STABLE unique "
-    "printer-uuid (token|host|slug), the exact client URI echoed in "
-    "printer-uri-supported, one mDNS service per queue with its own rp "
-    "and uuid on the SAME SRV port. The v3.3.4-era add failure was the "
-    "shared queue IDENTITY, not the shared port - with identity fixed, "
-    "the extra ports were masking tape, and the firewall goes back to "
-    "the single AdvPrint Pro rule TCP 9235 (+ 9100 RAW, 631 IPP "
-    "mirror, 5353 mDNS). FEATURE - POPUP PRINTER SELECT: the popup "
-    "always showed the FIRST printer after a reload because it read a "
-    "field the hub never sends (default_printer vs default) - fixed, "
-    "and the popup now REMEMBERS the last printer you picked "
-    "(chrome.storage advLastPrinter) and auto-selects it on open, "
-    "falls back to the hub's current default, and marks the OS default "
-    "in the list. On top of v3.3.5: manual LAN/IPP re-scan, auto-CRX "
-    "on install, the v3.3.4 uuid fix and the idempotent set-default "
-    "all stay unchanged.")
+VERSION = "3.3.5"
+VERSION_NAME = ("v3.3.5 (DEDICATED QUEUE PORTS + MANUAL RE-SCAN + "
+    "AUTO-CRX-ON-INSTALL. BUG 1 - \"only default or only one add "
+    "possible; adding another errors\" (still reported on v3.3.4): the "
+    "per-printer queues shared ONE endpoint - every mDNS service "
+    "resolved to the same host:port and every queue rode the same "
+    "ip:9235/ipp/print URL, so Windows' Add-Printer flow treated the "
+    "second queue as the printer that was already there. THE DEEP FIX: "
+    "the hub now opens ONE DEDICATED TCP PORT PER PRINTER (9236, 9237, "
+    "... right after the hub port) that serves exactly that printer's "
+    "queue for ALL /ipp/print* paths, every mDNS service advertises "
+    "its OWN SRV port, and ports are kept stable in config "
+    "(ipp_queue_port_map) so an installed queue survives restarts. "
+    "ip:9235/ipp/print stays the central/default queue and "
+    "ip:9235/ipp/print/<printer> the path queue - both keep working; "
+    "each printer ALSO gets http://<lan-ip>:<own-port>/ipp/print. "
+    "FEATURE 2 - the Printers panel's \"Show other PCs (LAN / IPP)\" "
+    "list no longer auto-loads on every 3 s poll: it renders from the "
+    "LAST MANUAL SCAN and refreshes ONLY via the panel Re-scan button "
+    "or the switch itself (GET /peer/status?fresh=1 skips the probe "
+    "cache). FEATURE 3 - AUTO CRX ON INSTALL: the installer writes the "
+    "FULL extension policy (Forcelist + Allowlist + Sources, HKLM + "
+    "HKCU, now incl. Opera) by itself, the hub re-applies the per-user "
+    "HKCU pass SILENTLY on every start (autocrx_hkcu, no UAC, no "
+    ".bat), so the built-in CRX installs and auto-updates itself from "
+    "the hub; the console gets the Auto-install switch. Firewall: the "
+    "installer opens TCP 9235-9259 for the queue ports. On top of "
+    "v3.3.4: everything from the multi-printer uuid fix, the popup "
+    "printer/reload/network-icon release and the idempotent "
+    "set-default stays unchanged.")
 FULL_BRAND = ("AdvPrint Pro (Advanced Printer) by "
               "Bit Dream IT - Innovative Healthcare Solutions")
 BRANDING = ("AdvPrint Pro (Advanced Printer) - Version %s - by "
@@ -259,13 +262,21 @@ CFG = {
                                       #  for ports < 1024; on macOS/Linux
                                       #  the hub logs a hint when the bind
                                       #  is refused. 0 = off.
-    # v3.4.6: ipp_queue_ports / ipp_queue_port_map are GONE - the hub is
-    # back to ONE port (the hub port) for every queue. The per-printer
-    # path queues (/ipp/print/<printer>) plus the per-queue identity
-    # (unique printer-name + stable unique printer-uuid + URI echo) are
-    # what Windows/CUPS key a queue on - exactly how a CUPS server serves
-    # many printers from ONE port. Old config.json files may still carry
-    # the two keys; they are ignored (not in CONFIG_KEYS any more).
+    "ipp_queue_ports": True,          # v3.3.5 BUG 1 (the deep fix): ONE
+                                      #  EXTRA TCP port per local printer
+                                      #  (9236, 9237, ...) that serves
+                                      #  ONLY that printer's queue. With a
+                                      #  dedicated ip:port every printer is
+                                      #  a genuinely DIFFERENT endpoint -
+                                      #  Windows adds all of them side by
+                                      #  side instead of "only one" (the
+                                      #  shared-port/path queues collide in
+                                      #  the Add-Printer flow). 0/False =
+                                      #  path-only queues (old behavior).
+    "ipp_queue_port_map": {},         # v3.3.5: {printer_name: port} the
+                                      #  STABLE port allocation - survives
+                                      #  restarts so an added queue keeps
+                                      #  working; managed automatically.
     "autocrx_hkcu": True,             # v3.3.5 AUTO CRX ON INSTALL: the
                                       #  hub writes THIS USER's browser
                                       #  force-install policy (HKCU - no
@@ -378,9 +389,8 @@ CONFIG_KEYS = ("token", "token_header_only", "allowed_origins",
                "dest_mode", "ip_printer_host", "ip_printer_port",
                "ip_printer_proto",
                "ipp_printer", "ipp_mdns", "ipp_standard_port",
-               "autocrx_hkcu",            # v3.4.6: ipp_queue_ports +
-                                          # ipp_queue_port_map removed
-                                          # (ONE port again - see CFG)
+               "ipp_queue_ports", "ipp_queue_port_map",
+               "autocrx_hkcu",
                "keep_files",           # v3.2.0 gap fix: the ONE UI
                                        #  switch writes it back now
                "drop_enabled", "drop_dir", "drop_delete",
@@ -396,6 +406,7 @@ CONFIG_TYPES = {"token_header_only": bool, "allowed_origins": list,
                 "hold_offline": bool, "audit_enabled": bool,
                 "share_lan": bool, "ipp_printer": bool,
                 "ipp_mdns": bool, "ipp_standard_port": int,
+                "ipp_queue_ports": bool, "ipp_queue_port_map": dict,
                 "autocrx_hkcu": bool,
                 "raw_printer_port": int,
                 "reprint_watermark": bool, "reprint_reason_required": bool,
@@ -6304,9 +6315,13 @@ class Handler(BaseHTTPRequestHandler):
             # v3.0.8: per-OS cheat sheet. v3.2.2: shared with the
             # standard-port mirror (ipp631) via ipp_landing_html().
             # v3.2.9 BUG 3: the page shows the address THIS device used.
-            # v3.4.6: ONE port again - there is no per-port queue
-            # binding any more, the central landing page describes the
-            # default queue and /ipp/print/<printer> has its own page.
+            # v3.3.5 BUG 1: on a DEDICATED queue port the landing page
+            # describes THE BOUND PRINTER (the endpoint IS that queue).
+            _qbind = getattr(self.server, "queue_binding", None)
+            if _qbind:
+                return self._send_html(200, ipp_landing_html(
+                    req_host=self._req_host(), req_port=self._req_port(),
+                    queue_name=_qbind))
             return self._send_html(200, ipp_landing_html(
                 req_host=self._req_host(), req_port=self._req_port()))
         err = self._auth_error(qt, allow_query=True)   # v2.0.2: every GET
@@ -6410,6 +6425,13 @@ class Handler(BaseHTTPRequestHandler):
             # queue from its own console always gets ITS reachable URL.
             per_printer = ipp_printer_enabled()
             _req_h = self._req_host()
+            # v3.3.5 BUG 1: make sure the dedicated port map reflects the
+            # CURRENT printer list before the payload is built (cheap -
+            # the printer list comes from the cache)
+            try:
+                ipp_queue_port_allocations()
+            except Exception:
+                pass
             items = []
             for n in list_printers_cached():
                 item = {"name": n, "is_default": n == dp,
@@ -6423,10 +6445,17 @@ class Handler(BaseHTTPRequestHandler):
                     # producing the doubled
                     # /ipp/print/ipp/print/<printer>?token=... URL on
                     # the printer Details button.
-                    # v3.4.6: the path queue on the HUB port is THE
-                    # per-printer endpoint again - no separate
-                    # ipp_port/ipp_dedicated fields any more.
                     item["ipp_path"] = _ipp_queue_slug(n)
+                    # v3.3.5 BUG 1: the DEDICATED queue port URL - this
+                    # printer's OWN ip:port endpoint (the multi-add fix).
+                    ded = ipp_queue_dedicated_url(n, host=_req_h)
+                    try:
+                        item["ipp_port"] = (int(
+                            ded.split(":")[-1].split("/")[0])
+                            if ded else 0)
+                    except ValueError:
+                        item["ipp_port"] = 0
+                    item["ipp_dedicated"] = ded
                 items.append(item)
             for g in groups:
                 items.append({"name": g, "is_default": False,
@@ -6732,25 +6761,30 @@ class Handler(BaseHTTPRequestHandler):
         # as before (routed to that one printer).
         ipp_q_printer = ""
         ipp_q_unknown = ""
-        # v3.4.6: ONE port again - no per-port queue binding. Every
-        # queue answers on the hub port: /ipp/print is the default
-        # queue, /ipp/print/<printer> routes to that printer (raw
-        # name, URL-encoded or slug - see _ipp_queue_match). The
-        # per-queue identity (unique printer-name + stable unique
-        # printer-uuid + client-URI echo) is what makes Windows add
-        # every printer side by side on the SAME host:port - the same
-        # way a CUPS server serves many queues from one port.
+        # v3.3.5 BUG 1: on a DEDICATED per-printer queue port the bound
+        # printer OWNS every /ipp/print* path - the endpoint itself IS
+        # the queue. Windows adds this printer as
+        # http://<lan-ip>:<queue-port>/ipp/print (NO path tail!) - the
+        # binding is what routes its Get-Printer-Attributes / Print-Job
+        # to exactly that one printer.
+        _ippq_bind = getattr(self.server, "queue_binding", None)
+        if _ippq_bind and route.startswith("/ipp"):
+            ipp_q_printer = _ippq_bind
+            ipp_q_unknown = ""
         if route.startswith("/ipp/print/"):
-            ipp_q_printer = _ipp_queue_match_cached(
-                urllib.parse.unquote(route[len("/ipp/print/"):]))
-            if not ipp_q_printer:
-                ipp_q_unknown = urllib.parse.unquote(
-                    route[len("/ipp/print/"):])[:80]
-                db_audit("ipp.queue.reject", ip=self._client_ip(),
-                         site="lan",
-                         details="unknown per-printer IPP queue %r "
-                                 "(answered as generic queue)"
-                                 % route[:120])
+            # v3.3.5: on a bound queue port the binding WINS - a slug
+            # path on that port still prints on the bound printer.
+            if not _ippq_bind:
+                ipp_q_printer = _ipp_queue_match_cached(
+                    urllib.parse.unquote(route[len("/ipp/print/"):]))
+                if not ipp_q_printer:
+                    ipp_q_unknown = urllib.parse.unquote(
+                        route[len("/ipp/print/"):])[:80]
+                    db_audit("ipp.queue.reject", ip=self._client_ip(),
+                             site="lan",
+                             details="unknown per-printer IPP queue %r "
+                                     "(answered as generic queue)"
+                                     % route[:120])
             route = "/ipp/print"
         if route in ("/ipp/print", "/ipp", "/ipp/"):
             if not ipp_printer_enabled():
@@ -11567,17 +11601,15 @@ function renderPrinters(list){
         "<span>Jobs <b>" + (p.jobs != null ? p.jobs : 0) + "</b></span>" +
         "<span>" + chip(p.status === "ready" ? "ready" : p.status) + "</span>";
       var url = c.querySelector(".url");
-      /* v3.4.6: ONE port again - this printer's per-printer queue URL
-         on the HUB port (ipp://ip:9235/ipp/print/<printer>) leads.
-         Every printer adds side by side from this one endpoint: the
-         queue is picked by the path + the unique per-queue identity
-         (printer-name/uuid), exactly like a CUPS server. */
-      var leadUrl = p.ipp_queue || "";
+      /* v3.3.5: the DEDICATED queue port URL leads (this printer's OWN
+         ip:port - the endpoint Windows can add side by side with every
+         other printer); the path queue stays on the Details button. */
+      var leadUrl = p.ipp_dedicated || p.ipp_queue;
       if (leadUrl) { url.innerHTML = ""; url.appendChild(document.createTextNode(leadUrl));
         var b = document.createElement("button"); b.className = "cp"; b.textContent = "COPY";
         b.setAttribute("data-cp", leadUrl); url.appendChild(b);
-        url.title = "Per-printer queue on the hub port (ONE port serves"
-          + " every printer - v3.4.6)"; }
+        if (p.ipp_dedicated) url.title = "Dedicated port " + p.ipp_port +
+          " - this printer's OWN endpoint (v3.3.5 multi-printer fix)"; }
       else { url.style.display = "none"; }
       var ops = c.querySelector(".ops");
       ops.innerHTML = '<button class="btn blue" data-ptest="' + esc(p.name) + '">Test Page</button>' +
@@ -12299,7 +12331,7 @@ function renderExt(audit){
     rows.slice(0, 6).forEach(function(r2){
       var tr = tmpl.cloneNode(true), td = tr.querySelectorAll("td");
       td[0].innerHTML = "<b>" + esc(r2.who) + "</b>";
-      td[1].textContent = "v" + (BOOT.version || "3.4.6");
+      td[1].textContent = "v" + (BOOT.version || "3.3.5");
       td[2].textContent = r2.at ? r2.at.slice(11, 19) : "\u2014";
       td[3].innerHTML = '<span class="chip ok"><span class="d"></span>PAIRED</span>';
       tbl.appendChild(tr);
@@ -12321,7 +12353,7 @@ function renderExt(audit){
       m2.textContent = BASE + "/extension/updates.xml";
   });
   var crxChip = document.querySelector("#p-extension .frow .chip.ok");
-  if (crxChip) crxChip.innerHTML = '<span class="d"></span>CRX v' + (BOOT.version || "3.4.6") + " READY";
+  if (crxChip) crxChip.innerHTML = '<span class="d"></span>CRX v' + (BOOT.version || "3.3.5") + " READY";
   /* v3.2.8 STALE-CRX GUARD: ask the hub which package it really
    * serves (/extension/info is open, no token). Older than the hub
    * itself -> Chrome never updates -> browsers keep the old bugs.
@@ -12527,7 +12559,7 @@ async function renderUpdate(res){
    full-page /docs stays available via the "Full guide page" button.
    ============================================================ */
 function docsHtml(){
-  var v = esc(BOOT.version || "3.4.6");
+  var v = esc(BOOT.version || "3.3.5");
   var ip = esc(BOOT.lan_ip || location.hostname || "127.0.0.1");
   var port = esc(String(BOOT.port || location.port || "9235"));
   var base = "http://" + ip + ":" + port;
@@ -16034,11 +16066,22 @@ def lan_listen_start():
         build_health_snapshot()
     except Exception:
         pass
+    # v3.3.5: the per-printer queue ports ride the LAN listener's
+    # lifecycle - they exist for LAN clients only.
+    try:
+        ippq_reconcile()
+    except Exception:
+        pass
     return None
 
 def lan_listen_stop():
-    """Stop the dedicated LAN listeners (loopback hub keeps running)."""
+    """Stop the dedicated LAN listeners (loopback hub keeps running).
+    v3.3.5: the per-printer queue ports stop with them."""
     global _LAN_HTTPDS, _LAN_THREADS, _LAN_BINDS, _LAN_BIND_SIG, BOUND_LAN
+    try:
+        ippq_stop_all()
+    except Exception:
+        pass
     httpds = _LAN_HTTPDS
     if not httpds:
         return
@@ -16094,35 +16137,213 @@ def lan_listen_ensure():
         lan_listen_start()
     elif not want and _LAN_HTTPDS:
         lan_listen_stop()
+    # v3.3.5: keep the dedicated queue ports in step with the printer
+    # list (new printer -> new port; removed printer -> port freed)
+    # every time this 3 s hook runs.
+    try:
+        ippq_reconcile()
+    except Exception:
+        pass
 
 # ------------------------------------------------------------
-# v3.4.6 - ONE PORT FOR EVERYTHING (the answer to "why not the hub
-# default port only - one port to handle different PCs to connect
-# through IPP or other?").
+# v3.3.5 BUG 1 - DEDICATED PER-PRINTER QUEUE PORTS (the deep fix for
+# "only default or only one add possible - adding another errors").
 #
-# v3.3.5 answered the multi-printer add failure with ONE DEDICATED
-# TCP PORT PER PRINTER (9236, 9237, ... + firewall 9235-9259). That
-# worked, but it was masking tape: a CUPS server has served MANY
-# queues from ONE port (631) forever, and Windows adds them side by
-# side happily - because it keys a queue on the FULL URI plus the
-# printer attributes, not on host:port alone. The v3.3.4-era failure
-# was a shared queue IDENTITY (every path answered with the same
-# printer-name/uuid), which v3.3.4/v3.3.5 already fixed:
+# v3.3.4 made every mDNS service carry its OWN uuid, but all queues
+# still answered on the SAME host:port (one SRV target, one TCP 9235)
+# and the SAME /ipp/print URL prefix. Windows' Add-Printer flow keys a
+# connection on host:port first - when the second queue resolves to
+# the SAME ip:9235 the wizard treats it as the printer that is already
+# there and the add fails. The only fix Windows cannot argue with is
+# a DIFFERENT endpoint: the hub now opens ONE EXTRA TCP port per
+# local printer (9236, 9237, ... right after the hub port) and every
+# queue port serves EXACTLY ONE printer for ALL /ipp/print* paths.
 #
-#   * /ipp/print                    -> the default queue (hub port)
-#   * /ipp/print/<printer>          -> that ONE printer (hub port)
-#   * Get-Printer-Attributes answers with the queue's OWN
-#     printer-name, its STABLE unique printer-uuid
-#     (token|hostname|slug) and echoes the exact URI the client used
-#   * mDNS: ONE service PER queue with rp=ipp/print/<slug>, a unique
-#     uuid in TXT - all on the SAME SRV port (the hub port)
+#   http://<lan-ip>:9235/ipp/print              -> central queue (default)
+#   http://<lan-ip>:9235/ipp/print/<printer>    -> per-printer path queue
+#   http://<lan-ip>:9236/ipp/print              -> printer #1 (own port!)
+#   http://<lan-ip>:9237/ipp/print              -> printer #2 (own port!)
 #
-# So v3.4.6 removes the extra listeners, the port allocation map and
-# the 9235-9259 firewall range. Every PC, phone and tablet connects
-# to ONE port; the queue is chosen by the path. Fewer sockets, one
-# firewall rule, no port exhaustion with 24+ printers, and the
-# add-printer flow keeps working for every printer side by side.
+# The mDNS announce gives every printer service its OWN SRV record
+# (its own port), so discovery, manual add and "Add device" all see
+# genuinely separate printers. Ports are allocated ONCE and kept in
+# config (ipp_queue_port_map) so an installed queue survives restarts.
 # ------------------------------------------------------------
+
+_IPPQ_MAX_QUEUES = 24
+_IPPQ_HTTPDS = {}        # printer_name -> {"port": int, "httpds": [...],
+                         #                 "threads": [...]}
+_IPPQ_LOCK = threading.Lock()
+
+
+def ipp_queue_port_base():
+    """First queue port = hub port + 1 (9236 with the default 9235)."""
+    return int(CFG.get("port", 9235)) + 1
+
+
+def ipp_queue_port_allocations(refresh=False):
+    """{printer_name: port} - the STABLE per-printer port map.
+    Existing valid assignments are kept (an installed Windows queue
+    keeps its port across restarts); new printers take the lowest free
+    port after the hub port; stale entries (printer gone) are dropped.
+    Persisted in config when something changed."""
+    names = []
+    try:
+        names = sorted(n for n in list_printers_cached(max_age=30.0)
+                       if n)[:_IPPQ_MAX_QUEUES]
+    except Exception:
+        names = []
+    base = ipp_queue_port_base()
+    top = base + _IPPQ_MAX_QUEUES
+    m = {}
+    kept = CFG.get("ipp_queue_port_map") or {}
+    if not isinstance(kept, dict):
+        kept = {}
+    used = set()
+    for n in names:
+        p = kept.get(n)
+        try:
+            p = int(p)
+        except (TypeError, ValueError):
+            p = 0
+        if base <= p < top and p not in used:
+            m[n] = p
+            used.add(p)
+    nxt = base
+    for n in names:
+        if n in m:
+            continue
+        while nxt < top and nxt in used:
+            nxt += 1
+        if nxt >= top:
+            break                      # ran out of queue ports - path
+        m[n] = nxt                     # queues keep working for the rest
+        used.add(nxt)
+    if m != kept:
+        CFG["ipp_queue_port_map"] = dict(m)   # in-memory: always
+        # persist so an installed queue keeps its port across restarts
+        # (only on a REAL configured hub - config.json exists after the
+        # boot bootstrap; keeps test/mDNS probe calls side-effect free)
+        try:
+            if os.path.exists(config_path()):
+                write_config_file({k: CFG[k] for k in CONFIG_KEYS})
+        except Exception:
+            pass
+    return m
+
+
+def _ippq_stop_one(name):
+    """Stop + forget the dedicated listeners of ONE printer."""
+    with _IPPQ_LOCK:
+        ent = _IPPQ_HTTPDS.pop(name, None)
+    if not ent:
+        return
+    def _closer(ents):
+        for httpd in ents:
+            try:
+                httpd.shutdown()
+            except Exception:
+                pass
+            try:
+                httpd.server_close()
+            except Exception:
+                pass
+    threading.Thread(target=_closer, args=(ent["httpds"],), daemon=True,
+                     name="advprint-ippq-stop").start()
+    log("[IPPQ] queue port %d closed (%s)" % (ent["port"], name))
+
+
+def ippq_stop_all():
+    """Stop EVERY dedicated queue-port listener (LAN sharing off)."""
+    with _IPPQ_LOCK:
+        names = list(_IPPQ_HTTPDS.keys())
+    for n in names:
+        _ippq_stop_one(n)
+
+
+def ippq_reconcile():
+    """Start/stop the dedicated queue ports so they always match the
+    current printer list. Runs alongside the LAN listeners: with LAN
+    sharing / IPP off nothing is bound. Cheap - called from the mDNS
+    3 s loop and right after lan_listen_start()."""
+    if _env("HOST"):
+        return
+    want = bool(CFG.get("ipp_queue_ports")) and ipp_printer_enabled() \
+        and (bool(CFG.get("share_lan")) or lan_listen_active())
+    if not want:
+        ippq_stop_all()
+        return
+    alloc = ipp_queue_port_allocations()
+    with _IPPQ_LOCK:
+        live = dict(_IPPQ_HTTPDS)
+    for n in list(live.keys()):
+        if n not in alloc or live[n]["port"] != alloc[n]:
+            _ippq_stop_one(n)
+    for n, port in alloc.items():
+        with _IPPQ_LOCK:
+            if n in _IPPQ_HTTPDS:
+                continue
+        socks, errs = [], []
+        try:
+            socks, errs = bind_listener_sockets(port, "IPPQ %s" % n)
+        except OSError as e:
+            log("[IPPQ] %s: cannot bind port %d (%s) - the path queue"
+                " ip:%d/ipp/print/%s still works"
+                % (n, port, e, int(CFG.get("port", 9235)),
+                   _ipp_queue_slug(n)))
+            continue
+        opened, threads = [], []
+        for s in socks:
+            try:
+                httpd = _httpd_on(s, Handler, HubServer)
+                httpd.queue_binding = n          # THE per-port routing
+            except Exception as e:
+                try:
+                    s.close()
+                except OSError:
+                    pass
+                errs.append("%s: %s" % (_sock_label(s), e))
+                continue
+            opened.append(httpd)
+        if not opened:
+            for s in socks:
+                try:
+                    s.close()
+                except OSError:
+                    pass
+            log("[IPPQ] %s: port %d refused (%s) - path queue still"
+                " works" % (n, port, "; ".join(errs)))
+            continue
+        for httpd in opened:
+            t = threading.Thread(target=httpd.serve_forever,
+                                 kwargs={"poll_interval": 0.2},
+                                 name="advprint-ippq", daemon=True)
+            threads.append(t)
+            t.start()
+        with _IPPQ_LOCK:
+            _IPPQ_HTTPDS[n] = {"port": port, "httpds": opened,
+                               "threads": threads}
+        log("[IPPQ] printer %r listens on its OWN port %d - add it as "
+            "http://<lan-ip>:%d/ipp/print (unique endpoint, every "
+            "printer adds cleanly)" % (n, port, port))
+
+
+def ipp_queue_dedicated_url(name, host=None):
+    """http://<host>:<queue-port>/ipp/print for ONE printer - empty
+    string when the printer has no dedicated port (ports off, list
+    unavailable). host defaults to the LAN IP the same way lan_share_url
+    does."""
+    m = CFG.get("ipp_queue_port_map") or {}
+    port = m.get(name)
+    try:
+        port = int(port)
+    except (TypeError, ValueError):
+        return ""
+    if not (ipp_queue_port_base() <=
+            port < ipp_queue_port_base() + _IPPQ_MAX_QUEUES):
+        return ""
+    ip = str(host or (lan_ip() if CFG.get("share_lan") else "127.0.0.1"))
+    return "http://%s:%d/ipp/print" % (ip, port)
 
 # ------------------------------------------------------------
 # v2.9.0 - NETWORK PRINTER MODE. The hub can now be added on OTHER
@@ -17386,7 +17607,7 @@ def ipp_landing_html(req_host=None, req_port=None, queue_name=None):
  other print. 100%% local - powered by AdvPrint Pro %s.</div>
  </div></body></html>""" % (
         _html_escape("network printer" if not queue_name
-                     else "queue \"%s\"" % queue_name),
+                     else "queue \"%s\" (dedicated port)" % queue_name),
         _html_escape(host),
         _html_escape(ipp_url, quote=True),
         _html_escape(http_url, quote=True),
@@ -17816,13 +18037,14 @@ def _mdns_services():
     the central queue) so its TXT record gets a UNIQUE printer-uuid -
     without it Windows adds only the first discovered queue and
     errors on the rest.
-    v3.4.6: ONE SRV PORT AGAIN - the hub port for EVERY service.
-    v3.3.5 briefly gave each queue its own TCP port; that is gone (the
-    user asked for ONE port and the per-queue identity - unique uuid,
-    own rp path, own printer-name - is what really distinguishes the
-    queues, exactly like a CUPS server). The tuple keeps 6 slots so
-    the SRV-per-service wire format is unchanged; every port value is
-    the hub port.
+    v3.3.5 BUG 1: each service ALSO carries its OWN SRV port - the
+    central queue the hub port, every per-printer queue its DEDICATED
+    port (ipp_queue_port_allocations). v3.3.4 taught Windows to tell
+    the queues apart (unique uuids) but all of them still resolved to
+    the SAME host:port, and the Add-Printer flow treats a second queue
+    on the same endpoint as "already there". With one port per printer
+    every queue is a genuinely DIFFERENT network printer - discovery,
+    "Add device" and manual adds all succeed side by side.
     Tuple: (instance, rp, ty, note, slug, port).
     Service 0 = the classic central queue (ipp/print, hub port). Then
     ONE service per LOCAL printer with rp=ipp/print/<slug>, capped at
@@ -17834,6 +18056,7 @@ def _mdns_services():
     out = [(_mdns_instance_name(), "ipp/print", "AdvPrint Pro",
             "AdvPrint Pro print hub", None, hub_port)]
     try:
+        alloc = ipp_queue_port_allocations()
         for n in list_printers_cached(max_age=30.0)[:24]:
             if not n:
                 continue
@@ -17842,7 +18065,7 @@ def _mdns_services():
                         n[:60],
                         "AdvPrint Pro - %s" % n[:60],
                         _ipp_queue_slug(n),
-                        hub_port))
+                        int(alloc.get(n) or hub_port)))
     except Exception:
         pass
     return out
@@ -17868,10 +18091,9 @@ def _mdns_rrset(ip, ttl=_MDNS_TTL, ip6=None):
     records = []
     for inst, rp, ty, note, slug, port in _mdns_services():
         fq = inst + "._ipp._tcp.local"
-        # v3.4.6: an SRV PER SERVICE - all pointing at the ONE hub port
-        # (the queue is picked by the rp path in TXT + the URI path),
-        # so a client resolving any instance lands on the same socket
-        # and the path decides the queue.
+        # v3.3.5 BUG 1: an SRV PER SERVICE - every printer queue
+        # advertises its own dedicated port, so a client resolving one
+        # instance can never land on another printer's endpoint.
         srv = ((0).to_bytes(2, "big") + (0).to_bytes(2, "big") +
                int(port).to_bytes(2, "big") + _mdns_encode_name(target))
         records.append(

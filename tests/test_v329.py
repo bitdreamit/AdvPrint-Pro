@@ -132,17 +132,17 @@ def _vals(group, name):
 # ---------------------------------------------------------------
 
 def test_version_329_everywhere():
-    assert advprint.VERSION == "3.4.6"
-    assert advprint.VERSION_NAME.startswith("v3.4.6")
-    assert "ONE PORT FOR EVERYTHING" in advprint.VERSION_NAME
-    assert "3.4.6" in VERSION_TXT
-    assert MANIFEST["version"] == "3.4.6"
-    assert 'var _apVerFallback = "3.4.6";' in open(
+    assert advprint.VERSION == "3.3.5"
+    assert advprint.VERSION_NAME.startswith("v3.3.5")
+    assert "DEDICATED QUEUE PORTS" in advprint.VERSION_NAME
+    assert "3.3.5" in VERSION_TXT
+    assert MANIFEST["version"] == "3.3.5"
+    assert 'var _apVerFallback = "3.3.5";' in open(
         os.path.join(EXT, "content", "api.js"), encoding="utf-8").read()
-    assert 'BOOT.version || "3.4.6"' in CONSOLE
+    assert 'BOOT.version || "3.3.5"' in CONSOLE
     assert "## v3.2.9 - THE MULTI-PC IPP RELEASE" in CHANGELOG
-    assert 'VIProductVersion "3.4.6.0"' in NSI
-    assert "AdvPrint-Pro-Setup-3.4.6.exe" in NSI
+    assert 'VIProductVersion "3.3.5.0"' in NSI
+    assert "AdvPrint-Pro-Setup-3.3.5.exe" in NSI
 
 
 def test_release_docs_329_exist():
