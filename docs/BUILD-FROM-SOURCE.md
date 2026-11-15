@@ -2,6 +2,15 @@
 
 **AdvPrint Pro** by Bit Dream IT - Innovative Healthcare Solutions
 
+> **On WINDOWS?** Skip the bash/dpkg-deb path entirely — use the
+> cross-platform Python builder:
+>
+>     build.cmd                 (or:  python scripts\build-all.py)
+>
+> It builds CRX + extension zip + Setup EXE + DEB (pure-Python DEB
+> builder, no WSL needed) + SHA256SUMS in one go. Full step-by-step
+> Windows instructions: **docs/BUILD-WINDOWS.md**.
+
 Build ALL release artifacts from this tree alone. The CRX signing key
 ships in `extension-signing/` (keeps the fixed extension id
 `likldbkamojokkfdlcjibiljpgbbnohc` so Chrome auto-updates the
