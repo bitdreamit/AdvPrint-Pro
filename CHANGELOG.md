@@ -1,6 +1,109 @@
 # Changelog - AdvPrint Pro (Advanced Printer)
 by Bit Dream IT - Innovative Healthcare Solutions
 
+## v3.5.2 - DASHBOARD DATA YOU CAN TRUST (success rate, save-password fix, history tools) (2026-11-15)
+
+v3.5.1 made every dashboard CARD live; the user then reported the last
+two pain points: "3.5.1 fine - need update dashboard success rate also,
+now fake" and "search anything and the browser offers to SAVE A
+PASSWORD - the search text as user name and the token as password -
+this is very bad". Plus three everyday requests: show DATE AND TIME in
+the history/visitor rows, a per-row button to VIEW the file in
+history, and an extra DATE-WISE filter. Locked by `tests/test_v352.py`.
+
+### 1. Real success rate (the "always 33.3%" is gone for good)
+
+- The old `db_stats()` counted ONLY `status='printed'` as success over
+  the 7-day window. A hub whose jobs mostly end as `saved` files (or
+  whose printer is offline so jobs `fail`) sat frozen on whatever
+  printed/failed ratio the week happened to hold - a number that never
+  moves reads as FAKE even when it is technically real.
+- NEW math: success = `printed + saved` (a saved file IS a delivered
+  document), failures = `failed + dead`; `canceled` jobs are USER
+  actions, not printer outcomes, so they stay out of the math.
+- `/stats` now returns the full picture: `printed_7d`, `saved_7d`,
+  `failed_7d`, `canceled_7d`, `total_7d` next to `success_rate`.
+- The KPI tile shows the counts BEHIND the percentage: the small label
+  reads "7d N ok / M fail" (was the static text "7 days") and the
+  hover tooltip spells out the whole calculation ("14 printed + 2
+  saved = 16 ok, 1 failed/dead -> 94.1% of 17 finished (3 canceled
+  not counted)"). A number that moves AND explains itself can never
+  be mistaken for demo data again.
+
+### 2. No more browser "save password?" prompts
+
+- ROOT CAUSE: the Connections tab token boxes were real
+  `type="password"` fields. Chrome's credential heuristics pair text
+  inputs with password fields on the same page - so typing in the
+  history SEARCH box (or the Hub URL box, or anywhere) made the
+  browser offer to save the SEARCH TEXT as a user name with the hub
+  token as the password. Nothing was ever submitted anywhere; it was
+  pure field-pairing noise, but it looked like the console was
+  phishing its own user.
+- FIX: both token boxes (Self PC token + LAN PC token) are ordinary
+  text inputs now, masked by CSS (`-webkit-text-security: disc`) -
+  the browser never sees a password field, so it can never offer to
+  save one. The Self PC box carries `id="selfTokenInp"` and AUTO-FILLS
+  with the real hub token at boot (the old markup held a static demo
+  token forever - one more fake value gone); "Detect token" re-fills
+  it on click.
+- Belt and braces: at boot the console sets `autocomplete="off"` on
+  EVERY text / search / date input, and the markup carries it on the
+  history search + token + date inputs; the token-entry modal and the
+  old /dashboard page search get it too. Firefox ignores
+  -webkit-text-security (shows the token in plain text) - acceptable
+  for an owner-only console page, noted in the CSS comment.
+
+### 3. DATE + TIME in every row (no more "when was 14:19:41?")
+
+- History rows, the dashboard Recent Jobs list, the Audit (visitor)
+  rows, the LAN visitors' first/last hit columns, the DropZone
+  activity list and the /debug problem rows used to slice
+  `created_at` to the TIME ONLY ("14:19:41") - yesterday's jobs
+  looked like they happened today. All of them show the full
+  "YYYY-MM-DD HH:MM:SS" now. (Log-panel lines and the paired-PC
+  schedule time stay time-of-day on purpose.)
+
+### 4. History: per-row VIEW file button
+
+- Every finished job that still has its stored file on disk gets a
+  "View" button next to Reprint. It opens
+  `/jobs/<id>/file?view=1&token=...` in a new tab -
+  `_send_file()` learned `inline=True` and answers
+  `Content-Disposition: inline` so the BROWSER's PDF viewer shows the
+  document (the default stays `attachment` = download, so nothing
+  changes for existing links). Raw .prn spool files get no View
+  button (no browser viewer for them). The endpoint is still
+  token-gated like every other GET route.
+
+### 5. History: date-wise filter over the WHOLE database
+
+- The filter row now has From / To date inputs + a "Clear dates"
+  button. While a date is set, the table renders from a server query
+  - `/jobs?limit=200&date_from=YYYY-MM-DD&date_to=YYYY-MM-DD`
+  (both inclusive, both optional, bad values ignored) - instead of
+  filtering only the last-100 rows the poll fetched. `db_list()`
+  grew optional `date_from` / `date_to` parameters
+  (`substr(created_at,1,10)` BETWEEN); the caption reads
+  "date filter A -> B - N match(es)" while active.
+- Clearing the dates falls back to the live poll list instantly.
+
+### 6. Version strings
+
+- 3.5.2 across the hub (`VERSION`, `VERSION_NAME`, boot-json
+  fallbacks, embedded console title + KPI tile), the extension
+  (manifest.json, popup.html, i18n.js EN+BN, api.js fallback),
+  `VERSION.txt`, `START-HERE.txt`, `README.md`, the NSIS installer
+  (OutFile / VIProductVersion / version keys / DisplayVersion /
+  error string), the .deb control and this changelog. docs/
+  RELEASE-NOTES-v3.5.2.md explains the release; the standalone
+  template (`AdvPrint-Pro-Console-UI-Template-v3.5.2-ProTheme.html`)
+  carries the same console.
+
+- Zero changes to printing, IPP/RAW sockets, rules, LAN pairing,
+  themes or the queue worker - everything else is exactly the
+  working v3.5.1 build.
+
 ## v3.5.1 - DASHBOARD LIVE DATA (dashboard-only bug fix on v3.5.0) (2026-11-15)
 
 The user reported that the ONE UI dashboard showed fake, never-changing

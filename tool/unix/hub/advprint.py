@@ -96,28 +96,31 @@ if _HUB_DIR not in sys.path:
     sys.path.insert(0, _HUB_DIR)
 
 
-VERSION = "3.5.1"
-VERSION_NAME = ("v3.5.1 (DASHBOARD LIVE DATA - EVERY DASHBOARD VALUE "
-    "COMES FROM THE HUB). The user reported that the ONE UI dashboard "
-    "showed fake, never-changing data in every release: a fixed 33.3% "
-    "success rate, a fixed uptime of 04:12:37, the same hardcoded "
-    "default printer (HP Laser 103 107 108 / OFFLINE / status hold ON) "
-    "even when the real default printer is different, fake 2 PCs / "
-    "2 peers connection counts and a static RAW port address. v3.5.1 "
-    "fixes the dashboard at the root: the Print Hub Status card now "
-    "ticks a real uptime from the hub start time, shows the real "
-    "worker/queue health, the real LAN sharing URL, real IPP and RAW "
-    "socket state (raw_active / raw_addrs), the real DropZone watch "
-    "state with its waiting PDF count, real Connections counts from "
-    "/peers and the real masked token; the Default Printer card shows "
-    "the REAL OS default printer with its live status (READY / OFFLINE "
-    "/ PAPER OUT / ERROR) and the real status-hold setting; the Recent "
-    "Jobs card caption counts today's real jobs; the KPI row stays "
-    "live (jobs today, 7-day success rate from the job DB, queue size, "
-    "printers ready). Everything else is exactly the working v3.5.0 "
-    "build: the ProTheme theme engine (8 themes + density / corners / "
-    "frame in Settings > Appearance), the rules table fit fix and the "
-    "single port for every queue.")
+VERSION = "3.5.2"
+VERSION_NAME = ("v3.5.2 (DASHBOARD DATA YOU CAN TRUST - the last fake "
+    "numbers are gone). v3.5.1 made every dashboard CARD live; this "
+    "release fixes what was still not honest about the KPI row and "
+    "hardens the day-to-day console: (1) REAL SUCCESS RATE - the math "
+    "used to count only status='printed' as success, so a hub that "
+    "delivers most jobs as saved files sat frozen on a printed/failed "
+    "ratio (the user's 'always 33.3%'); success is now printed + "
+    "saved, canceled jobs stay out of the math, and the tile shows "
+    "the counts BEHIND the percentage ('7d 14 ok / 2 fail' + a full "
+    "breakdown tooltip) so it can never read as a demo value again. "
+    "(2) NO MORE SAVE-PASSWORD PROMPTS - the Connections token boxes "
+    "were type=password, so Chrome paired every text box on the page "
+    "(the history search!) with them and offered to save the search "
+    "text as a password; they are CSS-masked text inputs now and every "
+    "input is autocomplete=off. (3) DATE + TIME everywhere - history "
+    "rows, dashboard recent jobs, audit/visitor rows, LAN visitor "
+    "first/last hit, DropZone activity and debug problems used to "
+    "show the time only, so yesterday looked like today. (4) History: "
+    "a per-row VIEW button opens the stored file inline in the browser "
+    "(/jobs/<id>/file?view=1) and a DATE-WISE filter (from/to) queries "
+    "the whole job database server-side. Everything else is exactly "
+    "the working v3.5.1 build: live dashboard cards, the ProTheme "
+    "theme engine (8 themes + density / corners / frame), the rules "
+    "table fit fix and the single port for every queue.")
 FULL_BRAND = ("AdvPrint Pro (Advanced Printer) by "
               "Bit Dream IT - Innovative Healthcare Solutions")
 BRANDING = ("AdvPrint Pro (Advanced Printer) - Version %s - by "
@@ -825,16 +828,29 @@ def db_get(job_id):
         row = conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
         return dict(row) if row else None
 
-def db_list(limit=HISTORY_DEFAULT, status=None):
+def db_list(limit=HISTORY_DEFAULT, status=None, date_from=None, date_to=None):
+    """v3.5.2 DATE-WISE FILTER: date_from / date_to (inclusive,
+    YYYY-MM-DD) filter the WHOLE history server-side -
+    created_at is ISO 'YYYY-MM-DDTHH:MM:SS' so substr(.,1,10) is the
+    calendar day. The history tab sends both when the user picks a
+    date range; the old signature (limit, status) stays compatible."""
+    where, args = [], []
+    if status:
+        where.append("status=?")
+        args.append(status)
+    if date_from:
+        where.append("substr(created_at,1,10)>=?")
+        args.append(str(date_from))
+    if date_to:
+        where.append("substr(created_at,1,10)<=?")
+        args.append(str(date_to))
+    sql = "SELECT * FROM jobs"
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += " ORDER BY id DESC LIMIT ?"
+    args.append(int(limit))
     with _DB_LOCK, db() as conn:
-        if status:
-            rows = conn.execute(
-                "SELECT * FROM jobs WHERE status=? ORDER BY id DESC LIMIT ?",
-                (status, int(limit))).fetchall()
-        else:
-            rows = conn.execute(
-                "SELECT * FROM jobs ORDER BY id DESC LIMIT ?", (int(limit),)
-            ).fetchall()
+        rows = conn.execute(sql, args).fetchall()
         return [dict(r) for r in rows]
 
 # v2.7.0: history management - job states grouped the way the new
@@ -953,7 +969,19 @@ def db_count_held():
         return int(row["n"])
 
 def db_stats():
-    """Success rate + queue size for the dashboard (last 7 days + today)."""
+    """Success rate + queue size for the dashboard (last 7 days + today).
+
+    v3.5.2 REAL SUCCESS RATE: the old math counted ONLY status='printed'
+    as success, so a hub that mostly delivers jobs as saved files (or
+    forwards them) looked frozen at whatever printed/failed ratio the
+    last 7 days happened to hold - the user read the never-moving
+    number as FAKE data ("always 33.3%"). The honest math:
+      success = printed + saved      (a saved file IS a delivered doc)
+      failed  = failed + dead        (printer / spool failures)
+      canceled is a USER action, not a printer outcome -> excluded.
+    The tile also publishes every count so the UI can show the numbers
+    BEHIND the percentage (nothing looks static when it moves and
+    explains itself)."""
     week = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
     with _DB_LOCK, db() as conn:
         by = {}
@@ -962,19 +990,31 @@ def db_stats():
         row = conn.execute(
             "SELECT COUNT(*) n FROM jobs WHERE status='printed' AND created_at >= ?",
             (week,)).fetchone()
-        ok7 = int(row["n"])
+        printed7 = int(row["n"])
+        row = conn.execute(
+            "SELECT COUNT(*) n FROM jobs WHERE status='saved' AND created_at >= ?",
+            (week,)).fetchone()
+        saved7 = int(row["n"])
         row = conn.execute(
             "SELECT COUNT(*) n FROM jobs WHERE status IN ('failed','dead') AND created_at >= ?",
             (week,)).fetchone()
         bad7 = int(row["n"])
-    total7 = ok7 + bad7
+        row = conn.execute(
+            "SELECT COUNT(*) n FROM jobs WHERE status='canceled' AND created_at >= ?",
+            (week,)).fetchone()
+        canc7 = int(row["n"])
+    ok7 = printed7 + saved7          # delivered to paper OR to file
+    total7 = ok7 + bad7              # canceled stays out of the math
     return {
         "by_status": by,
         "queue_size": db_count_pending() + db_count_held(),
         "jobs_today": db_count_today(),
         "success_rate": round(100.0 * ok7 / total7, 1) if total7 else None,
-        "printed_7d": ok7,
+        "printed_7d": printed7,
+        "saved_7d": saved7,
         "failed_7d": bad7,
+        "canceled_7d": canc7,
+        "total_7d": total7,
     }
 
 # ------------------------------------------------------------
@@ -5212,7 +5252,12 @@ class Handler(BaseHTTPRequestHandler):
         except (BrokenPipeError, ConnectionResetError):
             pass
 
-    def _send_file(self, path, download_name, ctype="application/pdf"):
+    def _send_file(self, path, download_name, ctype="application/pdf",
+                   inline=False):
+        """v3.5.2: inline=True serves the file Content-Disposition:inline
+        so the BROWSER opens it (PDF viewer) instead of downloading -
+        this is what the history tab's per-row "View" button uses
+        (/jobs/<id>/file?view=1). The default stays attachment."""
         try:
             with open(path, "rb") as f:
                 data = f.read()
@@ -5227,11 +5272,12 @@ class Handler(BaseHTTPRequestHandler):
         # RFC 5987 filename* for non-ASCII (Bengali titles etc.).
         safe = "".join(c for c in str(download_name or "file")
                        if c not in ('"', "\r", "\n", "\\"))[:100] or "file"
+        _disp = "inline" if inline else "attachment"
         if all(ord(c) < 128 for c in safe):
-            disp = 'attachment; filename="%s"' % safe
+            disp = '%s; filename="%s"' % (_disp, safe)
         else:
-            disp = ("attachment; filename*=UTF-8''%s"
-                    % quote(safe, safe=""))
+            disp = ("%s; filename*=UTF-8''%s"
+                    % (_disp, quote(safe, safe="")))
         self.send_header("Content-Disposition", disp)
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
@@ -6575,8 +6621,19 @@ class Handler(BaseHTTPRequestHandler):
                 limit = HISTORY_DEFAULT
             limit = max(1, min(200, limit))
             status = (q.get("status") or [""])[0] or None
+            # v3.5.2 DATE-WISE FILTER: ?date_from=YYYY-MM-DD&date_to=
+            # YYYY-MM-DD (both inclusive, both optional). Bad values are
+            # ignored (never a 500) - only strict YYYY-MM-DD passes.
+            def _day(v):
+                v = (v or "").strip()
+                return v if re.fullmatch(r"\d{4}-\d{2}-\d{2}", v) else None
+            date_from = _day((q.get("date_from") or [""])[0])
+            date_to = _day((q.get("date_to") or [""])[0])
             return self._send(200, {"ok": True,
-                                    "jobs": db_list(limit, status=status)})
+                                    "date_from": date_from, "date_to": date_to,
+                                    "jobs": db_list(limit, status=status,
+                                                    date_from=date_from,
+                                                    date_to=date_to)})
         if route == "/stats":
             st = db_stats()
             _psn = printers_status_cached()
@@ -6741,6 +6798,10 @@ class Handler(BaseHTTPRequestHandler):
                                             "error": "job not found"})
                 return self._send(200, {"ok": True, "job": j})
             if len(parts) == 3 and parts[2] == "file":
+                # v3.5.2: ?view=1 opens the stored file INLINE in the
+                # browser (history tab "View" button); the default keeps
+                # downloading. Token auth is unchanged either way.
+                _view = ((q.get("view") or [""])[0] == "1")
                 j = db_get(int(parts[1]) if parts[1].isdigit() else 0)
                 if j and j.get("file_path") and os.path.exists(j["file_path"]):
                     ctype = ("application/octet-stream"
@@ -6749,7 +6810,8 @@ class Handler(BaseHTTPRequestHandler):
                                            "advprint-job-%d.%s"
                                            % (j["id"], "prn"
                                               if j.get("kind") == "raw"
-                                              else "pdf"), ctype)
+                                              else "pdf"), ctype,
+                                           inline=_view)
                 return self._send(404, {"ok": False,
                                         "error": "job or file not found"})
         if route == "/extension/policy/status":
@@ -9315,7 +9377,7 @@ CONSOLE_HTML = r"""<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AdvPrint Pro — Printing Hub · ALL-IN-ONE Console v3.5.1 — Pro Themes</title>
+<title>AdvPrint Pro — Printing Hub · ALL-IN-ONE Console v3.5.2 — Pro Themes</title>
 <style>
 :root{--navy:#14224f;--mono:'Cascadia Mono','JetBrains Mono','SF Mono',Consolas,'Liberation Mono',monospace;
   --purple-hex:#5b3fc4;
@@ -9579,7 +9641,31 @@ body{font-family:'Segoe UI Variable Text','Segoe UI',system-ui,-apple-system,Rob
 /* ---------- forms ---------- */
 .frow{display:flex;gap:12px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
 .frow label{font-weight:600;font-size:12px;color:var(--ink-2);min-width:150px}
+.tok-mask{-webkit-text-security:disc}
 .inp,select.inp{height:var(--ctl-h2);border:1px solid var(--line-2);border-radius:var(--r-md);padding:0 11px;
+/* v3.5.2 SAVE-PASSWORD FIX: token boxes are normal text inputs masked
+   by CSS - the browser never sees a type=password field, so it never
+   offers to "save this password" when the user types in the history
+   search or any other box. Firefox ignores -webkit-text-security and
+   shows the token in plain text (the hub console is an owner-only page). */
+/* v3.5.2 SAVE-PASSWORD FIX: token boxes are normal text inputs masked
+   by CSS - the browser never sees a type=password field, so it never
+   offers to "save this password" when the user types in the history
+   search or any other box. Firefox ignores -webkit-text-security and
+   shows the token in plain text (the hub console is an owner-only page). */
+
+/* v3.5.2 SAVE-PASSWORD FIX: token boxes are normal text inputs masked
+   by CSS - the browser never sees a type=password field, so it never
+   offers to "save this password" when the user types in the history
+   search or any other box. Firefox ignores -webkit-text-security and
+   shows the token in plain text (the hub console is an owner-only page). */
+
+/* v3.5.2 SAVE-PASSWORD FIX: token boxes are normal text inputs masked
+   by CSS - the browser never sees a type=password field, so it never
+   offers to "save this password" when the user types in the history
+   search or any other box. Firefox ignores -webkit-text-security and
+   shows the token in plain text (the hub console is an owner-only page). */
+
   font-size:12px;font-family:inherit;color:var(--ink);background:var(--input-bg);outline:none;min-width:220px;
   transition:border-color .12s,box-shadow .12s}
 .inp:hover{border-color:var(--line-3)}
@@ -10224,10 +10310,10 @@ html[data-frame="flush"] .window{max-width:none;border-radius:0;border:none;box-
 
           <div class="stats">
             <div class="stat"><div class="d">today</div><div class="v">38</div><div class="l">Jobs Today</div></div>
-            <div class="stat g"><div class="d">7 days</div><div class="v">94.7%</div><div class="l">Success Rate</div></div>
+            <div class="stat g"><div class="d">7d 17 ok / 1 fail</div><div class="v">94.7%</div><div class="l">Success Rate</div></div>
             <div class="stat w"><div class="d">live</div><div class="v">4</div><div class="l">In Queue</div></div>
             <div class="stat r"><div class="d">1 offline</div><div class="v">3/4</div><div class="l">Printers Ready</div></div>
-            <div class="stat"><div class="d">hub</div><div class="v">v3.5.1</div><div class="l">Version</div></div>
+            <div class="stat"><div class="d">hub</div><div class="v">v3.5.2</div><div class="l">Version</div></div>
           </div>
 
           <!-- v3.2.3: the Quick-actions card is GONE - all six of its
@@ -10329,8 +10415,18 @@ html[data-frame="flush"] .window{max-width:none;border-radius:0;border:none;box-
             <div class="card-b" style="padding-bottom:4px">
               <div class="frow" style="margin-bottom:4px">
                 <select class="inp" style="min-width:150px"><option>All statuses</option><option>Printed</option><option>Queued</option><option>Saved (file)</option><option>Failed</option><option>Canceled</option></select>
-                <input class="inp" type="text" placeholder="Search title / printer / #id" style="min-width:210px">
-                <select class="inp" style="min-width:130px"><option>load last 100</option><option>last 50</option><option>last 300</option></select>
+                <!-- v3.5.2: autocomplete=off - the browser used to offer to
+                     "save this password" with the search text as the user
+                     name (the hub token field was the password half) -->
+                <input class="inp" type="text" autocomplete="off" placeholder="Search title / printer / #id" style="min-width:190px">
+                <select class="inp" style="min-width:120px"><option>load last 100</option><option>last 50</option><option>last 300</option></select>
+                <!-- v3.5.2: DATE-WISE FILTER - from/to (inclusive) over the
+                     WHOLE history (server-side /jobs?date_from&date_to),
+                     not just the rows already loaded -->
+                <input class="inp" type="date" id="histFrom" autocomplete="off" title="Filter from date (inclusive)" style="min-width:130px">
+                <span class="id" style="color:var(--muted)">&#8594;</span>
+                <input class="inp" type="date" id="histTo" autocomplete="off" title="Filter to date (inclusive)" style="min-width:130px">
+                <button class="btn small" id="histDateClear" title="Clear the date filter">&#10006; Clear dates</button>
                 <span style="flex:1"></span>
                 <span class="id" id="histSelInfo" style="color:#64748b">nothing ticked</span>
                 <button class="btn small danger" id="histCancelSel" disabled>&#10006; Cancel selected</button>
@@ -10341,10 +10437,10 @@ html[data-frame="flush"] .window{max-width:none;border-radius:0;border:none;box-
             </div>
             <div class="tbl-wrap"><table class="tbl">
               <tr><th style="width:30px"><input type="checkbox" data-hall></th><th>#</th><th>Time</th><th>Title</th><th>Printer</th><th>Kind</th><th>Status</th><th></th></tr>
-              <tr><td><input type="checkbox" checked></td><td class="id">#2046</td><td class="id">14:19:41</td><td class="doc">invoice-2026-11.pdf</td><td>Microsoft Print to PDF</td><td><span class="chip info">PDF</span></td><td><span class="chip ok">PRINTED</span></td><td><button class="btn small">&#8635; Reprint</button></td></tr>
-              <tr><td><input type="checkbox" checked></td><td class="id">#2044</td><td class="id">14:11:55</td><td class="doc">presentation.pptx</td><td>OneNote (Desktop)</td><td><span class="chip gray">DOC</span></td><td><span class="chip ok">PRINTED</span></td><td><button class="btn small">&#8635; Reprint</button></td></tr>
-              <tr><td><input type="checkbox"></td><td class="id">#2043</td><td class="id">13:58:12</td><td class="doc">manual-de.pdf</td><td>HP Laser 103 107 108</td><td><span class="chip info">PDF</span></td><td><span class="chip err">FAILED</span></td><td><button class="btn small">&#8635; Reprint</button></td></tr>
-              <tr><td><input type="checkbox"></td><td class="id">#2040</td><td class="id">13:40:27</td><td class="doc">receipt-881.pdf</td><td>Microsoft Print to PDF</td><td><span class="chip info">PDF</span></td><td><span class="chip warn">SAVED (file)</span></td><td><button class="btn small">Open file</button></td></tr>
+              <tr><td><input type="checkbox" checked></td><td class="id">#2046</td><td class="id">2026-11-15 14:19:41</td><td class="doc">invoice-2026-11.pdf</td><td>Microsoft Print to PDF</td><td><span class="chip info">PDF</span></td><td><span class="chip ok">PRINTED</span></td><td><a class="btn small" target="_blank" rel="noopener" href="#">&#128065; View</a><button class="btn small">&#8635; Reprint</button></td></tr>
+              <tr><td><input type="checkbox" checked></td><td class="id">#2044</td><td class="id">2026-11-15 14:11:55</td><td class="doc">presentation.pptx</td><td>OneNote (Desktop)</td><td><span class="chip gray">DOC</span></td><td><span class="chip ok">PRINTED</span></td><td><button class="btn small">&#8635; Reprint</button></td></tr>
+              <tr><td><input type="checkbox"></td><td class="id">#2043</td><td class="id">2026-11-14 13:58:12</td><td class="doc">manual-de.pdf</td><td>HP Laser 103 107 108</td><td><span class="chip info">PDF</span></td><td><span class="chip err">FAILED</span></td><td><button class="btn small">&#8635; Reprint</button></td></tr>
+              <tr><td><input type="checkbox"></td><td class="id">#2040</td><td class="id">2026-11-14 13:40:27</td><td class="doc">receipt-881.pdf</td><td>Microsoft Print to PDF</td><td><span class="chip info">PDF</span></td><td><span class="chip warn">SAVED (file)</span></td><td><a class="btn small" target="_blank" rel="noopener" href="#">&#128065; View</a><button class="btn small">&#8635; Reprint</button></td></tr>
               <tr><td><input type="checkbox"></td><td class="id">#2039</td><td class="id">13:38:10</td><td class="doc">scan-batch.pdf</td><td>—</td><td><span class="chip info">PDF</span></td><td><span class="chip warn">SCHEDULED 15:00</span></td><td><button class="btn small">Edit</button></td></tr>
               <tr><td><input type="checkbox"></td><td class="id">#2038</td><td class="id">13:12:44</td><td class="doc">lab-request-form.pdf</td><td>HP Laser 103 107 108</td><td><span class="chip info">PDF</span></td><td><span class="chip purple">DROPZONE</span></td><td><button class="btn small">&#8635; Reprint</button></td></tr>
               <tr><td><input type="checkbox"></td><td class="id">#2037</td><td class="id">12:41:19</td><td class="doc">receipt-scan.pdf</td><td>Microsoft Print to PDF</td><td><span class="chip info">PDF</span></td><td><span class="chip ok">PRINTED</span></td><td><button class="btn small">&#8635; Reprint</button></td></tr>
@@ -10581,7 +10677,15 @@ html[data-frame="flush"] .window{max-width:none;border-radius:0;border:none;box-
             <div class="card-h">&#128421; This PC (Self PC) — the main Printing Hub <span class="r"><span class="chip ok"><span class="d"></span>CONNECTED · 12 ms</span></span></div>
             <div class="card-b">
               <div class="frow"><label>Hub URL</label><input class="inp mono" value="http://127.0.0.1:9235"></div>
-              <div class="frow" style="margin-bottom:4px"><label>Token</label><input class="inp mono" type="password" value="mPz5HFOsB9xaJ36isQ7kDfjaaNrERnXs" style="min-width:260px">
+              <!-- v3.5.2 SAVE-PASSWORD FIX: this field used to be
+                   type=password holding a demo token. Chrome paired it
+                   with every text input on the page (the history search,
+                   URL boxes...) and popped "save this password?" with the
+                   SEARCH TEXT as the user name. It is now a normal text
+                   box masked by CSS (-webkit-text-security) - password
+                   managers never see a password field, so they never
+                   offer to save one. The REAL hub token is filled by JS. -->
+              <div class="frow" style="margin-bottom:4px"><label>Token</label><input class="inp mono tok-mask" type="text" id="selfTokenInp" autocomplete="off" spellcheck="false" placeholder="hub token (filled automatically)" style="min-width:260px">
                 <button class="btn blue">Connect</button><button class="btn">Detect token</button></div>
               <div class="note" style="margin-bottom:0">New installs get a <b>private random token</b> — read it with
                 <span class="mono">python advprint.py token</span> or in this console. <b>Detect token</b> fills the current token
@@ -10594,7 +10698,9 @@ html[data-frame="flush"] .window{max-width:none;border-radius:0;border:none;box-
             <div class="card-b">
               <div class="frow"><label>LAN PC hub URL</label><input class="inp mono" id="lanPcHubUrl"
                 placeholder="http://192.168.1.101:9235" style="min-width:230px"></div>
-              <div class="frow" style="margin-bottom:4px"><label>LAN PC token</label><input class="inp mono" id="lanPcToken" type="password"
+              <!-- v3.5.2 SAVE-PASSWORD FIX: text box + CSS mask (was
+                   type=password - same browser save-prompt bait) -->
+              <div class="frow" style="margin-bottom:4px"><label>LAN PC token</label><input class="inp mono tok-mask" id="lanPcToken" type="text" autocomplete="off" spellcheck="false"
                 placeholder="the other PC's hub token" style="min-width:170px">
                 <button class="btn blue" id="lanPcConnect">Connect</button><button class="btn danger" id="lanPcClear">Clear</button></div>
               <div class="note" id="lanPcStatus" style="margin-bottom:6px">Enter the <b>OTHER PC's</b> hub URL and token, then Connect.
@@ -11460,7 +11566,7 @@ function showTokenCard(show){
       '<div class="card-h">\uD83D\uDD11 Hub token needed</div><div class="card-b">' +
       '<div class="note" style="margin-bottom:10px">This console talks to the hub with your private ' +
       'token. Paste it once - it is remembered in this browser.</div>' +
-      '<input class="inp mono" id="tokInp" style="width:100%" placeholder="paste the hub token">' +
+      '<input class="inp mono" id="tokInp" autocomplete="off" spellcheck="false" style="width:100%" placeholder="paste the hub token">' +
       '<div style="display:flex;gap:8px;margin-top:10px">' +
       '<button class="btn blue" id="bTokGo">Connect</button>' +
       '<span class="mono" style="font-size:10.5px;color:var(--muted);align-self:center">' +
@@ -11837,6 +11943,21 @@ function renderStats(h, st, q, pr){
   if (stats.length >= 5) {
     stats[0].querySelector(".v").textContent = st.jobs_today != null ? st.jobs_today : "0";
     stats[1].querySelector(".v").textContent = st.success_rate != null ? st.success_rate + "%" : "\u2014";
+    /* v3.5.2 REAL SUCCESS RATE: the tile now shows the counts BEHIND the
+       percentage so it can never look like a frozen demo number again.
+       Success = printed + saved (a saved file IS a delivered document);
+       failures = failed + dead; canceled jobs are user actions, not
+       printer outcomes, so they stay out of the math. The counts move
+       on every poll - if the number is 33.3% the tooltip says exactly
+       which jobs made it so. */
+    var ok7 = (st.printed_7d || 0) + (st.saved_7d || 0),
+        bad7 = st.failed_7d || 0, sv7 = st.saved_7d || 0,
+        pr7 = st.printed_7d || 0,
+        cc7 = st.canceled_7d || 0, tt7 = st.total_7d != null ? st.total_7d : (ok7 + bad7);
+    stats[1].querySelector(".d").textContent = "7d " + ok7 + " ok / " + bad7 + " fail";
+    stats[1].title = "last 7 days: " + pr7 + " printed + " + sv7 + " saved = " + ok7 +
+      " ok, " + bad7 + " failed/dead  \u2192 " + st.success_rate + "% of " + tt7 +
+      " finished" + (cc7 ? " (" + cc7 + " canceled not counted)" : "");
     stats[2].querySelector(".v").textContent = q.pending + (q.held ? " (+" + q.held + ")" : "");
     stats[3].querySelector(".d").textContent = (real.length - ok) ? (real.length - ok) + " offline" : "all ready";
     stats[3].querySelector(".v").textContent = ok + "/" + real.length;
@@ -12256,9 +12377,10 @@ async function loadLanHits(){
         '" data-hallow="' + esc(h.ip) + '" data-hremove="' +
         (h.allowed ? "1" : "0") + '">' + (h.allowed ? "Remove" : "Allow") +
         "</button>";
+      /* v3.5.2: visitor first/last hit shows DATE + TIME */
       return "<tr><td class='mono'>" + esc(h.ip) + "</td><td>" + h.count +
-        "</td><td>" + esc(String(h.first).slice(11, 19)) + "</td><td>" +
-        esc(String(h.last).slice(11, 19)) + "</td><td>" + st + "</td><td>" +
+        "</td><td>" + esc(String(h.first).slice(0, 19)) + "</td><td>" +
+        esc(String(h.last).slice(0, 19)) + "</td><td>" + st + "</td><td>" +
         op + "</td></tr>";
     }).join("");
   } catch (e) { /* the card just stays on its loading row */ }
@@ -12431,7 +12553,9 @@ function renderRecent(jobs){
     td[3].textContent = j.pages_total || 1;
     td[4].innerHTML = chip(j.status);
     td[5].innerHTML = prog(j.status, jobPct(j));
-    td[6].textContent = (j.created_at || "").replace("T", " ").slice(11, 19);
+    /* v3.5.2: the Recent list shows DATE + TIME (it used to show the
+       time only, so yesterday's rows looked like they happened today) */
+    td[6].textContent = (j.created_at || "").replace("T", " ").slice(0, 19);
     tbl.appendChild(tr);
   });
   if (!(jobs || []).length) {
@@ -12633,6 +12757,49 @@ function renderRemotePrinters(st){
 
 /* ---- queue + history ---- */
 var lastJobs = [];
+/* ---------- v3.5.2 HISTORY UPGRADES --------------------------------
+   1. DATE-WISE FILTER: histFrom / histTo (inclusive) query the WHOLE
+      job database server-side (/jobs?date_from=&date_to=), not just
+      the last-100 rows the poll fetched. While a date is set the
+      history table renders from that answer (histDateJobs); clear the
+      dates and it falls back to the live poll list.
+   2. VIEW FILE: every history row that still has its stored file gets
+      a "View" button next to Reprint - it opens
+      /jobs/<id>/file?view=1 (inline, browser PDF viewer) in a new
+      tab, token in the query string like every GET link. */
+var histDateFrom = "", histDateTo = "", histDateJobs = null, histDateBusy = false;
+function viewFileUrl(j){
+  return BASE + "/jobs/" + j.id + "/file?view=1&token=" + encodeURIComponent(TOKEN);
+}
+function histDateRead(){
+  var f = $("histFrom"), t = $("histTo");
+  histDateFrom = (f && f.value) || "";
+  histDateTo = (t && t.value) || "";
+}
+function histDateFetch(){
+  histDateRead();
+  if (!histDateFrom && !histDateTo) { histDateJobs = null; renderJobs(lastJobs); return; }
+  if (histDateFrom && histDateTo && histDateFrom > histDateTo) {
+    toast("From date is after the to date", "warn"); return;
+  }
+  var qq = "/jobs?limit=200";
+  if (histDateFrom) qq += "&date_from=" + encodeURIComponent(histDateFrom);
+  if (histDateTo) qq += "&date_to=" + encodeURIComponent(histDateTo);
+  histDateBusy = true;
+  api(qq).then(function(d){
+    histDateJobs = d.jobs || [];
+    histDateBusy = false;
+    renderJobs(lastJobs);
+    toast("History filtered: " + histDateJobs.length + " job(s) in range", "ok");
+  }).catch(function(e){ histDateBusy = false; toast(e.message, "err"); });
+}
+function histDateClear(){
+  var f = $("histFrom"), t = $("histTo");
+  if (f) f.value = ""; if (t) t.value = "";
+  histDateJobs = null; histDateFrom = ""; histDateTo = "";
+  renderJobs(lastJobs);
+}
+
 function renderJobs(jobs){
   jobs = jobs || [];
   lastJobs = jobs;
@@ -12710,12 +12877,16 @@ function renderJobs(jobs){
   if (ht) {
     var htmpl = null;
     qsa("tr", ht).forEach(function(tr){ if (tr.querySelector("td")) { if (!htmpl) htmpl = tr.cloneNode(true); tr.remove(); } });
-    var q2 = (document.querySelector("#p-history input.inp") || {}).value || "";
+    /* v3.5.2 DATE FILTER: while from/to is set the table shows the
+       server-filtered answer over the WHOLE database; otherwise the
+       live poll list. */
+    var histSrc = (histDateFrom || histDateTo) ? (histDateJobs || []) : jobs;
+    var q2 = (document.querySelector('#p-history input[type="text"]') || {}).value || "";
     var stSel = document.querySelectorAll("#p-history select.inp")[0];
     var stv = stSel ? stSel.value.toLowerCase() : "";
     var limSel = document.querySelectorAll("#p-history select.inp")[1];
     var lim = limSel ? parseInt((limSel.value.match(/\d+/) || [100])[0], 10) : 100;
-    var hlist = jobs.filter(function(j){
+    var hlist = histSrc.filter(function(j){
       if (stv && stv !== "all statuses") {
         var map = { printed: ["printed", "done"], queued: ["queued"], "saved (file)": ["saved"],
           failed: ["failed", "dead"], canceled: ["canceled"] };
@@ -12734,13 +12905,24 @@ function renderJobs(jobs){
       td[0].firstElementChild.checked = !!histSel[j.id];
       td[0].firstElementChild.setAttribute("data-hid", j.id);
       td[1].textContent = "#" + j.id;
-      td[2].textContent = (j.created_at || "").replace("T", " ").slice(11, 19);
+      /* v3.5.2: TIME column shows DATE + TIME (it used to slice the
+         time only - "14:19:41" - so yesterday's jobs looked like
+         today's). Full "YYYY-MM-DD HH:MM:SS" now. */
+      td[2].textContent = (j.created_at || "").replace("T", " ").slice(0, 19);
       td[3].textContent = j.title || "job";
       td[4].textContent = j.printer || "\u2014";
       td[5].innerHTML = kindChip(jobKind(j));
       td[6].innerHTML = chip(j.status);
       var canStill = ["queued", "held", "printing"].indexOf(j.status) >= 0;
-      td[7].innerHTML =
+      /* v3.5.2 VIEW FILE: rows that still have the stored file open it
+         in a new tab (inline PDF view). Raw .prn spool files stay
+         download-only (no browser viewer for them) so they get no
+         View button. */
+      var vw = (j.file_path && j.kind !== "raw")
+        ? '<a class="btn small" target="_blank" rel="noopener" title="open the stored file (inline)" href="' +
+          esc(viewFileUrl(j)) + '">&#128065; View</a> '
+        : "";
+      td[7].innerHTML = vw +
         (canStill ? '<button class="btn small danger" data-cancel="' + j.id + '">Cancel</button>'
                   : '<button class="btn small" data-reprint="' + j.id + '"' +
                     (j.file_path || ["printed", "saved"].indexOf(j.status) >= 0 ? "" : " disabled") +
@@ -12755,7 +12937,10 @@ function renderJobs(jobs){
       ht.appendChild(tr);
     }
     var hr = document.querySelector("#p-history .card-h .r");
-    if (hr) hr.textContent = "last " + Math.min(hlist.length, lim) + " of " + jobs.length +
+    if (hr) hr.textContent = (histDateFrom || histDateTo
+      ? "date filter " + (histDateFrom || "beginning") + " \u2192 " + (histDateTo || "today") +
+        " \u00b7 " + hlist.length + " match(es) of " + histSrc.length
+      : "last " + Math.min(hlist.length, lim) + " of " + jobs.length) +
       " \u00b7 reprint needs the original file on disk (Hub \u2192 Keep printed files)";
     syncSelBar();
   }
@@ -12866,7 +13051,9 @@ function renderAudit(rows){
   qsa("tr", tbl).forEach(function(tr){ if (tr.querySelector("td")) { if (!tmpl) tmpl = tr.cloneNode(true); tr.remove(); } });
   rows.slice(0, 60).forEach(function(a){
     var tr = tmpl.cloneNode(true), td = tr.querySelectorAll("td");
-    td[0].textContent = (a.created_at || "").replace("T", " ").slice(11, 19);
+    /* v3.5.2: the audit / visitor rows show DATE + TIME (time only
+       before - a visit from yesterday looked like it happened today) */
+    td[0].textContent = (a.created_at || "").replace("T", " ").slice(0, 19);
     td[1].innerHTML = '<span class="chip info">' + esc(a.actor || a.ip || "client") + "</span>";
     td[2].textContent = a.action || "";
     td[3].textContent = a.details || a.printer || a.site || "";
@@ -13218,7 +13405,8 @@ async function loadDropzone(){
         td[0].textContent = (a.details || "").split("\u00b7")[0].trim() || "file";
         td[1].textContent = a.printer || "default";
         td[2].innerHTML = chip(/fail/i.test(a.details || "") ? "failed" : "printed");
-        td[3].textContent = (a.created_at || "").slice(11, 19);
+        /* v3.5.2: DropZone activity shows DATE + TIME */
+        td[3].textContent = (a.created_at || "").slice(0, 19);
         tbl.appendChild(tr);
       });
       if (!rows.length && tmpl) {
@@ -13380,7 +13568,7 @@ function renderExt(audit){
     rows.slice(0, 6).forEach(function(r2){
       var tr = tmpl.cloneNode(true), td = tr.querySelectorAll("td");
       td[0].innerHTML = "<b>" + esc(r2.who) + "</b>";
-      td[1].textContent = "v" + (BOOT.version || "3.5.1");
+      td[1].textContent = "v" + (BOOT.version || "3.5.2");
       td[2].textContent = r2.at ? r2.at.slice(11, 19) : "\u2014";
       td[3].innerHTML = '<span class="chip ok"><span class="d"></span>PAIRED</span>';
       tbl.appendChild(tr);
@@ -13402,7 +13590,7 @@ function renderExt(audit){
       m2.textContent = BASE + "/extension/updates.xml";
   });
   var crxChip = document.querySelector("#p-extension .frow .chip.ok");
-  if (crxChip) crxChip.innerHTML = '<span class="d"></span>CRX v' + (BOOT.version || "3.5.1") + " READY";
+  if (crxChip) crxChip.innerHTML = '<span class="d"></span>CRX v' + (BOOT.version || "3.5.2") + " READY";
   /* v3.2.8 STALE-CRX GUARD: ask the hub which package it really
    * serves (/extension/info is open, no token). Older than the hub
    * itself -> Chrome never updates -> browsers keep the old bugs.
@@ -13437,7 +13625,8 @@ async function loadDebugPanel(){
       var probs = dbg.problems || [];
       probs.slice(0, 12).forEach(function(p){
         var tr = tmpl.cloneNode(true), td = tr.querySelectorAll("td");
-        td[0].textContent = (p.created_at || "").slice(11, 19) || new Date().toLocaleTimeString();
+        /* v3.5.2: problem rows show DATE + TIME */
+        td[0].textContent = (p.created_at || "").slice(0, 19) || new Date().toLocaleTimeString();
         td[1].innerHTML = '<span class="chip ' + (p.level === "error" ? "err" : "warn") + '">' +
           esc(p.check || p.level || "hub") + "</span>";
         td[2].textContent = p.what || "";
@@ -13608,7 +13797,7 @@ async function renderUpdate(res){
    full-page /docs stays available via the "Full guide page" button.
    ============================================================ */
 function docsHtml(){
-  var v = esc(BOOT.version || "3.5.1");
+  var v = esc(BOOT.version || "3.5.2");
   var ip = esc(BOOT.lan_ip || location.hostname || "127.0.0.1");
   var port = esc(String(BOOT.port || location.port || "9235"));
   var base = "http://" + ip + ":" + port;
@@ -14166,7 +14355,11 @@ function bindButtons(){
   btnLike("#p-connections", /Save settings/i, function(){ ACTIONS["save-sites"](); });
   btnLike("#p-connections", /Save site list/i, function(){ ACTIONS["save-sites"](); });
   btnLike("#p-connections", /Detect token/i, function(){
-    var inp = qsa("#p-connections input[type=password]")[0];
+    /* v3.5.2: the Self PC token box is #selfTokenInp now (a CSS-masked
+       text input - the old password-field lookup died with the
+       save-password fix). ALSO: the field auto-fills at boot, so
+       "Detect token" is only a manual re-fill. */
+    var inp = $("selfTokenInp");
     if (inp) { inp.value = TOKEN; toast("Token filled from the running hub", "ok"); } });
   btnIn("#p-connections", "Connect", function(){
     var url = qsa("#p-connections input.inp.mono")[0].value.trim();
@@ -14978,6 +15171,24 @@ async function boot(){
   bindSwitches();
   bindSelections();   /* v3.2.5: History/Queue checkbox selection engine */
   bindPrintDefaults();
+  /* v3.5.2 SAVE-PASSWORD FIX (belt and braces): every text / search /
+     date box on the page gets autocomplete="off" - no browser should
+     ever offer to store what the user types here (the old bug: the
+     history search text was offered as a PASSWORD because the page
+     contained type=password token fields). The token fields themselves
+     are CSS-masked text inputs now, so the pairing cannot happen. */
+  qsa('input[type="text"],input[type="search"],input[type="date"]').forEach(function(i){
+    try { i.setAttribute("autocomplete", "off"); } catch (e) {}
+  });
+  /* v3.5.2: the Self PC token card shows the REAL token (the old
+     markup held a static demo token that never changed). */
+  var sti = $("selfTokenInp");
+  if (sti && !sti.value) sti.value = TOKEN;
+  /* v3.5.2: history date filter bindings (change = fetch, clear = reset) */
+  var hf = $("histFrom"), ht2 = $("histTo"), hc = $("histDateClear");
+  if (hf) hf.addEventListener("change", histDateFetch);
+  if (ht2) ht2.addEventListener("change", histDateFetch);
+  if (hc) hc.addEventListener("click", histDateClear);
   applyCenterView();
   try {
     await api("/health");
@@ -16009,7 +16220,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
         <option value="forwarded">Forwarded</option>
         <option value="not_printed">Not printed (failed + dead + canceled)</option>
       </select>
-      <input type="search" id="hSearch" size="24" placeholder="Search title / printer / #id..." oninput="HIST.page=1;renderHistory()">
+      <input type="search" id="hSearch" autocomplete="off" size="24" placeholder="Search title / printer / #id..." oninput="HIST.page=1;renderHistory()">
       <select id="hLimit" onchange="loadHistory()">
         <option value="50">load last 50</option>
         <option value="100" selected>load last 100</option>
@@ -16311,7 +16522,7 @@ async function loadLan(){
       if(hd.strict){
         if(hits.length){
           for(const h of hits){
-            rows+="<tr><td class='mono'>"+esc(h.ip)+" <small>"+h.count+" hits &middot; last "+esc(String(h.last).slice(11,19))+"</small></td>"+
+            rows+="<tr><td class='mono'>"+esc(h.ip)+" <small>"+h.count+" hits &middot; last "+esc(String(h.last).slice(0,19))+"</small></td>"+
               "<td>"+(h.allowed?"<span class='st queued'>ALLOWED</span>":"<span class='st held'>not on the list</span>")+"</td>"+
               "<td><button onclick='lanAllow(\""+esc(h.ip)+"\","+(h.allowed?"true":"false")+")'>"+(h.allowed?"Remove from list":"Allow - add to list")+"</button></td></tr>";
           }

@@ -13,31 +13,37 @@ Web page ──► Chrome extension ──► AdvPrint Pro hub (localhost:9235) 
 
 ---
 
-## What's new in v3.5.1 (DASHBOARD LIVE DATA - dashboard-only bug fix)
+## What's new in v3.5.2 (DASHBOARD DATA YOU CAN TRUST + history tools)
 
-You reported: "in all previous versions the dashboard data is so fake -
-it always shows 33.3% success and the default printer and other things,
-this is not dynamic." Correct: the dashboard looked live but several
-values were static demo markup that NO code ever replaced. v3.5.1
-fixes exactly that (nothing else was touched):
+v3.5.1 made every dashboard card live; v3.5.2 fixes the last numbers
+that could still read as fake, plus four everyday-console upgrades
+(no print, rule, queue, theme or network logic touched):
 
-- **Print Hub Status card - every row is real now.** The uptime ticks
-  from the actual hub start (it is NOT stuck at 04:12:37 anymore),
-  Service reflects the real print-worker state, LAN sharing shows your
-  real LAN URL, IPP / RAW port show the REAL socket state, DropZone
-  shows the real watch state with the waiting-PDF count, Connections
-  shows your real peer counts from `/peers`, and the token row masks
-  the real token. The subtitle shows your real PC name (was always
-  "AI-Lab").
-- **Default Printer card - your REAL default printer.** Name from the
-  hub, live status chip (READY / OFFLINE / PAPER OUT / ERROR) from the
-  printer scan, and the real status-hold setting - instead of the
-  hardcoded "HP Laser 103 107 108 / OFFLINE / status hold ON".
-- **Recent Jobs caption** counts today's real jobs.
-- **Also fixed:** the IPP row used to be overwritten by the mDNS text
-  ("printers announce themselves").
-- The KPI row (jobs today / 7-day success rate / queue / printers
-  ready) was already computed from the job database and stays live.
+- **Real success rate.** The old math counted only `printed` as
+  success, so a hub that delivers most jobs as saved files sat frozen
+  on a printed/failed ratio (your "always 33.3%"). Success is now
+  `printed + saved` (a saved file IS a delivered document), `canceled`
+  jobs stay out of the math, and the Success Rate tile shows the
+  counts BEHIND the percentage - "7d 14 ok / 2 fail" plus a hover
+  tooltip with the full breakdown. Still 100% live from your job
+  database on every poll - but now it moves and it explains itself.
+- **No more browser "save password?" prompts.** The Connections token
+  boxes were `type="password"` fields, so the browser paired every
+  text box on the page with them - typing in the history SEARCH box
+  made Chrome offer to save the search text as a password. They are
+  CSS-masked text inputs now, the real token auto-fills, and every
+  input is `autocomplete="off"`.
+- **Date + time everywhere.** History rows, dashboard Recent Jobs,
+  Audit/visitor rows, LAN visitors' first/last hit, DropZone activity
+  and /debug problems used to show the time only - yesterday looked
+  like today. All show "YYYY-MM-DD HH:MM:SS" now.
+- **History: View button + date filter.** Rows that still have their
+  stored file get a per-row "View" button that opens the file INLINE
+  in the browser (`/jobs/<id>/file?view=1`), and a From/To date filter
+  queries the WHOLE job database server-side
+  (`/jobs?date_from=&date_to=`) - not just the last 100 rows.
+- Everything else is the working v3.5.1 build (live dashboard cards,
+  ProTheme 8-theme engine, rules table fit, single port).
 - Theme engine, rules, queue, printing and network logic are exactly
   the working v3.5.0 build. Locked by `tests/test_v351.py`. Full
   details in `CHANGELOG.md` and `docs/RELEASE-NOTES-v3.5.1.md`.

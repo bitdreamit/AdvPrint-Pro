@@ -1,90 +1,104 @@
-AdvPrint Pro (Advanced Printer) v3.5.1 - START HERE
+AdvPrint Pro (Advanced Printer) v3.5.2 - START HERE
 ====================================================
 by Bit Dream IT - Innovative Healthcare Solutions
 
-QUICK NOTE ON v3.5.1 - DASHBOARD LIVE DATA (dashboard-only bug fix)
--------------------------------------------------------------------
-The user reported: "in all previous versions dashboard data so fake -
-it always shows 33.3% success and the default printer and other things,
-this is not dynamic." Correct - the dashboard LOOKED live but several
-values were static demo markup that no code ever replaced. v3.5.1 is a
-DASHBOARD-ONLY bug fix on the working v3.5.0 (ProTheme) tree - no
-print, rule, queue, theme or network logic was touched:
+QUICK NOTE ON v3.5.2 - DASHBOARD DATA YOU CAN TRUST (+ history tools)
+----------------------------------------------------------------------
+v3.5.1 made every dashboard card live; this release fixes what was
+still not honest in the KPI row, kills an annoying browser prompt and
+upgrades the History tab. No print, rule, queue, theme or network
+logic was touched:
 
-1) PRINT HUB STATUS CARD - every row is now REAL (3 s refresh):
-   - uptime     ticks from the actual hub start time (was stuck at
-                the static "uptime 04:12:37" forever);
-   - Service    HEALTHY while the real print worker thread is alive,
-                DEGRADED otherwise (was hardcoded HEALTHY);
-   - Listen     the address this browser actually reached;
-   - LAN share  real share_lan config + your PC's real LAN URL;
-   - IPP        real ipp_printer config (READY / OFF) - also fixes
-                the bug where the row was overwritten by the mDNS
-                text ("printers announce themselves");
-   - RAW port   the REAL JetDirect socket state (raw_active +
-                raw_printer_port + the actual bound address);
-   - DropZone   real watch state + the REAL number of PDFs waiting;
-   - Connections real counts: this PC (+ saved LAN PC) and
-                online/total peers from /peers (was always "2 PCs
-                2 peers");
-   - Token      the REAL hub token, masked to first...last 4.
-   The dashboard subtitle now shows your real PC name (was always
-   "AI-Lab").
+1) REAL SUCCESS RATE - the math used to count only status='printed'
+   as success, so a hub that delivers most jobs as saved files sat
+   frozen on a printed/failed ratio (your "always 33.3%"). Now:
+   - success = printed + saved (a saved file IS a delivered document);
+   - failed = failed + dead; canceled jobs stay out of the math
+     (canceling is YOUR action, not a printer outcome);
+   - the Success Rate tile shows the counts BEHIND the percentage:
+     "7d 14 ok / 2 fail" plus a hover tooltip with the full breakdown
+     (printed + saved = ok, failed/dead, canceled not counted).
+   The number still comes live from your job database on every poll -
+   but now it moves when your printing moves and it always explains
+   itself.
 
-2) DEFAULT PRINTER CARD - shows the REAL OS default printer with its
-   LIVE state: name from the hub, status chip READY / OFFLINE /
-   PAPER OUT / ERROR from the printer scan, and the real status-hold
-   setting. (Was hardcoded "HP Laser 103 107 108 / OFFLINE / status
-   hold ON" in every previous version.)
+2) NO MORE "SAVE PASSWORD?" PROMPTS - the Connections tab token boxes
+   were type="password" fields, so the browser paired every text box
+   on the page with them: typing in the history SEARCH box made
+   Chrome offer to save the search text as a password (with the hub
+   token as the password half). The token boxes are now ordinary text
+   inputs masked by CSS (-webkit-text-security), the real token is
+   filled in automatically, and every input on the page is
+   autocomplete=off - no browser will ever offer to save anything.
 
-3) RECENT JOBS CARD - the caption now counts TODAY'S REAL jobs
-   ("last 6 of N today"), the rows were already live.
+3) DATE + TIME EVERYWHERE - History rows, the dashboard Recent Jobs
+   list, the Audit (visitor) rows, the LAN visitors' first/last hit,
+   DropZone activity and /debug problem rows used to show the TIME
+   only ("14:19:41"), so yesterday's jobs looked like today's. All of
+   them show the full "YYYY-MM-DD HH:MM:SS" now.
 
-4) KPI ROW - was already live and stays live: jobs today, 7-day
-   success rate computed from the job database, queue size, printers
-   ready, hub version.
+4) HISTORY: VIEW FILE + DATE FILTER:
+   - every history row that still has its stored file gets a
+     per-row "View" button next to Reprint - it opens the file INLINE
+     in the browser (PDF viewer) via /jobs/<id>/file?view=1, no
+     download prompt;
+   - a DATE-WISE filter (From / To dates + Clear) queries the WHOLE
+     job database server-side (/jobs?date_from=&date_to=), not just
+     the last 100 rows - print again that one job from last Tuesday.
 
-5) THEME ENGINE (from v3.5.0, unchanged): 8 themes (Cobalt, Classic
-   IDM, Emerald, Violet, Graphite, Midnight, Carbon, System) +
-   density / corners / window frame in Settings > Appearance, saved
-   per browser, applies instantly.
+5) EVERYTHING ELSE IS THE WORKING v3.5.1 BUILD: the live dashboard
+   cards (uptime / service / LAN / IPP / RAW / DropZone / Connections
+   / token / real default printer), the ProTheme theme engine (8
+   themes + density / corners / frame), the rules table fit fix and
+   the single port for every queue.
 
 UPGRADE IN 3 STEPS (from any v3.x)
 ----------------------------------
 1. Close the old hub (tray icon -> Exit) and run the new
-   AdvPrint-Pro-Setup-3.5.1.exe - it installs over the old folder and
+   AdvPrint-Pro-Setup-3.5.2.exe - it installs over the old folder and
    keeps config.json, the queue database and your rules.
-2. Start AdvPrint Pro. The tray tooltip shows "v3.5.1 - running on
+2. Start AdvPrint Pro. The tray tooltip shows "v3.5.2 - running on
    http://127.0.0.1:9235".
 3. Chrome updates the extension by itself from the hub within a minute
-   (chrome://extensions -> AdvPrint Pro -> 3.5.1). Linux .deb: sudo
-   dpkg -i advprint-pro_3.5.1_all.deb.
+   (chrome://extensions -> AdvPrint Pro -> 3.5.2). Linux .deb: sudo
+   dpkg -i advprint-pro_3.5.2_all.deb.
 
 QUICK VERIFY (2 minutes)
 ------------------------
 - Console: http://127.0.0.1:9235/ui - Dashboard:
-  - the uptime in the Print Hub Status card STARTS FROM YOUR HUB'S
-    real uptime and ticks every second (it is NOT 04:12:37 anymore);
+  - the Success Rate tile shows "7d N ok / M fail" with real counts
+    from YOUR job database (hover it for the full breakdown);
+  - the uptime in the Print Hub Status card ticks from the hub's
+    real start time;
   - Default Printer shows YOUR real default printer and its real
     state (switch a printer off and watch the chip flip to OFFLINE);
   - Connections shows your real peer count (empty hub = "1 PC
-    0/0 peers"), not "2 PCs 2 peers";
-  - Jobs Today / Success Rate come from YOUR job database.
-- The ONE UI footer and the tray tooltip say v3.5.1.
-- http://127.0.0.1:9235/health reports "version": "3.5.1" and
+    0/0 peers"), not "2 PCs 2 peers".
+- History tab:
+  - every finished row with a stored file has a "View" button that
+    opens the PDF inline in a new tab (no download prompt);
+  - pick From / To dates - the table refetches from the WHOLE
+    database ("date filter 2026-11-01 -> 2026-11-15 - N match(es)");
+  - Time column shows date AND time ("2026-11-15 14:19:41").
+- Connections tab: the Token box shows your REAL token (CSS-masked)
+  and typing in the history search box does NOT trigger any browser
+  "save password" offer any more.
+- The ONE UI footer and the tray tooltip say v3.5.2.
+- http://127.0.0.1:9235/health reports "version": "3.5.2" and
   carries default_printer / raw_active / worker_alive.
 - http://127.0.0.1:9235/extension/info shows "stale": false and
-  version 3.5.1 (if stale, restart the hub once).
-- Locked by tests/test_v351.py (python3 tests/test_v351.py).
+  version 3.5.2 (if stale, restart the hub once).
+- Locked by tests/test_v352.py (python3 tests/test_v352.py).
 
 DOCUMENTATION (all local, A-to-Z)
 ---------------------------------
 - README.md            - features, install, API, LAN/IPP modes
 - docs/DEVELOPER-API.md          - window.advprint JS API
 - docs/AdvPrint-Pro-v3.4.8-A-to-Z-DEV-GUIDE.md - build + release guide
-- docs/RELEASE-NOTES-v3.5.1.md   - this release, the fix explained
-- docs/RELEASE-NOTES-v3.4.8.md   - previous release, the table fix
-- download/AdvPrint-Pro-Console-UI-Template-v3.5.1-ProTheme.html
+- docs/RELEASE-NOTES-v3.5.2.md   - this release, explained
+- docs/RELEASE-NOTES-v3.5.1.md   - previous release, the dashboard fix
+- docs/RELEASE-NOTES-v3.4.8.md   - the rules-table fit fix
+- download/AdvPrint-Pro-Console-UI-Template-v3.5.2-ProTheme.html
   - the ONE UI as a standalone theme template (opens anywhere; with
     the hub running it is 100% live, offline it shows real-shaped
     sample data labelled TEMPLATE PREVIEW)

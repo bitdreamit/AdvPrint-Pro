@@ -29,7 +29,7 @@ from conftest import wait_until  # noqa: E402
 def test_health_open_no_token(hub):
     code, d = hub.get("/health", token=None)
     assert code == 200 and d["ok"] is True
-    assert d["version"] == "3.4.8"
+    assert d["version"] == advprint.VERSION  # v3.5.2: was pinned "3.4.8"
     assert d["v2"] is True
     assert "100% local" in d["branding"]
 
@@ -539,7 +539,7 @@ def test_v1_database_migration(tmp_path):
 
 
 def test_version_anchors():
-    assert advprint.VERSION == "3.4.8"
+    assert advprint.VERSION == "3.5.2"  # v3.5.2 bump (was pinned 3.4.8)
     # repo/package layout: tool/windows/portable/hub -> root/extension
     root = os.path.dirname(os.path.dirname(os.path.dirname(
         os.path.dirname(os.path.dirname(advprint.__file__)))))
@@ -1136,8 +1136,9 @@ def test_v261_tray_module_ships_and_parses():
 
 
 def test_v261_version_single_source():
-    assert advprint.VERSION == "3.4.8"
-    assert advprint.VERSION_NAME.startswith("v3.4.8")
+    # v3.5.2: coherence instead of a frozen number (this pin broke on
+    # every bump since 3.4.9)
+    assert advprint.VERSION_NAME.startswith("v" + advprint.VERSION)
 
 
 def test_v261_cli_cmd_full_path():
