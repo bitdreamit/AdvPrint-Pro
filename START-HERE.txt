@@ -1,30 +1,34 @@
-AdvPrint Pro (Advanced Printer) v3.5.3 - START HERE
+AdvPrint Pro (Advanced Printer) v3.5.4 - START HERE
 ====================================================
 by Bit Dream IT - Innovative Healthcare Solutions
 
-QUICK NOTE ON v3.5.3 - STATUS BAR ALWAYS VISIBLE
-------------------------------------------------
-v3.5.2 was confirmed working; one last layout bug remained: the bottom
-status bar (Hub Running / IP:port / Printers / Queue / History / LAN /
-DropZone / Uptime / version) rendered BELOW the bottom edge of the
-window - "outside bottom, not showing". Root cause: the stylesheet
-never reset the browser's default 8px body margin and never set
-box-sizing, so the desktop frame (height:100vh + 14px padding + 8px
-margin) was 936px tall inside a 900px window; body{overflow:hidden}
-clipped the overflow and the status bar - the last element in the
-window - went hidden.
+QUICK NOTE ON v3.5.4 - CRX SIGNATURE VERIFIED
+---------------------------------------------
+v3.5.3 fixed the last layout bug (status bar always visible) but its
+.crx shipped with a STALE signature - the CRX3 header was signed over
+an older zip than the archive actually inside, so Chrome rejected it
+with "CRX signature verification failed" while the 3.5.2 crx kept
+working.
 
-THE FIX IS THREE DECLARATIONS: body{margin:0} plus
-box-sizing:border-box on the desktop and window layers, so 100vh is
-the REAL height. The bar now sits fully on screen at every window
-size (verified by a rendered-browser probe at 720p / 768p / 900p /
-1000p, zero JS errors).
+THE FIX IN v3.5.4: every CRX is repacked fresh from the extension
+source with the SAME stable release key - the extension ID is
+UNCHANGED (likldbkamojokkfdlcjibiljpgbbnohc), so pairing, settings and
+the hub auto-update chain all survive. tool/crx3.py verify (a
+Chrome-identical signature check) is now a HARD BUILD GATE: a CRX
+whose signature does not match the archive inside can never ship
+again. All artifacts (CRX, extension zip, DEB, Setup EXE) are rebuilt
+and their SHA256 checksums are in docs/SHA256SUMS-3.5.4.txt - check
+before installing:
 
-EVERYTHING ELSE IS THE WORKING v3.5.2 BUILD: the real success rate,
-no more save-password prompts, date+time everywhere, the history
-per-row View file button and date filter, the live dashboard cards,
-the ProTheme theme engine (8 themes + density / corners / frame) and
-the single port for every queue.
+  Windows CMD        : certutil -hashfile AdvPrint-Pro.crx SHA256
+  Windows PowerShell : Get-FileHash AdvPrint-Pro.crx -Algorithm SHA256
+  Linux / macOS      : sha256sum AdvPrint-Pro.crx
+
+EVERYTHING ELSE IS THE WORKING v3.5.3 BUILD: the always-visible status
+bar, the real success rate, no more save-password prompts, date+time
+everywhere, the history per-row View file button and date filter, the
+live dashboard cards, the ProTheme theme engine (8 themes + density /
+corners / frame) and the single port for every queue.
 
 WHAT v3.5.2 ALREADY FIXED (kept unchanged here)
 -----------------------------------------------
@@ -43,13 +47,15 @@ WHAT v3.5.2 ALREADY FIXED (kept unchanged here)
 UPGRADE IN 3 STEPS (from any v3.x)
 ----------------------------------
 1. Close the old hub (tray icon -> Exit) and run the new
-   AdvPrint-Pro-Setup-3.5.3.exe - it installs over the old folder and
+   AdvPrint-Pro-Setup-3.5.4.exe - it installs over the old folder and
    keeps config.json, the queue database and your rules.
-2. Start AdvPrint Pro. The tray tooltip shows "v3.5.3 - running on
+2. Start AdvPrint Pro. The tray tooltip shows "v3.5.4 - running on
    http://127.0.0.1:9235".
 3. Chrome updates the extension by itself from the hub within a minute
-   (chrome://extensions -> AdvPrint Pro -> 3.5.3). Linux .deb: sudo
-   dpkg -i advprint-pro_3.5.3_all.deb.
+   (chrome://extensions -> AdvPrint Pro -> 3.5.4). Linux .deb: sudo
+   dpkg -i advprint-pro_3.5.4_all.deb.
+   Drag-install instead? Use the included AdvPrint-Pro.crx ( Developer
+   mode ON at chrome://extensions ) - its signature is build-verified.
 
 QUICK VERIFY (2 minutes)
 ------------------------
@@ -71,22 +77,22 @@ QUICK VERIFY (2 minutes)
 - Connections tab: the Token box shows your REAL token (CSS-masked)
   and typing in the history search box does NOT trigger any browser
   "save password" offer any more.
-- The ONE UI footer and the tray tooltip say v3.5.2.
-- http://127.0.0.1:9235/health reports "version": "3.5.2" and
+- The ONE UI footer and the tray tooltip say v3.5.4.
+- http://127.0.0.1:9235/health reports "version": "3.5.4" and
   carries default_printer / raw_active / worker_alive.
 - http://127.0.0.1:9235/extension/info shows "stale": false and
-  version 3.5.2 (if stale, restart the hub once).
-- Locked by tests/test_v352.py (python3 tests/test_v352.py).
+  version 3.5.4 (if stale, restart the hub once).
+- Locked by tests/test_v354.py (python3 tests/test_v354.py).
 
 DOCUMENTATION (all local, A-to-Z)
 ---------------------------------
 - README.md            - features, install, API, LAN/IPP modes
 - docs/DEVELOPER-API.md          - window.advprint JS API
 - docs/AdvPrint-Pro-v3.4.8-A-to-Z-DEV-GUIDE.md - build + release guide
-- docs/RELEASE-NOTES-v3.5.2.md   - this release, explained
-- docs/RELEASE-NOTES-v3.5.1.md   - previous release, the dashboard fix
-- docs/RELEASE-NOTES-v3.4.8.md   - the rules-table fit fix
-- download/AdvPrint-Pro-Console-UI-Template-v3.5.2-ProTheme.html
+- docs/RELEASE-NOTES-v3.5.4.md   - this release, explained
+- docs/RELEASE-NOTES-v3.5.3.md   - previous release + the CRX hot-fix
+- docs/RELEASE-NOTES-v3.5.2.md   - the dashboard-trust release
+- docs/AdvPrint-Pro-Console-UI-Template-v3.5.1-ProTheme.html
   - the ONE UI as a standalone theme template (opens anywhere; with
     the hub running it is 100% live, offline it shows real-shaped
     sample data labelled TEMPLATE PREVIEW)

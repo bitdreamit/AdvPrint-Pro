@@ -96,26 +96,8 @@ if _HUB_DIR not in sys.path:
     sys.path.insert(0, _HUB_DIR)
 
 
-VERSION = "3.5.3"
-VERSION_NAME = ("v3.5.3 (STATUS BAR ALWAYS VISIBLE - the bottom "
-    "bar stays on screen). v3.5.2 made the dashboard numbers honest "
-    "and killed the save-password prompts; the user then reported "
-    "the last layout bug: the status bar sat BELOW the viewport "
-    "bottom and could not be seen at all. Root cause: the stylesheet "
-    "never reset the browser's default 8px body margin and never set "
-    "box-sizing, so the desktop frame (height:100vh + 14px padding + "
-    "8px margin) rendered 936px tall inside a 900px window - the "
-    "whole app, status bar last, spilled past the fold and "
-    "body{overflow:hidden} clipped it. The fix is surgical: "
-    "body{margin:0} plus box-sizing:border-box on the desktop and "
-    "the window layers, so 100vh is the REAL height and the status "
-    "bar now sits inside the viewport at every window size "
-    "(verified 720p / 768p / 900p / 1000p). Everything else is "
-    "exactly the working v3.5.2 build: real success rate, "
-    "save-password fix, date+time history, per-row VIEW file button, "
-    "server-side date filter, live dashboard cards, the ProTheme "
-    "engine (8 themes + density / corners / frame) and the single "
-    "port for every queue.")
+VERSION = "3.5.4"
+VERSION_NAME = ("v3.5.4 (CRX SIGNATURE VERIFIED - the extension package is signed by the stable release key and the build now refuses to ship an unverified signature). v3.5.3 kept the status bar always visible but shipped its .crx with a STALE signature - the header was signed over an older zip than the archive actually inside, so Chrome rejected it with 'CRX signature verification failed' while the 3.5.2 crx kept working. This full release repacks the CRX fresh from the extension source with the SAME stable key (extension ID unchanged: likldbkamojokkfdlcjibiljpgbbnohc, so pairing and auto-update survive), adds tool/crx3.py verify - a Chrome-identical signature check - and wires it into build-all.sh as a hard build gate. Everything else is exactly the working v3.5.3 build: the always-visible status bar, real success rate, save-password fix, date+time history, per-row VIEW file button, server-side date filter, live dashboard cards, the ProTheme engine (8 themes + density / corners / frame) and the single port for every queue.")
 FULL_BRAND = ("AdvPrint Pro (Advanced Printer) by "
               "Bit Dream IT - Innovative Healthcare Solutions")
 BRANDING = ("AdvPrint Pro (Advanced Printer) - Version %s - by "
@@ -9372,7 +9354,7 @@ CONSOLE_HTML = r"""<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AdvPrint Pro — Printing Hub · ALL-IN-ONE Console v3.5.3 — Pro Themes</title>
+<title>AdvPrint Pro — Printing Hub · ALL-IN-ONE Console v3.5.4 — Pro Themes</title>
 <style>
 :root{--navy:#14224f;--mono:'Cascadia Mono','JetBrains Mono','SF Mono',Consolas,'Liberation Mono',monospace;
   --purple-hex:#5b3fc4;
@@ -10312,7 +10294,7 @@ html[data-frame="flush"] .window{max-width:none;border-radius:0;border:none;box-
             <div class="stat g"><div class="d">7d 17 ok / 1 fail</div><div class="v">94.7%</div><div class="l">Success Rate</div></div>
             <div class="stat w"><div class="d">live</div><div class="v">4</div><div class="l">In Queue</div></div>
             <div class="stat r"><div class="d">1 offline</div><div class="v">3/4</div><div class="l">Printers Ready</div></div>
-            <div class="stat"><div class="d">hub</div><div class="v">v3.5.3</div><div class="l">Version</div></div>
+            <div class="stat"><div class="d">hub</div><div class="v">v3.5.4</div><div class="l">Version</div></div>
           </div>
 
           <!-- v3.2.3: the Quick-actions card is GONE - all six of its
@@ -13567,7 +13549,7 @@ function renderExt(audit){
     rows.slice(0, 6).forEach(function(r2){
       var tr = tmpl.cloneNode(true), td = tr.querySelectorAll("td");
       td[0].innerHTML = "<b>" + esc(r2.who) + "</b>";
-      td[1].textContent = "v" + (BOOT.version || "3.5.3");
+      td[1].textContent = "v" + (BOOT.version || "3.5.4");
       td[2].textContent = r2.at ? r2.at.slice(11, 19) : "\u2014";
       td[3].innerHTML = '<span class="chip ok"><span class="d"></span>PAIRED</span>';
       tbl.appendChild(tr);
@@ -13589,7 +13571,7 @@ function renderExt(audit){
       m2.textContent = BASE + "/extension/updates.xml";
   });
   var crxChip = document.querySelector("#p-extension .frow .chip.ok");
-  if (crxChip) crxChip.innerHTML = '<span class="d"></span>CRX v' + (BOOT.version || "3.5.3") + " READY";
+  if (crxChip) crxChip.innerHTML = '<span class="d"></span>CRX v' + (BOOT.version || "3.5.4") + " READY";
   /* v3.2.8 STALE-CRX GUARD: ask the hub which package it really
    * serves (/extension/info is open, no token). Older than the hub
    * itself -> Chrome never updates -> browsers keep the old bugs.
@@ -13796,7 +13778,7 @@ async function renderUpdate(res){
    full-page /docs stays available via the "Full guide page" button.
    ============================================================ */
 function docsHtml(){
-  var v = esc(BOOT.version || "3.5.3");
+  var v = esc(BOOT.version || "3.5.4");
   var ip = esc(BOOT.lan_ip || location.hostname || "127.0.0.1");
   var port = esc(String(BOOT.port || location.port || "9235"));
   var base = "http://" + ip + ":" + port;

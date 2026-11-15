@@ -1,6 +1,46 @@
 # Changelog - AdvPrint Pro (Advanced Printer)
 by Bit Dream IT - Innovative Healthcare Solutions
 
+## v3.5.4 - CRX SIGNATURE VERIFIED (full release; the extension package is signed and build-checked) (2026-11-15)
+
+v3.5.3 kept the status bar always visible but shipped its .crx with a
+stale signature; the same-day hot-fix repaired the file, and v3.5.4 is
+the FULL release that bakes the fix into the tree, bumps every version
+string and rebuilds every artifact. Locked by `tests/test_v354.py`.
+
+### 1. The CRX is signed and verified again
+
+- Every CRX repacked fresh from `extension/` with the SAME stable
+  release key `extension-signing/advprint-printer.pem` - extension ID
+  stays `likldbkamojokkfdlcjibiljpgbbnohc` (pairing, settings and the
+  hub `/extension/updates.xml` auto-update chain survive).
+- `tool/crx3.py verify <crx> [version]` - Chrome-identical verification
+  (ID/key match, RSA-PKCS1v15-SHA256 over "CRX3 SignedData" + the exact
+  archive inside, payload zip integrity, expected version). It FAILS on
+  the broken v3.5.3 file and PASSES the good v3.5.2 one.
+- `scripts/build-all.sh` runs the verification as a HARD GATE right
+  after the sync/version guards - a stale-signed CRX can no longer
+  reach a release.
+- Cross-checked against Chromium's own `--pack-extension` output for
+  the same key: same extension ID, signature verifies.
+
+### 2. Version coherence 3.5.4
+
+Hub `VERSION`/`VERSION_NAME`, `VERSION.txt`, `extension/manifest.json`
+3.5.4, popup + i18n (EN/Bangla) + api.js fallback, console title +
+`BOOT.version` fallbacks (x3) + hub stat card, NSIS
+`VIProductVersion 3.5.4.0` + `DisplayVersion` + setup exe name, deb
+`control` 3.5.4. The v3.5.3 statusbar-fix CSS stays byte-for-byte
+(marked "v3.5.3 statusbar fix" in the stylesheet on purpose - it is
+history, not the current version).
+
+### 3. Rebuilt and verified artifacts
+
+AdvPrint-Pro.crx (5 synced copies), AdvPrint-Pro-Extension-3.5.4.zip,
+advprint-pro_3.5.4_all.deb (embedded CRX md5-checked),
+AdvPrint-Pro-Setup-3.5.4.exe (NSIS payload CRX md5-checked),
+docs/SHA256SUMS-3.5.4.txt.
+
 ## v3.5.3 - STATUS BAR ALWAYS VISIBLE (the bottom bar stays on screen) (2026-11-15)
 
 v3.5.2 was confirmed working ("3.5.2 fine"); the user then reported the

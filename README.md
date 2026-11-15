@@ -13,23 +13,31 @@ Web page ──► Chrome extension ──► AdvPrint Pro hub (localhost:9235) 
 
 ---
 
-## What's new in v3.5.3 (STATUS BAR ALWAYS VISIBLE)
+## What's new in v3.5.4 (CRX SIGNATURE VERIFIED)
 
-v3.5.2 was confirmed working; one last layout bug remained: the bottom
-status bar (Hub Running / IP:port / Printers / Queue / History / LAN /
-DropZone / Uptime / version) rendered BELOW the bottom edge of the
-window - "outside bottom, not showing". Root cause: the stylesheet
-never reset the browser's default 8px body margin and never set
-`box-sizing`, so the desktop frame (`height:100vh` + 14px padding +
-8px margin) was 936px tall inside a 900px window, and
-`body{overflow:hidden}` clipped the overflow - hiding the bar, the last
-element in the window. The fix is three declarations:
-`body{margin:0}` plus `box-sizing:border-box` on `.desktop` and
-`.window`, so `100vh` is the real height. The bar now sits fully on
-screen at every window size (verified by a rendered-browser probe at
-720p / 768p / 900p / 1000p, zero JS errors). Everything else is exactly
-the working v3.5.2 build. Locked by `tests/test_v353.py`. Full details
-in `CHANGELOG.md` and `docs/RELEASE-NOTES-v3.5.3.md`.
+v3.5.3 fixed the last layout bug (the status bar always stays visible)
+but shipped its `.crx` with a STALE signature: the CRX3 header was
+signed over an older zip than the archive actually packed inside, so
+Chrome rejected it with *CRX signature verification failed* - while the
+older 3.5.2 crx kept working. v3.5.4 is the full release that makes the
+extension package trustworthy again:
+
+- **Every CRX repacked fresh** from the extension source with the SAME
+  stable release key - the extension ID is unchanged
+  (`likldbkamojokkfdlcjibiljpgbbnohc`), so hub pairing, settings and
+  the `/extension/updates.xml` auto-update chain all survive;
+- **`tool/crx3.py verify`** - a Chrome-identical signature check
+  (ID/key match + RSA over `CRX3 SignedData` + the exact archive
+  inside + payload integrity + expected version) that reproduces the
+  bug on the broken file and passes every good one;
+- **A hard build gate** in `scripts/build-all.sh` - the build now
+  REFUSES to ship a CRX whose signature does not match its payload;
+- Version coherence 3.5.4 across hub / extension / installers, all
+  artifacts rebuilt (CRX, extension zip, DEB, Setup EXE).
+
+The status bar fix from v3.5.3 stays exactly as delivered. Locked by
+`tests/test_v354.py`. Full details in `CHANGELOG.md` and
+`docs/RELEASE-NOTES-v3.5.4.md`.
 
 ---
 ## What was new in v3.5.2 (DASHBOARD DATA YOU CAN TRUST + history tools)
