@@ -13,7 +13,26 @@ Web page ──► Chrome extension ──► AdvPrint Pro hub (localhost:9235) 
 
 ---
 
-## What's new in v3.5.2 (DASHBOARD DATA YOU CAN TRUST + history tools)
+## What's new in v3.5.3 (STATUS BAR ALWAYS VISIBLE)
+
+v3.5.2 was confirmed working; one last layout bug remained: the bottom
+status bar (Hub Running / IP:port / Printers / Queue / History / LAN /
+DropZone / Uptime / version) rendered BELOW the bottom edge of the
+window - "outside bottom, not showing". Root cause: the stylesheet
+never reset the browser's default 8px body margin and never set
+`box-sizing`, so the desktop frame (`height:100vh` + 14px padding +
+8px margin) was 936px tall inside a 900px window, and
+`body{overflow:hidden}` clipped the overflow - hiding the bar, the last
+element in the window. The fix is three declarations:
+`body{margin:0}` plus `box-sizing:border-box` on `.desktop` and
+`.window`, so `100vh` is the real height. The bar now sits fully on
+screen at every window size (verified by a rendered-browser probe at
+720p / 768p / 900p / 1000p, zero JS errors). Everything else is exactly
+the working v3.5.2 build. Locked by `tests/test_v353.py`. Full details
+in `CHANGELOG.md` and `docs/RELEASE-NOTES-v3.5.3.md`.
+
+---
+## What was new in v3.5.2 (DASHBOARD DATA YOU CAN TRUST + history tools)
 
 v3.5.1 made every dashboard card live; v3.5.2 fixes the last numbers
 that could still read as fake, plus four everyday-console upgrades

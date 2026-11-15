@@ -46,7 +46,7 @@ ADV_PATHS = [
     os.path.join(ROOT, "tool", "windows", "portable", "hub", "advprint.py"),
     os.path.join(ROOT, "installer", "stage", "hub", "advprint.py"),
 ]
-V = "3.5.2"
+V = "3.5.3"
 
 
 def console():
@@ -235,7 +235,7 @@ def test_embedded_console_matches_standalone():
     std = console()
     assert emb == std + "\n"
     # the embedded copy carries THIS release's fixes, not a stale one
-    assert "v3.5.2" in emb
+    assert "v3.5.3" in emb
     assert ".tok-mask{-webkit-text-security:disc}" in emb
     assert "histDateFetch" in emb
 
@@ -259,7 +259,7 @@ def test_advprint_copies_byte_identical():
 def test_version_everywhere():
     a = adv()
     assert 'VERSION = "' + V + '"' in a
-    assert 'VERSION_NAME = ("v' + V + ' (DASHBOARD DATA YOU CAN TRUST' in a
+    assert 'VERSION_NAME = ("v' + V + ' (STATUS BAR ALWAYS VISIBLE' in a
     vt = open(os.path.join(ROOT, "VERSION.txt"), encoding="utf-8").read()
     assert V in vt
     man = json.load(open(os.path.join(ROOT, "extension", "manifest.json"),

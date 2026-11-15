@@ -96,31 +96,26 @@ if _HUB_DIR not in sys.path:
     sys.path.insert(0, _HUB_DIR)
 
 
-VERSION = "3.5.2"
-VERSION_NAME = ("v3.5.2 (DASHBOARD DATA YOU CAN TRUST - the last fake "
-    "numbers are gone). v3.5.1 made every dashboard CARD live; this "
-    "release fixes what was still not honest about the KPI row and "
-    "hardens the day-to-day console: (1) REAL SUCCESS RATE - the math "
-    "used to count only status='printed' as success, so a hub that "
-    "delivers most jobs as saved files sat frozen on a printed/failed "
-    "ratio (the user's 'always 33.3%'); success is now printed + "
-    "saved, canceled jobs stay out of the math, and the tile shows "
-    "the counts BEHIND the percentage ('7d 14 ok / 2 fail' + a full "
-    "breakdown tooltip) so it can never read as a demo value again. "
-    "(2) NO MORE SAVE-PASSWORD PROMPTS - the Connections token boxes "
-    "were type=password, so Chrome paired every text box on the page "
-    "(the history search!) with them and offered to save the search "
-    "text as a password; they are CSS-masked text inputs now and every "
-    "input is autocomplete=off. (3) DATE + TIME everywhere - history "
-    "rows, dashboard recent jobs, audit/visitor rows, LAN visitor "
-    "first/last hit, DropZone activity and debug problems used to "
-    "show the time only, so yesterday looked like today. (4) History: "
-    "a per-row VIEW button opens the stored file inline in the browser "
-    "(/jobs/<id>/file?view=1) and a DATE-WISE filter (from/to) queries "
-    "the whole job database server-side. Everything else is exactly "
-    "the working v3.5.1 build: live dashboard cards, the ProTheme "
-    "theme engine (8 themes + density / corners / frame), the rules "
-    "table fit fix and the single port for every queue.")
+VERSION = "3.5.3"
+VERSION_NAME = ("v3.5.3 (STATUS BAR ALWAYS VISIBLE - the bottom "
+    "bar stays on screen). v3.5.2 made the dashboard numbers honest "
+    "and killed the save-password prompts; the user then reported "
+    "the last layout bug: the status bar sat BELOW the viewport "
+    "bottom and could not be seen at all. Root cause: the stylesheet "
+    "never reset the browser's default 8px body margin and never set "
+    "box-sizing, so the desktop frame (height:100vh + 14px padding + "
+    "8px margin) rendered 936px tall inside a 900px window - the "
+    "whole app, status bar last, spilled past the fold and "
+    "body{overflow:hidden} clipped it. The fix is surgical: "
+    "body{margin:0} plus box-sizing:border-box on the desktop and "
+    "the window layers, so 100vh is the REAL height and the status "
+    "bar now sits inside the viewport at every window size "
+    "(verified 720p / 768p / 900p / 1000p). Everything else is "
+    "exactly the working v3.5.2 build: real success rate, "
+    "save-password fix, date+time history, per-row VIEW file button, "
+    "server-side date filter, live dashboard cards, the ProTheme "
+    "engine (8 themes + density / corners / frame) and the single "
+    "port for every queue.")
 FULL_BRAND = ("AdvPrint Pro (Advanced Printer) by "
               "Bit Dream IT - Innovative Healthcare Solutions")
 BRANDING = ("AdvPrint Pro (Advanced Printer) - Version %s - by "
@@ -9377,7 +9372,7 @@ CONSOLE_HTML = r"""<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AdvPrint Pro — Printing Hub · ALL-IN-ONE Console v3.5.2 — Pro Themes</title>
+<title>AdvPrint Pro — Printing Hub · ALL-IN-ONE Console v3.5.3 — Pro Themes</title>
 <style>
 :root{--navy:#14224f;--mono:'Cascadia Mono','JetBrains Mono','SF Mono',Consolas,'Liberation Mono',monospace;
   --purple-hex:#5b3fc4;
@@ -9469,16 +9464,20 @@ html[data-theme="midnight"]{--bg:#0c1322;--panel:#121b30;--surface-2:#16213a;--s
 html[data-theme="carbon"]{--bg:#101113;--panel:#18191c;--surface-2:#1d1f23;--sidebar-bg:#141518;--menubar-bg:#18191c;--toolbar-bg:#1d1f23;--status-bg:#18191c;--cardh-bg:#1d1f23;--input-bg:#101113;--btn-bg:#1d1f23;--ico-bg:#202226;--line:#2a2c31;--line-2:#383b42;--line-3:#4d515a;--line-soft:#202226;--ink:#ededf0;--ink-2:#b0b3bb;--muted:#7d818b;--ph:#64676f;--blue:#2dd4bf;--blue-deep:#76e3d5;--blue-soft:#1b3736;--blue-line:#20605a;--accent-border:#26b4a2;--on-accent:#06101f;--grad-accent:linear-gradient(180deg,#3ed7c4,#28bba8);--cnt-bg:#202226;--cnt-ink:#b0b3bb;--tbl-hover:#1d1f23;--th-ink:#7d818b;--track:#202226;--sw-off:#4d515a;--sw-off-h:#62666e;--scroll:#383b42;--scroll-h:#4d515a;--sel:#216d65;--log-bg:#0a0b0c;--log-line:#2a2c31;--log-ink:#b0b3bb;--log-ts:#7d818b;--log-hl:#6ce1d2;--log-scroll:#383b42;--toast-bg:#202226;--toast-ink:#ededf0;--overlay:rgba(2,5,14,.66);--sh-1:0 1px 2px rgba(0,0,0,.35);--sh-2:0 6px 18px rgba(0,0,0,.4);--sh-3:0 18px 48px rgba(0,0,0,.6),0 4px 12px rgba(0,0,0,.4);--sh-win:0 40px 90px rgba(0,0,0,.7),0 0 0 1px rgba(255,255,255,.04);--ring:0 0 0 3px rgba(45,212,191,0.35);--ring-soft:rgba(45,212,191,0.25);--accent-hi:#62dfcf;--chrome-line:#3d3e43;--chrome-edge:#0c0d0f;--chrome-muted:#b0b1b2;--chrome-bg:linear-gradient(180deg,#1d1f24,#131417);--logo-bg:linear-gradient(145deg,#62dfcf,#28bba8);--desk-bg:radial-gradient(1200px 600px at 20% -10%,#1f2a2a 0%,transparent 60%),linear-gradient(165deg,#050606 0%,#0b0c0d 55%,#050606 100%);--ok:#4ade80;--ok-bg:#10301f;--ok-line:#1d5a38;--ok-hi:#34d399;--warn:#fbbf24;--warn-bg:#33270c;--warn-line:#6b4d12;--warn-hi:#fbbf24;--err:#ff7b7b;--err-bg:#3a1717;--err-line:#6e2a2a;--purple:#b7a4ff;--purple-bg:#251d47;--purple-line:#43367f;--orange-ink:#fdba74;--orange-bg:#35210f;--orange-line:#6b4219;--gray-ink:#a8b3c9;--gray-bg:#232b3d;--gray-line:#34405a}
 html[data-mode="dark"]{color-scheme:dark}
 html,body{height:100%}
-body{font-family:'Segoe UI Variable Text','Segoe UI',system-ui,-apple-system,Roboto,'Noto Sans','Noto Sans Bengali','Noto Sans SC',sans-serif;
+/* v3.5.3 statusbar fix: the UA default body margin (8px) plus the desktop's
+   padding used to push the whole frame past the viewport bottom, so the
+   status bar ended up "outside bottom" and invisible. Reset the margin and
+   switch the frame layers to border-box so height:100vh is the REAL size. */
+body{margin:0;font-family:'Segoe UI Variable Text','Segoe UI',system-ui,-apple-system,Roboto,'Noto Sans','Noto Sans Bengali','Noto Sans SC',sans-serif;
   background:var(--desk-bg);
   color:var(--ink);overflow:hidden;font-size:13px;-webkit-font-smoothing:antialiased;
   text-rendering:optimizeLegibility;font-variant-numeric:tabular-nums}
 ::selection{background:var(--sel);color:var(--ink)}
 :focus{outline:none}
 :focus-visible{outline:2px solid var(--blue);outline-offset:2px;border-radius:4px}
-.desktop{height:100vh;padding:14px;display:flex;flex-direction:column}
+.desktop{height:100vh;box-sizing:border-box;padding:14px;display:flex;flex-direction:column}
 .window{flex:1;min-height:0;max-width:1400px;width:100%;margin:0 auto;display:flex;
-  flex-direction:column;border-radius:12px;overflow:hidden;border:1px solid var(--chrome-line);
+  flex-direction:column;border-radius:12px;overflow:hidden;border:1px solid var(--chrome-line);box-sizing:border-box;
   box-shadow:var(--sh-win);
   background:var(--bg)}
 /* scrollbars */
@@ -10313,7 +10312,7 @@ html[data-frame="flush"] .window{max-width:none;border-radius:0;border:none;box-
             <div class="stat g"><div class="d">7d 17 ok / 1 fail</div><div class="v">94.7%</div><div class="l">Success Rate</div></div>
             <div class="stat w"><div class="d">live</div><div class="v">4</div><div class="l">In Queue</div></div>
             <div class="stat r"><div class="d">1 offline</div><div class="v">3/4</div><div class="l">Printers Ready</div></div>
-            <div class="stat"><div class="d">hub</div><div class="v">v3.5.2</div><div class="l">Version</div></div>
+            <div class="stat"><div class="d">hub</div><div class="v">v3.5.3</div><div class="l">Version</div></div>
           </div>
 
           <!-- v3.2.3: the Quick-actions card is GONE - all six of its
@@ -13568,7 +13567,7 @@ function renderExt(audit){
     rows.slice(0, 6).forEach(function(r2){
       var tr = tmpl.cloneNode(true), td = tr.querySelectorAll("td");
       td[0].innerHTML = "<b>" + esc(r2.who) + "</b>";
-      td[1].textContent = "v" + (BOOT.version || "3.5.2");
+      td[1].textContent = "v" + (BOOT.version || "3.5.3");
       td[2].textContent = r2.at ? r2.at.slice(11, 19) : "\u2014";
       td[3].innerHTML = '<span class="chip ok"><span class="d"></span>PAIRED</span>';
       tbl.appendChild(tr);
@@ -13590,7 +13589,7 @@ function renderExt(audit){
       m2.textContent = BASE + "/extension/updates.xml";
   });
   var crxChip = document.querySelector("#p-extension .frow .chip.ok");
-  if (crxChip) crxChip.innerHTML = '<span class="d"></span>CRX v' + (BOOT.version || "3.5.2") + " READY";
+  if (crxChip) crxChip.innerHTML = '<span class="d"></span>CRX v' + (BOOT.version || "3.5.3") + " READY";
   /* v3.2.8 STALE-CRX GUARD: ask the hub which package it really
    * serves (/extension/info is open, no token). Older than the hub
    * itself -> Chrome never updates -> browsers keep the old bugs.
@@ -13797,7 +13796,7 @@ async function renderUpdate(res){
    full-page /docs stays available via the "Full guide page" button.
    ============================================================ */
 function docsHtml(){
-  var v = esc(BOOT.version || "3.5.2");
+  var v = esc(BOOT.version || "3.5.3");
   var ip = esc(BOOT.lan_ip || location.hostname || "127.0.0.1");
   var port = esc(String(BOOT.port || location.port || "9235"));
   var base = "http://" + ip + ":" + port;

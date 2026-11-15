@@ -539,13 +539,13 @@ def test_v1_database_migration(tmp_path):
 
 
 def test_version_anchors():
-    assert advprint.VERSION == "3.5.2"  # v3.5.2 bump (was pinned 3.4.8)
+    assert advprint.VERSION == "3.5.3"  # v3.5.3 bump (was pinned 3.4.8)
     # repo/package layout: tool/windows/portable/hub -> root/extension
     root = os.path.dirname(os.path.dirname(os.path.dirname(
         os.path.dirname(os.path.dirname(advprint.__file__)))))
     ext = os.path.join(root, "extension", "manifest.json")
     with open(ext) as f:
-        assert json.load(f)["version"] == "3.4.8"
+        assert json.load(f)["version"] == advprint.VERSION
 
 
 def test_log_rotation(tmp_path):
@@ -1062,7 +1062,7 @@ def test_v26_token_current_loopback_only(hub):
     code, d = hub.get("/token/current")
     assert code == 200 and d["ok"] is True
     assert d["token"] == hub.token
-    assert d["app"] == "AdvPrint Pro" and d["version"] == "3.4.8"
+    assert d["app"] == "AdvPrint Pro" and d["version"] == advprint.VERSION
 
 
 def test_v26_token_current_rejects_remote(hub):
@@ -1310,7 +1310,7 @@ def test_v264_setup_exe_kills_zombie_hubs():
     assert "Stop-Process -Name AdvPrintPro" in stopps
     assert "Stop-Process -Name PrintHubPro" in stopps
     assert "sc.exe delete AdvPrint" in stopps
-    assert 'VIProductVersion "3.4.8.0"' in src
+    assert 'VIProductVersion "' + advprint.VERSION + '.0"' in src
 
 
 # ---------------- v2.6.8: printer-name self-heal + menu guard ----------
@@ -1593,7 +1593,10 @@ def _v280_pdf(tmp_path, name="z.pdf", big="AdvPrint Pro v2.8 test"):
 
 
 def test_v280_version_and_config_keys():
-    assert advprint.VERSION == "3.4.8"
+    root = os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.dirname(os.path.dirname(advprint.__file__)))))
+    assert advprint.VERSION == json.load(
+        open(os.path.join(root, "extension", "manifest.json")))["version"]
     for k in ("drop_enabled", "drop_dir", "drop_delete"):
         assert k in advprint.CFG and k in advprint.CONFIG_KEYS
         assert k in advprint.CONFIG_TYPES
@@ -1819,7 +1822,7 @@ def test_v280_source_wiring_restart_tray_tool_installer():
     nsi = open(os.path.join(root, "installer", "setup.nsi"),
                encoding="utf-8").read()
     assert "hub-stop.ps1" in nsi
-    assert "3.3.0" in nsi and "${IfNot} ${Silent}" in nsi
+    assert advprint.VERSION in nsi and "${IfNot} ${Silent}" in nsi
     # extension dual profile
     ext = os.path.join(root, "extension")
     bg = open(os.path.join(ext, "background.js"), encoding="utf-8").read()
@@ -1833,7 +1836,7 @@ def test_v280_source_wiring_restart_tray_tool_installer():
     # background.js + the ONE UI Connections tab
     assert "127.0.0.1:9235" in opt and "ONE UI" in opt
     man = json.load(open(os.path.join(ext, "manifest.json")))
-    assert man["version"] == "3.4.8"
+    assert man["version"] == advprint.VERSION
 
 
 def test_v280_lan_profile_never_auto_heals():
@@ -2099,8 +2102,8 @@ def test_v281_setup_nsi_version():
         root = os.path.dirname(root)
     nsi = open(os.path.join(root, "installer", "setup.nsi"),
                encoding="utf-8", errors="replace").read()
-    assert 'VIProductVersion "3.4.8.0"' in nsi
-    assert "AdvPrint-Pro-Setup-3.4.8.exe" in nsi
+    assert 'VIProductVersion "' + advprint.VERSION + '.0"' in nsi
+    assert "AdvPrint-Pro-Setup-" + advprint.VERSION + ".exe" in nsi
 
 
 # ============================================================

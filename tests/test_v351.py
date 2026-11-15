@@ -42,7 +42,11 @@ ADV_PATHS = [
     os.path.join(ROOT, "tool", "windows", "portable", "hub", "advprint.py"),
     os.path.join(ROOT, "installer", "stage", "hub", "advprint.py"),
 ]
-V = "3.5.1"
+# v3.5.3: V follows the manifest (single source of truth) instead of
+# a frozen string - the coherence checks below stay meaningful on
+# every later release without being edited again.
+V = json.load(open(os.path.join(ROOT, "extension", "manifest.json"),
+                   encoding="utf-8"))["version"]
 
 # ---------------- A. the dashboard is id-wired + rendered ----------------
 
@@ -179,7 +183,7 @@ def test_console_embed_safe():
 def test_version_everywhere():
     adv = open(ADV_PATHS[0], encoding="utf-8").read()
     assert 'VERSION = "' + V + '"' in adv
-    assert 'VERSION_NAME = ("v' + V + ' (DASHBOARD LIVE DATA' in adv
+    assert ('VERSION_NAME = ("v' + V) in adv  # name starts with the current version
     assert "RULES TABLE FITS" not in adv.split("CONSOLE_HTML")[0].split("VERSION_NAME")[1][:200]
     # the constants swallowed by nothing - the hub must stay importable
     for k in ("FULL_BRAND", "BRANDING", "IS_WIN = sys.platform", "HIDE = "):

@@ -1,6 +1,53 @@
 # Changelog - AdvPrint Pro (Advanced Printer)
 by Bit Dream IT - Innovative Healthcare Solutions
 
+## v3.5.3 - STATUS BAR ALWAYS VISIBLE (the bottom bar stays on screen) (2026-11-15)
+
+v3.5.2 was confirmed working ("3.5.2 fine"); the user then reported the
+last layout bug: the status bar - Hub Running / IP:port / Printers /
+Queue / History / LAN / DropZone / Uptime / version - "is outside
+bottom, not showing - update 3.5.3 to show also this". The bar rendered
+BELOW the viewport bottom edge on every window size. Locked by
+`tests/test_v353.py`.
+
+### 1. Root cause - a 936px frame inside a 900px window
+
+- The stylesheet never reset the browser's default 8px body margin and
+  never set `box-sizing`, so `.desktop{height:100vh;padding:14px}`
+  laid out 900px of CONTENT plus 14px padding on each side = 936px of
+  real page, and the UA body margin pushed it another 8px down.
+- `body{overflow:hidden}` silently clipped everything past the fold -
+  and the LAST element in the window is the status bar, so the bar went
+  outside the bottom exactly as reported. Measured before the fix at a
+  900px-tall window: the bar occupied y=894..921, i.e. 21 of its 27
+  pixels were below the fold.
+
+### 2. The fix - surgical, three declarations
+
+- `body{margin:0}` - kills the UA default margin (was pushing the whole
+  frame 8px down).
+- `.desktop{box-sizing:border-box}` - `height:100vh` is now the REAL
+  total size, the 14px frame padding included.
+- `.window{box-sizing:border-box}` - the 1px window border no longer
+  adds 2px of phantom height.
+- Result: the frame exactly fills the viewport at any window size and
+  the status bar sits fully on screen. Verified with a rendered-browser
+  probe at 1280x720 / 1366x768 / 1440x900 / 1600x1000 - bar bottoms
+  705 / 753 / 885 / 985 px, all inside their viewports, document
+  scroll height exactly equal to the viewport (no hidden overflow),
+  zero JS errors.
+
+### 3. Everything else
+
+- Exactly the working v3.5.2 build: real success rate, save-password
+  fix, date+time history, per-row View file button, server-side date
+  filter, live dashboard cards, ProTheme engine (8 themes + density /
+  corners / frame), rules table fit, single port for every queue.
+- Version coherence bumped across hub / extension / installer:
+  manifest.json 3.5.3, popup + i18n + api.js fallback, NSIS
+  3.5.3.0 / DisplayVersion, deb control 3.5.3, VERSION.txt, console
+  title, BOOT.version UI fallbacks.
+
 ## v3.5.2 - DASHBOARD DATA YOU CAN TRUST (success rate, save-password fix, history tools) (2026-11-15)
 
 v3.5.1 made every dashboard CARD live; the user then reported the last
