@@ -67,6 +67,16 @@ PYEOF
 [ "$CRXV" = "$V" ] || { echo "!! CRX version $CRXV != hub version $V"; exit 1; }
 echo "   embedded CRX copies synced + verified v$CRXV"
 
+# v3.5.3 CRX-SIGNATURE GUARD (the stale-signature delivery bug): v3.5.3
+# shipped a CRX whose header signature was computed over an OLDER zip
+# than the archive actually inside (cmp sync + version checks both pass
+# on such a file - Chrome then rejects it with "CRX signature
+# verification failed"). Chrome-identical verification is now a hard
+# build gate: ID/key match + RSA over "CRX3 SignedData" + archive +
+# payload integrity + expected version.
+python3 tool/crx3.py verify "$DIST/AdvPrint-Pro.crx" "$V" \
+  || { echo "!! CRX3 signature verification FAILED - refusing to ship a stale-signed CRX"; exit 1; }
+
 # ---------- 2) unpacked extension zip (Web-store upload / dev load) ----------
 echo "-- extension zip"
 ( cd extension && zip -qr "$DIST/AdvPrint-Pro-Extension-$V.zip" . )

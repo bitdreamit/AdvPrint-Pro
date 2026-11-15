@@ -1,0 +1,66 @@
+AdvPrint Pro v3.5.3 - CRX SIGNATURE FIX PACKAGE
+by Bit Dream IT - Innovative Healthcare Solutions - 2026-11-15
+
+WHAT HAPPENED
+-------------
+The v3.5.3 CRX shipped earlier today was rejected by Chrome with
+"CRX signature verification failed". The extension files inside were
+correct v3.5.3, but the CRX header carried an RSA signature computed
+over an older zip state - Chrome verifies the signature against the
+exact archive inside the file and refused it. The 3.5.2 CRX was signed
+correctly, which is why 3.5.2 installed fine.
+
+THE FIX
+-------
+AdvPrint-Pro.crx in this package is repacked fresh from the v3.5.3
+extension source with the SAME stable release key, so:
+
+  - extension ID is UNCHANGED: likldbkamojokkfdlcjibiljpgbbnohc
+  - your existing settings / hub pairing survive the upgrade
+  - the hub auto-update chain (/extension/updates.xml) keeps working
+
+Signature verified Chrome-identically and cross-checked against
+Chromium's own --pack-extension output for the same key.
+
+STEP 1 - CHECK THE FILE (optional but recommended)
+-------------------------------------------------
+After downloading, confirm the hash matches; a mismatch means the file
+was corrupted in transfer:
+
+  Windows CMD   : certutil -hashfile AdvPrint-Pro.crx SHA256
+  Windows PowerShell: Get-FileHash AdvPrint-Pro.crx -Algorithm SHA256
+  Linux / macOS : sha256sum AdvPrint-Pro.crx
+
+  Expected SHA256:
+  0c6a5671b02c3733aff1fd4b9bd289a33e3958d70540299ab7a13ec49068b8e0
+
+STEP 2 - INSTALL THE CRX
+------------------------
+1. If an old copy is loaded: chrome://extensions -> Remove (settings
+   are kept in sync storage; re-pair takes one click if asked).
+2. chrome://extensions -> enable Developer mode (top right).
+3. Drag AdvPrint-Pro.crx onto the page -> click "Add extension".
+
+ALREADY RUNNING A v3.5.3 HUB? Also replace its embedded copy so
+Chrome auto-update serves the good file:
+  - Windows:  C:\AdvPrintPro\hub\extension\AdvPrint-Pro.crx
+    (or your install folder - same folder as advprint.py / tool.py)
+  - Linux DEB: /opt/advprint/hub/extension/AdvPrint-Pro.crx
+  then restart the hub. Or simply reinstall with the rebuilt
+  AdvPrint-Pro-Setup-3.5.3.exe / advprint-pro_3.5.3_all.deb - both
+  already contain the fixed CRX (verified byte-for-byte).
+
+FALLBACK (no CRX needed)
+------------------------
+Unzip AdvPrint-Pro-Extension-3.5.3.zip -> chrome://extensions ->
+Developer mode -> "Load unpacked" -> select the unzipped folder.
+
+WHY THIS CANNOT SHIP AGAIN
+--------------------------
+`tool/crx3.py` now has a `verify` command (Chrome-identical checks) and
+`scripts/build-all.sh` hard-fails the build if the signature does not
+match the archive inside - a stale-signed CRX can no longer reach a
+release.
+
+Full details: docs/RELEASE-NOTES-v3.5.3.md (HOT-FIX section) and
+SHA256SUMS-3.5.3.txt for all rebuilt artifacts.

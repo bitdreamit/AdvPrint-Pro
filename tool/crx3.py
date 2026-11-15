@@ -25,6 +25,7 @@ CLI:
   python3 tool/crx3.py --gen-key <pem>
   python3 tool/crx3.py pack <src dir> <key pem> <out crx>
   python3 tool/crx3.py info <crx>
+  python3 tool/crx3.py verify <crx> [expected-version]
 """
 import hashlib
 import io
@@ -199,11 +200,95 @@ def crx_info(crx_path):
             "zip_bytes": zip_bytes}
 
 
+# ------------------------------------------------------------- verify
+def verify_crx(crx_path, expect_version=None):
+    """Verify a CRX3 file the same way Chrome does (crx_verifier.cc).
+
+    Checks, in order:
+      1. magic "Cr24" + version 3 + parseable header
+      2. sha256(header public key)[:16] == signed_header_data.crx_id
+         -> the extension ID is stable and matches the key
+      3. RSA-PKCS1v15-SHA256 signature over
+         b"CRX3 SignedData\\0" + LE32(len(shd)) + shd + zip
+         -> catches the v3.5.3 delivery bug: a header signed over a
+            stale payload while the zip inside changed afterwards
+      4. payload zip integrity (testzip) + manifest version
+    Returns True/False; prints details. Used as a build guard.
+    """
+    import struct as _s
+    data = open(crx_path, "rb").read()
+    ok = True
+
+    def fail(msg):
+        nonlocal ok
+        ok = False
+        print("   VERIFY FAIL: %s" % msg)
+
+    if data[:4] != CRX_MAGIC:
+        fail("not a CRX (bad magic)")
+        return False
+    ver, hlen = _s.unpack_from("<II", data, 4)
+    if ver != CRX_VERSION:
+        fail("not CRX3 (version %d)" % ver)
+        return False
+    header, zip_bytes = data[12:12 + hlen], data[12 + hlen:]
+
+    fields = _pb_fields(header)
+    if not fields.get(2) or not fields.get(10000):
+        fail("header missing proof/signed_header_data")
+        return False
+    proof = _pb_fields(fields[2][0])
+    spki, signature = proof.get(1, [None])[0], proof.get(2, [None])[0]
+    shd = fields[10000][0]
+    crx_id = _pb_fields(shd).get(1, [None])[0]
+    if spki is None or signature is None or crx_id is None:
+        fail("proof/shd missing fields")
+        return False
+
+    if hashlib.sha256(spki).digest()[:16] != crx_id:
+        fail("crx_id != sha256(public key)[:16] - key/ID mismatch")
+    else:
+        print("   verify: extension ID %s matches key" % crx_id_from_raw(crx_id))
+
+    try:
+        from cryptography.hazmat.primitives import hashes, serialization
+        from cryptography.hazmat.primitives.asymmetric import padding
+        pub = serialization.load_der_public_key(spki)
+        blob = (SIGNATURE_CONTEXT + _s.pack("<I", len(shd)) + shd + zip_bytes)
+        pub.verify(signature, blob, padding.PKCS1v15(), hashes.SHA256())
+        print("   verify: RSA-SHA256 signature OK (%d-byte archive)"
+              % len(zip_bytes))
+    except ImportError:
+        fail("cryptography not installed - cannot verify signature")
+    except Exception:
+        fail("signature INVALID - header was signed over a DIFFERENT "
+             "payload (stale CRX). Repack: tool/crx3.py pack")
+
+    try:
+        with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
+            bad = zf.testzip()
+            if bad:
+                fail("payload zip corrupt at %s" % bad)
+            ver_s = json.loads(
+                zf.read("manifest.json").decode("utf-8")).get("version")
+    except Exception as e:
+        fail("payload unreadable: %s" % e)
+        return False
+    if expect_version and ver_s != expect_version:
+        fail("payload version %s != expected %s" % (ver_s, expect_version))
+    else:
+        print("   verify: payload zip OK, extension version %s" % ver_s)
+    if ok:
+        print("   verify: %s PASS" % crx_path)
+    return ok
+
+
 if __name__ == "__main__":
     import argparse
+    import sys
     ap = argparse.ArgumentParser(description="AdvPrint Pro CRX3 tool")
     ap.add_argument("--gen-key", metavar="PEM")
-    ap.add_argument("cmd", nargs="?", choices=("pack", "info"))
+    ap.add_argument("cmd", nargs="?", choices=("pack", "info", "verify"))
     ap.add_argument("args", nargs="*")
     a = ap.parse_args()
     if a.gen_key:
@@ -224,5 +309,11 @@ if __name__ == "__main__":
         info = crx_info(a.args[0])
         print("extension_id:", info["extension_id"])
         print("version:", info["version"])
+    elif a.cmd == "verify":
+        if len(a.args) < 1:
+            ap.error("verify <crx> [expected-version]")
+        good = verify_crx(a.args[0],
+                          a.args[1] if len(a.args) > 1 else None)
+        sys.exit(0 if good else 1)
     else:
-        ap.error("use --gen-key, or pack/info")
+        ap.error("use --gen-key, or pack/info/verify")

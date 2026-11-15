@@ -48,6 +48,35 @@ BELOW the viewport bottom edge on every window size. Locked by
   3.5.3.0 / DisplayVersion, deb control 3.5.3, VERSION.txt, console
   title, BOOT.version UI fallbacks.
 
+### 4. Same-day hot-fix: "crx signature verification failed"
+
+- Report: "crx signature verification failed - previous 3.5.2 crx work
+  fine but current so fix". The v3.5.3 CRX shipped with a header whose
+  RSA signature was computed over an OLDER zip state than the archive
+  actually packed inside; the cmp sync guard (copies identical) and the
+  version guard (payload says 3.5.3) both pass on such a file, so it
+  slipped out and Chrome rejects it on install. Forensics with an
+  independent Chrome-identical verifier: v3.5.2 CRX = signature VALID
+  (why 3.5.2 loaded), v3.5.3 CRX = signature INVALID over both the old
+  and the new payload.
+- FIX: every CRX repacked fresh from `extension/` with the SAME stable
+  release key `extension-signing/advprint-printer.pem` - extension ID
+  stays `likldbkamojokkfdlcjibiljpgbbnohc` (settings/pairing survive,
+  hub auto-update path unchanged). Cross-proved against Chromium's own
+  `--pack-extension` output for the same key: same ID, signature
+  verifies.
+- GUARD so it can never happen again: `tool/crx3.py verify <crx>
+  [version]` (Chrome-identical check: ID/key match + RSA over
+  "CRX3 SignedData" + archive + payload zip integrity + expected
+  version) wired into `scripts/build-all.sh` as a hard build gate after
+  the sync/version guards.
+- Rebuilt artifacts: AdvPrint-Pro.crx (also re-synced to
+  prebuilt/, tool/unix/hub/extension/, tool/windows/portable/hub/
+  extension/, installer stage), AdvPrint-Pro-Extension-3.5.3.zip,
+  advprint-pro_3.5.3_all.deb, AdvPrint-Pro-Setup-3.5.3.exe - all
+  verified to embed the fixed CRX byte-for-byte (deb + NSIS payload
+  extraction check).
+
 ## v3.5.2 - DASHBOARD DATA YOU CAN TRUST (success rate, save-password fix, history tools) (2026-11-15)
 
 v3.5.1 made every dashboard CARD live; the user then reported the last
