@@ -30,7 +30,7 @@ import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-V = "3.5.4"
+V = "3.5.5"
 EXT_ID = "likldbkamojokkfdlcjibiljpgbbnohc"
 
 CONSOLE_PATHS = [
@@ -180,7 +180,7 @@ def test_version_everywhere():
     i18n = open(os.path.join(ROOT, "extension", "i18n.js"),
                 encoding="utf-8").read()
     assert i18n.count("Version " + V) == 1
-    assert i18n.count("3.5.4") == 3  # header + EN + BN brand lines
+    assert i18n.count(V) == 3  # header + EN + BN brand lines
     api = open(os.path.join(ROOT, "extension", "content", "api.js"),
                encoding="utf-8").read()
     assert 'var _apVerFallback = "' + V + '";' in api

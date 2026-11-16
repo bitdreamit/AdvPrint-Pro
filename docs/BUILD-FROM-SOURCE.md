@@ -1,15 +1,16 @@
-# BUILD FROM SOURCE — every artifact, no prebuilt binaries (v3.1.3)
+# BUILD FROM SOURCE — every artifact, no prebuilt binaries (v3.5.5)
 
 **AdvPrint Pro** by Bit Dream IT - Innovative Healthcare Solutions
 
 > **On WINDOWS?** Skip the bash/dpkg-deb path entirely — use the
-> cross-platform Python builder:
+> cross-platform Python builder that now ships in the tree:
 >
 >     build.cmd                 (or:  python scripts\build-all.py)
 >
 > It builds CRX + extension zip + Setup EXE + DEB (pure-Python DEB
-> builder, no WSL needed) + SHA256SUMS in one go. Full step-by-step
-> Windows instructions: **docs/BUILD-WINDOWS.md**.
+> builder, no WSL needed) + SHA256SUMS in one go, and hard-fails early
+> on any missing source file. Full step-by-step Windows instructions:
+> **docs/BUILD-WINDOWS.md**.
 
 Build ALL release artifacts from this tree alone. The CRX signing key
 ships in `extension-signing/` (keeps the fixed extension id

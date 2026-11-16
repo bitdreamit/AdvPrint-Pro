@@ -11,7 +11,7 @@
 ;    REAL administrator rights: the exe requests admin via its
 ;    manifest, so Windows shows the UAC prompt by itself
 ;    ("auto permission to install" - nothing is half-installed).
-;    Silent install:  AdvPrint-Pro-Setup-3.5.4.exe /S
+;    Silent install:  AdvPrint-Pro-Setup-3.5.5.exe /S
 ;    (elevation still applies - Windows shows UAC once.)
 ;  - v2.8 UPGRADE / UNINSTALL FIX (the v2.7.x pain "service not
 ;    uninstalled, some files abort install"): BEFORE any file is
@@ -36,7 +36,14 @@
 
 Unicode true
 Name "AdvPrint Pro (Advanced Printer)"
-OutFile "../dist/AdvPrint-Pro-Setup-3.5.4.exe"
+; ---- v3.5.5: working-directory independent --------------------------------
+; Jump to THIS script's own folder first, so every relative path below
+; resolves no matter where makensis was started from (build-all.py sets
+; the cwd, but a manual "makensis setup.nsi" from another folder would
+; not resolve stage/... without this line).
+!cd "${__FILEDIR__}"
+
+OutFile "../dist/AdvPrint-Pro-Setup-3.5.5.exe"
 InstallDir "$PROGRAMFILES64\AdvPrintPro"
 InstallDirRegKey HKLM "Software\AdvPrintPro" "InstallDir"
 ; full admin rights - the Windows UAC prompt appears by itself when
@@ -50,10 +57,10 @@ ShowInstDetails show
 ShowUnInstDetails show
 ManifestDPIAware true
 
-VIProductVersion "3.5.4.0"
+VIProductVersion "3.5.5.0"
 VIAddVersionKey ProductName "AdvPrint Pro (Advanced Printer)"
-VIAddVersionKey FileVersion "3.5.4.0"
-VIAddVersionKey ProductVersion "3.5.4.0"
+VIAddVersionKey FileVersion "3.5.5.0"
+VIAddVersionKey ProductVersion "3.5.5.0"
 VIAddVersionKey CompanyName "Bit Dream IT - Innovative Healthcare Solutions"
 VIAddVersionKey LegalCopyright "MIT License"
 VIAddVersionKey FileDescription "AdvPrint Pro - silent printing for any web page, PDF or application (setup)"
@@ -308,7 +315,7 @@ Section "AdvPrint Pro hub (required)" SEC_MAIN
     DetailPrint "No usable pythonw.exe (bundled runtime missing + no system Python)."
     ${IfNot} ${Silent}
       MessageBox MB_ICONEXCLAMATION|MB_OK \
-        "Setup could not prepare the bundled Python runtime and found no system Python.$\n$\nPlease re-download AdvPrint-Pro-Setup-3.5.4.exe (the file may be damaged in transit) and run it again."
+        "Setup could not prepare the bundled Python runtime and found no system Python.$\n$\nPlease re-download AdvPrint-Pro-Setup-3.5.5.exe (the file may be damaged in transit) and run it again."
     ${EndIf}
   ${EndIf}
 
@@ -328,7 +335,7 @@ Section "AdvPrint Pro hub (required)" SEC_MAIN
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\AdvPrintPro" \
     "DisplayName" "AdvPrint Pro (Advanced Printer) by Bit Dream IT"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\AdvPrintPro" \
-    "DisplayVersion" "3.5.4"
+    "DisplayVersion" "3.5.5"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\AdvPrintPro" \
     "Publisher" "Bit Dream IT - Innovative Healthcare Solutions"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\AdvPrintPro" \

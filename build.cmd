@@ -1,6 +1,6 @@
 @echo off
 rem ============================================================
-rem  AdvPrint Pro - one-click build on Windows
+rem  AdvPrint Pro - one-click build on Windows (v3.5.5+)
 rem  by Bit Dream IT - Innovative Healthcare Solutions
 rem
 rem  Double-click this file, or run from a terminal:

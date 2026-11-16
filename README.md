@@ -13,6 +13,33 @@ Web page ──► Chrome extension ──► AdvPrint Pro hub (localhost:9235) 
 
 ---
 
+## What's new in v3.5.5 (FULL SOURCE + WINDOWS BUILD KIT)
+
+v3.5.4 made the CRX trustworthy again. v3.5.5 makes the source tree
+itself complete and self-building on Windows:
+
+- **One-command Windows build** - `build.cmd` (or
+  `python scripts\build-all.py`) produces every artifact from source:
+  the signed CRX, the extension zip, the NSIS Setup EXE and the Linux
+  DEB (pure-Python builder - no WSL, no dpkg-deb);
+- **Incomplete-tree protection** - the build checks the full list of
+  required source files FIRST and names exactly what is missing,
+  instead of failing deep inside the installer compiler with
+  `stage/install/hub-stop.ps1 -> no files found`;
+- **Twin-sync + NSIS pre-check** - unix/windows hub copies must be
+  byte-identical and every `File` reference in `setup.nsi` must
+  resolve before the EXE build starts;
+- **Stale verchip fix** - the extension Options page version chip
+  (stuck on v3.5.1) now shows the real version;
+- `scripts/build-all.py` is the new cross-platform canonical builder
+  (bash `build-all.sh` stays for Linux/CI), with the CRX signature
+  gate, sync guards and version guards all carried over.
+
+Everything else is exactly the working v3.5.4 build. Locked by
+`tests/test_v355.py`. Full details in `CHANGELOG.md`,
+`docs/RELEASE-NOTES-v3.5.5.md` and the new `docs/BUILD-WINDOWS.md`.
+
+---
 ## What's new in v3.5.4 (CRX SIGNATURE VERIFIED)
 
 v3.5.3 fixed the last layout bug (the status bar always stays visible)

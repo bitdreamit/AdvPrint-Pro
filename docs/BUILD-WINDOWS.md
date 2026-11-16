@@ -1,4 +1,4 @@
-# BUILD ON WINDOWS — step by step (v3.5.4)
+# BUILD ON WINDOWS — step by step (v3.5.5)
 
 **AdvPrint Pro** by Bit Dream IT - Innovative Healthcare Solutions
 
@@ -12,7 +12,13 @@ This guide builds **every artifact from source on a Windows PC**:
 | Linux DEB | `advprint-pro_<V>_all.deb` | Python only (pure-Python builder — **no WSL needed**) |
 | Checksums | `SHA256SUMS-<V>.txt` | Python (built-in) |
 
-`<V>` is the version from `VERSION.txt` (currently 3.5.4).
+`<V>` is the version from `VERSION.txt` (currently 3.5.5).
+
+> **Got "no files found" inside makensis?** Since v3.5.5 the build
+> cannot hit that any more: it checks the complete file list FIRST and
+> names exactly what is missing. If it ever prints
+> `your source tree is MISSING ...`, your tree is incomplete — re-extract
+> the full source release zip and build again.
 
 ---
 
@@ -41,17 +47,15 @@ Either with Git:
 
     git clone https://github.com/bitdreamit/AdvPrint-Pro.git
     cd AdvPrint-Pro
-    git checkout v3.5.4
+    git checkout v3.5.5
 
 or without Git: open <https://github.com/bitdreamit/AdvPrint-Pro>,
 green **Code** button → **Download ZIP**, then right-click the zip →
 *Extract All…*
 
-> If the clone/zip does not yet contain `build.cmd` and
-> `scripts\build-all.py`, copy them in from the Build Kit zip
-> (`AdvPrint-Pro-BuildKit-Windows-v3.5.4.zip`) — the paths inside the kit
-> match the repo (`build.cmd` at the root, `build-all.py` in `scripts\`,
-> this guide in `docs\`).
+> Use the **full source release zip** (`AdvPrint-Pro-3.5.5-src.zip` or
+> the tag archive) so every file is present. Mixing an old tree with
+> new kit files is what caused the "no files found" support case.
 
 ---
 
@@ -65,17 +69,25 @@ Open **Command Prompt** in the source folder, then:
 
 1. checks Python and installs the single build dependency `cryptography`
    the first time,
-2. packs the extension into `dist\AdvPrint-Pro.crx` with the **repo's
+2. verifies the tree is COMPLETE (every file the build needs) and that
+   the unix/windows hub copies are byte-identical — if Windows Defender
+   quarantined one of the install `.ps1`/`.bat`/`.vbs` helpers, it is
+   restored automatically from a copy embedded inside `build-all.py`,
+3. packs the extension into `dist\AdvPrint-Pro.crx` with the **repo's
    stable signing key** (`extension-signing\advprint-printer.pem`),
-3. syncs the CRX into all 4 embedded copies and **verifies the signature
+4. syncs the CRX into all 4 embedded copies and **verifies the signature
    the same way Chrome does** (`tool\crx3.py verify`) — a broken/stale CRX
    fails the build instead of reaching your users,
-4. zips the unpacked extension for the Web Store,
-5. stages the hub + installers + bundled Python runtime into
-   `installer\stage\`,
-6. builds the **DEB in pure Python** (no WSL, no dpkg-deb),
-7. runs **makensis** to produce `dist\AdvPrint-Pro-Setup-<V>.exe`,
-8. writes `dist\SHA256SUMS-<V>.txt`.
+5. zips the unpacked extension for the Web Store,
+6. stages the hub + installers + bundled Python runtime into
+   `installer\stage\`, then pre-validates **every `File` reference in
+   `setup.nsi`** (no more mid-compile surprises),
+7. builds the **DEB in pure Python** (no WSL, no dpkg-deb),
+8. runs **makensis** to produce `dist\AdvPrint-Pro-Setup-<V>.exe` — if an
+   on-access scanner removes a staged file mid-compile, the build names
+   it, prints the one-time Defender exclusion fix and retries with
+   freshly staged copies,
+9. writes `dist\SHA256SUMS-<V>.txt`.
 
 PowerShell users: `python scripts\build-all.py` does the same thing.
 Linux/macOS: `python3 scripts/build-all.py` or the older
@@ -84,17 +96,26 @@ Linux/macOS: `python3 scripts/build-all.py` or the older
 Expected output at the end:
 
     == DONE - artifacts in dist/ ==
-        ~1.1 MB  AdvPrint-Pro.crx
-        ~110 KB  AdvPrint-Pro-Extension-3.5.4.zip
-         10.2 MB  AdvPrint-Pro-Setup-3.5.4.exe
-          ~40 KB  advprint-pro_3.5.4_all.deb
-          ~400 B  SHA256SUMS-3.5.4.txt
+        ~74 KB  AdvPrint-Pro.crx
+        ~74 KB  AdvPrint-Pro-Extension-3.5.5.zip
+         10.2 MB  AdvPrint-Pro-Setup-3.5.5.exe
+        ~550 KB  advprint-pro_3.5.5_all.deb
+          ~400 B  SHA256SUMS-3.5.5.txt
+
+**Antivirus note (one-time).** Real-time scanners sometimes quarantine
+build helper scripts (`.ps1` / `.bat` / `.vbs`) the moment they are
+written into `installer\stage\`. The build now survives this — it
+carries embedded copies of all nine helpers — but to stop the scanner
+from interfering at all, allow the source folder once in an **admin**
+PowerShell:
+
+    Add-MpPreference -ExclusionPath "D:\Software\Python\AdvPrint-Pro"
 
 ---
 
 ## 3) Verify what you built
 
-    python tool\crx3.py verify dist\AdvPrint-Pro.crx 3.5.4
+    python tool\crx3.py verify dist\AdvPrint-Pro.crx 3.5.5
 
 must print three `verify:` lines and `PASS` (ID matches key, RSA
 signature OK over the archive actually inside, payload zip OK). This is
@@ -104,7 +125,7 @@ the exact check that would have caught the v3.5.3
 Cross-check the checksums (PowerShell):
 
     Get-FileHash dist\AdvPrint-Pro.crx -Algorithm SHA256
-    type dist\SHA256SUMS-3.5.4.txt
+    type dist\SHA256SUMS-3.5.5.txt
 
 ---
 
@@ -148,6 +169,9 @@ Web Store dashboard.
    stale-signature bug happened.
 4. Keep `extension-signing\` out of any public fork you do not control —
    whoever holds the key can sign updates your hub serves.
+5. **Edit the hub in `tool\unix\hub\` only**, then let the build/tests
+   confirm the windows twin still matches — the build refuses to run on
+   drifted copies.
 
 ---
 
@@ -155,8 +179,11 @@ Web Store dashboard.
 
 1. Bump the version everywhere it lives: `VERSION.txt`,
    `extension\manifest.json`, `installer\setup.nsi` (`OutFile
-   "../dist/AdvPrint-Pro-Setup-<V>.exe"` — the build hard-fails if this
-   is forgotten), popup HTML/i18n labels, hub console statusbar — see
+   "../dist/AdvPrint-Pro-Setup-<V>.exe"` + `VIProductVersion` +
+   `DisplayVersion` — the build hard-fails if `OutFile` is forgotten),
+   popup/i18n/api.js labels, hub `VERSION`/`VERSION_NAME` in
+   `tool\unix\hub\advprint.py` (+ windows twin), console title +
+   `BOOT.version` fallbacks + stat card, deb `control` — see
    `docs\HOW-TO-RELEASE.md` for the full list.
 2. Run `build.cmd`.
 3. `python tool\crx3.py verify dist\AdvPrint-Pro.crx <V>` → PASS.
@@ -171,10 +198,15 @@ Web Store dashboard.
 |---|---|
 | `'python' is not recognized…` | Reinstall Python and tick **Add python.exe to PATH**, or use `py -3` instead of `python`. |
 | `pip install` fails behind a proxy | `pip install cryptography --proxy http://proxy:port` |
+| `your source tree is MISSING …` | The tree is incomplete — re-extract the full source release zip (do not mix old trees with new kit files) and build again. |
 | `makensis NOT found` | Install NSIS 3.x (step 1.2). The rest of the build still completes; run `cd installer` then `makensis setup.nsi` afterwards. |
 | `CRX3 signature verification FAILED` | Someone edited `dist\AdvPrint-Pro.crx` or an embedded copy after signing, or the key changed. Do not hand-patch — rebuild with `build.cmd`. |
 | `extension ID changed!` | `extension-signing\advprint-printer.pem` was replaced. Restore the original key file. |
 | `installer/setup.nsi OutFile is …` | The version was bumped but `setup.nsi` was not — change its `OutFile` line to `../dist/AdvPrint-Pro-Setup-<V>.exe`. |
+| `setup.nsi needs N file(s) that do not exist` | The build could not stage or re-stage a file — follow the per-file hint printed under the message (missing runtime = re-extract the source zip). |
+| `…was MISSING from the tree - it was restored from the copy embedded inside build-all.py` | Informational: your antivirus had removed an install helper and the build healed itself. Run the exclusion command in section 2 to stop it recurring. |
+| `staged file(s) DISAPPEARED …` then a retry | An on-access scanner removed a staged file while `makensis` compiled. The build re-staged and retried — also run the exclusion command it prints (admin PowerShell: `Add-MpPreference -ExclusionPath "<repo folder>"`). |
+| `twin files drifted apart` | Copy the edited hub file from `tool\unix\hub\` over its `tool\windows\portable\hub\` twin, then rebuild. |
 | SmartScreen blocks the Setup EXE | Expected (unsigned EXE): *More info* → *Run anyway*, or sign the EXE with a code-signing certificate. |
 | `WARNING: runtime missing` | `tool\windows\portable\installer\runtime\` was deleted — restore it from the repo, or the installed hub will need system Python. |
-| Antivirus flags the `.bat`/`.vbs` helpers | False positive on script helpers; add the source folder to exclusions while building. |
+| Antivirus flags the `.bat`/`.vbs`/`.ps1` helpers | False positive on script helpers; add the source folder to exclusions (`Add-MpPreference -ExclusionPath "<repo folder>"`). Since v3.5.5 the build also self-heals these files from copies embedded in `scripts\build-all.py`. |

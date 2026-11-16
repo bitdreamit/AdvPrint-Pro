@@ -539,7 +539,7 @@ def test_v1_database_migration(tmp_path):
 
 
 def test_version_anchors():
-    assert advprint.VERSION == "3.5.4"  # v3.5.4 bump (v3.5.3 -> CRX verified)
+    assert advprint.VERSION == "3.5.5"  # v3.5.5 bump (full source + Windows build kit)
     # repo/package layout: tool/windows/portable/hub -> root/extension
     root = os.path.dirname(os.path.dirname(os.path.dirname(
         os.path.dirname(os.path.dirname(advprint.__file__)))))

@@ -1,6 +1,66 @@
 # Changelog - AdvPrint Pro (Advanced Printer)
 by Bit Dream IT - Innovative Healthcare Solutions
 
+## v3.5.5 - FULL SOURCE + WINDOWS BUILD KIT (one command builds everything on Windows) (2026-11-16)
+
+A support build ("stage/install/hub-stop.ps1 -> no files found") showed
+that an incomplete source tree failed deep inside makensis with a
+confusing error, and that building the release still needed a Linux
+box. v3.5.5 ships the whole build toolchain inside the tree and makes
+every failure loud and early. Locked by `tests/test_v355.py`.
+
+### 1. The Windows build kit (new, in-tree)
+
+- `build.cmd` - one-click Windows launcher: finds Python, installs the
+  single dependency (`cryptography`), runs the build, pauses for
+  double-click users.
+- `scripts/build-all.py` - the cross-platform canonical builder
+  (Windows / Linux / macOS), mirroring `build-all.sh` artifact for
+  artifact: CRX3 pack + 4-copy sync + version guard + Chrome-identical
+  signature gate, extension zip, NSIS stage (hub + installers + bundled
+  runtime + docs), DEB, SHA256SUMS.
+- PURE-PYTHON DEB BUILDER - ar + tar.gz written by stdlib code with
+  root ownership and explicit modes, so Windows needs NO WSL and NO
+  dpkg-deb (validated with dpkg-deb --info on Linux).
+- makensis auto-discovery: PATH, `C:\Program Files (x86)\NSIS`,
+  `C:\Program Files\NSIS`, or the `~/nsis-root` prefix pattern.
+- `docs/BUILD-WINDOWS.md` - the step-by-step Windows guide (install
+  Python + NSIS, clone/ZIP, build, verify, install, troubleshooting).
+
+### 2. Loud, early failure guards (the support-case fix)
+
+- REQUIRED-TREE CHECK: every file the stage needs is verified to
+  exist BEFORE anything is built - a missing `hub-stop.ps1` now fails
+  in one second with the exact file name, not minutes later inside
+  makensis.
+- setup.nsi PRE-VALIDATION: every `File` reference in the installer
+  script must resolve, and its `OutFile` version must equal
+  `VERSION.txt`, or the build stops with fix-it instructions.
+- TWIN-SYNC GUARD: `tool/unix/hub/{advprint.py,console.html,gui_app.py}`
+  must stay byte-identical to their `tool/windows/portable/hub/` twins.
+- The stage copy step no longer silently skips missing files.
+- SELF-HEAL (round-2 support case): the 9 Windows install scripts
+  (.bat/.vbs/.ps1) ship as base64 copies inside build-all.py; a file
+  removed by antivirus quarantine (Windows Defender) is restored
+  automatically - with a printed warning - and the build continues.
+- MAKENSIS POST-MORTEM + RETRY: if a staged file disappears during
+  the compile (on-access scanner; surfaces as 'File:
+  "stage/install/hub-stop.ps1" -> no files found, line 198'), the
+  build names the vanished files, prints the one-time exclusion fix
+  (Add-MpPreference -ExclusionPath "<repo folder>") and retries
+  makensis once with freshly staged copies.
+
+### 3. Coherence and small fixes
+
+- Version 3.5.5 everywhere: hub `VERSION`/`VERSION_NAME`, VERSION.txt,
+  extension manifest/popup/i18n (EN+BN)/api.js fallback, console title
+  + BOOT fallbacks (x3) + hub stat card, NSIS
+  `VIProductVersion 3.5.5.0` + `DisplayVersion` + exe name, deb
+  `control`, smoke script copy `scripts/smoke_v355.py`.
+- Stale verchip fix: extension Options page version chip v3.5.1 ->
+  current (the popup comeback release forgot it).
+- `scripts/build-all.sh` unchanged for Linux/CI users.
+
 ## v3.5.4 - CRX SIGNATURE VERIFIED (full release; the extension package is signed and build-checked) (2026-11-15)
 
 v3.5.3 kept the status bar always visible but shipped its .crx with a
