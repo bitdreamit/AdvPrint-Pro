@@ -1,0 +1,4 @@
+50e45139c0c39433ba646f7b51527ba31ce4fd9c36fa5b9b1d5c3179e315b672  AdvPrint-Pro.crx
+cb74f0fcbe47f87b2f244ed495804a58d7804aa8acfced6fb8f06072ec2f94eb  AdvPrint-Pro-Extension-3.5.6.zip
+3aed8fd3b1e69baf655afed974867cf0cd9f70c12e40ee17e17fa3d74950b9b1  advprint-pro_3.5.6_all.deb
+713209b0e74789d828cfdc131a3ccddf10ad692dd1778296c98c54be46a2ed09  AdvPrint-Pro-Setup-3.5.6.exe

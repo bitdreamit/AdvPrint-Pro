@@ -19,8 +19,8 @@ B. build-all.py fails LOUD and EARLY:
    - unix/windows twin files must be byte-identical,
    - the DEB is built in pure Python (no WSL/dpkg-deb),
 C. the CRX pipeline is unchanged and gated (stable key, 4-copy sync,
-   Chrome-identical verify, payload version 3.5.5),
-D. the usual version coherence 3.5.5 (hub / extension / installer),
+   Chrome-identical verify, payload version 3.5.6),
+D. the usual version coherence 3.5.6 (hub / extension / installer),
 E. v3.5.4 + v3.5.3 + v3.5.2 fixes untouched (statusbar, tok-mask,
    success rate, history tools).
 """
@@ -31,7 +31,7 @@ import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-V = "3.5.5"
+V = "3.5.6"
 EXT_ID = "likldbkamojokkfdlcjibiljpgbbnohc"
 
 CONSOLE_PATHS = [
@@ -247,7 +247,7 @@ def test_stable_key_still_in_tree():
     assert crx3.crx_id_from_spki(spki) == EXT_ID
 
 
-# ---------------- D. version coherence 3.5.5 --------------------------
+# ---------------- D. version coherence 3.5.6 --------------------------
 
 def test_version_everywhere():
     a = adv()

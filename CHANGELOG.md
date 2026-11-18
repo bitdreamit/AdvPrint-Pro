@@ -1,6 +1,75 @@
 # Changelog - AdvPrint Pro (Advanced Printer)
 by Bit Dream IT - Innovative Healthcare Solutions
 
+## v3.5.6 - LAN ADMIN CONSOLE + IPP:// PRINTER URLS (2026-11-18)
+
+The owner asked: "any ip allow to access admin console ui if permission
+like loopback 127.0.0.1 and self ip auto add extra ips also access
+admin controlled from different ip same network. so control more easy"
+- and separately flagged that the add-printer URL the hub displays said
+`http://` where Android's manual-add screen needs `ipp://` (an http://
+URL keeps Android's Save button disabled).
+
+### THE ONE UI is now reachable from the network (two INDEPENDENT controls)
+
+- `allowed_ips` (LAYER 1, unchanged v3.2.3 semantics) - who may reach
+  the hub at all: printing, send portal, IPP, API. Empty/`*` = whole
+  LAN. Untouched by this release.
+- `ui_admin_mode` (LAYER 2, NEW config key, factory default `"lan"`)
+  - who may open the console UI + every settings endpoint:
+  `"self"` = the hub PC only (the exact v3.2.6 lock), `"lan"` = every
+  device on the hub PC's own SUBNET too (IPv4 same /24, IPv6 same
+  /64), `"any"` = every address LAYER 1 already lets in.
+- `admin_ips` (LAYER 2, NEW config key, default `[]`) - extra console
+  admins from ANY network (exact / CIDR / wildcard), honoured in
+  every mode: the office PC at 192.168.1.2 while the hub sits on
+  10.x, a phone on mobile data, a VPN peer.
+- Loopback + the hub PC's own IPs ALWAYS pass every layer (the owner
+  can never lock themselves out; self IPs are auto-added, never
+  listed). An EMPTY admin_ips list means NOBODY extra - unlike
+  allowed_ips, where empty means all - the two lists never share
+  logic (ip_allowed_by_list maps [] -> ["*"], so admin_ips uses the
+  dedicated admin_ips_hit()/ui_admin_allows() helpers).
+- Every remote console session is audited (`ui.remote_admin`, IP +
+  how it got in, throttled 1 per 10 s per IP like the ACL gate).
+- The v3.2.6 branded 403 page became the "console is gated" page: it
+  explains the three modes and the one-click fix in THE ONE UI > LAN
+  Sharing > Console admin access, and keeps the print instructions.
+- THE ONE UI LAN tab gained the "Console admin access" card: three
+  mode chips, the admin IP editor (add/remove chips), the hub's own
+  subnet chips and copyable console URLs for the other devices. The
+  security note + the built-in docs modal describe the new model.
+- `/health` now carries `ui_admin_mode`, `admin_ips`,
+  `ui_admin_subnets` and `ui_admin_urls`; `/config` GET/POST round
+  -trips both new keys (POST validates the mode, cleans the list,
+  caps it at 32 entries).
+
+### Printer URLs display ipp:// (Android manual add works)
+
+- The standard-port 631 chip, the Android row of the add-printer
+  guide, the IPP landing page and the gated page now DISPLAY
+  `ipp://IP:631/ipp/print` (or just the IP - Android assumes port 631
+  + /ipp/print itself). The hub still SPEAKS plain HTTP/IPP on those
+  ports; only the displayed scheme changed.
+- Windows' add-by-URL guide keeps `http://` (Windows' IPP Device box
+  wants http://) - the both-styles card stays honest.
+- The QR payload for the IPP printer STAYS `http://` (phone cameras
+  cannot open ipp:// links; v3.2.6 rule untouched, still test-pinned).
+
+### Version bump + build kit carried
+
+- Version 3.5.6 everywhere: hub VERSION/VERSION_NAME, VERSION.txt,
+  console twins (title + stat card + 3 BOOT fallbacks), manifest,
+  popup, i18n (EN+BN), api.js fallback, options chip, setup.nsi
+  (OutFile/VIProductVersion/FileVersion/ProductVersion/DisplayVersion
+  + silent + re-download), deb control, test V bumps.
+- New: tests/test_v356.py (27 checks), scripts/bump_356.py,
+  docs/RELEASE-NOTES-v3.5.6.md, scripts/smoke_v356.py.
+- The v3.5.5 build kit is untouched: build.cmd / scripts/build-all.py
+  with the tree guard, twin guard, NSIS pre-validation, abs-path
+  compile pipeline, wipe() and the CRX signature gate (stable key,
+  extension ID likldbkamojokkfdlcjibiljpgbbnohc unchanged).
+
 ## v3.5.5 - FULL SOURCE + WINDOWS BUILD KIT (one command builds everything on Windows) (2026-11-16)
 
 A support build ("stage/install/hub-stop.ps1 -> no files found") showed

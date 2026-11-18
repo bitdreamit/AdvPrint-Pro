@@ -13,6 +13,50 @@ Web page ──► Chrome extension ──► AdvPrint Pro hub (localhost:9235) 
 
 ---
 
+## What's new in v3.5.6 (LAN ADMIN CONSOLE + IPP:// PRINTER URLS)
+
+v3.5.5 made the tree self-building. v3.5.6 makes the hub easier to
+CONTROL and friendlier to Android:
+
+- **Console admin from any device on your network** - THE ONE UI
+  (settings, queue, history, tools) now answers on the hub PC's own
+  NETWORK by default (`ui_admin_mode: "lan"`): the admin-centre PC at
+  `192.168.1.2` keeps `127.0.0.1` + `192.168.1.2`, and a PC or phone
+  at any other IP of the same network opens the same console at
+  `http://192.168.1.2:9235/ui`. Two more modes: `"self"` restores the
+  exact v3.2.6 hub-PC-only lock, `"any"` opens the console for every
+  address the Allowed-IPs gate lets in;
+- **`admin_ips` - extra admins from ANY network** - exact IPs, CIDRs
+  or wildcards (the office PC on 10.x, a phone on mobile data, a VPN
+  peer) get full console control in every mode. The hub PC itself is
+  ALWAYS an admin (loopback + own IPs, auto-added, never listed) and
+  an EMPTY admin list never widens the gate (printing rules and
+  console-admin rules are two independent controls);
+- **Every remote console session is audited** - `ui.remote_admin`
+  rows show who controlled the hub from where (throttled 1/10 s/IP);
+- **One-click admin panel in THE ONE UI** - LAN Sharing gained a
+  "Console admin access" card: mode chips, the admin IP editor, the
+  hub's own subnet chips and copyable console URLs for the other
+  devices;
+- **Printer URLs now display `ipp://`** - the standard-port chip, the
+  Android add-printer guide, the IPP landing page and the gated page
+  show `ipp://IP:631/ipp/print` (Android's manual-add screen refuses
+  `http://` - its Save button stays disabled). The hub still SPEAKS
+  plain HTTP/IPP underneath; the QR payload stays `http://` because
+  phone cameras cannot open `ipp://` links;
+- **Your exact ask, implemented**: *any IP may access the admin
+  console UI with permission - loopback 127.0.0.1 and the self IP are
+  auto-added, extra IPs and same-network devices control the console
+  from a different IP* - while printing keeps the unchanged
+  v3.2.3 Allowed-IPs rules.
+
+Everything else is exactly the working v3.5.5 build (same build kit,
+same CRX key + extension ID, same hardening). Locked by
+`tests/test_v356.py`. Full details in `CHANGELOG.md` and
+`docs/RELEASE-NOTES-v3.5.6.md`.
+
+---
+
 ## What's new in v3.5.5 (FULL SOURCE + WINDOWS BUILD KIT)
 
 v3.5.4 made the CRX trustworthy again. v3.5.5 makes the source tree

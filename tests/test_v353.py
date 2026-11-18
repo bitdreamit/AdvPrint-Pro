@@ -36,7 +36,7 @@ ADV_PATHS = [
     os.path.join(ROOT, "tool", "windows", "portable", "hub", "advprint.py"),
     os.path.join(ROOT, "installer", "stage", "hub", "advprint.py"),
 ]
-V = "3.5.5"  # follows the current release (v3.5.5 bump)
+V = "3.5.6"  # follows the current release (v3.5.5 bump)
 
 
 def console():

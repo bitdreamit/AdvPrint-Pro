@@ -96,8 +96,8 @@ if _HUB_DIR not in sys.path:
     sys.path.insert(0, _HUB_DIR)
 
 
-VERSION = "3.5.5"
-VERSION_NAME = ("v3.5.5 (CRX SIGNATURE VERIFIED + FULL-SOURCE WINDOWS BUILD KIT - the tree is complete and buildable on Windows with one command: build.cmd / scripts/build-all.py packs the CRX with the stable key, syncs + Chrome-verifies every embedded copy, builds the extension zip, a WSL-free pure-Python DEB and the NSIS Setup EXE, and hard-fails on any missing source file, any drifted unix/windows twin copy or any setup.nsi File reference that does not resolve. Everything else is exactly the working v3.5.4 build: the always-visible status bar, real success rate, save-password fix, date+time history, per-row VIEW file button, server-side date filter, live dashboard cards, the ProTheme engine (8 themes + density / corners / frame) and the single port for every queue.")
+VERSION = "3.5.6"
+VERSION_NAME = ("v3.5.6 (CRX SIGNATURE VERIFIED + LAN ADMIN CONSOLE + IPP:// PRINTER URLS - THE ONE UI console can now be driven from any PC or phone on the SAME NETWORK as the hub (ui_admin_mode=lan, the factory default), with an extra admin_ips allow-list for trusted admin devices on any other network and a self/any mode switch, while the print surface keeps exactly the v3.2.3 Allowed-IPs rules and every remote console session lands in the audit trail. Every printer URL the hub shows for OS/Android manual add now DISPLAYS the ipp:// scheme (ipp://ip:631/ipp/print) that Android's manual-add screen actually accepts - an http:// URL disables its Save button - the hub still SPEAKS plain HTTP/IPP underneath, only the displayed URI changed. Keeps the full v3.5.5 build kit: build.cmd / scripts/build-all.py packs the CRX with the stable key, syncs + Chrome-verifies every embedded copy, builds the extension zip, a WSL-free pure-Python DEB and the NSIS Setup EXE, and hard-fails on any missing source file, any drifted unix/windows twin copy or any setup.nsi File reference that does not resolve.")
 FULL_BRAND = ("AdvPrint Pro (Advanced Printer) by "
               "Bit Dream IT - Innovative Healthcare Solutions")
 BRANDING = ("AdvPrint Pro (Advanced Printer) - Version %s - by "
@@ -351,6 +351,43 @@ CFG = {
                                       #  strict ON, watch the hits, add
                                       #  the real PCs, and the list - no
                                       #  longer "*" - locks the hub down.
+    "ui_admin_mode": "lan",           # v3.5.6 CONSOLE ADMIN ACCESS - who
+                                      #  may open THE ONE UI + every
+                                      #  settings endpoint from the
+                                      #  network. "self" = the hub PC
+                                      #  itself only (the old v3.2.6
+                                      #  lock), "lan" = every device on
+                                      #  the hub PC's own SUBNET too
+                                      #  (IPv4 same /24, IPv6 same /64 -
+                                      #  "a different-IP PC or phone on
+                                      #  the same network can control
+                                      #  the console"), "any" = every
+                                      #  address the Allowed-IPs gate
+                                      #  already lets in. Factory
+                                      #  default: "lan" - the owner asked
+                                      #  for easy remote control, the
+                                      #  token + audit trail stay on.
+                                      #  Loopback + the hub PC's own IPs
+                                      #  ALWAYS pass in every mode (the
+                                      #  owner can never lock themselves
+                                      #  out), and admin_ips below is
+                                      #  honoured in every mode too.
+    "admin_ips": [],                  # v3.5.6 EXTRA CONSOLE ADMINS - IPs
+                                      #  / CIDRs / wildcards that may open
+                                      #  the console UI from ANY network,
+                                      #  in every ui_admin_mode: the
+                                      #  office PC at 192.168.1.2 while
+                                      #  the hub sits on 10.x, a phone on
+                                      #  mobile data, a VPN peer, ...
+                                      #  Loopback + this PC's own IPs are
+                                      #  admins already and need no
+                                      #  entry here. Same rule format as
+                                      #  allowed_ips (exact / CIDR /
+                                      #  wildcard, "*" = everyone). Every
+                                      #  remote admin session is audited
+                                      #  (ui.remote_admin). Edit in THE
+                                      #  ONE UI > LAN Sharing > Console
+                                      #  admin access.
     "history_days": 30,               # v3.2.1 Settings tab: keep jobs (days)
     "log_level": "info",              # v3.2.1 Settings tab: info|debug|warn|error
 }
@@ -383,7 +420,9 @@ CONFIG_KEYS = ("port",   # v3.4.7: the hub port is saved in config.json
                "drop_enabled", "drop_dir", "drop_delete",
                "rules_mirror", "ext_api_sites", "ext_sync_at",
                "ext_prefs", "history_days", "log_level",
-               "allowed_ips", "lan_strict")
+               "allowed_ips", "lan_strict",
+               "ui_admin_mode",       # v3.5.6 CONSOLE ADMIN ACCESS
+               "admin_ips")           # v3.5.6 EXTRA CONSOLE ADMINS
 CONFIG_TYPES = {"port": int,   # v3.4.7: validated in POST /config
                                #  (1024-65535, not 631/5353/9100)
                 "token_header_only": bool, "allowed_origins": list,
@@ -421,7 +460,9 @@ CONFIG_TYPES = {"port": int,   # v3.4.7: validated in POST /config
                 "escpos_codepage": str,
                 "thermal_text_engine": str,
                 "allowed_ips": list,   # v3.2.3 ALLOWED IPS (LAN Sharing tab)
-                "lan_strict": bool}    # v3.4.7 STRICT LAN SHARE
+                "lan_strict": bool,    # v3.4.7 STRICT LAN SHARE
+                "ui_admin_mode": str,  # v3.5.6 self|lan|any (LAN tab)
+                "admin_ips": list}     # v3.5.6 extra console admins
 
 DEFAULT_TOKEN_WARNING = False   # True while the legacy default token is active
 BOUND_LAN = False               # True once the listener actually bound 0.0.0.0
@@ -1805,6 +1846,128 @@ def own_ip_set():
     _OWN_IPS_CACHE["t"] = now
     return ips
 
+# --------------------------------------------------------------
+# v3.5.6 CONSOLE ADMIN ACCESS - same-network + admin_ips
+# The v3.2.6 gate answered the console UI only on the hub PC itself.
+# The v3.5.6 owner request: "any ip allow to access admin console ui
+# if permission like loopback 127.0.0.1 and self ip auto add extra
+# ips also access admin controlled from different ip same network.
+# so control more easy" - run the console from the office PC or a
+# phone WITHOUT opening the gate to strangers.
+#
+# New LAYER 2 model (print surface unchanged, LAYER 1 unchanged):
+#   ui_admin_mode = "self"  the old lock: the hub PC only
+#   ui_admin_mode = "lan"   + every device on the hub PC's own
+#                           SUBNET (IPv4 same /24, IPv6 same /64)
+#                           - the FACTORY DEFAULT. The hub PC's own
+#                           192.168.1.2 and a PC/phone at 192.168.1.57
+#                           both get the full console.
+#   ui_admin_mode = "any"   + every address LAYER 1 already lets in
+#   admin_ips = [...]       extra admins from ANY network in every
+#                           mode (192.168.1.2 as the admin centre PC
+#                           reaching a 10.x hub, a phone on mobile
+#                           data, a VPN peer ...)
+# Loopback + the hub's own IPs always pass (owner lockout-proof);
+# every non-local admin session is audited as ui.remote_admin.
+# --------------------------------------------------------------
+
+def _norm_ip(ip):
+    """Normalise a client address for rule matching: strip the
+    IPv4-mapped ::ffff: prefix and the IPv6 zone suffix."""
+    ip = str(ip or "").strip()
+    if ip.startswith("::ffff:") and "." in ip:
+        ip = ip[len("::ffff:"):]
+    return ip.split("%")[0]
+
+
+def _subnet_key(ip):
+    """Coarse SUBNET identity used by ui_admin_mode="lan": the IPv4
+    /24 network address or the IPv6 /64 network address of `ip`.
+    Returns None for anything unparsable - an unparsable address can
+    never match a subnet, so a typo can only make the hub STRICTER,
+    never silently open it."""
+    ip = _norm_ip(ip)
+    if not ip:
+        return None
+    try:
+        import ipaddress as _ipa
+        a = _ipa.ip_address(ip)
+        if a.is_loopback:
+            return None                 # 127.x/::1 are own-host anyway
+        prefix = 24 if a.version == 4 else 64
+        net = _ipa.ip_network((str(a), prefix), strict=False)
+        return (a.version, str(net.network_address))
+    except ValueError:
+        return None
+
+
+_SUBNET_CACHE = {"keys": None, "t": 0.0}
+
+
+def own_subnet_keys():
+    """Subnet identities (/24 IPv4, /64 IPv6) of every OWN LAN address
+    - cached 5 s beside own_ip_set() so DHCP changes are picked up
+    without hammering ipaddress on every request. Self IPs are added
+    automatically: the hub PC is always an admin of itself."""
+    now = time.time()
+    if _SUBNET_CACHE["keys"] is not None and now - _SUBNET_CACHE["t"] < 5.0:
+        return _SUBNET_CACHE["keys"]
+    keys = set()
+    try:
+        for ip in own_ip_set():
+            k = _subnet_key(ip)
+            if k:
+                keys.add(k)
+    except Exception:
+        pass
+    _SUBNET_CACHE["keys"] = keys
+    _SUBNET_CACHE["t"] = now
+    return keys
+
+
+def ui_admin_allows(ip, mode=None, admin_rules=None, subnet_keys=None):
+    """v3.5.6 LAYER 2 decision for a NON-LOCAL client IP: may this
+    address open the console UI / settings endpoints? Own-host and
+    loopback callers never reach this (their handler path returns
+    first). Module-level so the test suite can drive it without
+    spinning up the HTTP server.
+      admin_rules=None -> CFG["admin_ips"]; "*" = everyone
+      mode=None        -> CFG["ui_admin_mode"] (self|lan|any)
+      subnet_keys=None -> own_subnet_keys()
+    NOTE: unlike allowed_ips (where an empty list means "all"), an
+    EMPTY admin_ips list must mean NOBODY extra - ip_allowed_by_list
+    maps empty -> ["*"], so the empty list is filtered out here."""
+    mode = str(mode if mode is not None
+               else CFG.get("ui_admin_mode") or "lan").lower()
+    if mode not in ("self", "lan", "any"):
+        mode = "lan"                  # unknown value -> factory default
+    rules = [str(x).strip() for x in
+             (admin_rules if admin_rules is not None
+              else (CFG.get("admin_ips") or [])) if str(x).strip()]
+    if rules and ip_allowed_by_list(_norm_ip(ip), rules):
+        return True
+    if mode == "any":
+        return True
+    if mode == "lan":
+        k = _subnet_key(ip)
+        if k and k in (subnet_keys if subnet_keys is not None
+                       else own_subnet_keys()):
+            return True
+    return False
+
+
+def admin_ips_hit(ip):
+    """True when `ip` matches the admin_ips EXTRA-admin list (v3.5.6).
+    Unlike ip_allowed_by_list, an EMPTY list means nobody - the hub PC
+    and same-network admins do not need entries, so empty must never
+    widen the gate."""
+    rules = [str(x).strip() for x in (CFG.get("admin_ips") or [])
+             if str(x).strip()]
+    if not rules:
+        return False
+    return ip_allowed_by_list(_norm_ip(ip), rules)
+
+
 # Routes a REMOTE (non-local) client may still call - the print surface.
 MGMT_OPEN_GET_EXACT = frozenset((
     "/health",      # extension + child PCs poll it
@@ -1881,6 +2044,16 @@ def build_health_snapshot():
         # (cfgCache.port) and the strict-LAN card
         "port": int(CFG.get("port", 9235)),
         "lan_strict": bool(CFG.get("lan_strict")),
+        # v3.5.6 CONSOLE ADMIN ACCESS - live state for the LAN tab card
+        "ui_admin_mode": str(CFG.get("ui_admin_mode") or "lan"),
+        "admin_ips": [str(x) for x in (CFG.get("admin_ips") or [])],
+        "ui_admin_subnets": [("%s/%d" % (k[1], 24 if k[0] == 4 else 64))
+                             for k in sorted(own_subnet_keys(),
+                                             key=lambda x: (x[0], x[1]))],
+        "ui_admin_urls": (["http://%s:%d/ui" % (i, int(CFG.get("port", 9235)))
+                           for i in list_lan_ips()[:4]]
+                          if str(CFG.get("ui_admin_mode") or "lan") != "self"
+                          else []),
         "ipp_printer": bool(CFG.get("ipp_printer", True)),
         "ipp_url": ("http://%s:%d/ipp/print" % (lan_ip(), CFG["port"]))
                    if CFG.get("share_lan") else None,
@@ -5420,11 +5593,39 @@ class Handler(BaseHTTPRequestHandler):
             return True
 
     def _mgmt_locked(self, route):
-        """v3.2.6: True when THIS route must refuse non-local callers.
-        From the hub PC everything answers as before. From the LAN only
-        the PRINT SURFACE answers (see MGMT_OPEN_* above) - the console
-        UI and every settings/management endpoint are local-only."""
+        """v3.2.6 + v3.5.6: True when THIS route must refuse the caller.
+        The hub PC itself (loopback + own IPs) always answers as before.
+        Everyone else: the PRINT SURFACE answers (see MGMT_OPEN_*), and
+        - NEW v3.5.6 - the console UI + management endpoints ALSO answer
+        for same-network devices (ui_admin_mode="lan", the factory
+        default), for every IP on the admin_ips list (any network) and
+        for everything when ui_admin_mode="any". Every remote admin
+        session is audited (ui.remote_admin) so the owner always sees
+        WHO controls the hub from WHERE."""
         if self._is_own_host():
+            return False
+        ip = self._client_ip() or ""
+        if ui_admin_allows(ip):
+            # v3.5.6 CONSOLE ADMIN ACCESS: a same-network device (or an
+            # admin_ips entry) gets the FULL console like the hub PC -
+            # settings, queue control, history, /tool, everything - the
+            # token auth on top stays exactly as it is. Throttled audit
+            # row (1 per 10 s per IP like the ACL gate).
+            now = time.time()
+            if now - _ACL_AUDIT_TS.get("ra" + ip, 0) >= 10:
+                _ACL_AUDIT_TS["ra" + ip] = now
+                try:
+                    via = ("admin_ips" if admin_ips_hit(ip)
+                           else ("same network" if _subnet_key(ip) in
+                                 own_subnet_keys() else "ui_admin_mode"))
+                    db_audit("ui.remote_admin", ip=ip,
+                             details="console control from %s (via %s, "
+                                     "ui_admin_mode=%s)"
+                                     % (ip[:64], via,
+                                        str(CFG.get("ui_admin_mode")
+                                            or "lan")))
+                except Exception:
+                    pass
             return False
         if self.command == "POST":
             if route in MGMT_POST_DENY:
@@ -5443,29 +5644,31 @@ class Handler(BaseHTTPRequestHandler):
         return True
 
     def _ui_locked_answer(self, route):
-        """Branded 403 for a LAN visitor that touched a local-only
-        route. HTML for browsers (points at the print URLs), JSON for
-        API clients. Audited once per 10 s per IP like the ACL gate."""
+        """Branded 403 for a visitor that touched a gated console route
+        from a device the v3.5.6 admin gate does not cover. HTML for
+        browsers (points at the print URLs + the fix), JSON for API
+        clients. Audited once per 10 s per IP like the ACL gate."""
         ip = self._client_ip() or "?"
-        log("[SECURITY] %s %s refused - the console UI is local-only "
-            "(v3.2.6)" % (ip, route))
+        mode = str(CFG.get("ui_admin_mode") or "lan")
+        log("[SECURITY] %s %s refused - the console UI is gated "
+            "(v3.5.6, ui_admin_mode=%s)" % (ip, route, mode))
         now = time.time()
         if now - _ACL_AUDIT_TS.get("ui" + ip, 0) >= 10:
             _ACL_AUDIT_TS["ui" + ip] = now
             try:
                 db_audit("ui.locked", ip=ip,
-                         details="non-local request to local-only %s"
+                         details="gated console request to local-only %s"
                                  % route[:80])
             except Exception:
                 pass
         if "text/html" in (self.headers.get("Accept") or ""):
             page = (
                 "<html><head><meta charset=\"utf-8\">"
-                "<title>AdvPrint Pro - console is local-only</title>"
+                "<title>AdvPrint Pro - console access gated</title>"
                 "<style>body{font-family:Segoe UI,system-ui,sans-serif;"
                 "background:#f5f8fc;color:#0f172a;display:flex;"
                 "align-items:center;justify-content:center;min-height:100vh;"
-                "margin:0}.win{max-width:560px;background:#fff;border:1px"
+                "margin:0}.win{max-width:620px;background:#fff;border:1px"
                 " solid #e2e8f0;border-radius:12px;overflow:hidden;"
                 "box-shadow:0 10px 30px rgba(15,23,42,.08)}.bar{background:"
                 "linear-gradient(135deg,#1e3a8a,#1d4ed8);color:#fff;padding:"
@@ -5475,27 +5678,37 @@ class Handler(BaseHTTPRequestHandler):
                 "font-size:12px}footer{padding:10px 18px;border-top:1px"
                 " solid #e2e8f0;color:#64748b;font-size:11.5px}</style>"
                 "</head><body><div class=\"win\">"
-                "<div class=\"bar\">AdvPrint Pro - the console runs on"
-                " the hub PC only</div>"
+                "<div class=\"bar\">AdvPrint Pro - the console is"
+                " gated on this hub</div>"
                 "<div class=\"b\"><b>Printing still works from this"
-                " device.</b> This hub accepts print jobs from the whole"
+                " device.</b> This hub accepts print jobs from the"
                 " LAN (or the Allowed-IPs list): the send portal, the"
                 " IPP printer URL and the print API all answer"
                 " normally.<br><br>"
-                "The <b>console UI, the settings and the history are"
-                " locked to the hub PC itself</b> (v3.2.6 security -"
-                " only the hub's own screen may change hub settings)."
-                " Open the console on the hub PC:"
-                " <code>http://127.0.0.1:%d/ui</code><br><br>"
+                "The <b>console UI and settings are gated</b> (v3.5.6"
+                " - the hub owner chooses who may open them:"
+                " <code>ui_admin_mode</code> <b>self</b> = the hub PC"
+                " only, <b>lan</b> = every device on the hub PC's same"
+                " network (factory default), <b>any</b> = every IP the"
+                " Allowed-IPs list lets in, plus the extra"
+                " <code>admin_ips</code> allow-list in every mode)."
+                " This device (<b>%s</b>) is not in that set. The hub"
+                " owner can allow it in <b>THE ONE UI &#8594; LAN"
+                " Sharing &#8594; Console admin access</b> (one click),"
+                " or by adding its IP to <code>admin_ips</code> in"
+                " config.json.<br><br>"
+                "The hub PC itself stays at"
+                " <code>http://127.0.0.1:%d/ui</code>.<br><br>"
                 "To PRINT from this device:<ul>"
                 "<li>Phones: open the <b>Send portal</b> - ask the hub"
                 " owner for the <code>/send?token=...</code> URL</li>"
                 "<li>Any PC or phone: add this PC as a network printer"
-                " - <code>http://%s:%d/ipp/print</code></li></ul>"
+                " - <code>ipp://%s:%d/ipp/print</code></li></ul>"
                 "</div><footer>100% local &#183; no cloud. AdvPrint by"
                 " Bit Dream IT - Innovative Healthcare Solutions.</footer>"
                 "</div></body></html>"
-                % (int(CFG.get("port", 9235)),
+                % (_html_escape(ip[:100]),
+                   int(CFG.get("port", 9235)),
                    _html_escape(lan_ip() or "this-PC"),
                    int(CFG.get("port", 9235)))).encode("utf-8")
             try:
@@ -5511,10 +5724,13 @@ class Handler(BaseHTTPRequestHandler):
         try:
             self._send(403, {
                 "ok": False,
-                "error": "local-only endpoint - '%s' answers on the hub"
-                         " PC itself; LAN devices keep print access"
-                         " (/print, /send, /ipp/print, /jobs)"
-                         % route[:60]})
+                "error": "gated console endpoint - '%s' answers on the"
+                         " hub PC itself, on the hub PC's same network"
+                         " (ui_admin_mode=lan) and for admin_ips"
+                         " devices; this device keeps print access"
+                         " (/print, /send, ipp://ip:port/ipp/print,"
+                         " /jobs)" % route[:60],
+                "ui_admin_mode": mode})
         except Exception:
             pass
 
@@ -7748,6 +7964,30 @@ class Handler(BaseHTTPRequestHandler):
                     if not cleaned or "*" in cleaned:
                         cleaned = ["*"]
                     val = cleaned
+                if key == "ui_admin_mode":
+                    # v3.5.6 CONSOLE ADMIN ACCESS - only the three real
+                    # modes pass; anything else is a typo that must not
+                    # silently widen or break the gate.
+                    if str(val) not in ("self", "lan", "any"):
+                        return self._send(400, {
+                            "ok": False,
+                            "error": "ui_admin_mode must be 'self'"
+                                     " (hub PC only), 'lan' (same"
+                                     " network too - factory default)"
+                                     " or 'any' (every IP the"
+                                     " Allowed-IPs gate lets in)"})
+                    val = str(val)
+                if key == "admin_ips":
+                    # v3.5.6 EXTRA CONSOLE ADMINS - same hygiene as
+                    # allowed_ips: short strings, dedupe, cap at 32.
+                    # An EMPTY list is fine (same-network admins and
+                    # the hub PC itself keep working without it).
+                    cleaned = []
+                    for x in (val if isinstance(val, list) else []):
+                        s = str(x).strip()[:64]
+                        if s and s not in cleaned:
+                            cleaned.append(s)
+                    val = cleaned[:32]
                 if key == "thermal_text_engine" and str(val) not in (
                         "", "auto", "builtin", "browser"):
                     return self._send(400, {
@@ -9354,7 +9594,7 @@ CONSOLE_HTML = r"""<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AdvPrint Pro — Printing Hub · ALL-IN-ONE Console v3.5.5 — Pro Themes</title>
+<title>AdvPrint Pro — Printing Hub · ALL-IN-ONE Console v3.5.6 — Pro Themes</title>
 <style>
 :root{--navy:#14224f;--mono:'Cascadia Mono','JetBrains Mono','SF Mono',Consolas,'Liberation Mono',monospace;
   --purple-hex:#5b3fc4;
@@ -10294,7 +10534,7 @@ html[data-frame="flush"] .window{max-width:none;border-radius:0;border:none;box-
             <div class="stat g"><div class="d">7d 17 ok / 1 fail</div><div class="v">94.7%</div><div class="l">Success Rate</div></div>
             <div class="stat w"><div class="d">live</div><div class="v">4</div><div class="l">In Queue</div></div>
             <div class="stat r"><div class="d">1 offline</div><div class="v">3/4</div><div class="l">Printers Ready</div></div>
-            <div class="stat"><div class="d">hub</div><div class="v">v3.5.5</div><div class="l">Version</div></div>
+            <div class="stat"><div class="d">hub</div><div class="v">v3.5.6</div><div class="l">Version</div></div>
           </div>
 
           <!-- v3.2.3: the Quick-actions card is GONE - all six of its
@@ -10557,12 +10797,12 @@ html[data-frame="flush"] .window{max-width:none;border-radius:0;border:none;box-
             <div class="lrow"><span class="lk">IP Printer mode <small>this PC becomes a network printer</small></span><span class="chip info">ACTIVE</span><span class="lv plain">every PC or phone adds this PC as their network printer &#8594; jobs print to (default printer)</span><span class="sp"></span><span class="ops"><button class="btn small" data-qr="ipp">QR</button></span></div>
             <div class="lrow"><span class="lk">Network printer (IPP) <small>built-in IPP Class Driver, no tools</small></span><span class="chip ok">READY</span><span class="lv">http://10.26.94.206:9235/ipp/print</span><span class="sp"></span><span class="ops"><button class="btn small ipp-tgl">Disable</button><button class="btn small blue">Copy printer URL</button><button class="btn small" data-qr="ipp">QR</button></span></div>
             <div class="lrow" id="row-mdns"><span class="lk">AirPrint / mDNS discovery <small>the printer appears BY ITSELF in phone &amp; PC lists</small></span><span class="chip gray">STARTING</span><span class="lv plain">Bonjour/_ipp._tcp broadcast on the LAN</span><span class="sp"></span><span class="ops"></span></div>
-            <div class="lrow" id="row-ipp631"><span class="lk">Standard IPP port 631 <small>mirror of /ipp/print — Android &amp; printer defaults</small></span><span class="chip gray">STARTING</span><span class="lv plain">http://IP:631/ipp/print answers like a real printer</span><span class="sp"></span><span class="ops"></span></div>
+            <div class="lrow" id="row-ipp631"><span class="lk">Standard IPP port 631 <small>mirror of /ipp/print — Android &amp; printer defaults</small></span><span class="chip gray">STARTING</span><span class="lv plain">ipp://IP:631/ipp/print answers like a real printer</span><span class="sp"></span><span class="ops"></span></div>
             <div class="lrow" id="row-hubips"><span class="lk">Hub addresses <small>EVERY interface IP, IPv4 + IPv6; pick the one YOUR PC reaches</small></span><span class="chip info">ALL IPs</span><span class="lv plain" id="hubIpList"></span><span class="sp"></span><span class="ops"></span></div>
             <div class="lrow"><span class="lk">RAW printer port <small>JetDirect, port 9100</small></span><span class="chip ok">LISTENING</span><span class="lv">10.26.94.206:9100</span><span class="sp"></span><span class="ops"><button class="btn small">How to add</button></span></div>
             <div class="lrow"><span class="lk">Windows firewall <small>inbound rule for LAN PCs</small></span><span class="chip ok">ALLOWED</span><span class="lv plain">inbound TCP 9235 allowed for LAN PCs</span><span class="sp"></span><span class="ops"><button class="btn small">Test LAN</button></span></div>
             <div class="lrow"><span class="lk">Printer status hold <small>pause jobs while a printer is offline</small></span><span class="chip ok">ON</span><span class="lv plain">jobs wait while the printer reports offline</span><span class="sp"></span><span class="ops"><button class="btn small">Disable</button></span></div>
-            <div class="note" id="lanSecurityNote" style="margin-top:10px"><b>&#128274; Security model:</b> the console UI and every setting answer <b>only on this PC</b> (loopback or this machine's own IP). Other PCs and phones keep full print access &#8212; Send portal, IPP printer URL, print API, ports 9235/631/9100 &#8212; exactly per the Allowed-IPs list below; they simply cannot open the UI or change anything. Opening the share URL from another PC shows a friendly locked page with the print instructions. Switching LAN sharing ON also turns the IPP printer ON automatically.</div>
+            <div class="note" id="lanSecurityNote" style="margin-top:10px"><b>&#128274; Security model (v3.5.6):</b> the console UI answers on this PC (loopback + this machine's own IPs) <b>and, by default (<code>ui_admin_mode: lan</code>), on every device of this PC's own network</b> — the card below controls it. Print access is unchanged: other PCs and phones keep the Send portal, the IPP printer URL (<span class="mono">ipp://IP:631/ipp/print</span>), the print API and ports 9235/631/9100 exactly per the Allowed-IPs list below; devices outside the admin set simply cannot open the UI or change anything, and every remote console session lands in the Audit trail (<span class="mono">ui.remote_admin</span>). The hub PC itself can never be locked out.</div>
           </div>
 
           <div class="card">
@@ -10576,6 +10816,27 @@ html[data-frame="flush"] .window{max-width:none;border-radius:0;border:none;box-
               </div>
               <div id="aclList" style="display:flex;gap:8px;flex-wrap:wrap;min-height:6px"></div>
               <div class="note">The hub PC itself (<span class="mono">127.0.0.1</span>) can ALWAYS reach the hub. Any device NOT on the list gets <b>403 access denied</b> &#8212; the console, the send portal, the API, IPP printing (9235 + 631) and the RAW 9100 port included. Every denial lands in the Audit trail (<span class="mono">acl.denied</span>).</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-h">&#9881; Console admin access — control this hub from another PC or phone <span class="r">v3.5.6 · same network by default · extra IPs from any network</span></div>
+            <div class="card-b">
+              <div class="frow" style="margin-bottom:8px;align-items:center;gap:10px">
+                <b style="font-size:12px">Who may open THE ONE UI:</b>
+                <button class="btn small" id="uamSelf">Hub PC only</button>
+                <button class="btn small" id="uamLan">Same network</button>
+                <button class="btn small" id="uamAny">Any allowed IP</button>
+                <span class="chip ok" id="uamMode">SAME NETWORK</span>
+              </div>
+              <div class="frow" style="margin-bottom:6px">
+                <span class="chip info" id="uamSubnet">subnet</span>
+                <input class="inp mono" id="adminIpInput" placeholder="extra admin IP — works from ANY network: 192.168.1.2 · 10.26.94.0/24 · 10.26.*" style="flex:1;min-width:260px;font-size:11.5px">
+                <button class="btn small blue" id="adminIpAdd">Add admin IP</button>
+              </div>
+              <div id="adminIpList" style="display:flex;gap:8px;flex-wrap:wrap;min-height:6px;margin-bottom:6px"></div>
+              <div class="lrow" style="margin-top:6px"><span class="lk">Console URLs for the other devices <small>open on the admin PC / phone — token prompt included</small></span><span class="chip info">COPY</span><span class="lv plain" id="uamUrls"></span><span class="sp"></span><span class="ops"></span></div>
+              <div class="note">The hub PC keeps full control in every mode (loopback + its own IPs are always admins — auto-added, never listed). <b>Same network</b> = devices sharing the hub PC's subnet (IPv4 /24, IPv6 /64) get the console after entering the hub token. <b>Extra admin IPs</b> work from ANY network — the office PC, a phone on mobile data, a VPN peer. Every remote console session is audited (<span class="mono">ui.remote_admin</span>). A device that is not in the set gets a friendly gated page and keeps full print access.</div>
             </div>
           </div>
 
@@ -10632,7 +10893,7 @@ html[data-frame="flush"] .window{max-width:none;border-radius:0;border:none;box-
                   Open anything printable &#8594; Share &#8594; <b>Print</b> &#8594; Select Printer — <b>AdvPrint Pro appears by itself</b> (AirPrint) while the phone is on the same Wi-Fi.</td></tr>
                 <tr><td><b>Android</b></td><td>
                   Print from any app &#8594; <b>Default Print Service / Mopria</b> — the printer is discovered automatically (mDNS).
-                  Manual add: Default Print Service &#8594; &#8942; &#8594; Add printer &#8594; <b>IP address</b> &#8594; <span class="mono" id="ippGuideAndroid">10.26.94.206</span> — Android tries the standard port <b>631</b> first, where this hub mirrors <span class="mono" id="ippGuideAndroid631">http://10.26.94.206:631/ipp/print</span> (Android ignores custom ports on manual add — the hub mirrors IPP on 631 for it).</td></tr>
+                  Manual add: Default Print Service &#8594; &#8942; &#8594; Add printer &#8594; <b>IP address</b> &#8594; <span class="mono" id="ippGuideAndroid">10.26.94.206</span> — Android assumes port <b>631</b> and <b>/ipp/print</b> by itself, where this hub mirrors <span class="mono" id="ippGuideAndroid631">ipp://10.26.94.206:631/ipp/print</span>. v3.5.6: paste the <b>ipp://</b> URI or just the IP — an <b>http://</b> URL keeps Android's Save button disabled (the hub still speaks plain HTTP/IPP underneath; only the displayed scheme changed).</td></tr>
               </table></div>
               <div class="note" style="margin:10px 0 0">RAW / JetDirect lovers: add a <b>Standard TCP/IP port</b> — IP <span class="mono" id="ippGuideRawIp">10.26.94.206</span>, port <span class="mono">9100</span>, device type <b>Generic Network Card</b>. Prints go to THIS PC's printer through the AdvPrint Pro hub — 100% local, no cloud.</div>
             </div>
@@ -12074,7 +12335,7 @@ function renderLanRows(){
   ipEl("ippGuideWin", lanBase() + "/ipp/print");
   ipEl("ippGuideMacHost", hubIp() + ":" + (hubPort() || 9235));
   ipEl("ippGuideAndroid", hubIp());
-  ipEl("ippGuideAndroid631", "http://" + hubIp() + ":631/ipp/print");
+  ipEl("ippGuideAndroid631", "ipp://" + hubIp() + ":631/ipp/print");
   ipEl("ippGuideRawIp", hubIp());
   /* v3.2.9 BUG 3 + v3.3.0 BUG 2: every hub interface IP as a copyable
      chip - IPv4 AND IPv6 now - plus the static "LAN PC hub URL" input
@@ -12118,10 +12379,14 @@ function renderLanRows(){
       hubIp() + ".local)")
            : (cfgCache.ipp_mdns === false ? "discovery off in Hub settings (ipp_mdns)"
               : "starts when LAN sharing / IP Printer mode is ON"));
-  /* v3.3.0 BUG 2: the chip shows the REAL bound sockets (IPv4 + IPv6) */
+  /* v3.3.0 BUG 2: the chip shows the REAL bound sockets (IPv4 + IPv6)
+     v3.5.6: the add-printer URI DISPLAYS ipp:// now (Android's manual
+     add accepts ipp:// or the bare IP; an http:// URL disables its
+     Save button). The mirror still SPEAKS plain HTTP/IPP - display
+     only. For IPv6 hosts hubHost() already adds the [brackets]. */
   var stdA = (std && std.addrs) || [];
   setChip("row-ipp631", !!std.up, "LISTENING", "OFF",
-    std.up ? ("http://" + hubHost(hubIp()) + ":" + (std.port || 631) +
+    std.up ? ("ipp://" + hubHost(hubIp()) + ":" + (std.port || 631) +
       "/ipp/print \u2014 IPv4 + IPv6 on every interface" +
       (stdA.length ? " (" + stdA.join(", ") + ")" : "") +
       " \u2014 Android manual add and printer defaults work")
@@ -12240,6 +12505,7 @@ function renderLanRows(){
     };
   }
   renderAcl();
+  renderUiAdmin();   /* v3.5.6: the Console admin access card */
 }
 
 /* ---- v3.2.3 ALLOWED IPS - who may reach this hub ----
@@ -12320,6 +12586,115 @@ function renderAcl(){
   if (all) all.onclick = function(){ saveAcl(["*"]); };
   var inp = $("aclInput");
   if (inp) inp.addEventListener("keydown", function(e){
+    if (e.key === "Enter") { e.preventDefault(); addOne(); } });
+})();
+
+/* ---- v3.5.6 CONSOLE ADMIN ACCESS ----
+   The ONE UI itself is now reachable from the hub PC's own network
+   (ui_admin_mode "lan", factory default) and from admin_ips devices
+   on any network. This renders the mode chips + the extra-admin list
+   and wires the three mode buttons and the Add field - same pattern
+   as the Allowed-IPs card above. */
+function uamModeLabel(){
+  var m = cfgCache.ui_admin_mode || "lan";
+  return m === "self" ? "HUB PC ONLY"
+       : m === "any"  ? "ANY ALLOWED IP"
+       : "SAME NETWORK";
+}
+function saveUiAdmin(patch, okMsg){
+  api("/config", { method: "POST", body: patch })
+    .then(function(){ if (okMsg) toast(okMsg, "ok"); poll(); })
+    .catch(function(e){ toast(e.message, "err"); });
+}
+function renderUiAdmin(){
+  var mode = $("uamMode"); if (!mode) return;   // card not on this page
+  var m = cfgCache.ui_admin_mode || "lan";
+  mode.textContent = uamModeLabel();
+  mode.className = "chip " + (m === "self" ? "warn" : "ok");
+  var subs = (window._lastHealth && window._lastHealth.ui_admin_subnets) || [];
+  var sub = $("uamSubnet");
+  if (sub) sub.textContent =
+    (m === "self" ? "gate: hub PC only" :
+     subs.length ? ("same network = " + subs.join(" + "))
+                 : "same network = this PC's subnet");
+  /* highlight the active mode button, grey the others */
+  [["uamSelf","self"],["uamLan","lan"],["uamAny","any"]].forEach(function(p){
+    var b = $(p[0]); if (!b) return;
+    b.style.opacity = (m === p[1]) ? "1" : ".45";
+    b.className = "btn small" + (m === p[1] ? " blue" : "");
+  });
+  /* extra admin IP chips with a remove x */
+  var box = $("adminIpList"); if (box) {
+    var list = (cfgCache.admin_ips || []);
+    box.innerHTML = "";
+    if (!list.length) {
+      var none = document.createElement("span");
+      none.className = "mono";
+      none.style.cssText = "background:#f1f5f9;border:1px solid #e2e8f0;" +
+        "border-radius:4px;padding:3px 10px;font-size:11.5px;color:#64748b";
+      none.textContent = "no extra admin IPs — same-network devices only";
+      box.appendChild(none);
+    }
+    list.forEach(function(ip){
+      var chip = document.createElement("span");
+      chip.className = "chip info";
+      chip.style.cssText = "display:inline-flex;align-items:center;gap:6px;" +
+        "padding:3px 6px 3px 10px;font-size:11.5px";
+      var s = document.createElement("span");
+      s.className = "mono"; s.textContent = ip;
+      var x = document.createElement("button");
+      x.textContent = "\u2715"; x.title = "remove " + ip;
+      x.style.cssText = "height:18px;padding:0 7px;font-size:10.5px;" +
+        "background:#fee2e2;border:1px solid #fecaca;color:#b91c1c;" +
+        "border-radius:5px;cursor:pointer";
+      x.onclick = function(){
+        saveUiAdmin({ admin_ips: list.filter(function(v){ return v !== ip; }),
+                      }, ip + " removed from the console admins"); };
+      chip.appendChild(s); chip.appendChild(x);
+      box.appendChild(chip);
+    });
+  }
+  /* the URLs the other admin devices should open */
+  var urls = (window._lastHealth && window._lastHealth.ui_admin_urls) || [];
+  var lv = $("uamUrls");
+  if (lv) {
+    lv.innerHTML = "";
+    var src = urls.length ? urls : [lanBase() + "/ui"];
+    src.forEach(function(u, i){
+      if (i) lv.appendChild(document.createTextNode("  \u00b7  "));
+      var b = document.createElement("button");
+      b.className = "btn small"; b.style.margin = "2px 4px 2px 0";
+      b.textContent = u.replace(/^http:\/\//, "");
+      b.title = "copy " + u;
+      b.onclick = function(){ copyText(u + (TOKEN ? "?t=" + TOKEN : ""));
+        toast("Console URL copied \u2014 open it on the other PC/phone", "ok"); };
+      lv.appendChild(b);
+    });
+  }
+}
+(function uamWire(){
+  var set = function(mode, label){
+    saveUiAdmin({ ui_admin_mode: mode }, "Console admin: " + label);
+  };
+  var bS = $("uamSelf"), bL = $("uamLan"), bA = $("uamAny"), inp, add;
+  if (bS) bS.onclick = function(){ set("self", "hub PC only (v3.2.6 lock)"); };
+  if (bL) bL.onclick = function(){ set("lan", "same network + hub PC (default)"); };
+  if (bA) bA.onclick = function(){ set("any", "every IP the Allowed-IPs list lets in"); };
+  function addOne(){
+    inp = $("adminIpInput"); if (!inp) return;
+    var v = (inp.value || "").trim();
+    if (!v) { toast("Type an IP first — e.g. 192.168.1.2", "warn"); return; }
+    var cur = (cfgCache.admin_ips || []).slice();
+    if (cur.indexOf(v) >= 0) { toast(v + " is already an admin IP", "warn"); return; }
+    if (cur.length >= 32) { toast("the admin list is capped at 32 entries", "warn"); return; }
+    cur.push(v);
+    inp.value = "";
+    saveUiAdmin({ admin_ips: cur }, v + " may now open the console from any network");
+  }
+  add = $("adminIpAdd");
+  if (add) add.onclick = addOne;
+  var ai = $("adminIpInput");
+  if (ai) ai.addEventListener("keydown", function(e){
     if (e.key === "Enter") { e.preventDefault(); addOne(); } });
 })();
 
@@ -13549,7 +13924,7 @@ function renderExt(audit){
     rows.slice(0, 6).forEach(function(r2){
       var tr = tmpl.cloneNode(true), td = tr.querySelectorAll("td");
       td[0].innerHTML = "<b>" + esc(r2.who) + "</b>";
-      td[1].textContent = "v" + (BOOT.version || "3.5.5");
+      td[1].textContent = "v" + (BOOT.version || "3.5.6");
       td[2].textContent = r2.at ? r2.at.slice(11, 19) : "\u2014";
       td[3].innerHTML = '<span class="chip ok"><span class="d"></span>PAIRED</span>';
       tbl.appendChild(tr);
@@ -13571,7 +13946,7 @@ function renderExt(audit){
       m2.textContent = BASE + "/extension/updates.xml";
   });
   var crxChip = document.querySelector("#p-extension .frow .chip.ok");
-  if (crxChip) crxChip.innerHTML = '<span class="d"></span>CRX v' + (BOOT.version || "3.5.5") + " READY";
+  if (crxChip) crxChip.innerHTML = '<span class="d"></span>CRX v' + (BOOT.version || "3.5.6") + " READY";
   /* v3.2.8 STALE-CRX GUARD: ask the hub which package it really
    * serves (/extension/info is open, no token). Older than the hub
    * itself -> Chrome never updates -> browsers keep the old bugs.
@@ -13778,7 +14153,7 @@ async function renderUpdate(res){
    full-page /docs stays available via the "Full guide page" button.
    ============================================================ */
 function docsHtml(){
-  var v = esc(BOOT.version || "3.5.5");
+  var v = esc(BOOT.version || "3.5.6");
   var ip = esc(BOOT.lan_ip || location.hostname || "127.0.0.1");
   var port = esc(String(BOOT.port || location.port || "9235"));
   var base = "http://" + ip + ":" + port;
@@ -13804,9 +14179,9 @@ function docsHtml(){
   + '<li><b>Queue mode</b> lines jobs up FIFO (held while the printer is offline — release with ⚡); <b>instant mode</b> prints immediately.</li>'
   + '<li><b>History</b> keeps every job — tick rows and Reprint in bulk; <b>Clear ALL history</b> removes finished records, waiting jobs are never touched.</li></ul>'
   + '<h3 id="d-lan">4 · LAN sharing · other PCs · security (v' + v + ')</h3>'
-  + '<ul><li><b>The console UI is local-only:</b> settings, history and the queue open only on this PC (loopback or this machine’s own IP). Nobody on the LAN can change your hub settings any more.</li>'
+  + '<ul><li><b>The console UI is gated (v3.5.6):</b> settings, history and the queue open on this PC (loopback + its own IPs) and, by default (<code>ui_admin_mode: lan</code>), on every device of this PC’s own network. Extra <b>admin_ips</b> entries may control it from ANY network; devices outside the set see a friendly gated page and cannot change anything. Every remote console session is audited (<code>ui.remote_admin</code>).</li>'
   + '<li><b>LAN PCs and phones keep FULL print access</b> — the send portal, the IPP printer URL, the print API and ports ' + port + ' / 631 / 9100 answer normally, exactly per the <b>Allowed-IPs</b> list (<code>*</code> = whole LAN).</li>'
-  + '<li>Opening the share URL from another PC shows a friendly locked page with the print instructions.</li>'
+  + '<li>Opening the console URL from a device outside the admin set shows a friendly gated page with the print instructions and the one-click fix (LAN Sharing → Console admin access).</li>'
   + '<li>Switching <b>LAN sharing ON also switches the IPP printer ON</b> automatically; the extra <b>IPP: ON/OFF</b> toggle in the panel header controls it independently.</li></ul>'
   + '<h3 id="d-ipp">5 · Add this PC as a network printer (IPP)</h3>'
   + '<ul><li><b>Printer URL:</b> <code>ipp://' + ip + ':' + port + '/ipp/print</code> — or the browser-friendly <code>' + base + '/ipp/print</code>. Per-printer queues: <code>ipp://' + ip + ':' + port + '/ipp/print/&lt;printer&gt;</code>.</li>'
@@ -18765,9 +19140,14 @@ def ipp_landing_html(req_host=None, req_port=None, queue_name=None):
     std = int(CFG.get("ipp_standard_port") or 0)
     std_note = ""
     if std > 0 and _IPP631_STATE.get("up"):
-        std_note = ("<li>Standard port also UP: <code>http://%s:%d/ipp/print"
-                    "</code> - Android's manual add and most printer "
-                    "dialogs default to port %d.</li>"
+        # v3.5.6: the Android-facing add-printer URI now DISPLAYS as
+        # ipp:// - Android's manual-add box refuses http:// (its Save
+        # button stays disabled). The mirror itself still SPEAKS plain
+        # HTTP/IPP on that port; only the displayed scheme changed.
+        std_note = ("<li>Standard port also UP: <code>ipp://%s:%d/ipp/print"
+                    "</code> - Android's manual add accepts this scheme"
+                    " (or just the IP - it defaults to port %d and"
+                    " /ipp/print).</li>"
                     % (_html_escape(ip), std, std))
     # v3.2.9 BUG 2: say WHO may print (allowed_ips / * enforcement)
     rules = [str(r) for r in (CFG.get("allowed_ips") or ["*"])]

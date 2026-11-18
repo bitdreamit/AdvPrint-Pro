@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AdvPrint Pro — Printing Hub · ALL-IN-ONE Console v3.5.5 — Pro Themes</title>
+<title>AdvPrint Pro — Printing Hub · ALL-IN-ONE Console v3.5.6 — Pro Themes</title>
 <style>
 :root{--navy:#14224f;--mono:'Cascadia Mono','JetBrains Mono','SF Mono',Consolas,'Liberation Mono',monospace;
   --purple-hex:#5b3fc4;
@@ -943,7 +943,7 @@ html[data-frame="flush"] .window{max-width:none;border-radius:0;border:none;box-
             <div class="stat g"><div class="d">7d 17 ok / 1 fail</div><div class="v">94.7%</div><div class="l">Success Rate</div></div>
             <div class="stat w"><div class="d">live</div><div class="v">4</div><div class="l">In Queue</div></div>
             <div class="stat r"><div class="d">1 offline</div><div class="v">3/4</div><div class="l">Printers Ready</div></div>
-            <div class="stat"><div class="d">hub</div><div class="v">v3.5.5</div><div class="l">Version</div></div>
+            <div class="stat"><div class="d">hub</div><div class="v">v3.5.6</div><div class="l">Version</div></div>
           </div>
 
           <!-- v3.2.3: the Quick-actions card is GONE - all six of its
@@ -1206,12 +1206,12 @@ html[data-frame="flush"] .window{max-width:none;border-radius:0;border:none;box-
             <div class="lrow"><span class="lk">IP Printer mode <small>this PC becomes a network printer</small></span><span class="chip info">ACTIVE</span><span class="lv plain">every PC or phone adds this PC as their network printer &#8594; jobs print to (default printer)</span><span class="sp"></span><span class="ops"><button class="btn small" data-qr="ipp">QR</button></span></div>
             <div class="lrow"><span class="lk">Network printer (IPP) <small>built-in IPP Class Driver, no tools</small></span><span class="chip ok">READY</span><span class="lv">http://10.26.94.206:9235/ipp/print</span><span class="sp"></span><span class="ops"><button class="btn small ipp-tgl">Disable</button><button class="btn small blue">Copy printer URL</button><button class="btn small" data-qr="ipp">QR</button></span></div>
             <div class="lrow" id="row-mdns"><span class="lk">AirPrint / mDNS discovery <small>the printer appears BY ITSELF in phone &amp; PC lists</small></span><span class="chip gray">STARTING</span><span class="lv plain">Bonjour/_ipp._tcp broadcast on the LAN</span><span class="sp"></span><span class="ops"></span></div>
-            <div class="lrow" id="row-ipp631"><span class="lk">Standard IPP port 631 <small>mirror of /ipp/print — Android &amp; printer defaults</small></span><span class="chip gray">STARTING</span><span class="lv plain">http://IP:631/ipp/print answers like a real printer</span><span class="sp"></span><span class="ops"></span></div>
+            <div class="lrow" id="row-ipp631"><span class="lk">Standard IPP port 631 <small>mirror of /ipp/print — Android &amp; printer defaults</small></span><span class="chip gray">STARTING</span><span class="lv plain">ipp://IP:631/ipp/print answers like a real printer</span><span class="sp"></span><span class="ops"></span></div>
             <div class="lrow" id="row-hubips"><span class="lk">Hub addresses <small>EVERY interface IP, IPv4 + IPv6; pick the one YOUR PC reaches</small></span><span class="chip info">ALL IPs</span><span class="lv plain" id="hubIpList"></span><span class="sp"></span><span class="ops"></span></div>
             <div class="lrow"><span class="lk">RAW printer port <small>JetDirect, port 9100</small></span><span class="chip ok">LISTENING</span><span class="lv">10.26.94.206:9100</span><span class="sp"></span><span class="ops"><button class="btn small">How to add</button></span></div>
             <div class="lrow"><span class="lk">Windows firewall <small>inbound rule for LAN PCs</small></span><span class="chip ok">ALLOWED</span><span class="lv plain">inbound TCP 9235 allowed for LAN PCs</span><span class="sp"></span><span class="ops"><button class="btn small">Test LAN</button></span></div>
             <div class="lrow"><span class="lk">Printer status hold <small>pause jobs while a printer is offline</small></span><span class="chip ok">ON</span><span class="lv plain">jobs wait while the printer reports offline</span><span class="sp"></span><span class="ops"><button class="btn small">Disable</button></span></div>
-            <div class="note" id="lanSecurityNote" style="margin-top:10px"><b>&#128274; Security model:</b> the console UI and every setting answer <b>only on this PC</b> (loopback or this machine's own IP). Other PCs and phones keep full print access &#8212; Send portal, IPP printer URL, print API, ports 9235/631/9100 &#8212; exactly per the Allowed-IPs list below; they simply cannot open the UI or change anything. Opening the share URL from another PC shows a friendly locked page with the print instructions. Switching LAN sharing ON also turns the IPP printer ON automatically.</div>
+            <div class="note" id="lanSecurityNote" style="margin-top:10px"><b>&#128274; Security model (v3.5.6):</b> the console UI answers on this PC (loopback + this machine's own IPs) <b>and, by default (<code>ui_admin_mode: lan</code>), on every device of this PC's own network</b> — the card below controls it. Print access is unchanged: other PCs and phones keep the Send portal, the IPP printer URL (<span class="mono">ipp://IP:631/ipp/print</span>), the print API and ports 9235/631/9100 exactly per the Allowed-IPs list below; devices outside the admin set simply cannot open the UI or change anything, and every remote console session lands in the Audit trail (<span class="mono">ui.remote_admin</span>). The hub PC itself can never be locked out.</div>
           </div>
 
           <div class="card">
@@ -1225,6 +1225,27 @@ html[data-frame="flush"] .window{max-width:none;border-radius:0;border:none;box-
               </div>
               <div id="aclList" style="display:flex;gap:8px;flex-wrap:wrap;min-height:6px"></div>
               <div class="note">The hub PC itself (<span class="mono">127.0.0.1</span>) can ALWAYS reach the hub. Any device NOT on the list gets <b>403 access denied</b> &#8212; the console, the send portal, the API, IPP printing (9235 + 631) and the RAW 9100 port included. Every denial lands in the Audit trail (<span class="mono">acl.denied</span>).</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-h">&#9881; Console admin access — control this hub from another PC or phone <span class="r">v3.5.6 · same network by default · extra IPs from any network</span></div>
+            <div class="card-b">
+              <div class="frow" style="margin-bottom:8px;align-items:center;gap:10px">
+                <b style="font-size:12px">Who may open THE ONE UI:</b>
+                <button class="btn small" id="uamSelf">Hub PC only</button>
+                <button class="btn small" id="uamLan">Same network</button>
+                <button class="btn small" id="uamAny">Any allowed IP</button>
+                <span class="chip ok" id="uamMode">SAME NETWORK</span>
+              </div>
+              <div class="frow" style="margin-bottom:6px">
+                <span class="chip info" id="uamSubnet">subnet</span>
+                <input class="inp mono" id="adminIpInput" placeholder="extra admin IP — works from ANY network: 192.168.1.2 · 10.26.94.0/24 · 10.26.*" style="flex:1;min-width:260px;font-size:11.5px">
+                <button class="btn small blue" id="adminIpAdd">Add admin IP</button>
+              </div>
+              <div id="adminIpList" style="display:flex;gap:8px;flex-wrap:wrap;min-height:6px;margin-bottom:6px"></div>
+              <div class="lrow" style="margin-top:6px"><span class="lk">Console URLs for the other devices <small>open on the admin PC / phone — token prompt included</small></span><span class="chip info">COPY</span><span class="lv plain" id="uamUrls"></span><span class="sp"></span><span class="ops"></span></div>
+              <div class="note">The hub PC keeps full control in every mode (loopback + its own IPs are always admins — auto-added, never listed). <b>Same network</b> = devices sharing the hub PC's subnet (IPv4 /24, IPv6 /64) get the console after entering the hub token. <b>Extra admin IPs</b> work from ANY network — the office PC, a phone on mobile data, a VPN peer. Every remote console session is audited (<span class="mono">ui.remote_admin</span>). A device that is not in the set gets a friendly gated page and keeps full print access.</div>
             </div>
           </div>
 
@@ -1281,7 +1302,7 @@ html[data-frame="flush"] .window{max-width:none;border-radius:0;border:none;box-
                   Open anything printable &#8594; Share &#8594; <b>Print</b> &#8594; Select Printer — <b>AdvPrint Pro appears by itself</b> (AirPrint) while the phone is on the same Wi-Fi.</td></tr>
                 <tr><td><b>Android</b></td><td>
                   Print from any app &#8594; <b>Default Print Service / Mopria</b> — the printer is discovered automatically (mDNS).
-                  Manual add: Default Print Service &#8594; &#8942; &#8594; Add printer &#8594; <b>IP address</b> &#8594; <span class="mono" id="ippGuideAndroid">10.26.94.206</span> — Android tries the standard port <b>631</b> first, where this hub mirrors <span class="mono" id="ippGuideAndroid631">http://10.26.94.206:631/ipp/print</span> (Android ignores custom ports on manual add — the hub mirrors IPP on 631 for it).</td></tr>
+                  Manual add: Default Print Service &#8594; &#8942; &#8594; Add printer &#8594; <b>IP address</b> &#8594; <span class="mono" id="ippGuideAndroid">10.26.94.206</span> — Android assumes port <b>631</b> and <b>/ipp/print</b> by itself, where this hub mirrors <span class="mono" id="ippGuideAndroid631">ipp://10.26.94.206:631/ipp/print</span>. v3.5.6: paste the <b>ipp://</b> URI or just the IP — an <b>http://</b> URL keeps Android's Save button disabled (the hub still speaks plain HTTP/IPP underneath; only the displayed scheme changed).</td></tr>
               </table></div>
               <div class="note" style="margin:10px 0 0">RAW / JetDirect lovers: add a <b>Standard TCP/IP port</b> — IP <span class="mono" id="ippGuideRawIp">10.26.94.206</span>, port <span class="mono">9100</span>, device type <b>Generic Network Card</b>. Prints go to THIS PC's printer through the AdvPrint Pro hub — 100% local, no cloud.</div>
             </div>
@@ -2723,7 +2744,7 @@ function renderLanRows(){
   ipEl("ippGuideWin", lanBase() + "/ipp/print");
   ipEl("ippGuideMacHost", hubIp() + ":" + (hubPort() || 9235));
   ipEl("ippGuideAndroid", hubIp());
-  ipEl("ippGuideAndroid631", "http://" + hubIp() + ":631/ipp/print");
+  ipEl("ippGuideAndroid631", "ipp://" + hubIp() + ":631/ipp/print");
   ipEl("ippGuideRawIp", hubIp());
   /* v3.2.9 BUG 3 + v3.3.0 BUG 2: every hub interface IP as a copyable
      chip - IPv4 AND IPv6 now - plus the static "LAN PC hub URL" input
@@ -2767,10 +2788,14 @@ function renderLanRows(){
       hubIp() + ".local)")
            : (cfgCache.ipp_mdns === false ? "discovery off in Hub settings (ipp_mdns)"
               : "starts when LAN sharing / IP Printer mode is ON"));
-  /* v3.3.0 BUG 2: the chip shows the REAL bound sockets (IPv4 + IPv6) */
+  /* v3.3.0 BUG 2: the chip shows the REAL bound sockets (IPv4 + IPv6)
+     v3.5.6: the add-printer URI DISPLAYS ipp:// now (Android's manual
+     add accepts ipp:// or the bare IP; an http:// URL disables its
+     Save button). The mirror still SPEAKS plain HTTP/IPP - display
+     only. For IPv6 hosts hubHost() already adds the [brackets]. */
   var stdA = (std && std.addrs) || [];
   setChip("row-ipp631", !!std.up, "LISTENING", "OFF",
-    std.up ? ("http://" + hubHost(hubIp()) + ":" + (std.port || 631) +
+    std.up ? ("ipp://" + hubHost(hubIp()) + ":" + (std.port || 631) +
       "/ipp/print \u2014 IPv4 + IPv6 on every interface" +
       (stdA.length ? " (" + stdA.join(", ") + ")" : "") +
       " \u2014 Android manual add and printer defaults work")
@@ -2889,6 +2914,7 @@ function renderLanRows(){
     };
   }
   renderAcl();
+  renderUiAdmin();   /* v3.5.6: the Console admin access card */
 }
 
 /* ---- v3.2.3 ALLOWED IPS - who may reach this hub ----
@@ -2969,6 +2995,115 @@ function renderAcl(){
   if (all) all.onclick = function(){ saveAcl(["*"]); };
   var inp = $("aclInput");
   if (inp) inp.addEventListener("keydown", function(e){
+    if (e.key === "Enter") { e.preventDefault(); addOne(); } });
+})();
+
+/* ---- v3.5.6 CONSOLE ADMIN ACCESS ----
+   The ONE UI itself is now reachable from the hub PC's own network
+   (ui_admin_mode "lan", factory default) and from admin_ips devices
+   on any network. This renders the mode chips + the extra-admin list
+   and wires the three mode buttons and the Add field - same pattern
+   as the Allowed-IPs card above. */
+function uamModeLabel(){
+  var m = cfgCache.ui_admin_mode || "lan";
+  return m === "self" ? "HUB PC ONLY"
+       : m === "any"  ? "ANY ALLOWED IP"
+       : "SAME NETWORK";
+}
+function saveUiAdmin(patch, okMsg){
+  api("/config", { method: "POST", body: patch })
+    .then(function(){ if (okMsg) toast(okMsg, "ok"); poll(); })
+    .catch(function(e){ toast(e.message, "err"); });
+}
+function renderUiAdmin(){
+  var mode = $("uamMode"); if (!mode) return;   // card not on this page
+  var m = cfgCache.ui_admin_mode || "lan";
+  mode.textContent = uamModeLabel();
+  mode.className = "chip " + (m === "self" ? "warn" : "ok");
+  var subs = (window._lastHealth && window._lastHealth.ui_admin_subnets) || [];
+  var sub = $("uamSubnet");
+  if (sub) sub.textContent =
+    (m === "self" ? "gate: hub PC only" :
+     subs.length ? ("same network = " + subs.join(" + "))
+                 : "same network = this PC's subnet");
+  /* highlight the active mode button, grey the others */
+  [["uamSelf","self"],["uamLan","lan"],["uamAny","any"]].forEach(function(p){
+    var b = $(p[0]); if (!b) return;
+    b.style.opacity = (m === p[1]) ? "1" : ".45";
+    b.className = "btn small" + (m === p[1] ? " blue" : "");
+  });
+  /* extra admin IP chips with a remove x */
+  var box = $("adminIpList"); if (box) {
+    var list = (cfgCache.admin_ips || []);
+    box.innerHTML = "";
+    if (!list.length) {
+      var none = document.createElement("span");
+      none.className = "mono";
+      none.style.cssText = "background:#f1f5f9;border:1px solid #e2e8f0;" +
+        "border-radius:4px;padding:3px 10px;font-size:11.5px;color:#64748b";
+      none.textContent = "no extra admin IPs — same-network devices only";
+      box.appendChild(none);
+    }
+    list.forEach(function(ip){
+      var chip = document.createElement("span");
+      chip.className = "chip info";
+      chip.style.cssText = "display:inline-flex;align-items:center;gap:6px;" +
+        "padding:3px 6px 3px 10px;font-size:11.5px";
+      var s = document.createElement("span");
+      s.className = "mono"; s.textContent = ip;
+      var x = document.createElement("button");
+      x.textContent = "\u2715"; x.title = "remove " + ip;
+      x.style.cssText = "height:18px;padding:0 7px;font-size:10.5px;" +
+        "background:#fee2e2;border:1px solid #fecaca;color:#b91c1c;" +
+        "border-radius:5px;cursor:pointer";
+      x.onclick = function(){
+        saveUiAdmin({ admin_ips: list.filter(function(v){ return v !== ip; }),
+                      }, ip + " removed from the console admins"); };
+      chip.appendChild(s); chip.appendChild(x);
+      box.appendChild(chip);
+    });
+  }
+  /* the URLs the other admin devices should open */
+  var urls = (window._lastHealth && window._lastHealth.ui_admin_urls) || [];
+  var lv = $("uamUrls");
+  if (lv) {
+    lv.innerHTML = "";
+    var src = urls.length ? urls : [lanBase() + "/ui"];
+    src.forEach(function(u, i){
+      if (i) lv.appendChild(document.createTextNode("  \u00b7  "));
+      var b = document.createElement("button");
+      b.className = "btn small"; b.style.margin = "2px 4px 2px 0";
+      b.textContent = u.replace(/^http:\/\//, "");
+      b.title = "copy " + u;
+      b.onclick = function(){ copyText(u + (TOKEN ? "?t=" + TOKEN : ""));
+        toast("Console URL copied \u2014 open it on the other PC/phone", "ok"); };
+      lv.appendChild(b);
+    });
+  }
+}
+(function uamWire(){
+  var set = function(mode, label){
+    saveUiAdmin({ ui_admin_mode: mode }, "Console admin: " + label);
+  };
+  var bS = $("uamSelf"), bL = $("uamLan"), bA = $("uamAny"), inp, add;
+  if (bS) bS.onclick = function(){ set("self", "hub PC only (v3.2.6 lock)"); };
+  if (bL) bL.onclick = function(){ set("lan", "same network + hub PC (default)"); };
+  if (bA) bA.onclick = function(){ set("any", "every IP the Allowed-IPs list lets in"); };
+  function addOne(){
+    inp = $("adminIpInput"); if (!inp) return;
+    var v = (inp.value || "").trim();
+    if (!v) { toast("Type an IP first — e.g. 192.168.1.2", "warn"); return; }
+    var cur = (cfgCache.admin_ips || []).slice();
+    if (cur.indexOf(v) >= 0) { toast(v + " is already an admin IP", "warn"); return; }
+    if (cur.length >= 32) { toast("the admin list is capped at 32 entries", "warn"); return; }
+    cur.push(v);
+    inp.value = "";
+    saveUiAdmin({ admin_ips: cur }, v + " may now open the console from any network");
+  }
+  add = $("adminIpAdd");
+  if (add) add.onclick = addOne;
+  var ai = $("adminIpInput");
+  if (ai) ai.addEventListener("keydown", function(e){
     if (e.key === "Enter") { e.preventDefault(); addOne(); } });
 })();
 
@@ -4198,7 +4333,7 @@ function renderExt(audit){
     rows.slice(0, 6).forEach(function(r2){
       var tr = tmpl.cloneNode(true), td = tr.querySelectorAll("td");
       td[0].innerHTML = "<b>" + esc(r2.who) + "</b>";
-      td[1].textContent = "v" + (BOOT.version || "3.5.5");
+      td[1].textContent = "v" + (BOOT.version || "3.5.6");
       td[2].textContent = r2.at ? r2.at.slice(11, 19) : "\u2014";
       td[3].innerHTML = '<span class="chip ok"><span class="d"></span>PAIRED</span>';
       tbl.appendChild(tr);
@@ -4220,7 +4355,7 @@ function renderExt(audit){
       m2.textContent = BASE + "/extension/updates.xml";
   });
   var crxChip = document.querySelector("#p-extension .frow .chip.ok");
-  if (crxChip) crxChip.innerHTML = '<span class="d"></span>CRX v' + (BOOT.version || "3.5.5") + " READY";
+  if (crxChip) crxChip.innerHTML = '<span class="d"></span>CRX v' + (BOOT.version || "3.5.6") + " READY";
   /* v3.2.8 STALE-CRX GUARD: ask the hub which package it really
    * serves (/extension/info is open, no token). Older than the hub
    * itself -> Chrome never updates -> browsers keep the old bugs.
@@ -4427,7 +4562,7 @@ async function renderUpdate(res){
    full-page /docs stays available via the "Full guide page" button.
    ============================================================ */
 function docsHtml(){
-  var v = esc(BOOT.version || "3.5.5");
+  var v = esc(BOOT.version || "3.5.6");
   var ip = esc(BOOT.lan_ip || location.hostname || "127.0.0.1");
   var port = esc(String(BOOT.port || location.port || "9235"));
   var base = "http://" + ip + ":" + port;
@@ -4453,9 +4588,9 @@ function docsHtml(){
   + '<li><b>Queue mode</b> lines jobs up FIFO (held while the printer is offline — release with ⚡); <b>instant mode</b> prints immediately.</li>'
   + '<li><b>History</b> keeps every job — tick rows and Reprint in bulk; <b>Clear ALL history</b> removes finished records, waiting jobs are never touched.</li></ul>'
   + '<h3 id="d-lan">4 · LAN sharing · other PCs · security (v' + v + ')</h3>'
-  + '<ul><li><b>The console UI is local-only:</b> settings, history and the queue open only on this PC (loopback or this machine’s own IP). Nobody on the LAN can change your hub settings any more.</li>'
+  + '<ul><li><b>The console UI is gated (v3.5.6):</b> settings, history and the queue open on this PC (loopback + its own IPs) and, by default (<code>ui_admin_mode: lan</code>), on every device of this PC’s own network. Extra <b>admin_ips</b> entries may control it from ANY network; devices outside the set see a friendly gated page and cannot change anything. Every remote console session is audited (<code>ui.remote_admin</code>).</li>'
   + '<li><b>LAN PCs and phones keep FULL print access</b> — the send portal, the IPP printer URL, the print API and ports ' + port + ' / 631 / 9100 answer normally, exactly per the <b>Allowed-IPs</b> list (<code>*</code> = whole LAN).</li>'
-  + '<li>Opening the share URL from another PC shows a friendly locked page with the print instructions.</li>'
+  + '<li>Opening the console URL from a device outside the admin set shows a friendly gated page with the print instructions and the one-click fix (LAN Sharing → Console admin access).</li>'
   + '<li>Switching <b>LAN sharing ON also switches the IPP printer ON</b> automatically; the extra <b>IPP: ON/OFF</b> toggle in the panel header controls it independently.</li></ul>'
   + '<h3 id="d-ipp">5 · Add this PC as a network printer (IPP)</h3>'
   + '<ul><li><b>Printer URL:</b> <code>ipp://' + ip + ':' + port + '/ipp/print</code> — or the browser-friendly <code>' + base + '/ipp/print</code>. Per-printer queues: <code>ipp://' + ip + ':' + port + '/ipp/print/&lt;printer&gt;</code>.</li>'

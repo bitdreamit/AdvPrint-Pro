@@ -218,8 +218,9 @@ def test_v326_in_ui_docs_modal():
         in CONSOLE
     assert 'openDocs("d-notes")' in CONSOLE
     assert 'id="docs-lnk-old"' in CONSOLE
-    # the docs content covers the new security model + the QR rule
-    assert "The console UI is local-only" in CONSOLE
+    # the docs content covers the security model + the QR rule
+    # (v3.5.6: the gate text follows the new admin-access model)
+    assert "The console UI is gated" in CONSOLE
     assert "d-notes" in CONSOLE and "d-ipp" in CONSOLE
 
 
@@ -266,21 +267,33 @@ def test_v326_gate_matrix_remote_print_surface_open():
 
 
 def test_v326_gate_matrix_remote_management_locked():
-    locked = ["/ui", "/dashboard", "/docs", "/", "/qr", "/stats",
-              "/audit", "/audit.csv", "/export/history.csv", "/debug",
-              "/diagnostics", "/peers", "/config", "/dropzone",
-              "/lan/selftest", "/token/current", "/queue"]
-    for route in locked:
-        h = _Stub("192.168.1.77", "GET")
-        assert advprint.Handler._mgmt_locked(h, route), route
-    for route in ("/config", "/token/rotate", "/autostart", "/tool",
-                  "/restart", "/queue/pause", "/queue/clear",
-                  "/history/clear", "/jobs/release_all",
-                  "/printers/set-default", "/livetest",
-                  "/extension/policy/install", "/firewall/allow",
-                  "/dropzone/open", "/ip-printer/test"):
-        h = _Stub("192.168.1.77", "POST")
-        assert advprint.Handler._mgmt_locked(h, route), route
+    # v3.5.6: the console gate gained the admin-access model
+    # (ui_admin_mode self|lan|any + admin_ips). The v3.2.6 lock lives
+    # on as mode "self" - this matrix runs under "self" so the exact
+    # v3.2.6 behaviour stays pinned; test_v356.py locks the new modes.
+    old = advprint.CFG.get("ui_admin_mode")
+    old_admins = advprint.CFG.get("admin_ips")
+    advprint.CFG["ui_admin_mode"] = "self"
+    advprint.CFG["admin_ips"] = []
+    try:
+        locked = ["/ui", "/dashboard", "/docs", "/", "/qr", "/stats",
+                  "/audit", "/audit.csv", "/export/history.csv", "/debug",
+                  "/diagnostics", "/peers", "/config", "/dropzone",
+                  "/lan/selftest", "/token/current", "/queue"]
+        for route in locked:
+            h = _Stub("192.168.1.77", "GET")
+            assert advprint.Handler._mgmt_locked(h, route), route
+        for route in ("/config", "/token/rotate", "/autostart", "/tool",
+                      "/restart", "/queue/pause", "/queue/clear",
+                      "/history/clear", "/jobs/release_all",
+                      "/printers/set-default", "/livetest",
+                      "/extension/policy/install", "/firewall/allow",
+                      "/dropzone/open", "/ip-printer/test"):
+            h = _Stub("192.168.1.77", "POST")
+            assert advprint.Handler._mgmt_locked(h, route), route
+    finally:
+        advprint.CFG["ui_admin_mode"] = old
+        advprint.CFG["admin_ips"] = old_admins
 
 
 def test_v326_gate_wired_into_get_and_post():
@@ -294,8 +307,11 @@ def test_v326_gate_wired_into_get_and_post():
 
 
 def test_v326_locked_page_is_helpful():
-    assert "the console runs on" in ADVPRINT_SRC
-    assert "local-only endpoint" in ADVPRINT_SRC
+    # v3.5.6: the branded 403 explains the admin-access model + the fix
+    assert "the console is" in ADVPRINT_SRC
+    assert "gated console endpoint" in ADVPRINT_SRC
+    assert "ui_admin_mode" in ADVPRINT_SRC
+    assert "admin_ips" in ADVPRINT_SRC
     assert "/ipp/print" in \
         ADVPRINT_SRC[ADVPRINT_SRC.find("_ui_locked_answer"):
                      ADVPRINT_SRC.find("_ui_locked_answer") + 4000]
@@ -312,8 +328,13 @@ def test_v326_loopback_ui_still_serves_console(hub):
 
 def test_v326_lan_security_note_in_console():
     # v3.4.7: the note lost its version prefix (user request)
+    # v3.5.6: the gate gained the admin-access model - the note now
+    # says "on this PC ... AND by default on every device of this PC's
+    # own network" instead of the old "only on this PC" lock.
     assert "Security model" in CONSOLE
-    assert "only on this PC" in CONSOLE
+    assert "Security model (v3.5.6)" in CONSOLE
+    assert "ui.remote_admin" in CONSOLE
+    assert "own network" in CONSOLE
 
 
 # ------------------------------------------------------------

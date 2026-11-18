@@ -1,6 +1,34 @@
-AdvPrint Pro (Advanced Printer) v3.5.5 - START HERE
+AdvPrint Pro (Advanced Printer) v3.5.6 - START HERE
 ====================================================
 by Bit Dream IT - Innovative Healthcare Solutions
+
+QUICK NOTE ON v3.5.6 - LAN ADMIN CONSOLE + IPP:// PRINTER URLS
+--------------------------------------------------------------
+v3.5.5 made the tree self-building. v3.5.6 makes the hub easier to
+CONTROL and friendlier to Android:
+
+1. CONSOLE ADMIN FROM ANY DEVICE ON YOUR NETWORK - the ONE UI now
+   answers on the hub PC's own network by default (ui_admin_mode=lan).
+   The admin centre PC 192.168.1.2 keeps 127.0.0.1 + 192.168.1.2, and
+   a PC or phone on any other IP of the SAME network opens the same
+   console at http://192.168.1.2:9235/ui. Modes: self (the old
+   v3.2.6 hub-PC-only lock) / lan (default) / any (everything the
+   Allowed-IPs gate lets in). Edit in THE ONE UI > LAN Sharing >
+   Console admin access.
+2. admin_ips - EXTRA ADMINS FROM ANY NETWORK - exact IP, CIDR or
+   wildcard entries (office PC on 10.x, phone on mobile data, VPN
+   peer) get full console control in every mode. The hub PC itself is
+   ALWAYS an admin (loopback + own IPs auto-added) and an EMPTY list
+   never widens the gate. Printing rules (allowed_ips) and console
+   rules (ui_admin_mode + admin_ips) are two INDEPENDENT controls.
+3. EVERY REMOTE CONSOLE SESSION IS AUDITED - ui.remote_admin rows
+   show who controlled the hub from where.
+4. PRINTER URLS NOW DISPLAY ipp:// - the standard-port chip, the
+   Android add-printer guide and the printer landing page show
+   ipp://IP:631/ipp/print (Android's manual-add screen refuses
+   http:// - its Save button stays disabled). The hub still SPEAKS
+   plain HTTP/IPP; only the displayed scheme changed. Paste ipp://
+   or just the IP - Android assumes port 631 + /ipp/print itself.
 
 QUICK NOTE ON v3.5.5 - FULL SOURCE + WINDOWS BUILD KIT
 ------------------------------------------------------
