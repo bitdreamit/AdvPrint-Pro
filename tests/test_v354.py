@@ -30,7 +30,7 @@ import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-V = "3.5.8"
+V = "3.5.9"
 EXT_ID = "likldbkamojokkfdlcjibiljpgbbnohc"
 
 CONSOLE_PATHS = [

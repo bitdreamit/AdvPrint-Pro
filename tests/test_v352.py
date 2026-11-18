@@ -46,7 +46,7 @@ ADV_PATHS = [
     os.path.join(ROOT, "tool", "windows", "portable", "hub", "advprint.py"),
     os.path.join(ROOT, "installer", "stage", "hub", "advprint.py"),
 ]
-V = "3.5.8"  # follows the current release (v3.5.5 bump)
+V = "3.5.9"  # follows the current release (v3.5.5 bump)
 
 
 def console():
@@ -235,7 +235,7 @@ def test_embedded_console_matches_standalone():
     std = console()
     assert emb == std + "\n"
     # the embedded copy carries THIS release's fixes, not a stale one
-    assert "v3.5.8" in emb
+    assert "v3.5.9" in emb
     assert ".tok-mask{-webkit-text-security:disc}" in emb
     assert "histDateFetch" in emb
 

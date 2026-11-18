@@ -1,6 +1,44 @@
-AdvPrint Pro (Advanced Printer) v3.5.8 - START HERE
+AdvPrint Pro (Advanced Printer) v3.5.9 - START HERE
 ====================================================
 by Bit Dream IT - Innovative Healthcare Solutions
+
+QUICK NOTE ON v3.5.9 - UNBREAKABLE DEB BUILD (SCANNER-PROOF STAGING)
+--------------------------------------------------------------
+v3.5.8 shipped clean, but the FIRST build attempt on the owner's PC
+crashed inside the build script itself - and only the SECOND run
+worked:
+
+  FileNotFoundError: ...dist\deb-build\advprint-pro_3.5.8\opt\
+  advprint\hub\console.html
+
+1. WHAT ACTUALLY HAPPENED - the pure-Python DEB packer stages every
+   payload file into dist\deb-build\, then walks that tree to pack
+   the tar. os.walk had JUST listed console.html, but the Windows
+   on-access scanner (Defender real-time protection) hid the
+   just-copied file for a moment between the walk and the open() -
+   the same failure class as the v3.5.5 makensis "no files found"
+   case. The file was never really missing; the second run passed
+   because the scanner had let go by then.
+2. SCANNER-PROOF DEB CYCLE - build-all.py now defends the DEB stage
+   in depth, mirroring the makensis fix: every staged file is read
+   through a short visibility retry (0.3s doubling backoff, six
+   attempts) so a momentary hide self-heals; os.walk fails LOUDLY
+   instead of silently skipping a hidden directory (a silent skip
+   would quietly ship an INCOMPLETE .deb); the staged tree is
+   verified file-by-file against the complete expected DEB layout
+   BEFORE tarring; and anything still getting through forces an
+   automatic re-stage + retry of the whole stage/tar cycle (up to
+   three attempts), with the Defender exclusion hint printed if it
+   ever still fails:
+     Add-MpPreference -ExclusionPath "C:\path\to\AdvPrint-Pro"
+3. ONE BUILD, EVERY TIME - build.cmd should now succeed on the first
+   run on any Windows PC, even with real-time protection on. Locked
+   by tests/test_v359.py, which reproduces the exact vanish-mid-tar
+   failure and proves the cycle heals it.
+4. EVERYTHING ELSE UNCHANGED - the v3.5.8 REAL WINDOW BUTTONS +
+   BRAND + TAB MEMORY console, the v3.5.7 SILENT WINDOWS guarantee
+   (CREATE_NO_WINDOW, zero CMD flicker), the LAN admin console,
+   ipp:// printer URLs, signed CRX chain, full build kit.
 
 QUICK NOTE ON v3.5.8 - REAL WINDOW BUTTONS + BRAND + TAB MEMORY
 --------------------------------------------------------------

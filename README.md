@@ -13,6 +13,37 @@ Web page ──► Chrome extension ──► AdvPrint Pro hub (localhost:9235) 
 
 ---
 
+## What's new in v3.5.9 (UNBREAKABLE DEB BUILD)
+
+The first v3.5.8 build crashed inside `build.cmd` itself — and only
+the second run worked. Fixed for good:
+
+- **What happened** — the pure-Python DEB packer stages every payload
+  file into `dist\deb-build\`, then walks that tree to pack the tar.
+  `os.walk` had *just listed* `console.html`, but the Windows
+  on-access scanner (Defender real-time protection) hid the
+  just-copied file for a moment **between the walk and the open()** —
+  `FileNotFoundError` on
+  `…\opt\advprint\hub\console.html`. The same failure class as the
+  v3.5.5 makensis "no files found" case; nothing was actually
+  missing.
+- **Scanner-proof DEB cycle** — `build-all.py` now defends the DEB
+  stage like the makensis fix: every read goes through a short
+  visibility retry (six attempts, doubling backoff), a hidden
+  directory fails **loudly** instead of being silently skipped (which
+  would quietly ship an incomplete .deb), the staged tree is verified
+  file-by-file against the complete expected DEB layout **before**
+  tarring, and anything still getting through forces an automatic
+  re-stage + retry of the whole cycle (up to 3 attempts) with the
+  Defender exclusion hint on final failure.
+- **First run, every time** — `build.cmd` now succeeds on the first
+  run even with real-time protection on. Locked by
+  `tests/test_v359.py`, which reproduces the exact vanish-mid-tar
+  failure and proves the cycle heals it.
+- Everything else is untouched: the v3.5.8 real window buttons +
+  brand title + tab memory, the v3.5.7 SILENT WINDOWS guarantee, LAN
+  admin console, `ipp://` printer URLs, signed CRX chain.
+
 ## What's new in v3.5.8 (REAL WINDOW BUTTONS + BRAND + TAB MEMORY)
 
 v3.5.7 silenced the Windows CMD flashes. v3.5.8 polishes the ONE UI

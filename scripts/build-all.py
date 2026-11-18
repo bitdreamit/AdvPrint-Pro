@@ -43,6 +43,19 @@
 #      hide a file for a moment and put it back before the old
 #      post-mortem looked), and setup.nsi itself is working-directory
 #      independent (!cd "${__FILEDIR__}").
+#   8. v3.5.9 DEB HARDENING (the first v3.5.8 build on the owner's
+#      PC died in the pure-Python DEB packer with FileNotFoundError
+#      on the freshly staged
+#      dist/deb-build/.../opt/advprint/hub/console.html - the
+#      on-access scanner hid the file between the tar walk and the
+#      open(); the second run always passed): the DEB cycle now
+#      retries every read with a short visibility backoff, fails
+#      LOUDLY if os.walk would silently skip a hidden directory or
+#      if a file vanished before the walk (which would otherwise
+#      quietly produce an INCOMPLETE .deb), verifies the staged tree
+#      file-by-file BEFORE tarring, and re-stages + retries the
+#      whole stage/tar cycle up to 3 times, printing the Defender
+#      exclusion fix if it ever still fails.
 # ============================================================
 import argparse
 import base64
@@ -804,12 +817,58 @@ def _ar_member(name, data, mtime):
     return hdr + data + pad
 
 
+def _read_visible(path, attempts=6, delay=0.3):
+    """open()+read() with a short visibility backoff (v3.5.9).
+
+    A Windows on-access scanner (Defender real-time protection) can
+    make a freshly staged file INVISIBLE for a moment: os.walk lists
+    it, the open() right after dies with FileNotFoundError and the
+    next build run passes (the v3.5.8 DEB failure on the staged
+    opt/advprint/hub/console.html - the same failure class as the
+    v3.5.5 makensis 'no files found' case). The file is nearly
+    always visible again a few hundred ms later, so retry before
+    giving up."""
+    last = None
+    for _ in range(attempts):
+        try:
+            with open(path, "rb") as f:
+                return f.read()
+        except (FileNotFoundError, PermissionError) as e:
+            last = e
+            time.sleep(delay)
+            delay = min(delay * 1.7, 2.0)
+    raise last
+
+
+def _visible_mtime(path, attempts=6, delay=0.3):
+    """os.path.getmtime with the same visibility backoff (v3.5.9)."""
+    last = None
+    for _ in range(attempts):
+        try:
+            return os.path.getmtime(path)
+        except (FileNotFoundError, PermissionError) as e:
+            last = e
+            time.sleep(delay)
+            delay = min(delay * 1.7, 2.0)
+    raise last
+
+
+def _walk_loud(err):
+    """os.walk onerror hook: a hidden directory must NEVER be
+    silently skipped - a silently missing subtree would produce a
+    quietly incomplete .deb (v3.5.9)."""
+    raise err
+
+
 def _tar_from_dir(src_dir, exclude_prefix=None):
     """tar.gz of a staged tree - ./ prefixed names, root ownership,
-    explicit modes (works on FAT/NTFS where +x does not exist)."""
+    explicit modes (works on FAT/NTFS where +x does not exist).
+    v3.5.9: scanner-proof - every read retries through a short
+    visibility backoff, and a hidden directory fails loudly instead
+    of being silently skipped."""
     buf = io.BytesIO()
     entries = []
-    for root, dirs, files in os.walk(src_dir):
+    for root, dirs, files in os.walk(src_dir, onerror=_walk_loud):
         dirs.sort()
         for name in sorted(files):
             full = os.path.join(root, name)
@@ -842,20 +901,33 @@ def _tar_from_dir(src_dir, exclude_prefix=None):
             mode = 0o755 if (r.startswith("./DEBIAN/postinst")
                              or r.startswith("./DEBIAN/prerm")
                              or r.startswith("./usr/bin/")) else 0o644
-            data = open(full, "rb").read()
+            data = _read_visible(full)
             ti = tarfile.TarInfo(r)
             ti.size = len(data)
             ti.mode = mode
             ti.uid = ti.gid = 0
             ti.uname = ti.gname = "root"
-            ti.mtime = int(os.path.getmtime(full))
+            ti.mtime = int(_visible_mtime(full))
             tf.addfile(ti, io.BytesIO(data))
     return buf.getvalue()
 
 
-def build_deb(staged_dir, out_path):
+def build_deb(staged_dir, out_path, expect=None):
     """dpkg-deb equivalent in pure Python (ar + tar.gz, root owner-group).
-    member order: debian-binary, control.tar.gz, data.tar.gz."""
+    member order: debian-binary, control.tar.gz, data.tar.gz.
+
+    v3.5.9 scanner-proofing: with `expect` set, a file that vanished
+    from the staged tree BEFORE the tar walk now fails loudly HERE
+    instead of quietly producing an INCOMPLETE .deb (a vanish after
+    the walk is covered by _read_visible())."""
+    if expect:
+        gone = [e for e in expect
+                if not os.path.exists(os.path.join(staged_dir,
+                                                   *e.split("/")))]
+        if gone:
+            raise FileNotFoundError(
+                "staged DEB tree lost %d file(s) before the tar walk: %s"
+                % (len(gone), ", ".join(gone[:5])))
     mtime = int(time.time())
     control = _tar_from_dir(os.path.join(staged_dir, "DEBIAN"))
     data = _tar_from_dir(staged_dir, exclude_prefix="./DEBIAN")
@@ -864,6 +936,156 @@ def build_deb(staged_dir, out_path):
         f.write(_ar_member("debian-binary", b"2.0\n", mtime))
         f.write(_ar_member("control.tar.gz", control, mtime))
         f.write(_ar_member("data.tar.gz", data, mtime))
+
+
+def deb_expected_files():
+    """The complete list of relative paths the DEB payload tree must
+    contain (v3.5.9) - the DEBIAN control dir, the static hub layout,
+    every *.html the hub dir ships, the CRX, the launcher scripts and
+    the service source when present. Mirrors exactly what
+    stage_deb_tree() copies."""
+    expect = []
+    debdir = rel("installer", "deb", "DEBIAN")
+    for name in sorted(os.listdir(debdir)):
+        expect.append("DEBIAN/" + name)
+    expect += [
+        "opt/advprint/hub/advprint.py",
+        "opt/advprint/hub/tool.py",
+        "opt/advprint/hub/tray_windows.py",
+        "opt/advprint/hub/service_main.py",
+        "opt/advprint/hub/advprint.ico",
+        "opt/advprint/hub/console.html",
+        "opt/advprint/hub/gui_app.py",
+        "opt/advprint/hub/extension/AdvPrint-Pro.crx",
+        "etc/xdg/autostart/advprint.desktop",
+        "usr/bin/advprint",
+        "usr/bin/advprint-start",
+        "usr/lib/systemd/user/advprint.service",
+    ]
+    htmldir = rel("tool", "unix", "hub")
+    for name in sorted(os.listdir(htmldir)):
+        if name.endswith(".html"):
+            expect.append("opt/advprint/hub/" + name)
+    svc = rel("tool", "windows", "portable", "hub", "service",
+              "AdvPrintProService.cs")
+    if os.path.exists(svc):
+        expect.append("opt/advprint/hub/service/AdvPrintProService.cs")
+    # dedupe (console.html is both a static entry and a hub *.html)
+    # while keeping the first-seen order (v3.5.9)
+    return list(dict.fromkeys(expect))
+
+
+def verify_deb_stage(tmp):
+    """Every file the DEB stage just copied must be there (v3.5.9) -
+    a file the scanner ate during the copy would otherwise surface
+    as a bare FileNotFoundError deep inside the tar (or worse, go
+    quietly missing from the payload). Returns the list of missing
+    paths (empty = good to tar)."""
+    return [e for e in deb_expected_files()
+            if not os.path.exists(os.path.join(tmp, *e.split("/")))]
+
+
+def stage_deb_tree(tmp, V, crx, whub, svc, deb_root=None):
+    """Stage the whole DEB payload into tmp (v3.5.9: extracted from
+    main so the scanner-proof retry loop can re-run it as a unit)."""
+    if deb_root is None:
+        deb_root = rel("dist", "deb-build")
+    wipe(deb_root)
+    shutil.copytree(rel("installer", "deb", "DEBIAN"),
+                    os.path.join(tmp, "DEBIAN"), dirs_exist_ok=True)
+    ctrl = os.path.join(tmp, "DEBIAN", "control")
+    ctl = open(ctrl, encoding="utf-8").read()
+    open(ctrl, "w", encoding="utf-8", newline="\n").write(
+        re.sub(r"(?m)^Version: .*", "Version: %s" % V, ctl))
+    for d in ("opt/advprint/hub/extension", "opt/advprint/hub/service",
+              "etc/xdg/autostart", "usr/bin", "usr/lib/systemd/user"):
+        os.makedirs(os.path.join(tmp, *d.split("/")), exist_ok=True)
+    cp = lambda src, *dst: shutil.copy2(rel(*src.split("/")),
+                                        os.path.join(tmp, *dst))
+    cp("tool/unix/hub/advprint.py", "opt", "advprint", "hub", "advprint.py")
+    for name in ("tool.py", "tray_windows.py", "service_main.py",
+                 "advprint.ico"):
+        shutil.copy2(os.path.join(whub, name),
+                     os.path.join(tmp, "opt", "advprint", "hub", name))
+    cp("tool/unix/hub/console.html", "opt", "advprint", "hub", "console.html")
+    cp("tool/unix/hub/gui_app.py", "opt", "advprint", "hub", "gui_app.py")
+    htmldir = rel("tool", "unix", "hub")
+    for name in sorted(os.listdir(htmldir)):
+        if name.endswith(".html"):
+            shutil.copy2(os.path.join(htmldir, name),
+                         os.path.join(tmp, "opt", "advprint", "hub", name))
+    shutil.copy2(crx, os.path.join(tmp, "opt", "advprint", "hub",
+                                   "extension", "AdvPrint-Pro.crx"))
+    if os.path.exists(svc):
+        shutil.copy2(svc, os.path.join(tmp, "opt", "advprint", "hub",
+                                       "service", "AdvPrintProService.cs"))
+    cp("installer/deb/data/advprint.desktop", "etc", "xdg", "autostart",
+       "advprint.desktop")
+    cp("installer/deb/data/advprint-launcher", "usr", "bin", "advprint")
+    cp("installer/deb/data/advprint-start", "usr", "bin", "advprint-start")
+    cp("installer/deb/data/advprint.service", "usr", "lib", "systemd",
+       "user", "advprint.service")
+
+
+def build_deb_scannerproof(V, deb, crx, whub, svc, deb_root=None,
+                           attempts=3):
+    """v3.5.9 scanner-proof DEB cycle: stage -> verify -> tar, with an
+    automatic re-stage + retry whenever the on-access scanner hides
+    or eats a freshly staged file.
+
+    The v3.5.8 first-run failure, for the record: the pure-Python DEB
+    packer died with
+        FileNotFoundError: ...deb-build\\advprint-pro_3.5.8\\opt\\
+        advprint\\hub\\console.html
+    because os.walk had JUST listed the file, but Windows Defender's
+    real-time scanner hid it between the walk and the open() - the
+    same failure class as the v3.5.5 makensis 'no files found' case,
+    and the second run always passed. Defense in depth:
+      1. _read_visible() retries every file read with a short backoff
+         (a momentary hide self-heals without a re-stage),
+      2. os.walk onerror makes a hidden DIRECTORY fail loudly instead
+         of silently omitting it from the payload,
+      3. verify_deb_stage() checks the staged tree file-by-file
+         BEFORE tarring,
+      4. build_deb(expect=...) catches a vanish that lands between
+         the verify and the tar walk,
+      5. anything still getting through re-stages and retries the
+         whole cycle, and the Defender exclusion hint is printed on
+         final failure."""
+    if deb_root is None:
+        deb_root = rel("dist", "deb-build")
+    tmp = os.path.join(deb_root, "advprint-pro_%s" % V)
+    expect = deb_expected_files()
+    last = "files kept vanishing"
+    for attempt in range(1, attempts + 1):
+        try:
+            stage_deb_tree(tmp, V, crx, whub, svc, deb_root=deb_root)
+            gone = verify_deb_stage(tmp)
+            if gone:
+                last = "vanished after staging: " + ", ".join(gone[:3])
+                print("   [!] %d staged file(s) vanished right after "
+                      "staging (on-access scanner):" % len(gone))
+                for g in gone:
+                    print("       - " + g)
+                time.sleep(0.8)
+                continue
+            build_deb(tmp, deb, expect=expect)
+            if attempt > 1:
+                print("   retry %d SUCCEEDED (the scanner let go - add "
+                      "the Defender exclusion below to stop this early)"
+                      % attempt)
+            return
+        except (FileNotFoundError, PermissionError) as e:
+            last = "%s: %s" % (type(e).__name__, e)
+            print("   [!] DEB stage/tar hit %s (attempt %d/%d) - "
+                  "re-staging..." % (last, attempt, attempts))
+            time.sleep(0.8)
+    die("the DEB stage kept losing files after %d attempts (last: %s).\n"
+        "  An on-access scanner (Defender real-time protection) is\n"
+        "  hiding/eating freshly staged files. One-time fix in an ADMIN\n"
+        "  PowerShell:\n"
+        '       Add-MpPreference -ExclusionPath "%s"\n'
+        "  then run the build again." % (attempts, last, ROOT))
 
 
 # ------------------------------------------------------------ main
@@ -970,43 +1192,8 @@ def main():
         print("-- DEB (skipped by request)")
     else:
         print("-- DEB (pure-python builder, no dpkg-deb needed)")
-        tmp = os.path.join(DIST, "deb-build", "advprint-pro_%s" % V)
-        wipe(os.path.join(DIST, "deb-build"))
-        shutil.copytree(rel("installer", "deb", "DEBIAN"),
-                        os.path.join(tmp, "DEBIAN"), dirs_exist_ok=True)
-        ctrl = os.path.join(tmp, "DEBIAN", "control")
-        ctl = open(ctrl, encoding="utf-8").read()
-        open(ctrl, "w", encoding="utf-8", newline="\n").write(
-            re.sub(r"(?m)^Version: .*", "Version: %s" % V, ctl))
-        for d in ("opt/advprint/hub/extension", "opt/advprint/hub/service",
-                  "etc/xdg/autostart", "usr/bin", "usr/lib/systemd/user"):
-            os.makedirs(os.path.join(tmp, *d.split("/")), exist_ok=True)
-        cp = lambda src, *dst: shutil.copy2(rel(*src.split("/")),
-                                            os.path.join(tmp, *dst))
-        cp("tool/unix/hub/advprint.py", "opt", "advprint", "hub", "advprint.py")
-        for name in ("tool.py", "tray_windows.py", "service_main.py", "advprint.ico"):
-            shutil.copy2(os.path.join(whub, name),
-                         os.path.join(tmp, "opt", "advprint", "hub", name))
-        cp("tool/unix/hub/console.html", "opt", "advprint", "hub", "console.html")
-        cp("tool/unix/hub/gui_app.py", "opt", "advprint", "hub", "gui_app.py")
-        htmldir = rel("tool", "unix", "hub")
-        for name in sorted(os.listdir(htmldir)):
-            if name.endswith(".html"):
-                shutil.copy2(os.path.join(htmldir, name),
-                             os.path.join(tmp, "opt", "advprint", "hub", name))
-        shutil.copy2(crx, os.path.join(tmp, "opt", "advprint", "hub",
-                                       "extension", "AdvPrint-Pro.crx"))
-        if os.path.exists(svc):
-            shutil.copy2(svc, os.path.join(tmp, "opt", "advprint", "hub",
-                                           "service", "AdvPrintProService.cs"))
-        cp("installer/deb/data/advprint.desktop", "etc", "xdg", "autostart",
-           "advprint.desktop")
-        cp("installer/deb/data/advprint-launcher", "usr", "bin", "advprint")
-        cp("installer/deb/data/advprint-start", "usr", "bin", "advprint-start")
-        cp("installer/deb/data/advprint.service", "usr", "lib", "systemd",
-           "user", "advprint.service")
         deb = os.path.join(DIST, "advprint-pro_%s_all.deb" % V)
-        build_deb(tmp, deb)
+        build_deb_scannerproof(V, deb, crx, whub, svc)
         shutil.rmtree(os.path.join(DIST, "deb-build"), ignore_errors=True)
         if shutil.which("dpkg-deb"):  # sanity check where available
             r = subprocess.run(["dpkg-deb", "--info", deb],

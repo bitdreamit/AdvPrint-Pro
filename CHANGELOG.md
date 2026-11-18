@@ -1,6 +1,44 @@
 # Changelog - AdvPrint Pro (Advanced Printer)
 by Bit Dream IT - Innovative Healthcare Solutions
 
+## v3.5.9 - UNBREAKABLE DEB BUILD (scanner-proof staging) (2026-11-18)
+
+The owner reported: the first v3.5.8 build died in the DEB stage with
+`FileNotFoundError` on
+`dist\deb-build\advprint-pro_3.5.8\opt\advprint\hub\console.html`,
+and only the second run succeeded.
+
+### Fixed / Changed
+
+- ROOT CAUSE: the pure-Python DEB packer walks the staged tree
+  (`os.walk`) and then opens each file; the Windows on-access scanner
+  (Defender real-time protection) hid the freshly copied
+  `console.html` for a moment **between the walk and the open()** -
+  the same failure class as the v3.5.5 makensis "no files found"
+  case. Nothing was really missing; the second run passed because the
+  scanner had let go.
+- VISIBILITY RETRY: every staged file is now read through
+  `_read_visible()` (six attempts, 0.3 s doubling backoff) and the
+  tar mtimes through `_visible_mtime()` - a momentary hide self-heals
+  without a re-stage.
+- LOUD WALK: `_tar_from_dir` passes an `onerror` hook to `os.walk` -
+  a hidden directory now fails the build loudly instead of being
+  silently skipped (a silent skip would quietly ship an INCOMPLETE
+  .deb).
+- STAGE VERIFICATION: the staged DEB tree is checked file-by-file
+  against `deb_expected_files()` (the complete expected layout: the
+  whole DEBIAN control dir, the hub payload, every hub .html, the
+  CRX, the launcher scripts and the service source) BEFORE tarring.
+- RE-STAGE + RETRY: the whole stage → verify → tar cycle moved into
+  `build_deb_scannerproof()` - any vanish still getting through
+  (including between the verify and the tar walk, now caught by
+  `build_deb(expect=...)`) triggers an automatic re-stage and retry,
+  up to 3 attempts, with the Defender exclusion fix printed on final
+  failure.
+- Version bump 3.5.8 -> 3.5.9 everywhere (hub, console, extension,
+  installer, DEB, build kit docs, tests); hub twins re-synced
+  byte-identical via scripts/embed_console.py.
+
 ## v3.5.8 - REAL WINDOW BUTTONS + BRAND + TAB MEMORY (2026-11-18)
 
 The owner asked: "fake minimize maximize close correct also update

@@ -1,6 +1,0 @@
-abd5ac6bf96a10ac9d20a541b8ee7c38868488c2c122dc3e52b69d03a1626fdc  AdvPrint-Pro-Setup-2.0.0.exe
-cf82a302d6530a369fe0f1830882c2915842dd06841d5d9d868876d70eaccb84  AdvPrint-Pro-2.0.0.zip
-187dcb4b1d5b6a9996fa40c87ce92c387d18c1a5bf412395184a78f5cc125288  AdvPrint-Pro-v2.0.0-FULL.zip
-34bb96393e29b51a0bc873a46e7fa4c8e467625940fac657620932b6b941e93d  AdvPrint-Pro-Extension-v2.0.0.zip
-73e4f4b9e0c66d9248b991a6e2055a3612d2de471dc7e4a42eee384ac43d8e33  advprint-pro_2.0.0_all.deb
-28aa6acbcf708ef4c188221e2b3e1b2627f74f58068568ca1b4eb8990d2be5bc  AdvPrint-Pro-Setup-2.0.0-exe.zip
