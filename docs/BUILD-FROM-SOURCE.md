@@ -1,4 +1,4 @@
-# BUILD FROM SOURCE — every artifact, no prebuilt binaries (v3.5.6)
+# BUILD FROM SOURCE — every artifact, no prebuilt binaries (v3.5.8)
 
 **AdvPrint Pro** by Bit Dream IT - Innovative Healthcare Solutions
 

@@ -96,8 +96,8 @@ if _HUB_DIR not in sys.path:
     sys.path.insert(0, _HUB_DIR)
 
 
-VERSION = "3.5.6"
-VERSION_NAME = ("v3.5.6 (CRX SIGNATURE VERIFIED + LAN ADMIN CONSOLE + IPP:// PRINTER URLS - THE ONE UI console can now be driven from any PC or phone on the SAME NETWORK as the hub (ui_admin_mode=lan, the factory default), with an extra admin_ips allow-list for trusted admin devices on any other network and a self/any mode switch, while the print surface keeps exactly the v3.2.3 Allowed-IPs rules and every remote console session lands in the audit trail. Every printer URL the hub shows for OS/Android manual add now DISPLAYS the ipp:// scheme (ipp://ip:631/ipp/print) that Android's manual-add screen actually accepts - an http:// URL disables its Save button - the hub still SPEAKS plain HTTP/IPP underneath, only the displayed URI changed. Keeps the full v3.5.5 build kit: build.cmd / scripts/build-all.py packs the CRX with the stable key, syncs + Chrome-verifies every embedded copy, builds the extension zip, a WSL-free pure-Python DEB and the NSIS Setup EXE, and hard-fails on any missing source file, any drifted unix/windows twin copy or any setup.nsi File reference that does not resolve.")
+VERSION = "3.5.8"
+VERSION_NAME = ("v3.5.8 (CRX SIGNATURE VERIFIED + LAN ADMIN CONSOLE + IPP:// PRINTER URLS - THE ONE UI console can now be driven from any PC or phone on the SAME NETWORK as the hub (ui_admin_mode=lan, the factory default), with an extra admin_ips allow-list for trusted admin devices on any other network and a self/any mode switch, while the print surface keeps exactly the v3.2.3 Allowed-IPs rules and every remote console session lands in the audit trail. Every printer URL the hub shows for OS/Android manual add now DISPLAYS the ipp:// scheme (ipp://ip:631/ipp/print) that Android's manual-add screen actually accepts - an http:// URL disables its Save button - the hub still SPEAKS plain HTTP/IPP underneath, only the displayed URI changed. NEW IN v3.5.8 - REAL WINDOW BUTTONS + BRAND + TAB MEMORY: the console title bar now reads AdvPrint Pro by Bit Dream IT - Innovative Healthcare Solutions (no version, no machine id, no theme labels anywhere in the title or the Dashboard subtitle), the title-bar minimize/maximize/close buttons REALLY work (minimize collapses the console to its title bar and restores on the second click, maximize toggles real fullscreen with an edge-to-edge in-page fallback plus double-click-on-titlebar support, close really closes the tab and says so honestly when the browser blocks it), every tab switch writes ?path=<tab> into the URL and remembers the last tab (localStorage) so a refresh or re-open lands on the SAME tab, and the uuid-looking machine id is gone from the Dashboard. Windows CMD/PowerShell keeps the v3.5.7 SILENT WINDOWS guarantee: CREATE_NO_WINDOW on every helper the hub launches, zero flicker. Keeps the full v3.5.5 build kit: build.cmd / scripts/build-all.py packs the CRX with the stable key, syncs + Chrome-verifies every embedded copy, builds the extension zip, a WSL-free pure-Python DEB and the NSIS Setup EXE, and hard-fails on any missing source file, any drifted unix/windows twin copy or any setup.nsi File reference that does not resolve.")
 FULL_BRAND = ("AdvPrint Pro (Advanced Printer) by "
               "Bit Dream IT - Innovative Healthcare Solutions")
 BRANDING = ("AdvPrint Pro (Advanced Printer) - Version %s - by "
@@ -3097,7 +3097,8 @@ def print_file(path, kind="a4", printer="", copies=1, job_id=None,
                    (", %s" % df) if df else "",
                    (", media %s" % media) if media else ""))
             proc = register(subprocess.Popen(cmd, stdout=subprocess.PIPE,
-                                             stderr=subprocess.PIPE))
+                                             stderr=subprocess.PIPE,
+                                             creationflags=HIDE))
         try:
             out, err = proc.communicate(timeout=180)
         except subprocess.TimeoutExpired:
@@ -4779,13 +4780,17 @@ def _ext_reg_hive(hive):
 
 
 def _ext_reg_query_values(full_key):
-    """{value_name: data} of REG_SZ values under full_key (reg.exe)."""
+    """{value_name: data} of REG_SZ values under full_key (reg.exe).
+    v3.5.7: creationflags=HIDE - the console polls policy status, and
+    a windowless hub (pythonw / AdvPrintPro.exe) gave every reg.exe
+    call its own flashing CMD window; now they are all invisible."""
     out = {}
     if not IS_WIN:
         return out
     try:
         p = subprocess.run(["reg", "query", full_key],
-                           capture_output=True, text=True, timeout=10)
+                           capture_output=True, text=True, timeout=10,
+                           creationflags=HIDE)
     except Exception:
         return out
     if p.returncode != 0:
@@ -4807,7 +4812,7 @@ def _ext_reg_add(full_key, name, data):
     r = subprocess.run(
         ["reg", "add", full_key, "/v", name, "/t", "REG_SZ",
          "/d", data, "/f"], capture_output=True, text=True,
-        timeout=10).returncode == 0
+        timeout=10, creationflags=HIDE).returncode == 0
     if r:
         return True
     if not IS_WIN:
@@ -4840,7 +4845,8 @@ def _ext_reg_delete(full_key, name):
     try:
         return subprocess.run(
             ["reg", "delete", full_key, "/v", name, "/f"],
-            capture_output=True, text=True, timeout=10).returncode == 0
+            capture_output=True, text=True, timeout=10,
+            creationflags=HIDE).returncode == 0
     except Exception:
         return False
 
@@ -9594,7 +9600,7 @@ CONSOLE_HTML = r"""<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AdvPrint Pro — Printing Hub · ALL-IN-ONE Console v3.5.6 — Pro Themes</title>
+<title>AdvPrint Pro by Bit Dream IT — Innovative Healthcare Solutions</title>
 <style>
 :root{--navy:#14224f;--mono:'Cascadia Mono','JetBrains Mono','SF Mono',Consolas,'Liberation Mono',monospace;
   --purple-hex:#5b3fc4;
@@ -9722,6 +9728,13 @@ body{margin:0;font-family:'Segoe UI Variable Text','Segoe UI',system-ui,-apple-s
   font-size:11px;cursor:default;display:flex;align-items:center;justify-content:center;transition:background .12s}
 .winbtn:hover{background:rgba(255,255,255,.12);color:#fff}
 .winbtn.close:hover{background:#d92d2d}
+/* v3.5.8: REAL window buttons - minimize collapses the window to its
+   title bar (click again restores); maximize/fullscreen and the soft
+   fallback drop the frame gaps so the console really fills the screen */
+.window.minimized{flex:0 0 auto}
+.window.minimized > :not(.titlebar){display:none !important}
+.window.maxed{border-radius:0 !important;max-width:none !important}
+.desktop.maxed{padding:0 !important}
 /* ---------- menu bar ---------- */
 .menubar{height:30px;flex:0 0 30px;display:flex;align-items:center;gap:1px;
   background:var(--menubar-bg);border-bottom:1px solid var(--line);padding:0 8px;user-select:none}
@@ -10253,7 +10266,7 @@ html[data-frame="flush"] .window{max-width:none;border-radius:0;border:none;box-
     <!-- ================= TITLE BAR ================= -->
     <div class="titlebar">
       <div class="logo">AP</div>
-      <div class="t-main">AdvPrint Pro — Printing Hub <small>· All-in-One Console · AI-Lab · THE ONE UI</small></div>
+      <div class="t-main">AdvPrint Pro by Bit Dream IT <small>— Innovative Healthcare Solutions</small></div>
       <div class="spacer"></div>
       <button class="winbtn">&#x2500;</button>
       <button class="winbtn">&#x25A1;</button>
@@ -10431,7 +10444,7 @@ html[data-frame="flush"] .window{max-width:none;border-radius:0;border:none;box-
     <div class="addrbar">
       <div class="fld">
         <span class="dot"></span>
-        <span class="url">http://10.26.94.206:9235/ui — AdvPrint Printing Hub · ALL-IN-ONE</span>
+        <span class="url">http://10.26.94.206:9235/ui — AdvPrint Pro by Bit Dream IT</span>
         <span class="lock">&#128274; token ok</span>
       </div>
       <!-- v3.2.3: the five pill buttons are GONE - QRs live in the Network
@@ -10525,7 +10538,7 @@ html[data-frame="flush"] .window{max-width:none;border-radius:0;border:none;box-
         <!-- ============ DASHBOARD ============ -->
         <section class="panel active" id="p-dashboard">
           <div class="p-head">
-            <h2>Dashboard</h2><span class="sub" id="dashSub">AI-Lab · live · every feature in ONE window</span>
+            <h2>Dashboard</h2><span class="sub" id="dashSub">live · every feature in ONE window</span>
             <div class="right"><button class="btn blue">&#8635; Refresh</button></div>
           </div>
 
@@ -10534,7 +10547,7 @@ html[data-frame="flush"] .window{max-width:none;border-radius:0;border:none;box-
             <div class="stat g"><div class="d">7d 17 ok / 1 fail</div><div class="v">94.7%</div><div class="l">Success Rate</div></div>
             <div class="stat w"><div class="d">live</div><div class="v">4</div><div class="l">In Queue</div></div>
             <div class="stat r"><div class="d">1 offline</div><div class="v">3/4</div><div class="l">Printers Ready</div></div>
-            <div class="stat"><div class="d">hub</div><div class="v">v3.5.6</div><div class="l">Version</div></div>
+            <div class="stat"><div class="d">hub</div><div class="v">v3.5.8</div><div class="l">Version</div></div>
           </div>
 
           <!-- v3.2.3: the Quick-actions card is GONE - all six of its
@@ -11857,10 +11870,28 @@ function toast(msg, type){
 }
 
 /* ---------- tabs (design behaviour + live load hooks) ---------- */
+/* v3.5.8 TAB MEMORY: every tab switch writes ?path=<tab> into the URL
+   (the token query stays) AND stores the tab - a refresh or a re-open
+   lands on the SAME tab: ?path wins, else the saved last tab, else the
+   Dashboard. With the saved tab the ?path in the URL is a bonus, not a
+   requirement - both paths lead back to where the user was. */
+var AP_TAB_KEY = "ap_console_tab";
+function apTabValid(name){
+  return !!$("p-" + name);
+}
+function apTabRemember(name){
+  if (!apTabValid(name)) return;
+  try { localStorage.setItem(AP_TAB_KEY, name); } catch (e) { /* private mode */ }
+  try {
+    var u = new URL(location.href);
+    u.searchParams.set("path", name);
+    history.replaceState(null, "", u.pathname + "?" + u.searchParams.toString());
+  } catch (e) { /* very old browser - the saved tab still remembers */ }
+}
 function showTab(name){
+  if (!apTabValid(name)) return;          /* unknown tab: keep the current one */
   qsa(".panel").forEach(function(p){ p.classList.remove("active"); });
-  var el = $("p-" + name);
-  if (el) el.classList.add("active");
+  $("p-" + name).classList.add("active");
   qsa(".sb-item").forEach(function(i){
     i.classList.toggle("active", i.dataset.tab === name); });
   var c = document.querySelector(".content");
@@ -11872,13 +11903,17 @@ function showTab(name){
   if (name === "hub") refreshHubPanel();
   if (name === "audit") renderAudit(auditRows);
   if (name === "rules") renderRules();
+  apTabRemember(name);
 }
 qsa("[data-tab]").forEach(function(el){
   el.addEventListener("click", function(){ showTab(el.dataset.tab); });
 });
-(function(){
-  var m = location.hash.match(/tab=([a-z]+)/);
-  if (m) showTab(m[1]);
+(function apTabRestore(){
+  var name = null;
+  try { name = new URL(location.href).searchParams.get("path"); } catch (e) {}
+  if (!name) { var m = location.hash.match(/tab=([a-z]+)/); if (m) name = m[1]; }
+  if (!name) { try { name = localStorage.getItem(AP_TAB_KEY); } catch (e) {} }
+  if (name) showTab(name);   /* invalid names simply keep the Dashboard */
 })();
 
 /* ---------- menubar dropdowns (design behaviour) ---------- */
@@ -12115,15 +12150,17 @@ function setCnt(tab, txt, cls){
   c.className = "cnt" + (cls ? " " + cls : "");
 }
 function renderFrame(h){
+  /* v3.5.8 BRAND: the title bar is the product brand only - no version,
+     no machine id (the uuid-looking hostname is gone from the console
+     for good), no theme labels. The version stays visible where it
+     belongs: the status bar pane and the Hub tab stat card. */
   var t = document.querySelector(".titlebar .t-main small");
-  if (t) t.textContent = " \u00b7 All-in-One Console v" + (h.version || BOOT.version || "?") +
-    " \u00b7 " + (h.host || BOOT.host || "PC") +
-    (IS_CENTER ? " \u00b7 CENTER PC UI" : " \u00b7 THE ONE UI");
+  if (t) t.textContent = " \u2014 Innovative Healthcare Solutions";
   var mr = document.querySelector(".m-right");
-  if (mr) mr.innerHTML = "<b>AdvPrint Pro Printing Hub</b> \u00b7 " +
+  if (mr) mr.innerHTML = "<b>AdvPrint Pro by Bit Dream IT</b> \u00b7 " +
     esc(BASE.replace(/^http:\/\//, "")) + " \u00b7 token auth ON";
   var ab = document.querySelector(".addrbar .url");
-  if (ab) ab.textContent = BASE + "/ui \u2014 AdvPrint Printing Hub \u00b7 ALL-IN-ONE" +
+  if (ab) ab.textContent = BASE + "/ui \u2014 AdvPrint Pro by Bit Dream IT" +
     (IS_CENTER ? " \u00b7 CENTER PC UI" : "");
   var lk = document.querySelector(".addrbar .lock");
   if (lk) lk.innerHTML = "\uD83D\uDD12 token ok";
@@ -12235,9 +12272,10 @@ function renderDashboard(h, st, q, pr){
   function chipC(cls, label){
     return "<span class='chip " + cls + "'><span class='d'></span>" + label + "</span>";
   }
+  /* v3.5.8: no machine id in the Dashboard subtitle - the uuid-looking
+     hostname never shows up here again */
   var sub = $("dashSub");
-  if (sub) sub.textContent = (h.host || BOOT.host || "this PC") +
-    " \u00b7 live \u00b7 every feature in ONE window";
+  if (sub) sub.textContent = "live \u00b7 every feature in ONE window";
   /* uptime chip in the card header - ticks with the statusbar clock */
   setT("dashUptime", hubStartTime ? "uptime " + fmtUptime(hubStartTime) : "uptime \u2014");
   /* service: healthy while the print worker thread is alive */
@@ -13924,7 +13962,7 @@ function renderExt(audit){
     rows.slice(0, 6).forEach(function(r2){
       var tr = tmpl.cloneNode(true), td = tr.querySelectorAll("td");
       td[0].innerHTML = "<b>" + esc(r2.who) + "</b>";
-      td[1].textContent = "v" + (BOOT.version || "3.5.6");
+      td[1].textContent = "v" + (BOOT.version || "3.5.8");
       td[2].textContent = r2.at ? r2.at.slice(11, 19) : "\u2014";
       td[3].innerHTML = '<span class="chip ok"><span class="d"></span>PAIRED</span>';
       tbl.appendChild(tr);
@@ -13946,7 +13984,7 @@ function renderExt(audit){
       m2.textContent = BASE + "/extension/updates.xml";
   });
   var crxChip = document.querySelector("#p-extension .frow .chip.ok");
-  if (crxChip) crxChip.innerHTML = '<span class="d"></span>CRX v' + (BOOT.version || "3.5.6") + " READY";
+  if (crxChip) crxChip.innerHTML = '<span class="d"></span>CRX v' + (BOOT.version || "3.5.8") + " READY";
   /* v3.2.8 STALE-CRX GUARD: ask the hub which package it really
    * serves (/extension/info is open, no token). Older than the hub
    * itself -> Chrome never updates -> browsers keep the old bugs.
@@ -14153,7 +14191,7 @@ async function renderUpdate(res){
    full-page /docs stays available via the "Full guide page" button.
    ============================================================ */
 function docsHtml(){
-  var v = esc(BOOT.version || "3.5.6");
+  var v = esc(BOOT.version || "3.5.8");
   var ip = esc(BOOT.lan_ip || location.hostname || "127.0.0.1");
   var port = esc(String(BOOT.port || location.port || "9235"));
   var base = "http://" + ip + ":" + port;
@@ -15407,20 +15445,71 @@ document.addEventListener("keydown", function(e){
     sb.style.display = sb.style.display === "none" ? "flex" : "none"; }
 });
 
-/* ---------- window buttons (design) ---------- */
-qsa(".winbtn").forEach(function(b){
-  b.addEventListener("click", function(){
-    if (b.classList.contains("close"))
-      toast("Keep the hub running \u2014 close the tab anytime (the tray icon manages the hub)", "warn");
-    else if (b.textContent.trim() === "\u2500")
-      qsa(".toolbar,.addrbar,.sidebar").forEach(function(el){
-        el.style.display = el.style.display === "none" ? "" : "none"; });
-    else {
-      var d = document.querySelector(".desktop");
-      d.style.padding = d.style.padding ? "" : "0";
+/* ---------- v3.5.8: REAL window buttons (were design-only) ----------
+   minimize: collapses the console to its title bar - click \u2500 again
+   to restore; a real in-page minimize that always works;
+   maximize: REAL fullscreen via the Fullscreen API (double-click on
+   the title bar toggles it too, like a desktop app); when the browser
+   refuses fullscreen the console maximizes edge-to-edge in-page;
+   close: really closes the tab (window.close); if the browser blocks
+   it (tab not opened by script) an honest toast says so - the hub
+   keeps printing either way, the tray icon manages it. */
+(function winbtnsReal(){
+  var win = document.querySelector(".window");
+  var desk = document.querySelector(".desktop");
+  function findBtn(txt){
+    var b = null;
+    qsa(".winbtn").forEach(function(x){
+      if (x.textContent.trim() === txt) b = x; });
+    return b;
+  }
+  function toggleMin(){
+    var on = !win.classList.contains("minimized");
+    win.classList.toggle("minimized", on);
+    var b = findBtn("\u2500");
+    if (b) b.title = on ? "Restore console" : "Minimize console";
+    toast(on ? "Console minimized \u2014 click \u2500 again to restore"
+             : "Console restored", "info");
+  }
+  function softMax(){
+    var on = !win.classList.contains("maxed");
+    win.classList.toggle("maxed", on);
+    desk.classList.toggle("maxed", on);
+    toast(on ? "Console maximized" : "Console restored", "info");
+  }
+  function toggleMax(){
+    if (document.fullscreenElement){
+      if (document.exitFullscreen) document.exitFullscreen();
+      return;
     }
+    var el = document.documentElement;
+    if (el.requestFullscreen){
+      var p = el.requestFullscreen();
+      if (p && p.catch) p.catch(softMax);
+    } else softMax();
+  }
+  function closeWin(){
+    window.close();
+    setTimeout(function(){
+      toast("The browser blocked closing this tab \u2014 close it with the tab\u2019s \u2715. The hub keeps printing; the tray icon manages it.", "warn");
+    }, 700);
+  }
+  qsa(".winbtn").forEach(function(b){
+    if (b.classList.contains("close")) b.addEventListener("click", closeWin);
+    else if (b.textContent.trim() === "\u2500") b.addEventListener("click", toggleMin);
+    else b.addEventListener("click", toggleMax);
   });
-});
+  var tb = document.querySelector(".titlebar");
+  if (tb) tb.addEventListener("dblclick", function(e){
+    if (e.target.closest && e.target.closest(".winbtn")) return;
+    toggleMax();
+  });
+  document.addEventListener("fullscreenchange", function(){
+    var on = !!document.fullscreenElement;
+    win.classList.toggle("maxed", on);
+    desk.classList.toggle("maxed", on);
+  });
+})();
 
 /* ---------- center view restrictions ---------- */
 function applyCenterView(){
@@ -17375,7 +17464,7 @@ def cmd_service(action):
         subprocess.run(
             ["powershell", "-NoProfile", "-Command",
              "Start-Process -FilePath '%s' -Verb RunAs -Wait" % bat],
-            timeout=240)
+            timeout=240, creationflags=HIDE)
     except Exception as e:
         print("Elevation failed or was canceled: %s" % e)
         return

@@ -46,7 +46,7 @@ ADV_PATHS = [
     os.path.join(ROOT, "tool", "windows", "portable", "hub", "advprint.py"),
     os.path.join(ROOT, "installer", "stage", "hub", "advprint.py"),
 ]
-V = "3.5.6"  # follows the current release (v3.5.5 bump)
+V = "3.5.8"  # follows the current release (v3.5.5 bump)
 
 
 def console():
@@ -235,7 +235,7 @@ def test_embedded_console_matches_standalone():
     std = console()
     assert emb == std + "\n"
     # the embedded copy carries THIS release's fixes, not a stale one
-    assert "v3.5.6" in emb
+    assert "v3.5.8" in emb
     assert ".tok-mask{-webkit-text-security:disc}" in emb
     assert "histDateFetch" in emb
 
@@ -284,7 +284,7 @@ def test_version_everywhere():
     # the boot-json version fallbacks inside the embedded console (3 of them)
     assert a.count('(BOOT.version || "' + V + '")') == 3
     # the embedded title + KPI tile
-    assert "ALL-IN-ONE Console v" + V in a
+    assert "AdvPrint Pro by Bit Dream IT" in a   # v3.5.8 brand title
     assert '<div class="stat"><div class="d">hub</div><div class="v">v' + V + '</div>' in console()
 
 

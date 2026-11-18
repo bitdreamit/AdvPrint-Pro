@@ -36,7 +36,7 @@ ADV_PATHS = [
     os.path.join(ROOT, "tool", "windows", "portable", "hub", "advprint.py"),
     os.path.join(ROOT, "installer", "stage", "hub", "advprint.py"),
 ]
-V = "3.5.6"  # follows the current release (v3.5.5 bump)
+V = "3.5.8"  # follows the current release (v3.5.5 bump)
 
 
 def console():
@@ -96,7 +96,7 @@ def test_embedded_console_carries_fix():
     emb = m.group(1)
     assert "body{margin:0;" in emb
     assert ".desktop{height:100vh;box-sizing:border-box;" in emb
-    assert "ALL-IN-ONE Console v" + V in emb
+    assert "AdvPrint Pro by Bit Dream IT" in emb  # v3.5.8 brand title
 
 
 # ---------------- C. embedded == standalone ----------------
@@ -149,7 +149,7 @@ def test_version_everywhere():
                encoding="utf-8").read()
     assert "Version: " + V in deb
     assert a.count('(BOOT.version || "' + V + '")') == 3
-    assert "ALL-IN-ONE Console v" + V in a
+    assert "AdvPrint Pro by Bit Dream IT" in a   # v3.5.8 brand title
     assert '<div class="stat"><div class="d">hub</div><div class="v">v' + V + '</div>' in console()
 
 

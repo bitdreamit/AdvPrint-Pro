@@ -19,8 +19,8 @@ B. build-all.py fails LOUD and EARLY:
    - unix/windows twin files must be byte-identical,
    - the DEB is built in pure Python (no WSL/dpkg-deb),
 C. the CRX pipeline is unchanged and gated (stable key, 4-copy sync,
-   Chrome-identical verify, payload version 3.5.6),
-D. the usual version coherence 3.5.6 (hub / extension / installer),
+   Chrome-identical verify, payload version 3.5.8),
+D. the usual version coherence 3.5.8 (hub / extension / installer),
 E. v3.5.4 + v3.5.3 + v3.5.2 fixes untouched (statusbar, tok-mask,
    success rate, history tools).
 """
@@ -31,7 +31,7 @@ import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-V = "3.5.6"
+V = "3.5.8"
 EXT_ID = "likldbkamojokkfdlcjibiljpgbbnohc"
 
 CONSOLE_PATHS = [
@@ -247,7 +247,7 @@ def test_stable_key_still_in_tree():
     assert crx3.crx_id_from_spki(spki) == EXT_ID
 
 
-# ---------------- D. version coherence 3.5.6 --------------------------
+# ---------------- D. version coherence 3.5.8 --------------------------
 
 def test_version_everywhere():
     a = adv()
@@ -281,7 +281,7 @@ def test_version_everywhere():
                encoding="utf-8").read()
     assert "Version: " + V in deb
     assert a.count('(BOOT.version || "' + V + '")') == 3
-    assert "ALL-IN-ONE Console v" + V in a
+    assert "AdvPrint Pro by Bit Dream IT" in a   # v3.5.8 brand title
     assert '<div class="stat"><div class="d">hub</div><div class="v">v' \
         + V + '</div>' in console()
     readme = open(os.path.join(ROOT, "README.md"), encoding="utf-8").read()
@@ -300,7 +300,7 @@ def test_version_everywhere():
 def test_embedded_console_matches_standalone():
     m = re.search(r'CONSOLE_HTML = r"""(.*?)"""', adv(), re.S)
     assert m.group(1) == console() + "\n"
-    assert "ALL-IN-ONE Console v" + V in m.group(1)
+    assert "AdvPrint Pro by Bit Dream IT" in m.group(1)  # v3.5.8 brand
 
 
 # ---------------- E. earlier fixes untouched --------------------------

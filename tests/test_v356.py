@@ -16,7 +16,7 @@ The owner asked for two things:
      opening it for everything LAYER 1 lets in. Every remote console
      session is audited (ui.remote_admin).
 
-Also locks: version coherence 3.5.6, the v3.5.5 build kit untouched.
+Also locks: version coherence 3.5.8, the v3.5.5 build kit untouched.
 """
 import json
 import os
@@ -26,7 +26,7 @@ import sys
 import pytest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-V = "3.5.6"
+V = "3.5.8"
 EXT_ID = "likldbkamojokkfdlcjibiljpgbbnohc"
 
 CONSOLE_PATHS = [
@@ -50,12 +50,12 @@ def adv():
     return open(ADV_PATHS[0], encoding="utf-8").read()
 
 
-# ---------------- A. version coherence 3.5.6 --------------------------
+# ---------------- A. version coherence 3.5.8 --------------------------
 
 def test_v356_hub_version():
     assert advprint.VERSION == V
     assert advprint.VERSION_NAME.startswith(
-        "v3.5.6 (CRX SIGNATURE VERIFIED + LAN ADMIN CONSOLE")
+        "v3.5.8 (CRX SIGNATURE VERIFIED + LAN ADMIN CONSOLE")
     assert "ipp://" in advprint.VERSION_NAME
     assert "admin_ips" in advprint.VERSION_NAME
 
@@ -85,11 +85,11 @@ def test_v356_extension_version_files():
 
 def test_v356_console_version_spots():
     c = console()
-    assert ("ALL-IN-ONE Console v%s" % V) in c
+    assert "AdvPrint Pro by Bit Dream IT" in c   # v3.5.8 brand title
     assert ('<div class="v">v%s</div>' % V) in c
     assert c.count('(BOOT.version || "%s")' % V) == 3
     a = adv()
-    assert ("ALL-IN-ONE Console v%s" % V) in a
+    assert "AdvPrint Pro by Bit Dream IT" in a   # v3.5.8 brand title
 
 
 def test_v356_installer_version_spots():

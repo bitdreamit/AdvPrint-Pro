@@ -13,6 +13,71 @@ Web page ──► Chrome extension ──► AdvPrint Pro hub (localhost:9235) 
 
 ---
 
+## What's new in v3.5.8 (REAL WINDOW BUTTONS + BRAND + TAB MEMORY)
+
+v3.5.7 silenced the Windows CMD flashes. v3.5.8 polishes the ONE UI
+console itself — four owner-reported items, all fixed:
+
+- **The window buttons really work now** — the title-bar
+  minimize / maximize / close buttons used to be decoration with a
+  toast. Minimize collapses the console to its title bar (a second
+  click restores it); maximize toggles REAL fullscreen via the
+  Fullscreen API — with double-click-on-titlebar support and an
+  edge-to-edge in-page fallback when the browser refuses fullscreen;
+  close really closes the tab, and when the browser blocks
+  `window.close()` (tab not opened by script) an honest toast says
+  so. The hub keeps printing either way — the tray icon manages it.
+- **New brand title** — the browser tab and the console title bar now
+  read **"AdvPrint Pro by Bit Dream IT — Innovative Healthcare
+  Solutions"**. The old composite title ("Printing Hub · ALL-IN-ONE
+  Console vX — Pro Themes") is gone; no version, no machine id and
+  no theme label sits in the title anymore. The version stays where
+  it belongs: the status bar pane and the Hub tab stat card.
+- **Tab memory + URL path** — every tab switch writes `?path=<tab>`
+  into the URL (the token query is kept) and stores the last tab.
+  Refresh or re-open lands on the SAME tab: `?path` wins, else the
+  saved tab, else the Dashboard — so `http://hub:9235/ui?path=history`
+  survives any reload even on a fresh browser profile.
+- **No uuid on the Dashboard** — the uuid-looking machine id that sat
+  next to "Dashboard" and in the old title bar is gone for good; the
+  subtitle is simply "live · every feature in ONE window".
+- **CMD/PowerShell still 100% silent** — the v3.5.7 SILENT WINDOWS
+  guarantee is untouched (CREATE_NO_WINDOW on every helper the hub
+  launches, zero flicker) and still enforced by the build gate.
+
+---
+
+## What's new in v3.5.7 (SILENT WINDOWS - no CMD window flashes)
+
+v3.5.6 made the console controllable from the network. v3.5.7 fixes
+the last cosmetic Windows annoyance reported on first run: **multiple
+CMD windows flashing on screen** while AdvPrint works.
+
+On Windows the hub is started windowless (pythonw / AdvPrintPro.exe —
+the NSIS finish page, the Startup entry and START-ADVPRINT.vbs all do
+this), but a few helper launches inside the hub still popped their own
+console window:
+
+- `_ext_reg_query_values` / `_ext_reg_add` / `_ext_reg_delete`
+  (`reg.exe`) — the console's extension-policy status check alone
+  means 5 browsers x 2 hives = **10 flashing CMD windows per poll**;
+  the policy install button added up to 15 more.
+- the elevated service helper's PowerShell parent window.
+- the CUPS `lp` fallback print path (defensive).
+
+v3.5.7 launches every one of them with `creationflags=CREATE_NO_WINDOW`
+(the hub's existing `HIDE` constant — `0` on macOS/Linux, so nothing
+changes there). A new build-gate test (`tests/test_v357.py`) sweeps
+the whole hub + tool source and **hard-fails the build if any
+subprocess call whose command is a known console binary (reg,
+powershell, schtasks, netsh, sc, taskkill, tasklist) is missing the
+hide flag**, so the flashes can never come back. UAC prompts still
+appear when elevation is genuinely needed — those must be approved by
+a human and are not a bug. Nothing else changed: same windowless hub,
+same tray icon, same hub.log, same print chain.
+
+---
+
 ## What's new in v3.5.6 (LAN ADMIN CONSOLE + IPP:// PRINTER URLS)
 
 v3.5.5 made the tree self-building. v3.5.6 makes the hub easier to

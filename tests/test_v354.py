@@ -30,7 +30,7 @@ import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-V = "3.5.6"
+V = "3.5.8"
 EXT_ID = "likldbkamojokkfdlcjibiljpgbbnohc"
 
 CONSOLE_PATHS = [
@@ -150,7 +150,7 @@ def test_statusbar_still_last_frame_child():
 def test_embedded_console_matches_standalone():
     m = re.search(r'CONSOLE_HTML = r"""(.*?)"""', adv(), re.S)
     assert m.group(1) == console() + "\n"
-    assert "ALL-IN-ONE Console v" + V in m.group(1)
+    assert "AdvPrint Pro by Bit Dream IT" in m.group(1)  # v3.5.8 brand
 
 
 def test_console_copies_byte_identical():
@@ -193,7 +193,7 @@ def test_version_everywhere():
                encoding="utf-8").read()
     assert "Version: " + V in deb
     assert a.count('(BOOT.version || "' + V + '")') == 3
-    assert "ALL-IN-ONE Console v" + V in a
+    assert "AdvPrint Pro by Bit Dream IT" in a   # v3.5.8 brand title
     assert '<div class="stat"><div class="d">hub</div><div class="v">v' \
         + V + '</div>' in console()
     readme = open(os.path.join(ROOT, "README.md"), encoding="utf-8").read()

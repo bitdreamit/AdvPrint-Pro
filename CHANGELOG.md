@@ -1,6 +1,73 @@
 # Changelog - AdvPrint Pro (Advanced Printer)
 by Bit Dream IT - Innovative Healthcare Solutions
 
+## v3.5.8 - REAL WINDOW BUTTONS + BRAND + TAB MEMORY (2026-11-18)
+
+The owner asked: "fake minimize maximize close correct also update
+actually work able", the title replaced by "AdvPrint Pro by Bit Dream
+IT - Innovative Healthcare Solutions", tab URL path support with
+refresh surviving on the same tab, no uuid next to Dashboard, and
+"cmd powershell hiddenly work need no flick any".
+
+### Fixed / Changed
+
+- REAL WINDOW BUTTONS: minimize collapses the console to its title
+  bar (click again restores); maximize toggles REAL fullscreen via
+  the Fullscreen API (double-click on the title bar works too; an
+  edge-to-edge in-page fallback covers browsers that refuse
+  fullscreen); close really calls window.close() and shows an
+  honest toast when the browser blocks it. The hub keeps printing
+  either way - the tray icon manages it.
+- BRAND TITLE: the browser tab + console title bar now read
+  "AdvPrint Pro by Bit Dream IT - Innovative Healthcare Solutions".
+  The composite "Printing Hub · ALL-IN-ONE Console vX — Pro Themes"
+  title, the "All-in-One Console vX · <machine-id> · THE ONE UI"
+  title bar and the "ALL-IN-ONE" address-bar text are gone. The
+  version stays visible in the status bar pane and the Hub tab stat
+  card.
+- TAB MEMORY + URL PATH: showTab() validates the tab, writes
+  ?path=<tab> into the URL via history.replaceState (the token
+  query is preserved) and stores the last tab in localStorage; on
+  boot ?path wins, else the saved tab, else the Dashboard. Refresh
+  after clicking History stays on History.
+- NO UUID ON THE DASHBOARD: the machine-id text next to "Dashboard"
+  (and in the old title bar) is gone; the subtitle is "live · every
+  feature in ONE window".
+- SILENT EXECUTION CARRIED: every helper the hub launches on Windows
+  keeps creationflags=CREATE_NO_WINDOW (v3.5.7), still enforced by
+  the AST build-gate sweep in tests/test_v357.py.
+- Version bump 3.5.7 -> 3.5.8 everywhere (hub, console, extension,
+  installer, DEB, build kit docs, tests); hub twins re-synced
+  byte-identical via scripts/embed_console.py.
+
+## v3.5.7 - SILENT WINDOWS (no CMD window flashes) (2026-11-18)
+
+The owner reported: "when windows run first multiple time cmd run ...
+if it by advprint please run this silently not show on screen" - on
+Windows the hub runs windowless (pythonw / AdvPrintPro.exe), but a few
+helper launches inside the hub still popped their own console window.
+
+### Fixed
+
+- reg.exe policy calls (query / add / delete) now launch with
+  CREATE_NO_WINDOW - the console's policy status poll alone used to
+  flash up to 10 CMD windows per poll (5 browsers x 2 hives) and the
+  policy install button up to 15 more; all invisible now.
+- The elevated service helper (service-install / service-remove) hides
+  its PowerShell parent window; the UAC prompt itself still appears
+  (elevation must be approved by a human) but nothing else does.
+- The CUPS `lp` fallback print path launches hidden too (defensive -
+  only reachable when SumatraPDF is absent).
+- NEW BUILD GATE: tests/test_v357.py sweeps the whole hub + tool
+  source and hard-fails if ANY subprocess call whose command is a
+  known console binary (reg, powershell, schtasks, netsh, sc,
+  taskkill, tasklist) is missing `creationflags=HIDE` - the flashes
+  can never come back. HIDE is 0 on macOS/Linux, so POSIX behaviour
+  is byte-for-byte unchanged.
+- Version bump 3.5.6 -> 3.5.7 everywhere (hub, THE ONE UI console,
+  extension, installer, DEB, build kit docs, tests); hub twins
+  re-synced byte-identical (1,150,729 bytes each).
+
 ## v3.5.6 - LAN ADMIN CONSOLE + IPP:// PRINTER URLS (2026-11-18)
 
 The owner asked: "any ip allow to access admin console ui if permission

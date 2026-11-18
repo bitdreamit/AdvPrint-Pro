@@ -1,6 +1,59 @@
-AdvPrint Pro (Advanced Printer) v3.5.6 - START HERE
+AdvPrint Pro (Advanced Printer) v3.5.8 - START HERE
 ====================================================
 by Bit Dream IT - Innovative Healthcare Solutions
+
+QUICK NOTE ON v3.5.8 - REAL WINDOW BUTTONS + BRAND + TAB MEMORY
+--------------------------------------------------------------
+v3.5.7 silenced the Windows CMD flashes. v3.5.8 polishes the ONE UI
+console itself:
+
+1. REAL WINDOW BUTTONS - the title-bar minimize / maximize / close
+   buttons used to be decoration; now they really work. Minimize
+   collapses the console to its title bar (click again to restore),
+   maximize toggles REAL fullscreen (double-click on the title bar
+   works too, and there is an edge-to-edge fallback), close really
+   closes the tab - and if the browser blocks that it says so
+   honestly. The hub keeps printing either way; the tray icon
+   manages it.
+2. NEW BRAND TITLE - the browser tab and the console title bar now
+   read "AdvPrint Pro by Bit Dream IT - Innovative Healthcare
+   Solutions". No version, no machine id, no theme labels in the
+   title anymore; the version stays in the status bar and the Hub
+   tab stat card.
+3. TAB MEMORY + URL PATH - clicking a tab (History, Queue, ...)
+   writes ?path=history (etc.) into the URL AND saves the last tab.
+   Refresh or re-open lands on the SAME tab: the URL path wins,
+   otherwise the saved tab, otherwise the Dashboard.
+4. NO UUID ON THE DASHBOARD - the uuid-looking machine id that sat
+   next to "Dashboard" (and in the old title bar) is gone for good.
+5. CMD/POWERSHELL STILL 100% SILENT - the v3.5.7 SILENT WINDOWS
+   guarantee is untouched: CREATE_NO_WINDOW on every helper the hub
+   launches, zero flicker; UAC prompts are the only thing that
+   ever shows (they must be approved).
+6. v3.5.7 / v3.5.6 FEATURES ALL PRESENT - LAN admin console
+   (ui_admin_mode + admin_ips), ipp:// printer URLs, signed CRX
+   chain, windowless hub + tray icon, full build kit.
+
+QUICK NOTE ON v3.5.7 - SILENT WINDOWS (NO CMD FLASHES)
+------------------------------------------------------
+v3.5.6 made the console adminable from the whole network. v3.5.7
+fixes the last cosmetic Windows annoyance - flashing CMD windows:
+
+1. NO MORE CMD WINDOW FLASHES - the hub runs windowless, but its
+   reg.exe policy calls, the elevated service PowerShell and the
+   CUPS lp fallback each popped their own console window. First run
+   + every console policy poll could flash 10-25 windows. Every
+   helper now launches with CREATE_NO_WINDOW - nothing shows.
+2. UAC PROMPTS STILL APPEAR - when something genuinely needs admin
+   approval (firewall rule, service install, CRX policy pass) the
+   Windows UAC prompt still shows; that one must be approved, it is
+   not a bug.
+3. NOTHING ELSE CHANGED - same windowless hub + tray icon, same
+   hub.log, same print chain; macOS/Linux behaviour is unchanged
+   (the hide flag is 0 there). A new build-gate test sweeps the
+   source so a future console flash cannot silently return.
+4. v3.5.6 FEATURES ALL PRESENT - LAN admin console (ui_admin_mode +
+   admin_ips), ipp:// printer URLs, signed CRX chain, full build kit.
 
 QUICK NOTE ON v3.5.6 - LAN ADMIN CONSOLE + IPP:// PRINTER URLS
 --------------------------------------------------------------
