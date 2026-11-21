@@ -1,7 +1,7 @@
-AdvPrint Pro (Advanced Printer) v3.5.9 - COMPLETE SOURCE MANIFEST
+AdvPrint Pro (Advanced Printer) v3.5.10 - COMPLETE SOURCE MANIFEST
 by Bit Dream IT - Innovative Healthcare Solutions
 
-This file lists EVERY file in the v3.5.9 source tree (the manifest
+This file lists EVERY file in the v3.5.10 source tree (the manifest
 file itself ships in the zip on top of this count). After extracting
 the source zip you can compare: the number of files and the total
 size must match. If anything on this list is missing from your local
@@ -9,16 +9,16 @@ tree, the build will tell you its exact name - re-extract the full
 source zip. (Build intermediates - dist/, installer/stage/, caches -
 are excluded: build-all.py regenerates them.)
 
-Files: 336   Total bytes: 51614589
+Files: 344   Total bytes: 52084051
 
         87 .gitignore
-    182187 CHANGELOG.md
+    185052 CHANGELOG.md
       2807 INSTALL-FIX.txt
       1068 LICENSE
-      2124 README-BUILDKIT.txt
-     80492 README.md
-     12616 START-HERE.txt
-       107 VERSION.txt
+      2127 README-BUILDKIT.txt
+     82402 README.md
+     14587 START-HERE.txt
+       108 VERSION.txt
       1464 build.cmd
      25871 docs/API.md
     260046 docs/AdvPrint-Pro-3.1.2-BUILD-and-DEPLOY-Guide.pdf
@@ -49,8 +49,8 @@ Files: 336   Total bytes: 51614589
       5007 docs/AdvPrint-Pro-v3.4.8-A-to-Z-DEV-GUIDE.md
     234269 docs/AdvPrint-Pro-v3.4.8-rules-table-fixed.png
     167504 docs/AdvPrint-Pro-v3.4.8-rules-table-narrow.png
-      5325 docs/BUILD-FROM-SOURCE.md
-     10327 docs/BUILD-WINDOWS.md
+      5326 docs/BUILD-FROM-SOURCE.md
+     10337 docs/BUILD-WINDOWS.md
      17347 docs/BUILD-and-DEPLOY-Guide.html
       3328 docs/CENTER-CHILD-PCS (1).md
       3328 docs/CENTER-CHILD-PCS.md
@@ -111,6 +111,7 @@ Files: 336   Total bytes: 51614589
       6117 docs/RELEASE-NOTES-v3.4.7.md
       2603 docs/RELEASE-NOTES-v3.4.8.md
       4389 docs/RELEASE-NOTES-v3.5.1.md
+      5694 docs/RELEASE-NOTES-v3.5.10.md
       7976 docs/RELEASE-NOTES-v3.5.2.md
       6263 docs/RELEASE-NOTES-v3.5.3.md
       5020 docs/RELEASE-NOTES-v3.5.4.md
@@ -138,6 +139,8 @@ Files: 336   Total bytes: 51614589
     175297 docs/v3.5.1-preview-appearance.png
     212803 docs/v3.5.1-preview-dashboard-emerald.png
     212348 docs/v3.5.1-preview-dashboard.png
+    208612 docs/v3.5.10-preview-900p.png
+    170847 docs/v3.5.10-queue-mode-off.png
     163912 docs/v3.5.4-preview-720p.png
     197935 docs/v3.5.4-preview-900p.png
     246023 docs/v3.5.6-console-admin-card.png
@@ -163,15 +166,15 @@ Files: 336   Total bytes: 51614589
       4464 docs/store/PRIVACY-POLICY.md
       7808 docs/store/STORE-LISTING-TEXTS.md
       7202 docs/store/privacy-policy.html
-    106464 extension/background.js
-     16180 extension/i18n.js
+    112832 extension/background.js
+     16183 extension/i18n.js
       4056 extension/managed.json
-      1680 extension/manifest.json
-      3071 extension/options.html
+      1681 extension/manifest.json
+      3072 extension/options.html
       2092 extension/options.js
-     17887 extension/popup.html
-     26486 extension/popup.js
-      5150 extension/content/api.js
+     17889 extension/popup.html
+     27665 extension/popup.js
+      5151 extension/content/api.js
       2656 extension/content/hook.js
       3831 extension/content/relay.js
       8089 extension/icons/icon128.png
@@ -181,8 +184,8 @@ Files: 336   Total bytes: 51614589
       1704 extension-signing/advprint-printer.pem
       1068 installer/LICENSE
      34810 installer/installer.ico
-     29522 installer/setup.nsi
-       370 installer/deb/DEBIAN/control
+     29529 installer/setup.nsi
+       371 installer/deb/DEBIAN/control
        709 installer/deb/DEBIAN/postinst
        477 installer/deb/DEBIAN/prerm
         82 installer/deb/data/advprint-launcher
@@ -192,11 +195,12 @@ Files: 336   Total bytes: 51614589
      73640 prebuilt/AdvPrint-Pro-Crx-3.5.4.zip
      74453 prebuilt/AdvPrint-Pro-Extension-3.5.4.zip
   10178097 prebuilt/AdvPrint-Pro-Setup-3.5.4.exe
-     74176 prebuilt/AdvPrint-Pro.crx
+     76364 prebuilt/AdvPrint-Pro.crx
     363500 prebuilt/advprint-pro_3.5.4_all.deb
      15513 scripts/_popup_harness.html
-     80394 scripts/build-all.py
+     81225 scripts/build-all.py
       8705 scripts/build-all.sh
+     15359 scripts/bump_3510.py
      10097 scripts/bump_356.py
       9307 scripts/bump_357.py
      11282 scripts/bump_358.py
@@ -205,6 +209,7 @@ Files: 336   Total bytes: 51614589
       2494 scripts/embed_console.py
       9093 scripts/live_ipp_smoke.py
       7000 scripts/live_ipp_smoke_v346.py
+      6638 scripts/package_3510.py
       4406 scripts/package_356.py
       5822 scripts/package_357.py
       5822 scripts/package_358.py
@@ -222,6 +227,7 @@ Files: 336   Total bytes: 51614589
       7041 scripts/smoke_v329.py
       8782 scripts/smoke_v330.py
       7421 scripts/smoke_v334.py
+      8775 scripts/smoke_v3510.py
       4697 scripts/smoke_v354.py
       4697 scripts/smoke_v355.py
       4697 scripts/smoke_v356.py
@@ -240,9 +246,10 @@ Files: 336   Total bytes: 51614589
      10331 scripts/ui_check_v347.py
       8128 scripts/ui_check_v348.py
       6175 tests/conftest.py
+      9024 tests/ext_sync_sim.js
      14009 tests/test_audit_fixes.py
      16672 tests/test_dest.py
-    122388 tests/test_hub_v2.py
+    122389 tests/test_hub_v2.py
      22239 tests/test_ipp.py
       9418 tests/test_ipp_perprinter.py
       5777 tests/test_one_ui_v320.py
@@ -267,12 +274,13 @@ Files: 336   Total bytes: 51614589
      19723 tests/test_v347.py
       6913 tests/test_v348.py
       9542 tests/test_v351.py
-     13799 tests/test_v352.py
-      6793 tests/test_v353.py
-      8627 tests/test_v354.py
-     13747 tests/test_v355.py
-     16552 tests/test_v356.py
-     12685 tests/test_v357.py
+     15625 tests/test_v3510.py
+     13801 tests/test_v352.py
+      6794 tests/test_v353.py
+      8628 tests/test_v354.py
+     13822 tests/test_v355.py
+     16556 tests/test_v356.py
+     12690 tests/test_v357.py
      11572 tests/test_v358.py
      20498 tests/test_v359.py
      11590 tool/crx3.py
@@ -281,24 +289,24 @@ Files: 336   Total bytes: 51614589
      10079 tool/unix/install-unix.sh
       2018 tool/unix/uninstall-unix.sh
      34810 tool/unix/hub/advprint.ico
-   1155452 tool/unix/hub/advprint.py
-    396076 tool/unix/hub/console.html
+   1157262 tool/unix/hub/advprint.py
+    397806 tool/unix/hub/console.html
       8367 tool/unix/hub/gui_app.py
      10559 tool/unix/hub/service_main.py
      29141 tool/unix/hub/tool.py
      36990 tool/unix/hub/tray_windows.py
-     74176 tool/unix/hub/extension/AdvPrint-Pro.crx
+     76364 tool/unix/hub/extension/AdvPrint-Pro.crx
       7433 tool/unix/hub/service/AdvPrintProService.cs
        414 tool/windows/portable/AdvPrint-Tool.bat
     411205 tool/windows/portable/unix-hub-sync-target
      34810 tool/windows/portable/hub/advprint.ico
-   1155452 tool/windows/portable/hub/advprint.py
-    396076 tool/windows/portable/hub/console.html
+   1157262 tool/windows/portable/hub/advprint.py
+    397806 tool/windows/portable/hub/console.html
       8367 tool/windows/portable/hub/gui_app.py
      10559 tool/windows/portable/hub/service_main.py
      29141 tool/windows/portable/hub/tool.py
      36990 tool/windows/portable/hub/tray_windows.py
-     74176 tool/windows/portable/hub/extension/AdvPrint-Pro.crx
+     76364 tool/windows/portable/hub/extension/AdvPrint-Pro.crx
       7433 tool/windows/portable/hub/service/AdvPrintProService.cs
       1028 tool/windows/portable/install/ADVPRINT-LIVETEST.bat
        344 tool/windows/portable/install/INSTALL-WINDOWS-SERVICE.bat

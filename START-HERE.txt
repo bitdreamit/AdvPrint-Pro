@@ -1,6 +1,41 @@
-AdvPrint Pro (Advanced Printer) v3.5.9 - START HERE
+AdvPrint Pro (Advanced Printer) v3.5.10 - START HERE
 ====================================================
 by Bit Dream IT - Innovative Healthcare Solutions
+
+QUICK NOTE ON v3.5.10 - ONE POWER SWITCH (POPUP + CONSOLE = THE SAME SWITCH)
+--------------------------------------------------------------
+You reported three switch bugs and this release fixes all of them
+with ONE model: the popup switch, the console (ONE UI) switch and
+the Options switch are now THE SAME switch - one shared setting,
+one source of truth, last flip wins:
+
+1. "POPUP SWITCH OFF ... AFTER SOME TIME IT AUTO ON - WHY?" - the
+   popup wrote only the browser's local storage, while the hub
+   sync copied the console's STALE value back over it on the
+   5-minute alarm (the hub never even learned about popup
+   changes). Fixed: every local switch change is PUSHED into the
+   hub within a second and retried every minute / on popup open /
+   on startup while the hub is offline; adoption of the hub copy
+   is SKIPPED while a local push is still pending. Nothing flips
+   itself back any more - the last writer wins, everywhere.
+2. "THIS SWITCH WHY NOT SAME OPERATION BOTH" - they were two
+   different operations (console = hub write, popup = local
+   write). Now both perform the SAME operation: write the local
+   setting AND push it to the hub ext_prefs mirror; the Console,
+   the popup, the Options page and every paired browser follow
+   within seconds.
+3. "QUEUE ON OFF NO EFFECT IN UI - WHY?" - the Queue tab status
+   card was static demo HTML ("Queue mode ON" + "hub #2047"
+   hardcoded), and a console flip took up to 5 minutes to reach
+   the browsers. Fixed: the card is LIVE (real queue mode + real
+   pause state + real printing count, refreshed every poll), the
+   sync alarm is now 1 minute, and the popup mirrors switch flips
+   live via a storage listener.
+4. EVERYTHING ELSE UNCHANGED - the v3.5.9 UNBREAKABLE DEB BUILD
+   (SCANNER-PROOF STAGING), the v3.5.8 REAL WINDOW BUTTONS +
+   BRAND + TAB MEMORY console, the v3.5.7 SILENT WINDOWS
+   guarantee, the LAN admin console, ipp:// printer URLs, signed
+   CRX chain, full build kit.
 
 QUICK NOTE ON v3.5.9 - UNBREAKABLE DEB BUILD (SCANNER-PROOF STAGING)
 --------------------------------------------------------------

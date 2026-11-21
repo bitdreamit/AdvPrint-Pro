@@ -1890,6 +1890,11 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
           reply({ ok: true });
           break;
         case "getCfg":
+          /* v3.5.10 ONE POWER SWITCH: every popup open syncs the power
+           * keys at once (push a pending local change, else adopt the
+           * hub copy) - the popup can no longer show a stale state, and
+           * a console flip reaches the popup the moment it opens. */
+          extPrefSyncTick();
           reply({ ok: true, cfg: await loadCfg() });
           break;
         case "ruleState": {
@@ -2247,7 +2252,28 @@ chrome.commands.onCommand.addListener(async (command) => {
  * Every call targets the SELF PC hub (management lane, never the LAN/center
  * profile) and never throws - printing must not depend on bookkeeping. */
 const HUB_SYNC_ALARM = "advprintHubSync";
+/* v3.5.10 ONE POWER SWITCH: the popup switch, the Options switch and the
+ * console (ONE UI) switch are now THE SAME switch. Every local change of
+ * a power key is PUSHED to the hub (POST /config ext_prefs) within a
+ * second, and the hub copy is PULLED back every minute / on popup open /
+ * on startup - exactly the same operation on every surface, one source
+ * of truth (the hub ext_prefs mirror), no more auto-revert.
+ * THE v3.5.9-AND-BEFORE BUG: the popup wrote only chrome.storage.local,
+ * while adoptHubExtPrefs() copied the hub's STALE ext_prefs back over it
+ * on the 5-minute rules sync - flip the popup master switch OFF and it
+ * silently turned itself ON again within 5 minutes (the console switch
+ * kept working because it writes the hub directly). The hub never even
+ * LEARNED about popup changes, so the two switches performed different
+ * operations. Fixed: local changes now PUSH first, and adoption is
+ * skipped while a local push is still pending - the last writer wins,
+ * never the stale mirror. */
+const EXT_PREF_SYNC_ALARM = "advprintExtPrefSync";
+const EXT_PREF_KEYS = ["enabled", "queueMode", "rulesPaused", "hookPrint",
+  "debugMode", "retryOffline", "lang", "autoPrintAllPdfs",
+  "closeAfterPrint", "failFallback", "contextMenu", "badge"];
 let _rulesPushTimer = null;
+let _extPrefPushTimer = null;
+let _extPrefPushPending = false;   // local change not yet on the hub
 let _adoptingHubRules = false;
 
 function rulesHash(rules) {
@@ -2337,16 +2363,23 @@ async function pullRulesFromHub() {
 }
 
 /* v3.2.1 ONE UI: the hub console's Power Switches / Browser Behavior /
-   Printers "Default print options" panels are the MASTER of these keys.
-   The hub stores them under ext_prefs using the SAME key names as this
-   extension's storage, so adoption is 1:1. Applied on every hub sync
-   (5-minute alarm + startup) - the ONE UI wins, exactly like rules. */
+   Printers "Default print options" panels write these keys into the
+   hub's ext_prefs mirror (SAME key names as this extension's storage,
+   so adoption is 1:1). v3.5.10 ONE POWER SWITCH: applied on the
+   1-minute ext-pref sync tick + popup open + startup - and SKIPPED
+   while a local switch change is still pending its hub push, so a
+   popup flip can never be reverted by the stale hub copy (the old
+   5-minute-only adoption WAS the auto-revert bug). */
 async function adoptHubExtPrefs(cfgHub) {
   const prefs = cfgHub && cfgHub.ext_prefs;
   if (!prefs || typeof prefs !== "object") return;
-  const allowed = ["enabled", "queueMode", "rulesPaused", "hookPrint",
-    "debugMode", "retryOffline", "lang", "autoPrintAllPdfs",
-    "closeAfterPrint", "failFallback", "contextMenu", "badge"];
+  /* v3.5.10 ONE POWER SWITCH: while a LOCAL switch change has not landed
+   * on the hub yet, the hub copy is STALE - adopting it here is exactly
+   * the auto-revert bug (popup OFF reverted by the stale hub ON). The
+   * pending push retries every minute / on popup open; adoption resumes
+   * on the next tick after it lands. */
+  if (_extPrefPushPending) return;
+  const allowed = EXT_PREF_KEYS;
   const patch = {};
   let any = false;
   for (const k of allowed) {
@@ -2372,6 +2405,92 @@ async function adoptHubExtPrefs(cfgHub) {
   }
 }
 
+/* ------- v3.5.10 ONE POWER SWITCH: bidirectional ext_prefs sync ------
+ * PUSH  (local -> hub): any local change of a power key (popup switch,
+ *       Options switch, content script) is debounced 800 ms and POSTed
+ *       to /config as a FULL ext_prefs object - merged with the hub's
+ *       current copy so keys the extension does not own (print_defaults)
+ *       survive the whole-dict replace. Failing pushes stay PENDING and
+ *       retry every minute / on popup open, so a switch flipped while
+ *       the hub is offline still wins when the hub comes back.
+ * PULL  (hub -> local): extPrefSyncTick() runs every minute, on popup
+ *       open (getCfg) and on startup; it PUSHES first when a local
+ *       change is pending, otherwise adopts the hub copy. The console
+ *       (ONE UI) polls /config every 3 s, so a flip on ANY surface
+ *       shows up on EVERY OTHER surface within seconds.
+ * Conflict rule: last writer wins - whoever flipped last is pushed to
+ * the hub and everyone adopts it; the stale mirror can never flip a
+ * switch back on its own. */
+async function pushExtPrefsToHub(why) {
+  try {
+    const { base, token } = await hubRulesSyncBase();
+    const cur = await chrome.storage.local.get(EXT_PREF_KEYS);
+    const patch = {};
+    for (const k of EXT_PREF_KEYS) {
+      if (cur[k] !== undefined) patch[k] = cur[k];
+    }
+    let hubPrefs = {};
+    try {
+      const r = await fetch(base + "/config", {
+        headers: { "X-AdvPrint-Token": token } });
+      if (r.ok) {
+        const j = await r.json();
+        if (j && j.ext_prefs && typeof j.ext_prefs === "object") {
+          hubPrefs = j.ext_prefs;
+        }
+      }
+    } catch (_) { /* hub offline - the POST below fails the same way */ }
+    const prefs = Object.assign({}, hubPrefs, patch);
+    if (!prefs.print_defaults || typeof prefs.print_defaults !== "object") {
+      const st = await chrome.storage.local.get({ printDefaults: {} });
+      prefs.print_defaults = st.printDefaults || {};
+    }
+    const r2 = await fetch(base + "/config", {
+      method: "POST",
+      headers: { "X-AdvPrint-Token": token,
+                 "Content-Type": "application/json" },
+      body: JSON.stringify({ ext_prefs: prefs,
+                             ext_sync_at: new Date().toISOString() }),
+    });
+    if (!r2.ok) throw new Error("HTTP " + r2.status);
+    _extPrefPushPending = false;    // landed - adoption may resume
+    return true;
+  } catch (_) {
+    _extPrefPushPending = true;     // retried by the 1-minute sync tick
+    return false;
+  }
+}
+
+function scheduleExtPrefsPush(delayMs = 800) {
+  _extPrefPushPending = true;
+  if (_extPrefPushTimer) return;
+  _extPrefPushTimer = setTimeout(async () => {
+    _extPrefPushTimer = null;
+    await pushExtPrefsToHub("local-change");
+  }, delayMs);
+}
+
+async function pullExtPrefsFromHub() {
+  try {
+    const { base, token } = await hubRulesSyncBase();
+    const r = await fetch(base + "/config", {
+      headers: { "X-AdvPrint-Token": token } });
+    if (!r.ok) return;
+    const cfgHub = await r.json();
+    await adoptHubExtPrefs(cfgHub);
+  } catch (_) { /* hub offline */ }
+}
+
+/* one sync tick: PUSH when pending (local wins until it lands),
+ * otherwise PULL the hub copy - cheap, /config only */
+async function extPrefSyncTick() {
+  if (_extPrefPushPending) {
+    await pushExtPrefsToHub("pending-retry");
+    return;
+  }
+  await pullExtPrefsFromHub();
+}
+
 function scheduleRulesPush(delayMs = 2500) {
   if (_rulesPushTimer) return;
   _rulesPushTimer = setTimeout(async () => {
@@ -2389,20 +2508,37 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm && alarm.name === HUB_SYNC_ALARM) {
     pullRulesFromHub();            // v3.2.0 ONE UI central rule manager
   }
+  if (alarm && alarm.name === EXT_PREF_SYNC_ALARM) {
+    extPrefSyncTick();             // v3.5.10 ONE POWER SWITCH 1-min sync
+  }
 });
 try { chrome.alarms.create(HUB_SYNC_ALARM, { periodInMinutes: 5 }); }
+catch (_) {}                             // alarms API differences - ignore
+/* v3.5.10: fast ext_prefs sync - the old 5-minute-only adoption was the
+ * auto-revert window AND the reason a console flip took up to 5 minutes
+ * to reach the browsers ("queue switch has no effect"). */
+try { chrome.alarms.create(EXT_PREF_SYNC_ALARM, { periodInMinutes: 1 }); }
 catch (_) {}                             // alarms API differences - ignore
 chrome.runtime.onStartup.addListener(() => {
   try { chrome.alarms.create(HUB_SYNC_ALARM, { periodInMinutes: 5 }); }
   catch (_) {}
+  try { chrome.alarms.create(EXT_PREF_SYNC_ALARM, { periodInMinutes: 1 }); }
+  catch (_) {}
 });
 
-/* the ONE UI mirror: rules / whitelist edited anywhere are pushed */
+/* the ONE UI mirror: rules / whitelist edited anywhere are pushed.
+ * v3.5.10 ONE POWER SWITCH: every local change of a power key (popup
+ * switch, Options switch, hub adoption guard exempted above) is pushed
+ * to the hub too - popup switch and console switch are THE SAME switch. */
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== "local" || _adoptingHubRules) return;
   if (changes.rules) { invalidateCfg(); scheduleRulesPush(); }
   if (changes.apiSites) { invalidateCfg();
     pushSitesToHub(changes.apiSites.newValue || ["*"]); }
+  if (EXT_PREF_KEYS.some((k) => changes[k])) {
+    invalidateCfg();
+    scheduleExtPrefsPush();
+  }
 });
 
 /* ---------------- icon click = the POPUP (v3.2.5) ----------------

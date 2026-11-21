@@ -13,6 +13,41 @@ Web page ──► Chrome extension ──► AdvPrint Pro hub (localhost:9235) 
 
 ---
 
+## What's new in v3.5.10 (ONE POWER SWITCH)
+
+Three switch bugs you reported, one model that fixes all of them: the
+popup switch, the console (ONE UI) switch and the Options switch are
+now **THE SAME switch** — one shared setting, one source of truth,
+last flip wins:
+
+- **"Popup switch OFF, after some time it auto ON — why?"** — the
+  popup wrote only the browser's local storage, while the hub sync
+  copied the console's **stale** value back over it on the 5-minute
+  alarm; the hub never even learned about popup changes. Now every
+  local switch change is **pushed** into the hub within a second
+  (debounced, full-object POST that preserves `print_defaults`) and
+  retried every minute / on popup open / on startup while the hub is
+  offline — and adopting the hub copy is **skipped while a local push
+  is pending**. Nothing flips itself back any more.
+- **"This switch — why not the same operation, both?"** — they were
+  two different operations (console = hub write, popup = local write).
+  Now both perform the **same operation**: write the local setting AND
+  push it to the hub `ext_prefs` mirror. The Console, the popup, the
+  Options page and every paired browser follow within seconds (1-minute
+  sync alarm, popup-open sync, popup storage listener).
+- **"Queue on/off no effect in UI — why?"** — the Queue tab status
+  card was static demo HTML (`Queue mode ON` + `hub #2047` hardcoded),
+  and a console flip took up to 5 minutes to reach the browsers. The
+  card is **LIVE** now — real queue mode + real pause state + real
+  printing count, refreshed every poll — and the sync alarm dropped
+  from 5 minutes to 1.
+- Everything else is untouched: the v3.5.9 UNBREAKABLE DEB BUILD
+  (scanner-proof staging), the v3.5.8 real window buttons + brand
+  title + tab memory, the v3.5.7 SILENT WINDOWS guarantee, LAN admin
+  console, `ipp://` printer URLs, signed CRX chain.
+
+---
+
 ## What's new in v3.5.9 (UNBREAKABLE DEB BUILD)
 
 The first v3.5.8 build crashed inside `build.cmd` itself — and only

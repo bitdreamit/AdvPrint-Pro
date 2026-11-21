@@ -1,4 +1,4 @@
-# BUILD ON WINDOWS — step by step (v3.5.9)
+# BUILD ON WINDOWS — step by step (v3.5.10)
 
 **AdvPrint Pro** by Bit Dream IT - Innovative Healthcare Solutions
 
@@ -12,7 +12,7 @@ This guide builds **every artifact from source on a Windows PC**:
 | Linux DEB | `advprint-pro_<V>_all.deb` | Python only (pure-Python builder — **no WSL needed**) |
 | Checksums | `SHA256SUMS-<V>.txt` | Python (built-in) |
 
-`<V>` is the version from `VERSION.txt` (currently 3.5.9).
+`<V>` is the version from `VERSION.txt` (currently 3.5.10).
 
 > **Got "no files found" inside makensis?** Since v3.5.5 the build
 > cannot hit that any more: it checks the complete file list FIRST and
@@ -47,13 +47,13 @@ Either with Git:
 
     git clone https://github.com/bitdreamit/AdvPrint-Pro.git
     cd AdvPrint-Pro
-    git checkout v3.5.9
+    git checkout v3.5.10
 
 or without Git: open <https://github.com/bitdreamit/AdvPrint-Pro>,
 green **Code** button → **Download ZIP**, then right-click the zip →
 *Extract All…*
 
-> Use the **full source release zip** (`AdvPrint-Pro-3.5.9-src.zip` or
+> Use the **full source release zip** (`AdvPrint-Pro-3.5.10-src.zip` or
 > the tag archive) so every file is present. Mixing an old tree with
 > new kit files is what caused the "no files found" support case.
 
@@ -97,10 +97,10 @@ Expected output at the end:
 
     == DONE - artifacts in dist/ ==
         ~74 KB  AdvPrint-Pro.crx
-        ~74 KB  AdvPrint-Pro-Extension-3.5.9.zip
-         10.2 MB  AdvPrint-Pro-Setup-3.5.9.exe
-        ~550 KB  advprint-pro_3.5.9_all.deb
-          ~400 B  SHA256SUMS-3.5.9.txt
+        ~74 KB  AdvPrint-Pro-Extension-3.5.10.zip
+         10.2 MB  AdvPrint-Pro-Setup-3.5.10.exe
+        ~550 KB  advprint-pro_3.5.10_all.deb
+          ~400 B  SHA256SUMS-3.5.10.txt
 
 **Antivirus note (one-time).** Real-time scanners sometimes quarantine
 build helper scripts (`.ps1` / `.bat` / `.vbs`) the moment they are
@@ -115,7 +115,7 @@ PowerShell:
 
 ## 3) Verify what you built
 
-    python tool\crx3.py verify dist\AdvPrint-Pro.crx 3.5.9
+    python tool\crx3.py verify dist\AdvPrint-Pro.crx 3.5.10
 
 must print three `verify:` lines and `PASS` (ID matches key, RSA
 signature OK over the archive actually inside, payload zip OK). This is
@@ -125,7 +125,7 @@ the exact check that would have caught the v3.5.3
 Cross-check the checksums (PowerShell):
 
     Get-FileHash dist\AdvPrint-Pro.crx -Algorithm SHA256
-    type dist\SHA256SUMS-3.5.9.txt
+    type dist\SHA256SUMS-3.5.10.txt
 
 ---
 

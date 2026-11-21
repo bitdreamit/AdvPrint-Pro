@@ -12,7 +12,7 @@ freshly copied console.html for a moment BETWEEN the walk and the
 open(). The same failure class as the v3.5.5 makensis "no files found"
 case; nothing was actually missing.
 
-Locked here: version coherence 3.5.9, the visibility-retry read (a
+Locked here: version coherence 3.5.10, the visibility-retry read (a
 momentary hide self-heals), the loud walk (a hidden directory raises
 instead of being silently skipped), the file-by-file verification of
 the staged tree, build_deb(expect=...) catching a vanish between the
@@ -31,7 +31,7 @@ import tarfile
 import pytest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-V = "3.5.9"
+V = "3.5.10"
 EXT_ID = "likldbkamojokkfdlcjibiljpgbbnohc"
 BRAND = "AdvPrint Pro by Bit Dream IT"
 
@@ -65,12 +65,12 @@ def adv():
     return open(ADV_PATHS[0], encoding="utf-8").read()
 
 
-# ---------------- A. version coherence 3.5.9 --------------------------
+# ---------------- A. version coherence 3.5.10 --------------------------
 
 def test_v359_hub_version():
     assert advprint.VERSION == V
     assert advprint.VERSION_NAME.startswith(
-        "v3.5.9 (CRX SIGNATURE VERIFIED + LAN ADMIN CONSOLE")
+        "v3.5.10 (CRX SIGNATURE VERIFIED + LAN ADMIN CONSOLE")
     assert "UNBREAKABLE DEB BUILD" in advprint.VERSION_NAME
     assert "SCANNER-PROOF STAGING" in advprint.VERSION_NAME
     assert "_read_visible" not in advprint.VERSION_NAME  # prose, not code
@@ -452,10 +452,10 @@ def test_v359_release_docs():
     assert ch.count("## v%s" % V) == 1
     assert "UNBREAKABLE DEB BUILD" in ch
     rd = open(os.path.join(ROOT, "README.md"), encoding="utf-8").read()
-    assert ("## What's new in v%s (%s" % (V, "UNBREAKABLE DEB BUILD")) in rd
+    assert ("## What's new in v%s (%s" % (V, "ONE POWER SWITCH")) in rd
     sh = open(os.path.join(ROOT, "START-HERE.txt"), encoding="utf-8").read()
     assert ("AdvPrint Pro (Advanced Printer) v%s - START HERE" % V) in sh
-    assert "QUICK NOTE ON v3.5.9" in sh
+    assert "QUICK NOTE ON v3.5.10" in sh
     assert "QUICK NOTE ON v3.5.8" in sh     # the v3.5.8 note stays
     rn = os.path.join(ROOT, "docs", "RELEASE-NOTES-v%s.md" % V)
     assert os.path.exists(rn)

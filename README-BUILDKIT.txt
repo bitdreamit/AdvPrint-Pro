@@ -1,4 +1,4 @@
-AdvPrint Pro - Windows Build Kit (v3.5.9 - now part of the tree)
+AdvPrint Pro - Windows Build Kit (v3.5.10 - now part of the tree)
 by Bit Dream IT - Innovative Healthcare Solutions
 ====================================================
 
@@ -25,10 +25,10 @@ QUICK START
      (or Download ZIP on github)  - then copy this kit's files in
   4. Double-click  build.cmd
   5. Collect your artifacts from the new  dist\  folder
-  6. Verify:  python tool\crx3.py verify dist\AdvPrint-Pro.crx 3.5.9
+  6. Verify:  python tool\crx3.py verify dist\AdvPrint-Pro.crx 3.5.10
 
 NOTE 1: the build now verifies the COMPLETE file list first. If it says
-"your source tree is MISSING ...", re-extract the full v3.5.9 source
+"your source tree is MISSING ...", re-extract the full v3.5.10 source
 zip - do not mix an old tree with new kit files.
 
 NOTE 2: the build carries embedded copies of the 9 install helpers

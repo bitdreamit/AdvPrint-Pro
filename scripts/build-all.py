@@ -56,6 +56,19 @@
 #      file-by-file BEFORE tarring, and re-stages + retries the
 #      whole stage/tar cycle up to 3 times, printing the Defender
 #      exclusion fix if it ever still fails.
+#   9. v3.5.10 ONE POWER SWITCH (the owner reported: the popup
+#      power switch turned itself back ON after some time, the
+#      popup and console switches performed different operations,
+#      and the Queue on/off switch had no visible effect in the
+#      UI): the extension now PUSHES every local power-key change
+#      into the hub ext_prefs mirror within a second (debounced,
+#      print_defaults-preserving POST) and retries while pending,
+#      adoption SKIPS the stale hub copy while a local push is
+#      pending (last writer wins - no auto-revert), a 1-minute
+#      ext-pref sync alarm + popup-open sync keep every surface
+#      current within seconds, and the console Queue tab status
+#      card is LIVE (the old card was static demo HTML). No
+#      build-pipeline change - this note documents the release.
 # ============================================================
 import argparse
 import base64

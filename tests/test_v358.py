@@ -15,7 +15,7 @@ The owner asked (after v3.5.7 "work fine"):
   5. "cmd powershell hiddenly work need no flick any" - the v3.5.7
      SILENT WINDOWS guarantee stays (CREATE_NO_WINDOW everywhere).
 
-Locked here: version coherence 3.5.9, the brand title (exact), the
+Locked here: version coherence 3.5.10, the brand title (exact), the
 absence of the old composite title + machine id in the UI source, the
 tab-memory source shape, the real window-button source shape + CSS,
 byte-identical twins, the release docs.
@@ -28,7 +28,7 @@ import sys
 import pytest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-V = "3.5.9"
+V = "3.5.10"
 EXT_ID = "likldbkamojokkfdlcjibiljpgbbnohc"
 BRAND = "AdvPrint Pro by Bit Dream IT"
 BRAND_TITLE = ("AdvPrint Pro by Bit Dream IT "
@@ -70,12 +70,12 @@ def embedded_console():
     return a[i:j]
 
 
-# ---------------- A. version coherence 3.5.9 --------------------------
+# ---------------- A. version coherence 3.5.10 --------------------------
 
 def test_v358_hub_version():
     assert advprint.VERSION == V
     assert advprint.VERSION_NAME.startswith(
-        "v3.5.9 (CRX SIGNATURE VERIFIED + LAN ADMIN CONSOLE")
+        "v3.5.10 (CRX SIGNATURE VERIFIED + LAN ADMIN CONSOLE")
     assert "REAL WINDOW BUTTONS + BRAND + TAB MEMORY" in advprint.VERSION_NAME
     assert "SILENT WINDOWS" in advprint.VERSION_NAME
     assert "CREATE_NO_WINDOW" in advprint.VERSION_NAME
@@ -262,10 +262,10 @@ def test_v358_release_docs():
     # follows the running release (v3.5.9 UNBREAKABLE DEB BUILD)
     assert ("## What's new in v3.5.8 (REAL WINDOW BUTTONS + BRAND + "
             "TAB MEMORY)") in rd
-    assert ("## What's new in v%s (%s" % (V, "UNBREAKABLE DEB BUILD")) in rd
+    assert ("## What's new in v%s (%s" % (V, "ONE POWER SWITCH")) in rd
     sh = open(os.path.join(ROOT, "START-HERE.txt"), encoding="utf-8").read()
     assert ("AdvPrint Pro (Advanced Printer) v%s - START HERE" % V) in sh
-    assert "QUICK NOTE ON v3.5.9" in sh
+    assert "QUICK NOTE ON v3.5.10" in sh
     rn = os.path.join(ROOT, "docs", "RELEASE-NOTES-v%s.md" % V)
     assert os.path.exists(rn)
     body = open(rn, encoding="utf-8").read()

@@ -16,7 +16,7 @@ binary (reg, powershell, schtasks, netsh, sc, taskkill, tasklist) is
 missing creationflags=HIDE. HIDE is 0 on macOS/Linux - POSIX behaviour
 is byte-for-byte unchanged.
 
-Also locks: version coherence 3.5.9, the embedded ONE UI console,
+Also locks: version coherence 3.5.10, the embedded ONE UI console,
 byte-identical hub twins, the v3.5.6 LAN-admin + ipp:// features.
 """
 import ast
@@ -27,7 +27,7 @@ import sys
 import pytest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-V = "3.5.9"
+V = "3.5.10"
 EXT_ID = "likldbkamojokkfdlcjibiljpgbbnohc"
 HIDE_WIN = 0x08000000                      # CREATE_NO_WINDOW
 
@@ -75,12 +75,12 @@ def embedded_console():
     return a[i:j]
 
 
-# ---------------- A. version coherence 3.5.9 --------------------------
+# ---------------- A. version coherence 3.5.10 --------------------------
 
 def test_v357_hub_version():
     assert advprint.VERSION == V
     assert advprint.VERSION_NAME.startswith(
-        "v3.5.9 (CRX SIGNATURE VERIFIED + LAN ADMIN CONSOLE")
+        "v3.5.10 (CRX SIGNATURE VERIFIED + LAN ADMIN CONSOLE")
     assert "SILENT WINDOWS" in advprint.VERSION_NAME
     assert "CREATE_NO_WINDOW" in advprint.VERSION_NAME
     assert "ipp://" in advprint.VERSION_NAME
@@ -319,7 +319,7 @@ def test_v357_release_docs():
     assert "## What's new in v3.5.7 (SILENT WINDOWS" in rd
     sh = open(os.path.join(ROOT, "START-HERE.txt"), encoding="utf-8").read()
     assert ("AdvPrint Pro (Advanced Printer) v%s - START HERE" % V) in sh
-    assert "QUICK NOTE ON v3.5.9" in sh
+    assert "QUICK NOTE ON v3.5.10" in sh
     rn = os.path.join(ROOT, "docs", "RELEASE-NOTES-v%s.md" % V)
     assert os.path.exists(rn)
     assert "SILENT WINDOWS" in open(rn, encoding="utf-8").read()

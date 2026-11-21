@@ -1,6 +1,55 @@
 # Changelog - AdvPrint Pro (Advanced Printer)
 by Bit Dream IT - Innovative Healthcare Solutions
 
+## v3.5.10 - ONE POWER SWITCH (popup + console + options = the same switch) (2026-11-21)
+
+The owner reported: the popup power switch turned itself back ON some
+time after being switched OFF, the popup switch and the console switch
+did not perform the same operation, and the Queue on/off switch had no
+visible effect in the UI.
+
+### Fixed / Changed
+
+- ROOT CAUSE (auto-ON): the popup wrote `enabled`/`queueMode` only into
+  `chrome.storage.local`, while `adoptHubExtPrefs()` copied the hub's
+  STALE `ext_prefs` back over those keys on the 5-minute rules sync
+  alarm - the hub never learned about popup changes, so the stale
+  console value silently reverted the popup flip (the console switch
+  kept working because it writes the hub directly).
+- PUSH (local -> hub): every local change of a power key (popup,
+  Options, any content script) now triggers `scheduleExtPrefsPush()`
+  (800 ms debounce) and `pushExtPrefsToHub()` POSTs a FULL `ext_prefs`
+  object to `/config`, merged with the hub's current copy so
+  `print_defaults` survives the whole-dict replace.
+- NO-AUTO-REVERT GUARD: `adoptHubExtPrefs()` returns early while
+  `_extPrefPushPending` is set - a pending local change can never be
+  clobbered by the stale hub copy. Last writer wins; the push retries
+  every minute (and on popup open / startup) until it lands.
+- FAST SYNC: new `EXT_PREF_SYNC_ALARM` (`advprintExtPrefSync`, period
+  1 minute) runs `extPrefSyncTick()` (push-when-pending, else adopt);
+  the `getCfg` message handler fires a sync tick on every popup open;
+  `chrome.runtime.onStartup` creates the alarm too.
+- POPUP LIVE MIRROR: the popup listens to `chrome.storage.onChanged`
+  for `enabled`/`queueMode` and re-renders its switches live, so a
+  console flip shows up in an open popup within a second.
+- LIVE QUEUE CARD: the Queue tab status card (`#qmodeHead`) was static
+  demo HTML (`Queue mode ON` + `hub #2047 in progress` hardcoded) - the
+  Queue-mode switch had no visible effect anywhere. `renderQueueMode()`
+  now renders the real `ext_prefs.queueMode` + the real hub pause state
+  + the real printing count on every poll (RUNNING/PAUSED chip, ON/OFF
+  text).
+- HONEST TEXT: console notes + toasts now say the popup/console/
+  Options switches are THE SAME switch and sync within seconds (the
+  old "within 5 min" wording is gone).
+- Console re-embedded into both hub twins (byte-identical); version
+  3.5.9 -> 3.5.10 across manifest, popup, i18n, api.js, options,
+  setup.nsi, DEB control, VERSION.txt, START-HERE, README, docs.
+- Locked by `tests/test_v3510.py` (version coherence + twins
+  byte-identical + embed fresh, exact source pins for the sync engine,
+  the no-auto-revert guard, the 1-minute alarm, the popup mirror, the
+  live queue card, carried guarantees) and `scripts/smoke_v3510.py`
+  (real-hub Playwright probe: console flip -> hub state -> live card).
+
 ## v3.5.9 - UNBREAKABLE DEB BUILD (scanner-proof staging) (2026-11-18)
 
 The owner reported: the first v3.5.8 build died in the DEB stage with

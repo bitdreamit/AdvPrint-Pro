@@ -301,19 +301,41 @@ if (_netIcon) _netIcon.addEventListener("click", () => reloadAll(_netIcon));
 
 $("swEnabled").addEventListener("change", async () => {
   const on = $("swEnabled").checked;
+  /* v3.5.10 ONE POWER SWITCH: this popup switch and the console (ONE UI)
+   * switch are THE SAME switch - saveCfg writes the local setting and
+   * background.js pushes it into the hub's ext_prefs mirror within a
+   * second (retried every minute while the hub is offline), so the
+   * Console - and every other paired browser - follows immediately.
+   * The old one-way storage write is gone: no more auto-revert after
+   * 5 minutes, no more different operations on popup vs console. */
   await send({ type: "saveCfg", patch: { enabled: on } });
   renderEnabledState(!on);
-  msg(on ? "AdvPrint enabled" : "AdvPrint disabled - nothing will print", "info");
+  msg(on ? "AdvPrint enabled - same switch as the Console, synced"
+         : "AdvPrint disabled - nothing will print (synced to the Console)",
+      "info");
 });
 
 $("swQueue").addEventListener("change", async () => {
   const on = $("swQueue").checked;
+  /* v3.5.10 ONE POWER SWITCH: same operation as the console switch -
+   * the change lands in the hub ext_prefs mirror and the console Queue
+   * tab card shows the new mode live (see renderQueueMode there). */
   await send({ type: "saveCfg", patch: { queueMode: on } });
   $("swQueueSub").textContent = on
     ? AdvPrintI18n.t("popQueueOn")
     : AdvPrintI18n.t("popQueueOff");
   msg(on ? AdvPrintI18n.t("popQueueOnMsg")
          : AdvPrintI18n.t("popQueueOffMsg"), "info");
+});
+
+/* v3.5.10 ONE POWER SWITCH: live mirror - when the Console (or another
+ * paired browser / the Options page) flips a switch, this popup follows
+ * within a second instead of showing the stale value until reopening. */
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== "local") return;
+  if (changes.enabled || changes.queueMode) {
+    loadSwitches().catch(() => {});
+  }
 });
 
 /* v3.0.6: the popup rules switch was removed - the power switch for all

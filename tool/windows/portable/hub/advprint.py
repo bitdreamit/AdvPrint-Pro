@@ -96,8 +96,8 @@ if _HUB_DIR not in sys.path:
     sys.path.insert(0, _HUB_DIR)
 
 
-VERSION = "3.5.9"
-VERSION_NAME = ("v3.5.9 (CRX SIGNATURE VERIFIED + LAN ADMIN CONSOLE + IPP:// PRINTER URLS - THE ONE UI console can now be driven from any PC or phone on the SAME NETWORK as the hub (ui_admin_mode=lan, the factory default), with an extra admin_ips allow-list for trusted admin devices on any other network and a self/any mode switch, while the print surface keeps exactly the v3.2.3 Allowed-IPs rules and every remote console session lands in the audit trail. Every printer URL the hub shows for OS/Android manual add now DISPLAYS the ipp:// scheme (ipp://ip:631/ipp/print) that Android's manual-add screen actually accepts - an http:// URL disables its Save button - the hub still SPEAKS plain HTTP/IPP underneath, only the displayed URI changed. NEW IN v3.5.9 - UNBREAKABLE DEB BUILD (SCANNER-PROOF STAGING): the first v3.5.8 build on the owner's PC died inside the pure-Python DEB packer with FileNotFoundError on the freshly staged opt/advprint/hub/console.html - the Windows on-access scanner (Defender real-time protection) hid the just-copied file between the tar walk and the open(), the same failure class as the v3.5.5 makensis 'no files found' case, and the second run always passed. The DEB cycle is now defended in depth like makensis: every staged file is read through a short visibility retry (0.3s doubling backoff, six attempts), os.walk fails LOUDLY instead of silently skipping a hidden directory (a silent skip would quietly ship an INCOMPLETE .deb), the staged tree is verified file-by-file against the complete expected DEB layout before tarring, and anything still getting through forces an automatic re-stage + retry of the whole stage/tar cycle (up to three attempts) with the Defender exclusion hint printed if it ever still fails. Keeps the v3.5.8 REAL WINDOW BUTTONS + BRAND + TAB MEMORY console (brand-only title bar that really minimizes/maximizes/closes, ?path=<tab> URL memory, no machine id on the Dashboard) and the v3.5.7 SILENT WINDOWS guarantee: CREATE_NO_WINDOW on every helper the hub launches, zero flicker. Keeps the full v3.5.5 build kit: build.cmd / scripts/build-all.py packs the CRX with the stable key, syncs + Chrome-verifies every embedded copy, builds the extension zip, a WSL-free pure-Python DEB and the NSIS Setup EXE, and hard-fails on any missing source file, any drifted unix/windows twin copy or any setup.nsi File reference that does not resolve.")
+VERSION = "3.5.10"
+VERSION_NAME = ("v3.5.10 (CRX SIGNATURE VERIFIED + LAN ADMIN CONSOLE + IPP:// PRINTER URLS - THE ONE UI console can now be driven from any PC or phone on the SAME NETWORK as the hub (ui_admin_mode=lan, the factory default), with an extra admin_ips allow-list for trusted admin devices on any other network and a self/any mode switch, while the print surface keeps exactly the v3.2.3 Allowed-IPs rules and every remote console session lands in the audit trail. Every printer URL the hub shows for OS/Android manual add now DISPLAYS the ipp:// scheme (ipp://ip:631/ipp/print) that Android's manual-add screen actually accepts - an http:// URL disables its Save button - the hub still SPEAKS plain HTTP/IPP underneath, only the displayed URI changed. NEW IN v3.5.10 - ONE POWER SWITCH (POPUP + CONSOLE + OPTIONS = THE SAME SWITCH): the popup master switch could turn itself back ON - it wrote only the browser's local storage while the hub sync copied the STALE console value back over it on the 5-minute alarm, and the hub never even learned about popup changes (popup switch and console switch performed DIFFERENT operations). Fixed in depth: every local power-key change is PUSHED into the hub ext_prefs mirror within a second (debounced, full-object POST that preserves print_defaults) and retried every minute / on popup open / on startup while the hub is offline, adoption SKIPS the stale hub copy while a local push is pending (last writer wins - nothing flips itself back any more), a fast 1-minute ext-pref sync alarm plus getCfg-sync and a popup storage listener make every flip visible on every other surface within seconds, and the Queue tab status card is LIVE now (it was static demo HTML - Queue mode ON / hub #2047 hardcoded - so the Queue-mode switch had no visible effect anywhere; it now renders the real queueMode + the real pause state + the real printing count on every poll). Keeps the v3.5.9 UNBREAKABLE DEB BUILD (SCANNER-PROOF STAGING), the v3.5.8 REAL WINDOW BUTTONS + BRAND + TAB MEMORY console and the v3.5.7 SILENT WINDOWS guarantee: CREATE_NO_WINDOW on every helper the hub launches, zero flicker. Keeps the full v3.5.5 build kit: build.cmd / scripts/build-all.py packs the CRX with the stable key, syncs + Chrome-verifies every embedded copy, builds the extension zip, a WSL-free pure-Python DEB and the NSIS Setup EXE, and hard-fails on any missing source file, any drifted unix/windows twin copy or any setup.nsi File reference that does not resolve.")
 FULL_BRAND = ("AdvPrint Pro (Advanced Printer) by "
               "Bit Dream IT - Innovative Healthcare Solutions")
 BRANDING = ("AdvPrint Pro (Advanced Printer) - Version %s - by "
@@ -10547,7 +10547,7 @@ html[data-frame="flush"] .window{max-width:none;border-radius:0;border:none;box-
             <div class="stat g"><div class="d">7d 17 ok / 1 fail</div><div class="v">94.7%</div><div class="l">Success Rate</div></div>
             <div class="stat w"><div class="d">live</div><div class="v">4</div><div class="l">In Queue</div></div>
             <div class="stat r"><div class="d">1 offline</div><div class="v">3/4</div><div class="l">Printers Ready</div></div>
-            <div class="stat"><div class="d">hub</div><div class="v">v3.5.9</div><div class="l">Version</div></div>
+            <div class="stat"><div class="d">hub</div><div class="v">v3.5.10</div><div class="l">Version</div></div>
           </div>
 
           <!-- v3.2.3: the Quick-actions card is GONE - all six of its
@@ -10614,7 +10614,7 @@ html[data-frame="flush"] .window{max-width:none;border-radius:0;border:none;box-
             <span class="fchip">Failed <span class="n">1</span></span>
           </div>
           <div class="card">
-            <div class="card-h"><span class="chip ok"><span class="d"></span>RUNNING</span> Queue mode <b>ON</b> — jobs print in order (Pause holds them back) <span class="r">hub #2047 in progress</span></div>
+            <div class="card-h" id="qmodeHead"><span class="chip ok"><span class="d"></span>RUNNING</span> Queue mode <b>ON</b> — jobs print in order (Pause holds them back) <span class="r">&nbsp;</span></div>
             <div class="frow" style="margin-bottom:4px">
               <button class="btn small danger" id="queueCancelSel" disabled>&#10006; Cancel selected</button>
               <button class="btn small">&#9932; Clear selected</button>
@@ -10633,7 +10633,7 @@ html[data-frame="flush"] .window{max-width:none;border-radius:0;border:none;box-
               <tr><td><input type="checkbox"></td><td class="id">#2043</td><td class="doc">manual-de.pdf</td><td>HP Laser 103 107 108</td><td><span class="chip info">PDF</span></td><td><span class="chip err"><span class="d"></span>FAILED</span></td><td><div class="prog fail"><i style="width:31%"></i></div></td><td><button class="btn small">&#8635; Retry</button></td></tr>
             </table></div>
           </div>
-          <div class="note">Queue mode is switched in <b>Power Switches</b> — flip it and it saves instantly:
+          <div class="note">Queue mode is switched in <b>Power Switches</b> — or in the extension popup, it is <b>THE SAME switch</b> (synced within a second, last flip wins):
             <b>ON</b> = jobs print in order (Pause holds them back); <b>OFF</b> = instant print — every job goes straight to the printer.
             If no printer is active the job is auto-queued instead of failing. Release ALL held jobs: <b>Queue</b> tab.</div>
         </section>
@@ -11247,7 +11247,7 @@ https://reports.example.com/*</textarea>
                 <div><b>UI language</b><p>English or &#2476;&#2494;&#2434;&#2455;&#2509;&#2482;&#2494; for the extension pages and notifications. "Automatic" follows the browser language.</p></div></div>
             </div>
           </div>
-          <div class="note">These switches live in the paired browsers. Flip a switch and it is saved <b>instantly</b> — every paired Chrome/Edge adopts the new settings within a minute, no save button needed.</div>
+          <div class="note">These switches are <b>THE SAME switches</b> as the extension popup and the Options page — one shared setting, one source of truth. Flip a switch anywhere and it is saved <b>instantly</b>: the Console, the popup and every paired Chrome/Edge follow within <b>seconds</b>, and the last flip always wins — nothing flips itself back.</div>
         </section>
 
         <!-- ============ BROWSER BEHAVIOR ============ -->
@@ -13962,7 +13962,7 @@ function renderExt(audit){
     rows.slice(0, 6).forEach(function(r2){
       var tr = tmpl.cloneNode(true), td = tr.querySelectorAll("td");
       td[0].innerHTML = "<b>" + esc(r2.who) + "</b>";
-      td[1].textContent = "v" + (BOOT.version || "3.5.9");
+      td[1].textContent = "v" + (BOOT.version || "3.5.10");
       td[2].textContent = r2.at ? r2.at.slice(11, 19) : "\u2014";
       td[3].innerHTML = '<span class="chip ok"><span class="d"></span>PAIRED</span>';
       tbl.appendChild(tr);
@@ -13984,7 +13984,7 @@ function renderExt(audit){
       m2.textContent = BASE + "/extension/updates.xml";
   });
   var crxChip = document.querySelector("#p-extension .frow .chip.ok");
-  if (crxChip) crxChip.innerHTML = '<span class="d"></span>CRX v' + (BOOT.version || "3.5.9") + " READY";
+  if (crxChip) crxChip.innerHTML = '<span class="d"></span>CRX v' + (BOOT.version || "3.5.10") + " READY";
   /* v3.2.8 STALE-CRX GUARD: ask the hub which package it really
    * serves (/extension/info is open, no token). Older than the hub
    * itself -> Chrome never updates -> browsers keep the old bugs.
@@ -14191,7 +14191,7 @@ async function renderUpdate(res){
    full-page /docs stays available via the "Full guide page" button.
    ============================================================ */
 function docsHtml(){
-  var v = esc(BOOT.version || "3.5.9");
+  var v = esc(BOOT.version || "3.5.10");
   var ip = esc(BOOT.lan_ip || location.hostname || "127.0.0.1");
   var port = esc(String(BOOT.port || location.port || "9235"));
   var base = "http://" + ip + ":" + port;
@@ -15133,7 +15133,7 @@ async function saveExtPrefs(){
     /* v3.2.2: saved -> the poll may refresh the switches again */
     Object.keys(dirtyKeys).forEach(function(k){
       if (k.indexOf("#p-power") === 0 || k.indexOf("#p-browser") === 0) delete dirtyKeys[k]; });
-    toast("Power/Browser switches saved \u2014 paired browsers adopt them within 5 min (or on next start)", "ok");
+    toast("Power/Browser switches saved \u2014 the popup and every paired browser adopt them within seconds", "ok");
     poll();
   } catch (e) { toast("Save failed: " + e.message, "err"); }
 }
@@ -15154,6 +15154,32 @@ function renderExtPrefs(prefs){
   setSw("#p-browser", 1, prefs.closeAfterPrint);
   setSw("#p-browser", 2, prefs.contextMenu);
   setSw("#p-browser", 3, prefs.badge);
+}
+/* v3.5.10 ONE POWER SWITCH: the Queue tab status card is LIVE now - the
+   old card was static demo HTML ("Queue mode ON" + "hub #2047 in
+   progress" hardcoded), so flipping the Queue-mode switch changed
+   NOTHING visible anywhere (the "queue switch has no effect in the UI"
+   bug). It now renders the real ext_prefs.queueMode (the exact key the
+   popup switch writes) + the real hub pause state + the real printing
+   count on every poll, so the mode flip is instantly visible here. */
+function renderQueueMode(jobs){
+  jobs = jobs || [];
+  var head = document.querySelector("#qmodeHead");
+  if (!head) return;
+  var on = (cfgCache.ext_prefs || {}).queueMode !== false;
+  var printing = jobs.filter(function(j){ return j.status === "printing"; }).length;
+  var chip = pausedState
+    ? '<span class="chip warn"><span class="d"></span>PAUSED</span>'
+    : '<span class="chip ok"><span class="d"></span>RUNNING</span>';
+  var txt = on
+    ? (pausedState
+        ? "Queue mode <b>ON</b> \u2014 PAUSED: jobs wait in order (Resume releases them)"
+        : "Queue mode <b>ON</b> \u2014 jobs print in order (Pause holds them back)")
+    : "Queue mode <b>OFF</b> \u2014 instant print: every job goes straight to the printer (no waiting in line)";
+  var right = printing
+    ? printing + " job" + (printing === 1 ? "" : "s") + " printing now"
+    : "\u00a0";
+  head.innerHTML = chip + " " + txt + ' <span class="r">' + right + "</span>";
 }
 async function saveSites(){
   try {
@@ -15573,6 +15599,7 @@ async function poll(){
     renderExt(audit);
     renderSettings(cfgCache);
     renderExtPrefs((cfgCache.ext_prefs || {}));
+    renderQueueMode(jobs);          /* v3.5.10 live queue-mode card */
     /* v3.3.3 SHARE SEND MIRROR: the switch used to render OFF until the
        first /peer/status answer even when share_send was already ON in
        config.json (the boot window again) - flip-and-popup bait. The
